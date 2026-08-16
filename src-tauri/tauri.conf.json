@@ -12,9 +12,30 @@
   "app": {
     "windows": [
       {
-        "title": "Sublix",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "Sublix — Settings",
+        "width": 720,
+        "height": 560,
+        "minWidth": 480,
+        "minHeight": 400,
+        "resizable": true,
+        "decorations": true,
+        "url": "index.html"
+      },
+      {
+        "label": "overlay",
+        "title": "Sublix Overlay",
+        "width": 640,
+        "height": 120,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "skipTaskbar": true,
+        "resizable": true,
+        "minimizable": false,
+        "maximizable": false,
+        "focus": false,
+        "url": "index.html?window=overlay"
       }
     ],
     "security": {

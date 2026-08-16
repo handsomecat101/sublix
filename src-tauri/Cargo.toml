@@ -38,6 +38,14 @@ reqwest = { version = "0.12", features = ["blocking", "stream"] }  # Download bi
 zip = { version = "2", default-features = false, features = ["deflate"] }  # Extract whisper.cpp release zip
 tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
 
+# === M4: Overlay UI — Win32 API for click-through + always-on-top ===
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+] }
+
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!

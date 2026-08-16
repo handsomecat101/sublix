@@ -9,6 +9,7 @@ use tauri::Manager;
 
 pub mod audio;
 pub mod stt;
+pub mod overlay;
 
 use audio::{capture_to_wav, list_render_devices, AudioDevice, AudioFormat};
 use stt::{transcribe_wav as stt_transcribe_wav, TranscriptionResult, ModelVariant};
@@ -66,13 +67,37 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_audio_devices,
             capture_test,
-            transcribe_test
+            transcribe_test,
+            show_overlay,
+            hide_overlay
         ])
         .setup(|app| {
-            // Log successful startup
-            tracing::info!("🚀 Sublix started (window: {:?})", app.get_webview_window("main").map(|w| w.title().unwrap_or_default().to_string()));
+            // M4: Configure overlay window at startup
+            if let Some(overlay) = app.get_webview_window("overlay") {
+                // Position at bottom-center of primary monitor (deferred — needs monitor info)
+                // For now, just log success
+                tracing::info!(
+                    "🎨 Overlay window ready: {}",
+                    overlay.title().unwrap_or_default()
+                );
+            }
+            tracing::info!("🚀 Sublix started");
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// M4 Tauri command: show the overlay window.
+#[tauri::command]
+fn show_overlay(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|e| format!("{e}"))?;
+    Ok(())
+}
+
+/// M4 Tauri command: hide the overlay window.
+#[tauri::command]
+fn hide_overlay(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|e| format!("{e}"))?;
+    Ok(())
 }
