@@ -11,7 +11,7 @@ pub mod audio;
 pub mod stt;
 
 use audio::{capture_to_wav, list_render_devices, AudioDevice, AudioFormat};
-use stt::{transcribe_wav as stt_transcribe_wav, TranscriptionResult};
+use stt::{transcribe_wav as stt_transcribe_wav, TranscriptionResult, ModelVariant};
 
 /// Tauri command: list all available render (output) devices for loopback capture.
 #[tauri::command]
@@ -31,16 +31,23 @@ fn capture_test(
     capture_to_wav(&output_path, duration_secs, device_index).map_err(|e| format!("{e:#}"))
 }
 
-/// Tauri command: transcribe a WAV file using OpenAI Whisper API.
-///
-/// API key is read from `OPENAI_API_KEY` env var.
+/// Tauri command: transcribe a WAV file using local Whisper (auto-downloads if needed).
 #[tauri::command]
 fn transcribe_test(
     wav_path: String,
     language: Option<String>,
+    model_name: Option<String>,
 ) -> Result<TranscriptionResult, String> {
-    let api_key = stt::openai::get_api_key().map_err(|e| format!("{e:#}"))?;
-    stt_transcribe_wav(&wav_path, &api_key, language.as_deref()).map_err(|e| format!("{e:#}"))
+    // Allow model override
+    if let Some(name) = model_name {
+        if let Some(variant) = ModelVariant::from_name(&name) {
+            let whisper = stt::whisper_local::WhisperLocal::new(variant)
+                .map_err(|e| format!("{e:#}"))?;
+            return whisper.transcribe(&wav_path, language.as_deref())
+                .map_err(|e| format!("{e:#}"));
+        }
+    }
+    stt_transcribe_wav(&wav_path, language.as_deref()).map_err(|e| format!("{e:#}"))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

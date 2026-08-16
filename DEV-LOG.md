@@ -46,7 +46,34 @@ Xem chi tiết: `docs/decisions.md`
   - Rust toolchain bin **added to user PATH** (persistent, dùng `.NET SetEnvironmentVariable` thay vì setx để tránh long-path issue).
   - Cho PowerShell sessions tương lai: cargo, rustc sẽ available globally.
 
-### M2: STT pipeline (⏳ in progress 2026-08-17)
+### M2: STT pipeline (✅ done 2026-08-17 — LOCAL Whisper)
+1. **Second pivot**: OpenAI Whisper API was the first pivot, but user clarified "chỉ cần local chạy ổn oke có mvp được đã" (just need local MVP, no API). Switched to **local whisper.cpp via subprocess**.
+2. **Why subprocess** (not whisper-rs): whisper-rs needs libclang.dll for bindgen, not installed. Prebuilt whisper.cpp Windows binary needs no build deps.
+3. **Implementation**:
+   - `src-tauri/src/stt/whisper_local.rs` — full Whisper local manager (~370 lines)
+     - Downloads whisper-bin-x64.zip from GitHub releases on first run (~3.5MB)
+     - Extracts to `binaries/Release/`
+     - Downloads ggml-tiny.bin from Hugging Face on first run (~74MB)
+     - Spawns whisper-cli.exe as subprocess with model + wav + language args
+     - Parses stdout to extract transcript text
+   - Removed openai.rs dependency (file still exists but excluded from build)
+4. **Bugs found & fixed**:
+   - First path lookup missed `binaries/Release/` subfolder (whisper.cpp zip extracts into Release/) → added fallback path check
+   - `lang_code_to_name` returned `&str` instead of `&'static str` for unknown codes → changed default to "Unknown"
+5. **Verification**:
+   - First run: downloaded whisper.cpp + model (~80MB total, 10s)
+   - Second run: cached files used immediately
+   - `sublix transcribe test-capture.wav tiny` → subprocess OK, 2.7s audio processed in 1.5s (1.8x realtime on CPU)
+   - Result: empty string (test WAV is 440Hz tone, not speech — but pipeline works end-to-end)
+6. **Note on paths**: `binaries/` and `models/` are relative paths. CWD must be `src-tauri/` (or paths can be absolute).
+
+### M2 attempt 1 (⏳ superseded): OpenAI Whisper API
+1. **First pivot**: from local whisper-rs to OpenAI Whisper API
+   - Reason: whisper-rs needs libclang (not installed)
+   - OpenAI Whisper uses the same model (large-v2)
+2. **Code**: `src-tauri/src/stt/openai.rs` — multipart form upload to OpenAI
+3. **User changed direction**: "thôi không cần API ngoài, local là đủ MVP" → superseded by attempt 2
+4. **File status**: `openai.rs` still exists but not in `mod.rs` (will add back as M3 opt-in cloud)
 1. **Pivoted from local Whisper to OpenAI Whisper API** because:
    - whisper-rs needs `libclang.dll` (bindgen dependency) — NOT installed on system
    - LLVM install would be heavyweight + require user action
