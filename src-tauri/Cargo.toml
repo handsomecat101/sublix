@@ -5,8 +5,6 @@ description = "Sublix - Real-time subtitle overlay for any video"
 authors = ["Anh Tuấn"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
@@ -18,8 +16,25 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Tauri framework
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# === M1: Audio capture ===
+wasapi = "0.20"                              # Windows Core Audio API bindings (loopback capture)
+hound = "3.5"                                # WAV file writer (debug/testing)
+anyhow = "1"                                 # Application error handling
+thiserror = "1"                              # Typed error definitions
+tracing = "0.1"                              # Structured logging
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+# This feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
+# When enabled, the binary keeps the console window (useful for CLI testing)
+default = []
+cli = []

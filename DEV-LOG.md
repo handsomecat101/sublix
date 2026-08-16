@@ -46,6 +46,36 @@ Xem chi tiết: `docs/decisions.md`
   - Rust toolchain bin **added to user PATH** (persistent, dùng `.NET SetEnvironmentVariable` thay vì setx để tránh long-path issue).
   - Cho PowerShell sessions tương lai: cargo, rustc sẽ available globally.
 
+### M1: Audio capture (✅ done 2026-08-16 ~23:30)
+1. **Added deps to Cargo.toml**: `wasapi = "0.20"`, `hound = "3.5"`, `anyhow`, `thiserror`, `tracing`, `tracing-subscriber`
+2. **Created `src-tauri/src/audio/` module**:
+   - `mod.rs` — module exports
+   - `capture.rs` — WASAPI loopback capture + WAV writer
+3. **API discovery (took 3 iterations)**:
+   - wasapi 0.20 uses different names than 0.18/older:
+     - `get_default_device(&Direction)` not `get_default_render_device()`
+     - `DeviceCollection::new(&Direction::Render)` to enumerate
+     - `device.get_iaudioclient()` not `device.activate()`
+     - `AudioClient::get_mixformat()` not `get_mix_format()`
+     - `AudioClient::initialize_client(&wf, &Direction::Capture, &StreamMode::PollingShared{...})` not `initialize_shared()`
+     - `AudioClient::get_audiocaptureclient()` not `get_service()`
+     - `AudioClient::start_stream()` / `stop_stream()`
+     - `AudioCaptureClient::read_from_device(&mut [u8])` not `read_packet()`
+     - `WasapiRes` is `pub(crate)`, used `Result<T, WasapiError>` directly
+4. **Created CLI mode in main.rs**:
+   - `sublix list-devices` — enumerate output devices
+   - `sublix capture <seconds> <output.wav> [device_idx]` — capture N seconds to WAV
+5. **Bug found & fixed**:
+   - `WasapiRes` is private → use `Result<T, WasapiError>` directly
+   - `mod audio` private in lib.rs → `pub mod audio` to allow main.rs access
+   - `feature = "cli"` undefined → added to Cargo.toml features
+6. **Verification** (2026-08-16 16:43):
+   - `cargo check` pass
+   - `cargo build` pass (15.7MB debug binary)
+   - `sublix list-devices` → 8 devices enumerated
+   - `sublix capture 5 test.wav` while playing 440Hz tone → WAV 917KB, 44100Hz/2ch/32bit float
+   - Captured 267 packets (2.66s) of audio data from real device
+
 ### M0: Foundation scaffold (✅ done)
 1. **Project folder**: `H:/AI Project/sublix/`
 2. **Planning files** (viết trước):
