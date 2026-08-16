@@ -64,3 +64,9 @@ target/
 *.sqlite-journal
 config.json
 settings.json
+
+# Test artifacts
+test-capture*.wav
+*.wav
+npm-install.log
+cargo-check.log
