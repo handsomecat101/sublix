@@ -46,6 +46,22 @@ Xem chi tiết: `docs/decisions.md`
   - Rust toolchain bin **added to user PATH** (persistent, dùng `.NET SetEnvironmentVariable` thay vì setx để tránh long-path issue).
   - Cho PowerShell sessions tương lai: cargo, rustc sẽ available globally.
 
+### M2: STT pipeline (⏳ in progress 2026-08-17)
+1. **Pivoted from local Whisper to OpenAI Whisper API** because:
+   - whisper-rs needs `libclang.dll` (bindgen dependency) — NOT installed on system
+   - LLVM install would be heavyweight + require user action
+   - OpenAI Whisper API uses the **same Whisper model** (large-v2), just hosted
+   - M2.5 plan: add local Whisper back when LLVM is available
+2. **Added deps**: `reqwest` (blocking, multipart), `tokio` (fs, rt)
+3. **Removed**: `whisper-rs`, `whisper-rs-sys` (compile-failed without LLVM)
+4. **Files**:
+   - `src-tauri/src/stt/mod.rs` — module exports
+   - `src-tauri/src/stt/openai.rs` — OpenAI Whisper API client (~190 lines)
+   - `src-tauri/src/stt/whisper.rs` — DEAD CODE (local whisper, kept for M2.5)
+   - `src-tauri/src/stt/model.rs` — DEAD CODE (model download, kept for M2.5)
+5. **CLI**: `sublix transcribe <wav> [lang]` — requires `$env:OPENAI_API_KEY`
+6. **Status**: code written, cargo check passed, cargo build in progress (5-10 min for new deps)
+
 ### M1: Audio capture (✅ done 2026-08-16 ~23:30)
 1. **Added deps to Cargo.toml**: `wasapi = "0.20"`, `hound = "3.5"`, `anyhow`, `thiserror`, `tracing`, `tracing-subscriber`
 2. **Created `src-tauri/src/audio/` module**:

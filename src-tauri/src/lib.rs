@@ -8,8 +8,10 @@
 use tauri::Manager;
 
 pub mod audio;
+pub mod stt;
 
 use audio::{capture_to_wav, list_render_devices, AudioDevice, AudioFormat};
+use stt::{transcribe_wav as stt_transcribe_wav, TranscriptionResult};
 
 /// Tauri command: list all available render (output) devices for loopback capture.
 #[tauri::command]
@@ -29,6 +31,18 @@ fn capture_test(
     capture_to_wav(&output_path, duration_secs, device_index).map_err(|e| format!("{e:#}"))
 }
 
+/// Tauri command: transcribe a WAV file using OpenAI Whisper API.
+///
+/// API key is read from `OPENAI_API_KEY` env var.
+#[tauri::command]
+fn transcribe_test(
+    wav_path: String,
+    language: Option<String>,
+) -> Result<TranscriptionResult, String> {
+    let api_key = stt::openai::get_api_key().map_err(|e| format!("{e:#}"))?;
+    stt_transcribe_wav(&wav_path, &api_key, language.as_deref()).map_err(|e| format!("{e:#}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize tracing for structured logging
@@ -42,7 +56,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![list_audio_devices, capture_test])
+        .invoke_handler(tauri::generate_handler![
+            list_audio_devices,
+            capture_test,
+            transcribe_test
+        ])
         .setup(|app| {
             // Log successful startup
             tracing::info!("🚀 Sublix started (window: {:?})", app.get_webview_window("main").map(|w| w.title().unwrap_or_default().to_string()));

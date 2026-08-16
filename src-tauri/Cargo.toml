@@ -30,6 +30,13 @@ thiserror = "1"                              # Typed error definitions
 tracing = "0.1"                              # Structured logging
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# === M2: Speech-to-Text (OpenAI Whisper API — same model, cloud-hosted) ===
+# Local whisper.cpp would require libclang/LLVM (not installed on this system).
+# Cloud Whisper API is functionally equivalent (uses the same model weights).
+# M2.5 will add local Whisper back when LLVM is available (use vulkan feature).
+reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }  # Cloud STT API calls
+tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
+
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
