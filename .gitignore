@@ -1,0 +1,66 @@
+# Node
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/Cargo.lock
+src-tauri/gen/
+src-tauri/WixTools/
+
+# Build artifacts
+*.exe
+*.dll
+*.pdb
+*.so
+*.dylib
+*.msi
+*.app
+*.deb
+*.rpm
+*.appimage
+
+# Whisper models (large, can be re-downloaded)
+models/*.bin
+models/*.gguf
+models/*.ggml
+!models/.gitkeep
+!models/README.md
+
+# IDE / Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets / API keys
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Tauri
+.tauri/
+target/
+
+# User data (runtime)
+*.db
+*.sqlite
+*.sqlite-journal
+config.json
+settings.json
