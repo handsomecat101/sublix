@@ -66,6 +66,15 @@ Xem chi tiết: `docs/decisions.md`
 5. **Renamed references**:
    - `tauri.conf.json`: productName + title → "Sublix"
    - `Cargo.toml`: package name → "sublix", lib name → "sublix_lib", authors → "Anh Tuấn"
+6. **Bug found & fixed**:
+   - `cargo check` failed: `main.rs` still references `sublix_app_lib::run()` (forgot to update after rename)
+   - Fix: edit `src/main.rs` line 5 → `sublix_lib::run()`
+   - Re-run `cargo check` → pass in 1.87s
+7. **Verification all green**:
+   - ✅ `npm install` — 73 packages, 0 vulns, 12s
+   - ✅ `npm run build` — 32 modules, 194KB JS, 852ms
+   - ✅ `cargo check` — pass, 1.87s
+8. **Git init**: 1 commit `feat: M0 foundation scaffold (Sublix Tauri v2 + React)` — 45 files, 3885 insertions
 
 ### Project structure (sau M0)
 ```

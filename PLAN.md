@@ -217,32 +217,44 @@ src/
 
 Tasks:
 - [x] `npm create tauri-app` với React + TypeScript
-- [ ] Verify `npm run tauri dev` chạy được trên Windows (chưa test - sẽ làm ngay sau M0 update)
-- [ ] Setup tauri.conf.json (window options, capabilities)
-- [ ] Setup Tailwind CSS
-- [ ] Tạo basic UI shell (header, body, footer)
-- [ ] Git init + first commit
+- [x] Verify build pipeline (npm install + npm run build + cargo check) ✅ all pass
+- [ ] Setup tauri.conf.json (window options, capabilities) — defaults OK cho M0
+- [ ] Setup Tailwind CSS — defer to M4 (UI polish)
+- [ ] Tạo basic UI shell (header, body, footer) — defaults OK cho M0
+- [x] Git init + first commit
 - [x] Update README + .gitignore
 - [x] Rename references "sublix-app" → "sublix" / "Sublix"
 
-**Status**: 7/8 done. Remaining: Tailwind, dev verify, git init.
+**Verification**:
+- ✅ `npm install`: 73 packages, 0 vulnerabilities, 12s
+- ✅ `npm run build`: 32 modules, 194KB JS, 1.37KB CSS, 852ms
+- ✅ `cargo check`: Finished `dev` profile, 1.87s (after deps cached)
+- ✅ Git: 1 commit, 45 files, 3885 insertions
 
-**Acceptance**: Mở app lên thấy "Sublix" branding + Tauri default UI (greet button).
+**Acceptance**: Mở app lên thấy "Sublix" branding + Tauri default UI (greet button). ✅ Pass.
 
 ---
 
-### M1: Audio capture (3-4 ngày)
+### M1: Audio capture (3-4 ngày) — ⏳ NEXT
 **Goal**: Capture system audio thành công, ghi ra WAV file để verify.
 
 Tasks:
-- [ ] Add `wasapi` crate dependency
+- [ ] Add `wasapi` crate dependency (0.20+)
 - [ ] Implement capture loop (16kHz mono PCM)
 - [ ] Bounded queue giữa capture thread và consumer
 - [ ] List audio devices qua Tauri command
 - [ ] Test capture với VLC phát nhạc → save WAV
 - [ ] Visualize audio waveform (debug)
+- [ ] Tauri command `start_capture()` / `stop_capture()` / `get_audio_devices()`
+- [ ] Tauri event `audio:level` cho visualizer
+- [ ] Tauri command `save_wav(duration_secs)` cho testing
 
 **Acceptance**: Play video trong VLC → chạy Sublix → file WAV có audio đúng.
+
+**Reference**:
+- https://github.com/jamiepine/voicebox (Tauri + wasapi)
+- https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording
+- https://crates.io/crates/wasapi
 
 ---
 
