@@ -70,3 +70,11 @@ test-capture*.wav
 *.wav
 npm-install.log
 cargo-check.log
+
+# === M2: Downloaded dependencies (large, re-downloadable) ===
+# whisper.cpp prebuilt binary (~3.5MB extracted to ~30MB)
+binaries/
+# Whisper model files (tiny=75MB, base=140MB, small=465MB, medium=1.5GB, large-v3=3GB)
+models/*.bin
+!models/.gitkeep
+!models/README.md
