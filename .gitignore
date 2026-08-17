@@ -78,3 +78,10 @@ binaries/
 models/*.bin
 !models/.gitkeep
 !models/README.md
+
+# === M4: UI mockup previews (AI-generated, not source) ===
+preview-*.png
+*.png
+!icons/*.png
+!src-tauri/icons/*.png
+!src-tauri/target/**/*.png
