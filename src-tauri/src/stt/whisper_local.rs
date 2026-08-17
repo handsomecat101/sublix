@@ -168,8 +168,6 @@ impl WhisperLocal {
             .arg("-l")
             .arg(lang)
             .arg("--no-prints")
-            .arg("--print-colors")
-            .arg("false")
             .output()
             .with_context(|| format!("Failed to run whisper-cli at {}", self.binary_path.display()))?;
         let inference_duration = start.elapsed().as_secs_f32();
@@ -264,18 +262,40 @@ fn read_wav_duration(wav_path: &str) -> Result<f32> {
     Ok(total_frames / spec.sample_rate as f32)
 }
 
-/// Find the whisper-cli.exe binary in the extracted directory tree.
-///
-/// The whisper.cpp release zip extracts into `binaries/Release/` (capital R).
-/// We search a few likely locations to be robust against future zip changes.
-fn find_whisper_cli() -> Option<PathBuf> {
-    let candidates = [
-        Path::new(BINARIES_DIR).join("whisper-cli.exe"),
-        Path::new(BINARIES_DIR).join("Release").join("whisper-cli.exe"),
-        Path::new(BINARIES_DIR).join("release").join("whisper-cli.exe"),
-        Path::new(BINARIES_DIR).join("bin").join("whisper-cli.exe"),
+/// Build a list of candidate paths to look for a file across possible locations.
+/// We try multiple locations so the app works regardless of CWD (dev vs release).
+/// Order matters: we prefer src-tauri/ (canonical location) over project-root (may
+/// have stale partial downloads from earlier failed runs).
+fn candidate_paths(relative_dir: &str, filename: &str) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    // Prefer src-tauri/ paths first (canonical location, used during dev)
+    let dirs = [
+        &format!("src-tauri/{relative_dir}"),
+        relative_dir,                    // project root
+        &format!("../{relative_dir}"),
+        &format!("../../{relative_dir}"),
     ];
-    candidates.into_iter().find(|p| p.exists())
+    for d in dirs {
+        paths.push(Path::new(d).join("Release").join(filename));
+        paths.push(Path::new(d).join("release").join(filename));
+        paths.push(Path::new(d).join(filename));
+        paths.push(Path::new(d).join("bin").join(filename));
+    }
+    // Also try next to current exe (for release builds)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join(relative_dir).join("Release").join(filename));
+            paths.push(dir.join(relative_dir).join(filename));
+        }
+    }
+    paths
+}
+
+/// Find the whisper-cli.exe binary in the extracted directory tree.
+fn find_whisper_cli() -> Option<PathBuf> {
+    candidate_paths(BINARIES_DIR, "whisper-cli.exe")
+        .into_iter()
+        .find(|p| p.exists())
 }
 
 /// Ensure whisper.cpp Windows binary is available. Downloads + extracts on first run.
@@ -313,16 +333,19 @@ pub fn ensure_binary() -> Result<PathBuf> {
 
 /// Ensure the Whisper model is available. Downloads from Hugging Face on first run.
 pub fn ensure_model(variant: ModelVariant) -> Result<PathBuf> {
-    let dir = Path::new(MODELS_DIR);
-    if !dir.exists() {
-        std::fs::create_dir_all(dir).context("Failed to create models directory")?;
+    // Check if model exists in any of the known locations
+    if let Some(existing) = candidate_paths(MODELS_DIR, variant.filename())
+        .into_iter()
+        .find(|p| p.exists())
+    {
+        info!("✅ Model {} found: {}", variant.filename(), existing.display());
+        return Ok(existing);
     }
-    let model_path = dir.join(variant.filename());
 
-    if model_path.exists() {
-        info!("✅ Model {} found: {}", variant.filename(), model_path.display());
-        return Ok(model_path);
-    }
+    // Download to first candidate dir (prefer src-tauri/models for consistency)
+    let target_dir = Path::new("src-tauri").join(MODELS_DIR);
+    std::fs::create_dir_all(&target_dir).context("Failed to create models directory")?;
+    let model_path = target_dir.join(variant.filename());
 
     warn!(
         "⏬ Model {} not found, downloading (~{}MB)...",
