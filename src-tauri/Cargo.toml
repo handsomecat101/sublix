@@ -1,6 +1,6 @@
 [package]
 name = "sublix"
-version = "0.1.0"
+version = "0.5.0"
 description = "Sublix - Real-time subtitle overlay for any video"
 authors = ["Anh Tuấn"]
 edition = "2021"
@@ -34,7 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Uses prebuilt whisper.cpp Windows binary (downloaded on first run, ~30MB).
 # Model: ggml-tiny.bin (~75MB) for fast MVP, can upgrade to large-v3 (~3GB) later.
 # Cloud OpenAI API remains as opt-in for users who want better quality.
-reqwest = { version = "0.12", features = ["blocking", "stream"] }  # Download binary + model
+reqwest = { version = "0.12", features = ["blocking", "stream", "json", "multipart"] }  # Download binary + model + JSON for llama-server HTTP + multipart for whisper-server
 zip = { version = "2", default-features = false, features = ["deflate"] }  # Extract whisper.cpp release zip
 tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
 
@@ -45,6 +45,9 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
 ] }
+
+# === M2.5: Live capture → STT → overlay (real-time) ===
+crossbeam-channel = "0.5"  # For stop signal + chunk queue
 
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem

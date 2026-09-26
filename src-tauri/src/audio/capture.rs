@@ -44,13 +44,19 @@ pub struct AudioFormat {
     pub sample_type: String, // "float" or "int"
 }
 
+/// Best-effort COM initialization. Tauri WebView2 may have already initialized
+/// COM in STA mode; in that case `CoInitializeEx(MTA)` returns `RPC_E_CHANGED_MODE`
+/// but we can still use WASAPI in the existing apartment.
+fn init_com_best_effort() {
+    if let Err(e) = initialize_mta().ok() {
+        warn!("COM init note (Tauri may have already init in STA): {e:?}");
+    }
+}
+
 /// Enumerate all render (output) devices. All render devices can be used
 /// for loopback capture.
 pub fn list_render_devices() -> Result<Vec<AudioDevice>> {
-    // Initialize COM (needed for WASAPI) — use MTA for safety
-    initialize_mta()
-        .ok()
-        .context("Failed to initialize COM (MTA)")?;
+    init_com_best_effort();
 
     let collection = wasapi::DeviceCollection::new(&Direction::Render)
         .context("Failed to enumerate render devices")?;
@@ -83,10 +89,8 @@ pub fn capture_to_wav(
     duration_secs: u32,
     device_index: Option<usize>,
 ) -> Result<AudioFormat> {
-    // --- 1. Initialize COM ---
-    initialize_mta()
-        .ok()
-        .context("Failed to initialize COM (MTA)")?;
+    // --- 1. Initialize COM (best effort) ---
+    init_com_best_effort();
 
     // --- 2. Pick the device ---
     let device = if let Some(idx) = device_index {

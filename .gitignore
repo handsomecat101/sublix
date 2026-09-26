@@ -71,13 +71,18 @@ test-capture*.wav
 npm-install.log
 cargo-check.log
 
-# === M2: Downloaded dependencies (large, re-downloadable) ===
-# whisper.cpp prebuilt binary (~3.5MB extracted to ~30MB)
+# === M2+: Downloaded dependencies & large AI models (gitignored) ===
 binaries/
-# Whisper model files (tiny=75MB, base=140MB, small=465MB, medium=1.5GB, large-v3=3GB)
+src-tauri/binaries/
 models/*.bin
+models/*.gguf
+src-tauri/models/*.bin
+src-tauri/models/*.gguf
+src-tauri/models/*.downloading
+src-tauri/models/.cache/
 !models/.gitkeep
 !models/README.md
+!src-tauri/models/.gitkeep
 
 # === M4: UI mockup previews (AI-generated, not source) ===
 preview-*.png

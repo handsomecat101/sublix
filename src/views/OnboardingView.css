@@ -1,0 +1,275 @@
+/* Onboarding view — first-run setup for Sublix */
+
+.onb-root {
+  min-height: 100vh;
+  background: #0f1115;
+  color: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 32px 40px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onb-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 16px;
+}
+
+.onb-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.onb-tagline {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.onb-step {
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 16px 18px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.onb-step-error {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.onb-step-done {
+  border-color: rgba(74, 222, 128, 0.2);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.onb-step-skipped {
+  opacity: 0.55;
+}
+
+.onb-step-icon {
+  font-size: 24px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.onb-step-body {
+  min-width: 0;
+}
+
+.onb-step-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.onb-step-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.onb-step-size {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.onb-step-desc {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.onb-step-error {
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+.onb-step-skipped {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+.onb-step-state {
+  font-size: 18px;
+  text-align: center;
+  min-width: 24px;
+}
+
+.onb-state-pending { color: rgba(255, 255, 255, 0.3); }
+.onb-state-downloading { color: #fbbf24; animation: onb-pulse 1.2s ease-in-out infinite; }
+.onb-state-done { color: #4ade80; }
+.onb-state-error { color: #f87171; }
+.onb-state-skipped { color: rgba(255, 255, 255, 0.4); }
+
+@keyframes onb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.onb-step-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.onb-model-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.onb-model-picker label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.onb-select {
+  background: rgba(0, 0, 0, 0.3);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  max-width: 280px;
+}
+
+.onb-select:hover { border-color: rgba(255, 255, 255, 0.2); }
+.onb-select:focus { outline: none; border-color: #60a5fa; }
+.onb-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Indeterminate progress bar */
+.onb-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.onb-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.onb-progress-bar-indeterminate {
+  background: linear-gradient(90deg,
+    rgba(96, 165, 250, 0.1) 0%,
+    rgba(96, 165, 250, 0.6) 50%,
+    rgba(96, 165, 250, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: onb-progress-slide 1.5s linear infinite;
+}
+
+@keyframes onb-progress-slide {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.onb-progress-message {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+/* Buttons */
+.onb-btn-primary,
+.onb-btn-secondary,
+.onb-btn-link {
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.onb-btn-primary {
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  color: white;
+}
+
+.onb-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.onb-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.onb-btn-secondary {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+}
+
+.onb-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.onb-btn-link {
+  padding: 4px 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+}
+
+.onb-btn-link:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.onb-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  gap: 12px;
+}
+
+.onb-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}

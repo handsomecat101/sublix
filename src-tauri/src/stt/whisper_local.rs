@@ -1,16 +1,8 @@
-//! Local Whisper STT — uses prebuilt whisper.cpp binary via subprocess.
+//! Local Whisper STT — manages Whisper models, binaries, and hallucination filtering.
 //!
-//! Why subprocess (not whisper-rs Rust binding):
-//! - whisper-rs needs `libclang.dll` for bindgen (NOT installed on this system)
-//! - whisper.cpp ships prebuilt Windows binaries → no build deps
-//! - Subprocess startup overhead (~200ms) is fine for MVP (file-based transcription)
-//! - Same Whisper model quality, fully local
-//!
-//! First-run flow:
-//!   1. Download `whisper-bin-x64.zip` from GitHub releases (~30MB) → `binaries/`
-//!   2. Extract `whisper-cli.exe` and `whisper.dll`
-//!   3. Download `ggml-tiny.bin` model from Hugging Face (~75MB) → `models/`
-//!   4. Subsequent runs: use cached files (no download)
+//! Supports both:
+//! - Long-running `whisper-server.exe` (via `whisper_server.rs`, primary fast path)
+//! - Subprocess `whisper-cli.exe` (fallback / CLI mode)
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -22,30 +14,83 @@ use tracing::{info, warn};
 const BINARIES_DIR: &str = "binaries";
 const MODELS_DIR: &str = "models";
 
-/// whisper.cpp release to download (pinned for stability)
-const WHISPER_CPP_VERSION: &str = "v1.7.6";
+/// whisper.cpp release to download (if no binary is present)
 const WHISPER_CPP_ZIP_URL: &str =
     "https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip";
+
+/// What engine the running whisper binary uses (for status display + telemetry).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum SttEngine {
+    Cuda, // NVIDIA GPU (RTX 3090 etc.) via whisper-cuda prebuilt binary
+    Cpu,  // CPU only
+}
+
+impl SttEngine {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SttEngine::Cuda => "cuda",
+            SttEngine::Cpu => "cpu",
+        }
+    }
+}
 
 /// Whisper model variants (mapped to ggml-*.bin files on Hugging Face)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum ModelVariant {
-    Tiny,        // 39M params, ~75MB
-    Base,        // 74M params, ~140MB
-    Small,       // 244M params, ~465MB
-    Medium,      // 769M params, ~1.5GB
-    LargeV3,     // 1.55B params, ~3GB
+    Tiny,            // 39M params, ~75MB
+    Base,            // 74M params, ~140MB
+    Small,           // 244M params, ~465MB
+    LargeV3TurboQ8,  // 809M params (4 decoder layers), Q8_0 ~874MB — ⭐ 2026 GPU sweet spot
+    Medium,          // 769M params, ~1.5GB
+    LargeV3Turbo,    // 809M params FP16, ~1.62GB
+    LargeV3,         // 1.55B params (32 decoder layers), ~3GB
 }
 
 impl ModelVariant {
+    pub const ALL: &'static [ModelVariant] = &[
+        ModelVariant::LargeV3TurboQ8,
+        ModelVariant::LargeV3Turbo,
+        ModelVariant::Base,
+        ModelVariant::Small,
+        ModelVariant::Medium,
+        ModelVariant::LargeV3,
+        ModelVariant::Tiny,
+    ];
+
     pub fn from_name(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
+        match s.to_lowercase().trim() {
             "tiny" => Some(Self::Tiny),
             "base" => Some(Self::Base),
             "small" => Some(Self::Small),
+            "large-v3-turbo-q8_0" | "large-v3-turbo-q8" | "turbo-q8" => Some(Self::LargeV3TurboQ8),
             "medium" => Some(Self::Medium),
+            "large-v3-turbo" | "turbo" => Some(Self::LargeV3Turbo),
             "large" | "large-v3" | "largev3" => Some(Self::LargeV3),
             _ => None,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Tiny => "tiny",
+            Self::Base => "base",
+            Self::Small => "small",
+            Self::LargeV3TurboQ8 => "large-v3-turbo-q8_0",
+            Self::Medium => "medium",
+            Self::LargeV3Turbo => "large-v3-turbo",
+            Self::LargeV3 => "large-v3",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::LargeV3TurboQ8 => "large-v3-turbo Q8 (874MB) — ⭐ 2026 GPU Best (Fast + Accurate)",
+            Self::LargeV3Turbo => "large-v3-turbo FP16 (1.6GB) — Ultra accurate + fast on GPU",
+            Self::Base => "base (140MB) — Fast lightweight (CPU/GPU)",
+            Self::Small => "small (465MB) — Balanced mid-range",
+            Self::Medium => "medium (1.5GB) — Legacy mid-heavy",
+            Self::LargeV3 => "large-v3 (3.0GB) — Full 32-layer (slower than Turbo)",
+            Self::Tiny => "tiny (75MB) — Ultra-light test model",
         }
     }
 
@@ -54,7 +99,9 @@ impl ModelVariant {
             Self::Tiny => "ggml-tiny.bin",
             Self::Base => "ggml-base.bin",
             Self::Small => "ggml-small.bin",
+            Self::LargeV3TurboQ8 => "ggml-large-v3-turbo-q8_0.bin",
             Self::Medium => "ggml-medium.bin",
+            Self::LargeV3Turbo => "ggml-large-v3-turbo.bin",
             Self::LargeV3 => "ggml-large-v3.bin",
         }
     }
@@ -71,14 +118,30 @@ impl ModelVariant {
             Self::Tiny => 75,
             Self::Base => 140,
             Self::Small => 465,
+            Self::LargeV3TurboQ8 => 874,
             Self::Medium => 1500,
+            Self::LargeV3Turbo => 1620,
             Self::LargeV3 => 3000,
         }
     }
 
-    /// Default model for MVP — smallest, fastest, good enough to verify pipeline.
+    /// Default model — prefers Large-v3-Turbo Q8 if downloaded, otherwise best installed model.
     pub fn default_mvp() -> Self {
-        Self::Tiny
+        Self::best_installed().unwrap_or(Self::LargeV3TurboQ8)
+    }
+
+    /// Return the best model currently downloaded on disk, in quality/speed priority order.
+    pub fn best_installed() -> Option<Self> {
+        let priority = [
+            Self::LargeV3TurboQ8,
+            Self::LargeV3Turbo,
+            Self::LargeV3,
+            Self::Medium,
+            Self::Small,
+            Self::Base,
+            Self::Tiny,
+        ];
+        priority.into_iter().find(|v| has_model(*v))
     }
 }
 
@@ -110,32 +173,137 @@ impl TranscriptionResult {
 
 /// Language options for whisper.cpp's `-l` flag.
 pub const TRANSCRIBE_LANG_OPTIONS: &[&str] = &[
-    "auto", "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl",
-    "ar", "sv", "it", "id", "hi", "fi", "vi", "he", "uk", "el", "ms", "cs", "ro", "da", "hu",
-    "ta", "no", "th", "ur", "hr", "bg", "lt", "la", "mi", "ml", "cy", "sk", "te", "fa", "lv",
-    "bn", "sr", "az", "sl", "kn", "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk",
-    "sq", "sw", "gl", "mr", "pa", "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be", "tg",
-    "sd", "gu", "am", "yi", "lo", "uz", "kk", "ht", "ps", "tk", "mn", "nn", "rm", "my", "jv",
+    "auto", "ja", "en", "vi", "zh", "ko", "fr", "de", "es", "ru", "pt", "it", "th", "id",
 ];
+
+/// Clean Whisper transcript output:
+/// 1. Strips non-speech sound tags like `(音楽)`, `[Music]`, `[BLANK_AUDIO]`, `(拍手)`.
+/// 2. Filters common Whisper silence/outro hallucinations (`ご視聴ありがとうございました`, `Thank you for watching`, etc.).
+/// 3. Deduplicates pathological phrase repetitions (`"フォーマル・フォーマル"`).
+pub fn clean_whisper_transcript(raw: &str) -> String {
+    let mut s = raw.trim().to_string();
+    if s.is_empty() {
+        return String::new();
+    }
+
+    // 1. Strip bracketed/parenthesized sound annotations: [...], （...）, (...)
+    s = strip_enclosed_tags(&s, '[', ']');
+    s = strip_enclosed_tags(&s, '(', ')');
+    s = strip_enclosed_tags(&s, '（', '）');
+    s = strip_enclosed_tags(&s, '【', '】');
+    s = s.replace('♪', "").replace('♬', "").trim().to_string();
+
+    if s.is_empty() {
+        return String::new();
+    }
+
+    // 2. Check known Whisper silence/music hallucinations
+    let lower = s.to_lowercase();
+    const HALLUCINATIONS: &[&str] = &[
+        "ご視聴ありがとうございました",
+        "ご視聴ありがとうございます",
+        "チャンネル登録",
+        "高評価",
+        "字幕:",
+        "字幕：",
+        "翻訳:",
+        "サブタイトル",
+        "thank you for watching",
+        "thanks for watching",
+        "subtitles by",
+        "amara.org",
+        "please subscribe",
+        "hãy đăng ký kênh",
+        "cảm ơn các bạn đã theo dõi",
+        "blank_audio",
+    ];
+    for h in HALLUCINATIONS {
+        if lower.contains(h) && s.chars().count() <= 45 {
+            return String::new();
+        }
+    }
+
+    // 3. Filter pure punctuation / single noise characters
+    let meaningful_chars = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && !matches!(c, '.' | ',' | '!' | '?' | '。' | '、' | '！' | '？' | '…' | '-' | '—' | '「' | '」' | '"' | '\''))
+        .count();
+    if meaningful_chars == 0 {
+        return String::new();
+    }
+
+    // 4. Collapse pathological repeats (e.g. same sentence/token repeated 3+ times)
+    collapse_repetitions(&s)
+}
+
+fn strip_enclosed_tags(input: &str, open: char, close: char) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut depth = 0usize;
+    for ch in input.chars() {
+        if ch == open {
+            depth += 1;
+        } else if ch == close {
+            if depth > 0 {
+                depth -= 1;
+            }
+        } else if depth == 0 {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn collapse_repetitions(input: &str) -> String {
+    let trimmed = input.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    let n = chars.len();
+    // Check if the string contains a substring of length 2..=20 repeated 3+ times consecutively
+    for pat_len in 2..=(n / 3).min(24) {
+        let mut i = 0;
+        while i + pat_len * 3 <= n {
+            let pat = &chars[i..i + pat_len];
+            let mut reps = 1;
+            while i + (reps + 1) * pat_len <= n
+                && &chars[i + reps * pat_len..i + (reps + 1) * pat_len] == pat
+            {
+                reps += 1;
+            }
+            if reps >= 3 {
+                // If almost the entire string is this repetition, drop it as hallucination
+                if reps * pat_len * 2 >= n {
+                    return pat.iter().collect::<String>().trim().to_string();
+                }
+            }
+            i += 1;
+        }
+    }
+    trimmed.to_string()
+}
 
 /// Whisper local STT manager.
 pub struct WhisperLocal {
     binary_path: PathBuf,
     model_path: PathBuf,
     model: ModelVariant,
+    engine: SttEngine,
 }
 
 impl WhisperLocal {
     /// Create a new Whisper local instance. Downloads binary + model if needed.
     pub fn new(model: ModelVariant) -> Result<Self> {
-        let binary_path = ensure_binary()?;
+        let (binary_path, engine) = ensure_binary_with_engine()?;
         let model_path = ensure_model(model)?;
 
         Ok(Self {
             binary_path,
             model_path,
             model,
+            engine,
         })
+    }
+
+    pub fn engine(&self) -> SttEngine {
+        self.engine
     }
 
     /// Transcribe a WAV file using the local whisper.cpp binary.
@@ -145,29 +313,30 @@ impl WhisperLocal {
             return Err(anyhow::anyhow!("WAV file not found: {}", wav_path.display()));
         }
 
-        // Get audio duration from WAV header
         let audio_duration = read_wav_duration(wav_path.to_str().unwrap()).unwrap_or(0.0);
-
-        // Build whisper-cli command
-        // Usage: whisper-cli.exe -m model.bin -f input.wav [-l lang] [--no-prints]
         let lang = language.unwrap_or("auto");
         info!(
-            "🎙️ Running: {} -m {} -f {} -l {}",
+            "🎙️ Running: {} (engine={}) -m {} -f {} -l {}",
             self.binary_path.display(),
+            self.engine.as_str(),
             self.model_path.display(),
             wav_path.display(),
             lang
         );
 
         let start = std::time::Instant::now();
-        let output = Command::new(&self.binary_path)
-            .arg("-m")
+        let mut cmd = Command::new(&self.binary_path);
+        cmd.arg("-m")
             .arg(&self.model_path)
             .arg("-f")
             .arg(wav_path)
             .arg("-l")
             .arg(lang)
-            .arg("--no-prints")
+            .arg("--no-prints");
+        if self.engine == SttEngine::Cpu {
+            cmd.arg("-ng");
+        }
+        let output = cmd
             .output()
             .with_context(|| format!("Failed to run whisper-cli at {}", self.binary_path.display()))?;
         let inference_duration = start.elapsed().as_secs_f32();
@@ -181,28 +350,13 @@ impl WhisperLocal {
             ));
         }
 
-        // whisper-cli outputs segments like:
-        //   [00:00:00.000 --> 00:00:05.000] Hello, world.
-        // For our MVP, we just want the text. Let's grab it from stdout.
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let text = parse_whisper_output(&stdout);
-
-        let detected_lang = if lang == "auto" {
-            "auto".to_string()
-        } else {
-            lang_code_to_name(lang).to_string()
-        };
-
-        info!(
-            "✅ Transcribed {} → {} chars in {:.2}s",
-            wav_path.display(),
-            text.len(),
-            inference_duration
-        );
+        let raw_text = parse_whisper_output(&stdout);
+        let text = clean_whisper_transcript(&raw_text);
 
         Ok(TranscriptionResult {
             text,
-            language: detected_lang,
+            language: lang.to_string(),
             model: self.model.filename().to_string(),
             audio_duration_secs: audio_duration,
             inference_duration_secs: inference_duration,
@@ -210,13 +364,6 @@ impl WhisperLocal {
     }
 }
 
-/// Parse whisper-cli stdout into plain text.
-///
-/// Output format (per segment):
-/// ```text
-/// [00:00:00.000 --> 00:00:05.000]  Hello, world.
-/// [00:00:05.500 --> 00:00:10.000]  This is a test.
-/// ```
 fn parse_whisper_output(stdout: &str) -> String {
     let mut texts = Vec::new();
     for line in stdout.lines() {
@@ -224,36 +371,18 @@ fn parse_whisper_output(stdout: &str) -> String {
         if line.is_empty() {
             continue;
         }
-        // Find "]" and take everything after it
         if let Some(idx) = line.find(']') {
             let text = line[idx + 1..].trim();
             if !text.is_empty() {
                 texts.push(text.to_string());
             }
         } else if !line.starts_with('[') {
-            // No timestamp prefix — probably the full text (when not using segment mode)
             texts.push(line.to_string());
         }
     }
     texts.join(" ")
 }
 
-fn lang_code_to_name(code: &str) -> &'static str {
-    match code.to_lowercase().as_str() {
-        "ja" => "Japanese",
-        "en" => "English",
-        "vi" => "Vietnamese",
-        "zh" => "Chinese",
-        "ko" => "Korean",
-        "fr" => "French",
-        "de" => "German",
-        "es" => "Spanish",
-        "auto" => "auto-detect",
-        _ => "Unknown",
-    }
-}
-
-/// Read WAV file duration from header.
 fn read_wav_duration(wav_path: &str) -> Result<f32> {
     let reader = hound::WavReader::open(wav_path)
         .with_context(|| format!("Failed to open WAV: {wav_path}"))?;
@@ -262,122 +391,141 @@ fn read_wav_duration(wav_path: &str) -> Result<f32> {
     Ok(total_frames / spec.sample_rate as f32)
 }
 
-/// Build a list of candidate paths to look for a file across possible locations.
-/// We try multiple locations so the app works regardless of CWD (dev vs release).
-/// Order matters: we prefer src-tauri/ (canonical location) over project-root (may
-/// have stale partial downloads from earlier failed runs).
 fn candidate_paths(relative_dir: &str, filename: &str) -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    // Prefer src-tauri/ paths first (canonical location, used during dev)
-    let dirs = [
-        &format!("src-tauri/{relative_dir}"),
-        relative_dir,                    // project root
-        &format!("../{relative_dir}"),
-        &format!("../../{relative_dir}"),
-    ];
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    paths.push(manifest_dir.join(relative_dir).join("whisper-cuda").join(filename));
+    paths.push(manifest_dir.join(relative_dir).join("Release").join(filename));
+    paths.push(manifest_dir.join(relative_dir).join("release").join(filename));
+    paths.push(manifest_dir.join(relative_dir).join(filename));
+    let dirs = [relative_dir, "src-tauri"];
     for d in dirs {
-        paths.push(Path::new(d).join("Release").join(filename));
-        paths.push(Path::new(d).join("release").join(filename));
-        paths.push(Path::new(d).join(filename));
-        paths.push(Path::new(d).join("bin").join(filename));
-    }
-    // Also try next to current exe (for release builds)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            paths.push(dir.join(relative_dir).join("Release").join(filename));
-            paths.push(dir.join(relative_dir).join(filename));
-        }
+        let p = Path::new(d);
+        paths.push(p.join(relative_dir).join("Release").join(filename));
+        paths.push(p.join(relative_dir).join(filename));
     }
     paths
 }
 
-/// Find the whisper-cli.exe binary in the extracted directory tree.
-fn find_whisper_cli() -> Option<PathBuf> {
+fn find_cuda_whisper_cli() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join(BINARIES_DIR).join("whisper-cuda").join("whisper-cli.exe"),
+        manifest_dir.join(BINARIES_DIR).join("cuda").join("whisper-cli.exe"),
+    ];
+    candidates.into_iter().find(|p| p.exists())
+}
+
+fn find_cpu_whisper_cli() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let p = manifest_dir.join(BINARIES_DIR).join("Release").join("whisper-cli.exe");
+    if p.exists() {
+        return Some(p);
+    }
     candidate_paths(BINARIES_DIR, "whisper-cli.exe")
         .into_iter()
         .find(|p| p.exists())
 }
 
-/// Ensure whisper.cpp Windows binary is available. Downloads + extracts on first run.
-pub fn ensure_binary() -> Result<PathBuf> {
-    // Check if already extracted
-    if let Some(path) = find_whisper_cli() {
-        info!("✅ whisper-cli found: {}", path.display());
-        return Ok(path);
+fn find_whisper_cli_with_engine() -> Option<(PathBuf, SttEngine)> {
+    if let Some(p) = find_cuda_whisper_cli() {
+        return Some((p, SttEngine::Cuda));
+    }
+    if let Some(p) = find_cpu_whisper_cli() {
+        return Some((p, SttEngine::Cpu));
+    }
+    None
+}
+
+pub fn ensure_binary_with_engine() -> Result<(PathBuf, SttEngine)> {
+    if let Some((path, engine)) = find_whisper_cli_with_engine() {
+        info!("✅ whisper-cli found: {} (engine={})", path.display(), engine.as_str());
+        return Ok((path, engine));
     }
 
     warn!("⏬ whisper-cli not found, downloading {}...", WHISPER_CPP_ZIP_URL);
-    let dir = Path::new(BINARIES_DIR);
-    std::fs::create_dir_all(dir).context("Failed to create binaries directory")?;
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BINARIES_DIR);
+    std::fs::create_dir_all(&dir).context("Failed to create binaries directory")?;
 
     let zip_path = dir.join("whisper-bin-x64.zip");
     download_file(WHISPER_CPP_ZIP_URL, &zip_path)?;
-
-    info!("📦 Extracting whisper-bin-x64.zip...");
-    extract_zip(&zip_path, dir)?;
-
-    // Clean up zip (best effort)
+    extract_zip(&zip_path, &dir)?;
     let _ = std::fs::remove_file(&zip_path);
 
-    // Find binary after extraction
-    let binary_path = find_whisper_cli().ok_or_else(|| {
-        anyhow::anyhow!(
-            "whisper-cli.exe not found after extraction. Searched in: {}",
-            dir.display()
-        )
+    let (binary_path, engine) = find_whisper_cli_with_engine().ok_or_else(|| {
+        anyhow::anyhow!("whisper-cli.exe not found after extraction in {}", dir.display())
     })?;
-
-    info!("✅ whisper-cli extracted: {}", binary_path.display());
-    Ok(binary_path)
+    Ok((binary_path, engine))
 }
 
-/// Ensure the Whisper model is available. Downloads from Hugging Face on first run.
+pub fn ensure_binary() -> Result<PathBuf> {
+    ensure_binary_with_engine().map(|(p, _)| p)
+}
+
+pub fn current_engine() -> Option<SttEngine> {
+    if find_cuda_whisper_cli().is_some() {
+        Some(SttEngine::Cuda)
+    } else if find_cpu_whisper_cli().is_some() {
+        Some(SttEngine::Cpu)
+    } else {
+        None
+    }
+}
+
+pub fn has_binary() -> bool {
+    find_whisper_cli_with_engine().is_some()
+}
+
+pub fn has_model(variant: ModelVariant) -> bool {
+    candidate_paths(MODELS_DIR, variant.filename())
+        .into_iter()
+        .any(|p| p.exists() && std::fs::metadata(&p).map(|m| m.len() > 10_000_000).unwrap_or(false))
+}
+
+pub fn model_looks_valid(variant: ModelVariant) -> bool {
+    has_model(variant)
+}
+
 pub fn ensure_model(variant: ModelVariant) -> Result<PathBuf> {
-    // Check if model exists in any of the known locations
     if let Some(existing) = candidate_paths(MODELS_DIR, variant.filename())
         .into_iter()
-        .find(|p| p.exists())
+        .find(|p| p.exists() && std::fs::metadata(p).map(|m| m.len() > 10_000_000).unwrap_or(false))
     {
-        info!("✅ Model {} found: {}", variant.filename(), existing.display());
         return Ok(existing);
     }
 
-    // Download to first candidate dir (prefer src-tauri/models for consistency)
-    let target_dir = Path::new("src-tauri").join(MODELS_DIR);
+    let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODELS_DIR);
     std::fs::create_dir_all(&target_dir).context("Failed to create models directory")?;
     let model_path = target_dir.join(variant.filename());
+    let temp_path = target_dir.join(format!("{}.downloading", variant.filename()));
 
     warn!(
         "⏬ Model {} not found, downloading (~{}MB)...",
         variant.filename(),
         variant.approximate_size_mb()
     );
-    download_file(&variant.download_url(), &model_path)?;
+    download_file(&variant.download_url(), &temp_path)?;
+    std::fs::rename(&temp_path, &model_path)
+        .with_context(|| format!("Failed to rename downloaded model to {}", model_path.display()))?;
     info!("✅ Model downloaded: {}", model_path.display());
     Ok(model_path)
 }
 
-/// Ensure local whisper.cpp + default model. Convenience function.
 pub fn ensure_local_whisper() -> Result<WhisperLocal> {
     WhisperLocal::new(ModelVariant::default_mvp())
 }
 
-/// Convenience: transcribe a WAV file using the local Whisper (default model).
-pub fn transcribe_wav(
-    wav_path: &str,
-    language: Option<&str>,
-) -> Result<TranscriptionResult> {
+pub fn transcribe_wav(wav_path: &str, language: Option<&str>) -> Result<TranscriptionResult> {
     let whisper = ensure_local_whisper()?;
     whisper.transcribe(wav_path, language)
 }
 
-/// Download a file from URL to a local path. Blocking, with progress logging.
 fn download_file(url: &str, dest: &Path) -> Result<()> {
     info!("📥 Downloading: {url}");
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("sublix/0.1.0")
-        .timeout(std::time::Duration::from_secs(600)) // 10 min
+        .user_agent("sublix/0.5.0")
+        .timeout(std::time::Duration::from_secs(900))
         .build()
         .context("Failed to build HTTP client")?;
 
@@ -394,11 +542,11 @@ fn download_file(url: &str, dest: &Path) -> Result<()> {
         .with_context(|| format!("Failed to create file: {}", dest.display()))?;
 
     use std::io::{Read, Write};
-    let mut buffer = [0u8; 64 * 1024]; // 64KB chunks
+    let mut buffer = [0u8; 128 * 1024];
     let mut last_log_pct: i32 = -1;
 
-    while let Some(chunk_result) = read_chunk(&mut response, &mut buffer) {
-        let bytes_read = chunk_result?;
+    loop {
+        let bytes_read = response.read(&mut buffer)?;
         if bytes_read == 0 {
             break;
         }
@@ -423,11 +571,6 @@ fn download_file(url: &str, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-fn read_chunk<R: std::io::Read>(reader: &mut R, buf: &mut [u8]) -> Option<std::io::Result<usize>> {
-    Some(reader.read(buf))
-}
-
-/// Extract a ZIP file to a destination directory.
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = std::fs::File::open(zip_path)
         .with_context(|| format!("Failed to open zip: {}", zip_path.display()))?;
@@ -451,6 +594,5 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<()> {
         }
     }
 
-    info!("✅ Extracted {} entries to {}", archive.len(), dest_dir.display());
     Ok(())
 }

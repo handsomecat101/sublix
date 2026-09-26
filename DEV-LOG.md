@@ -205,4 +205,167 @@ sublix/
 
 ---
 
-*Last updated: 2026-08-16 23:14 by Mavis*
+## Session 2 — 2026-08-24 20:00 → 21:10 (≈70 phút)
+
+### User intent
+- User test thực tế thấy latency 4-5s+ — KHÔNG phải realtime. Yêu cầu: làm sao thực sự realtime?
+- Mệt, muốn giải quyết nhanh, không hỏi lặt vặt.
+
+### Test thực tế (binary cũ 8/19, trước M5)
+- whisper-cli subprocess + CUDA tiny, 5s Japanese audio: **4.5s** (1.1x realtime)
+- whisper-cli + CUDA base, 5s Japanese: **10.3s** (0.5x realtime)
+- Nguyên nhân: subprocess reload model mỗi call + CUDA init overhead.
+
+### Decision: refactor STT sang whisper-server (long-running HTTP)
+- User chọn option B (whisper-server pattern) thay vì A (giảm chunk) hay C (whisper-stream).
+- Lý do: B là sweet spot — giảm 3x latency với effort vừa phải.
+
+### M5: STT server (whisper-server HTTP wrapper)
+1. **Tạo `src-tauri/src/stt/whisper_server.rs`** (~370 lines, pattern giống `translate/server.rs`):
+   - `WhisperServer` struct: spawn whisper-server subprocess, hold child handle
+   - `start(model)` — try CUDA build first, fall back to CPU. Polls `/health` until ready.
+   - `transcribe(wav, lang)` — POST multipart to `/inference`, parse JSON `{text: "..."}`
+   - **Auto-resample WAV → 16kHz mono float32** trước khi POST (whisper-server yêu cầu)
+   - Linear interpolation resample (đơn giản, đủ cho speech)
+   - Lazy singleton qua `OnceLock<WhisperServer>`
+2. **Bug fix:** binary v1.7.6 KHÔNG support `--log-disable` flag → bỏ.
+3. **Bug fix:** Cargo.toml thiếu `multipart` feature cho reqwest → thêm.
+4. **Frontend** (`SettingsView`): thêm section "🎤 STT engine (M5 — whisper-server)" với:
+   - Status indicator (○ not started / ⏳ starting / 🚀 CUDA / 💻 CPU)
+   - Button "Pre-start STT server" (optional, dùng model đã chọn)
+   - Auto-preload khi nhấn "Start Live" để skip 2-3s boot delay
+5. **Audio live loop** (`audio/live.rs`):
+   - Default model Tiny → **Base** (⭐ recommended)
+   - Gọi `stt::transcribe_via_server()` thay vì `WhisperLocal::transcribe` (subprocess)
+   - Auto-fallback về subprocess nếu server fail
+6. **`transcribe_test` command** (gọi từ UI): prefer server, fall back to subprocess
+7. **Cleanup toolchain:** Rust toolchain bị thiếu `rustc.exe` → uninstall + reinstall stable 1.98.0.
+   - Download rustup-init.exe (12.8MB) → `rustup toolchain install stable --profile minimal`
+   - Path update: dùng `C:\Users\TTC\.cargo\bin\` (có rustc proxy) thay vì toolchain bin trực tiếp.
+
+### Verification (2026-08-24 21:00)
+- ✅ `cargo check` pass (1 warning: unused `SttEngine` import — cleaned up)
+- ✅ `cargo build --bin sublix` pass (2m16s, 21MB binary)
+- ✅ `npm run build` pass (237KB JS, 12.39KB CSS, no TS errors)
+- ✅ **whisper-server standalone test** (CPU mode, tiny model, 5s Japanese):
+  - Cold start (server boot): 2s
+  - Inference (warm): **1.33-1.61s** (vs 4.5s subprocess cũ) = **~3x faster**
+- ✅ Output giống subprocess: `"「フォーマル・フォーマル」は「フォーマル・フォーマル」を使用しています。"`
+
+### Test results thực tế (CPU server, tiny, 5s audio)
+| Run | Time | Notes |
+|---|---|---|
+| Cold | 1.61s | First call, model in memory |
+| Warm 1 | 1.34s | |
+| Warm 2 | 1.33s | |
+| **Avg warm** | **1.33s** | **~3.4x faster than subprocess (4.5s)** |
+
+### Estimated live capture latency (after M5)
+- Capture 2s audio: 2s
+- STT server 2s audio (CPU tiny): ~0.6s
+- Translation (Qwen 3B): 0.1s (GPU) or ~1s (CPU)
+- **Total CPU: ~3.6s** (down from ~10s)
+- **Total GPU: ~2.7s** (down from ~10s)
+
+### Open issues
+- Chưa test live capture end-to-end qua Tauri GUI (cần user test trên máy thật với video/Zoom)
+- Onboarding view (M5 phase 2) đã code nhưng chưa verify (cần rebuild sau khi backend ready)
+- Translation model (Qwen2.5-3B) chưa download (cần ~1.8GB, user cần confirm)
+- CUDA whisper-server binary chưa có ở `binaries/cuda/` (chỉ whisper-cli CUDA). Hiện tại dùng CPU server.
+
+### Next steps
+- [ ] User test e2e live capture với video thật
+- [ ] Nếu OK → làm tiếp M5 phase 3-6 (tray, autostart, installer, logs viewer)
+- [ ] Nếu vẫn chậm → xem xét whisper-stream (true streaming, ~1s latency)
+
+### Lessons learned
+- whisper-server binary KHÔNG support `--log-disable` ở version 1.7.6 (chỉ main whisper-cli). Check binary help trước khi dùng flag.
+- `reqwest` blocking client cần enable `multipart` feature explicitly.
+- Path có space: cần quote trong PowerShell `Start-Process -ArgumentList`. Hoặc dùng `cmd /c` với string escape.
+- `cargo build` đầu tiên ~2 phút (compile tất cả deps), subsequent ~20s.
+
+---
+
+## Session 3 — 2026-08-24 22:30 → 22:50 (≈20 phút)
+
+### User intent
+- User yêu cầu: toggle rõ ràng để chọn CPU/GPU (không auto-detect lừa tình).
+- Indicator "chắc chắn" hiển thị đang chạy CPU hay GPU — "tù mò" là không được.
+
+### Implementation: M5+ Engine preference + persistent config
+1. **Tạo `src-tauri/src/config.rs`** (~80 lines):
+   - `AppConfig` struct: `{ stt_engine_preference, translation_engine_preference }`
+   - `load(app)` / `save(app)`: JSON ở `%APPDATA%/com.sublix.app/sublix-config.json`
+   - Validation: chỉ chấp nhận "auto" / "cpu" / "cuda"
+2. **`EnginePreference` enum** (trong `whisper_server.rs`):
+   - `Auto` | `Cuda` | `Cpu`
+   - `from_str(s)`, `as_str()` helpers
+3. **`WhisperServer::start`** refactor:
+   - `Auto`: try CUDA, fall back to CPU (warn)
+   - `Cuda`: force CUDA, fail if binary missing (no fallback)
+   - `Cpu`: force CPU, fail if binary missing
+4. **Tauri commands mới**:
+   - `get_config` → trả về full `AppConfig`
+   - `set_stt_engine_preference(choice)` → validate + save to disk
+5. **Modified commands**:
+   - `transcribe_test` đọc preference từ config, truyền vào `transcribe_via_server`
+   - `preload_stt_server_cmd` đọc preference, truyền vào `preload_stt_server`
+   - `audio/live.rs` đọc preference khi start_live, truyền vào thread loop
+6. **Frontend** (`SettingsView.tsx` STT engine section):
+   - **3-way toggle**: ⚙ AUTO | 💻 CPU | 🎮 GPU buttons (active state highlight)
+   - **Indicator với colored dot**:
+     - `engine-dot-cuda` (green, fast pulse) + "Running on GPU (CUDA) — fastest, ~0.1-0.2s per chunk"
+     - `engine-dot-cpu` (blue, slow pulse) + "Running on CPU — works on any machine, ~1-2s per chunk"
+     - `engine-dot-starting` (yellow, fast pulse) + "Starting server..."
+     - `engine-dot-idle` (gray, no pulse) + "Not started"
+   - **Warning banner** nếu preference conflicts với binary:
+     - Pref=GPU nhưng binary CUDA missing → "You picked GPU but no CUDA whisper-server binary..."
+     - Pref=CPU nhưng binary missing → "No whisper-server binary found..."
+   - Save handler: gọi `sublix.setSttEnginePreference(choice)`, nếu server đang chạy với engine khác → thông báo "Restart Sublix to switch"
+7. **CSS** (mới trong `SettingsView.css`):
+   - `.settings-engine-toggle` + `.settings-engine-btn` (active state gradient)
+   - `.engine-dot-*` (colored dots với pulse animation khác nhau)
+   - `.settings-engine-warning` (yellow banner với link + code style)
+
+### Verification (2026-08-24 22:45)
+- ✅ `npm run build` pass (240KB JS, 14.28KB CSS)
+- ✅ `cargo check` pass (only 2 dead_code warnings for unused version constants)
+- ✅ `cargo build --bin sublix` pass (32s)
+- ✅ Tauri dev start OK (Vite 866ms, Rust 445/447)
+
+### UX
+- User mở Settings → scroll xuống "🎤 STT engine"
+- Thấy 3 nút AUTO/CPU/GPU. Bấm chọn → preference save vào `%APPDATA%`
+- Bấm "Pre-start STT server" → server start với engine đã chọn
+- Indicator hiển thị rõ ràng: dot xanh (GPU) / dot xanh dương (CPU) + text "Running on X"
+- Nếu conflict (chọn GPU mà binary không có) → warning banner vàng + link tải CUDA build
+
+### Lessons learned
+- Tauri 2 cung cấp `app.path().app_config_dir()` — portable, đúng chuẩn OS-specific path
+- Để engine pref "chắc chắn" phải distinguish preference vs actual: preference lưu disk, actual là server state
+- Pulse animation phải khác nhau giữa CPU/GPU/starting để user nhận biết nhanh qua peripheral vision
+- Restart warning: chỉ hiện khi đổi preference, không phải khi set lần đầu
+
+---
+
+## Session 4 — 2026-09-27 (v0.5.0 Complete Overhaul: GPU Turbo + Qwen3 + Zero-Gap VAD)
+
+### Issues found in previous v0.4.3 state & fixed
+1. **Rust function-local `OnceLock` singleton bug (`whisper_server.rs` & `translate/server.rs`)**:
+   - `preload_server`, `transcribe_via_server`, and `current_engine` each declared their own function-local `static OnceLock`, so engine status always returned `None`, servers spawned twice, and changing models/engines required restarting the whole app.
+   - **Fix**: Replaced with module-level `Mutex<Option<Server>>` singletons supporting live **hot-swapping** of both model variants and CPU/GPU engines.
+2. **Missing `source_lang` in Live mode (`SettingsView.tsx` & `audio/live.rs`)**:
+   - `SettingsView` never passed `sourceLang` to `startLive()`, and `live.rs` hardcoded `None` (`"auto"`), causing translation prompts to receive `"auto"` instead of `"ja"` / `"en"`.
+   - **Fix**: Wired `source_lang`, `translation_model`, and `vad_enabled` end-to-end and persisted all settings in `%APPDATA%/com.sublix.app/sublix-config.json`.
+3. **Sequential capture-then-infer audio gaps (`audio/live.rs`)**:
+   - Previously, `live.rs` recorded a WAV file, stopped WASAPI, waited 1–2s for STT+LLM, then reopened WASAPI — dropping 1–2s of movie dialogue on every chunk.
+   - **Fix**: Rebuilt `audio/live.rs` as a **2-thread Producer-Consumer pipeline** with a continuous open WASAPI loopback stream (0ms gap) + **Smart VAD** (250ms pre-roll + natural 360ms pause endpointing) + Whisper hallucination/repetition filter.
+4. **Upgraded to 2026 AI Models (RTX 3090 24GB CUDA)**:
+   - Activated isolated `src-tauri/binaries/whisper-cuda/` so `whisper-server.exe` and `llama-server.exe` never conflict on `ggml.dll`.
+   - Downloaded & integrated **`Whisper Large-v3-Turbo Q8_0` (`ggml-large-v3-turbo-q8_0.bin`, 874MB)** for STT.
+   - Downloaded & integrated **`Qwen3-4B-Instruct-2507` (`Qwen3-4B-Instruct-2507-Q4_K_M.gguf`, 2.5GB)** (plus selectable `Gemma-3-4B-IT` and `Qwen3-8B`) with 2-line rolling dialogue context memory.
+   - **Verified RTX 3090 benchmark**: Both CUDA servers boot in **2.8s**; warm translation latency is **114–144ms** per subtitle line.
+
+---
+
+*Last updated: 2026-09-27 — v0.5.0 Ready*

@@ -2,13 +2,15 @@
 
 .settings-root {
   min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   background: #0f1115;
   color: #e5e7eb;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   padding: 24px 32px 40px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .settings-header {
@@ -84,6 +86,96 @@
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.5;
+}
+
+.settings-slider {
+  flex: 1;
+  max-width: 200px;
+  accent-color: #60a5fa;
+}
+
+.settings-slider-value {
+  min-width: 36px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  text-align: right;
+}
+
+/* Per-device audio level bars (from scan) */
+.settings-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.settings-level-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 36px 50px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+
+.settings-level-row.active {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.settings-level-row.selected {
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.settings-level-use {
+  font-size: 10px;
+  padding: 3px 6px;
+  min-width: 0;
+}
+
+.settings-level-name {
+  color: rgba(255, 255, 255, 0.8);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-level-error {
+  color: rgba(248, 113, 113, 0.7);
+  font-style: italic;
+}
+
+.settings-level-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.settings-level-bar-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: width 0.2s;
+}
+
+.settings-level-bar-fill[data-active="true"] {
+  background: linear-gradient(90deg, #4ade80, #22d3ee);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+}
+
+.settings-level-pct {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  text-align: right;
 }
 
 .settings-row {
@@ -198,4 +290,123 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
   font-style: italic;
+}
+
+/* === Engine preference toggle (M5+) === */
+
+.settings-engine-toggle {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.settings-engine-btn {
+  padding: 6px 14px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.settings-engine-btn:hover:not(:disabled):not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.settings-engine-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-engine-btn.active {
+  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  color: white;
+  box-shadow: 0 1px 4px rgba(96, 165, 250, 0.3);
+}
+
+/* === Engine status indicator (colored dot + text) === */
+
+.settings-engine-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.engine-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.engine-dot-cuda {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  animation: engine-pulse-cuda 1.8s ease-in-out infinite;
+}
+
+.engine-dot-cpu {
+  background: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+  animation: engine-pulse-cpu 2.4s ease-in-out infinite;
+}
+
+.engine-dot-starting {
+  background: #fbbf24;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+  animation: engine-pulse-starting 0.8s ease-in-out infinite;
+}
+
+.engine-dot-idle {
+  background: #94a3b8;
+  opacity: 0.5;
+}
+
+@keyframes engine-pulse-cuda {
+  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.6); }
+  50% { box-shadow: 0 0 14px rgba(52, 211, 153, 0.9); }
+}
+
+@keyframes engine-pulse-cpu {
+  0%, 100% { box-shadow: 0 0 6px rgba(96, 165, 250, 0.4); }
+  50% { box-shadow: 0 0 10px rgba(96, 165, 250, 0.7); }
+}
+
+@keyframes engine-pulse-starting {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.settings-engine-warning {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fde68a;
+}
+
+.settings-engine-warning code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+}
+
+.settings-engine-warning a {
+  text-decoration: underline;
 }

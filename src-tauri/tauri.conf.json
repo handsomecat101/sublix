@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sublix",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "identifier": "com.sublix.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,20 +13,20 @@
     "windows": [
       {
         "label": "main",
-        "title": "Sublix — Settings",
-        "width": 720,
-        "height": 560,
-        "minWidth": 480,
-        "minHeight": 400,
+        "title": "Sublix v0.5.0 — Settings",
+        "width": 760,
+        "height": 880,
+        "minWidth": 520,
+        "minHeight": 500,
         "resizable": true,
         "decorations": true,
         "url": "index.html"
       },
       {
         "label": "overlay",
-        "title": "Sublix Overlay",
-        "width": 640,
-        "height": 120,
+        "title": "Sublix v0.5.0 — Overlay",
+        "width": 720,
+        "height": 150,
         "transparent": true,
         "alwaysOnTop": true,
         "decorations": false,
