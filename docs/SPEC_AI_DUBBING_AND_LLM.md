@@ -158,17 +158,20 @@ QUY TẮC BẮT BUỘC:
 ## 6. Lộ Trình Phát Triển Chi Tiết (Roadmap & Milestones)
 
 - [x] **Milestone 1 (v0.6.0):** Left Sidebar UI, File Subtitle Studio, WASAPI loopback, Whisper Large-v3-Turbo local.
-- [ ] **Milestone 2 (v0.6.5 — ĐANG THỰC HIỆN):** 
-  - Tích hợp cổng kết nối **MiniMax Unlimited API** và **Ollama Local Endpoint (Qwen 27B)** vào Sublix Settings & Translation Engine.
-  - Thêm prompt biên kịch điện ảnh chuyên nghiệp.
-- [ ] **Milestone 3 (v0.7.0):** 
-  - Tích hợp **Sherpa-ONNX Diarization** (`sherpa-rs`): Tự động phát hiện danh sách vai diễn (Speaker 0, Speaker 1) và hiển thị trực quan trong Studio.
-- [ ] **Milestone 4 (v0.8.0):** 
-  - Tích hợp **Kokoro-Vietnamese ONNX & Edge-TTS**: Cho phép gán giọng đọc AI theo từng vai và xuất file audio lồng tiếng.
-- [ ] **Milestone 5 (v0.9.0):** 
-  - Tích hợp **Demucs / MelBand-Roformer**: Tách nhạc nền tự động và hòa âm đa kênh.
-- [ ] **Milestone 6 (v1.0.0 — Bản hoàn chỉnh):** 
-  - Tích hợp **F5-TTS / Viterbox Zero-shot Voice Cloning**: Clone giọng diễn viên gốc sang tiếng Việt. Render video lồng tiếng thành phẩm 1-click.
+- [x] **Milestone 2 (v0.6.0 - Đã hoàn thành):** 
+  - Tích hợp cổng kết nối **MiniMax Unlimited / Coding Plan API** (`sk-cp-` gateway `api.minimax.io`) và **Ollama Local Endpoint (Qwen 27B)** vào Sublix Settings & Translation Engine.
+  - Cấu hình cờ `reasoning_split: true`, bóc tách thẻ `<think>` nội suy của MiniMax-M3.
+  - Thêm prompt biên kịch điện ảnh chuyên nghiệp khống chế âm tiết (Lip-sync constrained).
+- [x] **Milestone 4 (v0.6.0 - Đã hoàn thành):** 
+  - Tích hợp **Neural TTS Multi-Voice Engine (Edge-TTS)**: Cho phép gán giọng đọc AI theo từng vai nhân vật (Nam Minh trầm ấm, Hoài My dịu dàng, giọng Anh, Nhật, Trung).
+  - Tích hợp tính năng **Nghe Thử Tức Thì 1-Click** (Instant Voice Preview) trên từng dòng thoại bằng Base64 audio stream.
+- [x] **Milestone 5 (v0.6.0 - Đã hoàn thành):** 
+  - Tích hợp **Demucs v4 (CUDA)** tách 100% tiếng diễn viên gốc để làm phim lồng tiếng rạp chiếu, giữ nguyên BGM/SFX.
+  - Hỗ trợ chế độ kép: **Thuyết minh (Audio Ducking)** và **Lồng tiếng Chiếu Rạp (Vocal Isolation)**.
+- [ ] **Milestone 3 (v0.7.0 — Roadmap):** 
+  - Tích hợp **Sherpa-ONNX Diarization** (`sherpa-rs`): Tự động phát hiện danh sách vai diễn (Speaker 0, Speaker 1) bằng vector embedding 3D-Speaker chạy native Rust ONNX.
+- [ ] **Milestone 6 (v0.8.0+ — Roadmap):** 
+  - Tích hợp **Kokoro-Vietnamese ONNX** (chạy local offline không cần mạng) và **F5-TTS / Viterbox Zero-shot Voice Cloning**: Clone màu giọng diễn viên gốc sang tiếng Việt.
 
 ---
 

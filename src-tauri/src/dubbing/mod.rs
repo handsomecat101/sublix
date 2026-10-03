@@ -103,6 +103,12 @@ pub fn find_ffmpeg() -> PathBuf {
 
 /// Helper to find edge-tts executable
 pub fn find_edge_tts() -> PathBuf {
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        let p_user = PathBuf::from(format!(r"{}\Python\Python313\Scripts\edge-tts.exe", app_data));
+        if p_user.exists() {
+            return p_user;
+        }
+    }
     let p313 = PathBuf::from(r"C:\Program Files\Python313\Scripts\edge-tts.exe");
     if p313.exists() {
         return p313;
@@ -172,7 +178,7 @@ pub fn get_preset_voices() -> Vec<VoicePreset> {
     ]
 }
 
-/// Synthesize a speech file via edge-tts
+/// Synthesize a speech file via edge-tts with python -m fallback
 pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_path: &Path) -> Result<()> {
     let tts_bin = find_edge_tts();
     let mut cmd = Command::new(&tts_bin);
@@ -193,15 +199,38 @@ pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_p
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let status = cmd
-        .status()
-        .with_context(|| format!("Failed to execute edge-tts at {:?}", tts_bin))?;
+    let status_res = cmd.status();
+    match status_res {
+        Ok(st) if st.success() => Ok(()),
+        _ => {
+            // Robust fallback to python -m edge_tts
+            let mut py_cmd = Command::new("python");
+            py_cmd.arg("-m")
+                .arg("edge_tts")
+                .arg("--text")
+                .arg(text)
+                .arg("--voice")
+                .arg(voice)
+                .arg("--write-media")
+                .arg(out_path);
 
-    if !status.success() {
-        return Err(anyhow::anyhow!("edge-tts failed with exit code: {:?}", status.code()));
+            if !rate.is_empty() && rate != "+0%" {
+                py_cmd.arg("--rate").arg(rate);
+            }
+            if !pitch.is_empty() && pitch != "+0Hz" {
+                py_cmd.arg("--pitch").arg(pitch);
+            }
+
+            #[cfg(windows)]
+            py_cmd.creation_flags(CREATE_NO_WINDOW);
+
+            let py_status = py_cmd.status().with_context(|| "Failed to execute python -m edge_tts")?;
+            if !py_status.success() {
+                return Err(anyhow::anyhow!("edge-tts failed with exit code: {:?}", py_status.code()));
+            }
+            Ok(())
+        }
     }
-
-    Ok(())
 }
 
 /// Synthesize single line and return as base64 data URI

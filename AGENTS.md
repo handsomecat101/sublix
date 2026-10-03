@@ -51,3 +51,4 @@ Trước khi thực hiện bất kỳ lệnh code hoặc sửa lỗi nào, bạn
 - [`agent-team/QUY_TRINH.md`](./agent-team/QUY_TRINH.md) — Quy trình 6 bước chi tiết
 - [`agent-team/GOVERNANCE.md`](./agent-team/GOVERNANCE.md) — Luật phối hợp & An toàn release
 - [`docs/SPEC_AI_DUBBING_AND_LLM.md`](./docs/SPEC_AI_DUBBING_AND_LLM.md) — Đặc tả kỹ thuật Pipeline Lồng tiếng & Scriptwriting AI SOTA
+- [`docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`](./docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md) — Hướng dẫn kỹ thuật & vận hành Studio Lồng tiếng AI (Voice models, Ducking, Demucs, MiniMax-M3)

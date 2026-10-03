@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 01:55 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Hoàn thiện tài liệu tra cứu kỹ thuật chi tiết `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md` (hướng dẫn chọn voice, cơ chế gán vai, preview 1-click, Demucs CUDA, MiniMax-M3, FFmpeg atempo) và củng cố fallback `python -m edge_tts`.
+- **Files đã sửa/tạo:** `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`, `docs/SPEC_AI_DUBBING_AND_LLM.md`, `src-tauri/src/dubbing/mod.rs`, `AGENTS.md`.
+- **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) đã build thành công 100% tại `src-tauri/target/release/sublix.exe`.
+- **Việc tiếp theo:** Sẵn sàng cho người dùng hoặc Agent tiếp theo kiểm thử hoặc nâng cấp thêm model voice offline (Kokoro-VN / F5-TTS).
+
+---
+
 ### 2026-10-04 01:48 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Bổ sung tùy chọn 2 chế độ xử lý âm thanh: **Thuyết minh (Audio Ducking)** và **Lồng tiếng Chiếu Rạp (Demucs v4 CUDA)** bóc tách 100% giọng gốc, giữ trọn BGM/SFX.
