@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 02:25 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
+- **Files đã sửa/tạo:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/config.rs`, `src-tauri/src/lib.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `agent-team/ISSUE_LOG.md`.
+- **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) build thành công (1m08s), video xuất bản khớp chuẩn 100% âm thanh đa vai.
+- **Việc tiếp theo:** Người dùng có thể xem video thành phẩm và thử nghiệm trực tiếp trên giao diện Studio.
+
+---
+
 ### 2026-10-04 01:55 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Hoàn thiện tài liệu tra cứu kỹ thuật chi tiết `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md` (hướng dẫn chọn voice, cơ chế gán vai, preview 1-click, Demucs CUDA, MiniMax-M3, FFmpeg atempo) và củng cố fallback `python -m edge_tts`.

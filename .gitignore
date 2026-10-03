@@ -26,6 +26,8 @@ src-tauri/WixTools/
 *.deb
 *.rpm
 *.appimage
+test_dubbing_input/
+test_sample.wav
 
 # Whisper models (large, can be re-downloaded)
 models/*.bin

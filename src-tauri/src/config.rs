@@ -179,6 +179,19 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    /// Load config from disk without requiring AppHandle (for CLI/tests/background workers)
+    pub fn load_or_default() -> Self {
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            let p = PathBuf::from(app_data).join("com.sublix.desktop").join("sublix-config.json");
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                if let Ok(cfg) = serde_json::from_str::<Self>(&content) {
+                    return cfg;
+                }
+            }
+        }
+        Self::default()
+    }
+
     /// Load config from disk. Returns Default if file missing or corrupt.
     pub fn load(app: &tauri::AppHandle) -> Self {
         let path = config_path(app);

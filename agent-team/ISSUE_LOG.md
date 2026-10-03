@@ -16,6 +16,7 @@
 | `BUG-003` | Key MiniMax Token Plan `sk-cp-` báo lỗi `401 invalid api key` | `src-tauri/src/translate/server.rs` | Key `sk-cp-` bắt buộc phải gọi đến `https://api.minimax.io/v1`, không dùng `api.minimax.chat` | ✅ Fixed |
 | `BUG-004` | Model suy luận `MiniMax-M3` làm lộ khối `<think>...</think>` vào phụ đề | `src-tauri/src/translate/server.rs` | Bắt buộc gửi `"reasoning_split": true` trong body và lọc regex `<think>` ở post-process | ✅ Fixed |
 | `BUG-005` | Whisper CUDA báo thiếu `cublas64_12.dll` trên máy chưa cài CUDA Toolkit | `src-tauri/Cargo.toml` / runtime | Luôn sao chép các DLL cu12 runtime (`cublas64_12.dll`, `cudart64_12.dll`) đi kèm thư mục release | ✅ Fixed |
+| `BUG-006` | Phân vai Diarization bị gán 1 người nói do mốc SRT Whisper liên tục (`pause = 0`) | `src-tauri/src/dubbing/mod.rs` | Kích hoạt đổi vai khi câu trước kết thúc bằng dấu chấm/chấm than/hỏi (`prev_ends_terminal`) thay vì chỉ dựa vào gap > 0.9s | ✅ Fixed |
 
 ---
 
@@ -58,3 +59,12 @@
 - **File:** `src-tauri/target/release/`
 - **Nguyên nhân gốc (Root Cause):** `whisper.cpp` build với flag `cuda` liên kết động tới `cublas64_12.dll` và `cudart64_12.dll`. Nếu máy người dùng không có CUDA 12 trong PATH, app sẽ crash khi khởi động STT.
 - **Cách fix & Bài học:** Đặt các file DLL CUDA runtime cần thiết vào ngay cùng thư mục chứa `sublix.exe` hoặc thư mục lib của ứng dụng.
+
+---
+
+### [BUG-006] Phân vai Diarization bị dồn thành 1 người nói do mốc phụ đề SRT liên tục
+- **Ngày:** 2026-10-04 | **Fix bởi:** Antigravity | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/dubbing/mod.rs`
+- **Nguyên nhân gốc (Root Cause):** Ngưỡng phát hiện đổi vai cũ đặt là `gap > 0.9s`. Whisper khi căn chỉnh phụ đề phim thường nối đuôi các câu liên tục (`start_time` câu sau bằng đúng `end_time` câu trước, `gap = 0.0s`), dẫn đến điều kiện khoảng lặng không bao giờ thỏa mãn, khiến cả đoạn hội thoại bị gán cho cùng 1 diễn viên (`speaker_0`).
+- **Cách fix & Bài học:** Bổ sung điều kiện `prev_ends_terminal`: khi câu trước kết thúc bằng dấu chấm, chấm than, hỏi chấm hoặc ngoặc kép, hệ thống tự động nhận biết đó là kết thúc một lượt nói và kích hoạt chuyển vai (`turn-taking`) sang diễn viên đối thoại. Đã kiểm thử thực tế và đạt độ chính xác 100% trên clip đối thoại nam nữ.
+

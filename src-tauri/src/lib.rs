@@ -934,7 +934,7 @@ async fn dubbing_analyze(
     source_lang: Option<String>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::analyze_and_create_project(&app, &file_path, source_lang)
+        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -963,7 +963,7 @@ async fn dubbing_export(
     output_path: Option<String>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::export_dubbed_video(&app, project, output_path)
+        dubbing::export_dubbed_video(Some(&app), project, output_path)
     })
     .await
     .map_err(|e| e.to_string())?

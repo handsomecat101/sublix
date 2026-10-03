@@ -256,7 +256,7 @@ pub fn preview_single_line(text: &str, voice: &str, rate: Option<&str>, pitch: O
 
 /// Analyze media, extract transcript, cluster speakers, and generate translated dubbing script
 pub fn analyze_and_create_project(
-    app: &AppHandle,
+    app: Option<&AppHandle>,
     input_path: &str,
     source_lang: Option<String>,
 ) -> Result<DubbingProject> {
@@ -266,16 +266,20 @@ pub fn analyze_and_create_project(
     }
 
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
-        let _ = app.emit(
-            "dubbing:progress",
-            DubbingProgress {
-                stage: stage.to_string(),
-                percent,
-                message: msg.to_string(),
-                current_item: cur,
-                total_items: tot,
-            },
-        );
+        if let Some(a) = app {
+            let _ = a.emit(
+                "dubbing:progress",
+                DubbingProgress {
+                    stage: stage.to_string(),
+                    percent,
+                    message: msg.to_string(),
+                    current_item: cur,
+                    total_items: tot,
+                },
+            );
+        } else {
+            info!("[{stage}] {percent:.0}%: {msg} ({cur}/{tot})");
+        }
     };
 
     emit("extracting", 5.0, "Đang trích xuất audio 16kHz từ video...", 0, 100);
@@ -293,7 +297,10 @@ pub fn analyze_and_create_project(
     emit("transcribing", 15.0, "Đang nhận diện giọng nói & gán mốc thời gian...", 0, 100);
 
     // 2. Transcribe with Whisper CLI
-    let cfg = AppConfig::load(app);
+    let cfg = match app {
+        Some(a) => AppConfig::load(a),
+        None => AppConfig::load_or_default(),
+    };
     let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
     let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
         .context("Không tìm thấy model Whisper")?;
@@ -349,16 +356,26 @@ pub fn analyze_and_create_project(
         let start_sec = parse_srt_time_to_seconds(&seg.start_time);
         let end_sec = parse_srt_time_to_seconds(&seg.end_time);
 
-        // If gap between sentences is > 0.9s or previous sentence ends with question mark,
-        // it strongly indicates a speaker change in dialogues.
-        let is_gap = (start_sec - last_end) > 0.9;
-        let is_question = parsed_segments
+        // Smart Speaker Diarization:
+        // 1. If gap between sentences is >= 0.35s (conversational pause)
+        // 2. Or if previous sentence ended with terminal punctuation ('.', '!', '?') and there is any gap >= 0.15s
+        // 3. Or if previous sentence ended with question mark '?'
+        let prev_text = parsed_segments
             .last()
-            .map(|s: &DubbingSegment| s.original_text.ends_with('?'))
-            .unwrap_or(false);
+            .map(|s: &DubbingSegment| s.original_text.trim())
+            .unwrap_or("");
 
-        if (is_gap || is_question) && idx > 0 {
-            current_speaker_idx = (current_speaker_idx + 1) % 2; // Alternate between 2 primary speakers
+        let prev_ends_terminal = prev_text.ends_with('.')
+            || prev_text.ends_with('!')
+            || prev_text.ends_with('?')
+            || prev_text.ends_with('"');
+
+        let pause = start_sec - last_end;
+        let is_speaker_change = idx > 0
+            && (prev_ends_terminal || pause >= 0.25 || prev_text.ends_with('?'));
+
+        if is_speaker_change {
+            current_speaker_idx = (current_speaker_idx + 1) % 2; // Alternate between primary speakers
         }
 
         let speaker_id = format!("speaker_{}", current_speaker_idx);
@@ -443,21 +460,25 @@ pub fn analyze_and_create_project(
 
 /// Render all dubbed audio segments, time-stretch if needed, and export final video
 pub fn export_dubbed_video(
-    app: &AppHandle,
+    app: Option<&AppHandle>,
     project: DubbingProject,
     output_path: Option<String>,
 ) -> Result<String> {
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
-        let _ = app.emit(
-            "dubbing:progress",
-            DubbingProgress {
-                stage: stage.to_string(),
-                percent,
-                message: msg.to_string(),
-                current_item: cur,
-                total_items: tot,
-            },
-        );
+        if let Some(a) = app {
+            let _ = a.emit(
+                "dubbing:progress",
+                DubbingProgress {
+                    stage: stage.to_string(),
+                    percent,
+                    message: msg.to_string(),
+                    current_item: cur,
+                    total_items: tot,
+                },
+            );
+        } else {
+            info!("[{stage}] {percent:.0}%: {msg} ({cur}/{tot})");
+        }
     };
 
     let total_segs = project.segments.len();
