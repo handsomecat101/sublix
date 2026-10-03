@@ -328,6 +328,43 @@ export default function DubbingStudioView({
             ))}
           </div>
 
+          {/* Dubbing Mode Selection */}
+          <div className="dubbing-mode-container">
+            <label className="dubbing-mode-title">Chế Độ Xử Lý Âm Thanh:</label>
+            <div className="dubbing-mode-options">
+              <div
+                className={`dubbing-mode-card ${
+                  project.dubbing_mode === "ducking" || !project.dubbing_mode ? "active" : ""
+                }`}
+                onClick={() => setProject({ ...project, dubbing_mode: "ducking" })}
+              >
+                <div className="dubbing-mode-header">
+                  <span className="dubbing-mode-icon">🎙️</span>
+                  <span className="dubbing-mode-name">Thuyết Minh (Audio Ducking)</span>
+                </div>
+                <p className="dubbing-mode-desc">
+                  Giữ toàn bộ âm thanh gốc (nhạc + tiếng diễn viên) nhưng tự động hạ nhỏ xuống {Math.round(project.bgm_volume * 100)}% khi có lời thoại. Giọng Việt đè lên rõ nét. Phù hợp phóng sự, tài liệu, review phim.
+                </p>
+              </div>
+
+              <div
+                className={`dubbing-mode-card ${
+                  project.dubbing_mode === "vocal_isolation" ? "active" : ""
+                }`}
+                onClick={() => setProject({ ...project, dubbing_mode: "vocal_isolation" })}
+              >
+                <div className="dubbing-mode-header">
+                  <span className="dubbing-mode-icon">🎭</span>
+                  <span className="dubbing-mode-name">Lồng Tiếng Chiếu Rạp (Demucs AI)</span>
+                  <span className="dubbing-mode-badge">Khuyên Dùng Cho Phim</span>
+                </div>
+                <p className="dubbing-mode-desc">
+                  Demucs v4 (CUDA) bóc tách và xóa triệt để 100% giọng gốc của diễn viên nước ngoài, giữ nguyên vẹn Nhạc nền & Hiệu ứng SFX rồi ghép giọng Việt mới vào. Chuẩn điện ảnh chiếu rạp!
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Audio Mixing Balance */}
           <div className="dubbing-mix-controls">
             <div className="dubbing-mix-slider-group">

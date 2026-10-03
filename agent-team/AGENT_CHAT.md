@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 01:48 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Bổ sung tùy chọn 2 chế độ xử lý âm thanh: **Thuyết minh (Audio Ducking)** và **Lồng tiếng Chiếu Rạp (Demucs v4 CUDA)** bóc tách 100% giọng gốc, giữ trọn BGM/SFX.
+- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`.
+- **Verify/Deploy:** Đã kiểm tra `tsc && vite build` và biên dịch thành công bản release `sublix.exe` (58.84s).
+- **Việc tiếp theo:** Sẵn sàng kiểm thử thực tế trên video phim nước ngoài để trải nghiệm chất lượng rạp chiếu.
+
+---
+
 ### 2026-10-04 01:32 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Đã hoàn thiện và tích hợp module **Studio Lồng Tiếng AI (AI Dubbing)**: tự động phân vai diễn viên, nghe thử giọng đọc TTS tức thì, biên kịch kịch bản qua MiniMax-M3, time-stretching và xuất video FFmpeg.

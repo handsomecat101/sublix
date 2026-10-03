@@ -347,6 +347,7 @@ export interface DubbingProject {
   segments: DubbingSegment[];
   bgm_volume: number;
   voice_volume: number;
+  dubbing_mode?: "ducking" | "vocal_isolation";
 }
 
 export interface DubbingProgress {

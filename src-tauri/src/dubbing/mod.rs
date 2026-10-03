@@ -67,6 +67,12 @@ pub struct DubbingProject {
     pub segments: Vec<DubbingSegment>,
     pub bgm_volume: f32,   // 0.25 (25% volume ducking)
     pub voice_volume: f32, // 1.25 (125% voice boost)
+    #[serde(default = "default_dubbing_mode")]
+    pub dubbing_mode: String, // "ducking" | "vocal_isolation"
+}
+
+fn default_dubbing_mode() -> String {
+    "ducking".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -402,6 +408,7 @@ pub fn analyze_and_create_project(
         segments: parsed_segments,
         bgm_volume: 0.25,
         voice_volume: 1.30,
+        dubbing_mode: "ducking".to_string(),
     })
 }
 
@@ -492,7 +499,45 @@ pub fn export_dubbed_video(
         speech_inputs.push((final_audio, seg.start_sec));
     }
 
-    emit("remuxing", 70.0, "Đang ghép audio lồng tiếng & nhạc nền vào video...", 0, 100);
+    // Check if user requested True Vocal Isolation via Demucs AI
+    let mut isolated_bgm_path: Option<PathBuf> = None;
+    if project.dubbing_mode == "vocal_isolation" {
+        emit("demucs", 65.0, "Đang bóc tách giọng nói gốc bằng Demucs AI GPU...", 0, 100);
+        let demucs_out = temp_dir.join("demucs_out");
+        let _ = fs::create_dir_all(&demucs_out);
+
+        let input_stem = Path::new(&project.input_path)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+
+        let mut demucs_cmd = Command::new("python");
+        demucs_cmd
+            .arg("-m")
+            .arg("demucs.separate")
+            .arg("--two-stems")
+            .arg("vocals")
+            .arg("-d")
+            .arg("cuda")
+            .arg("-o")
+            .arg(&demucs_out)
+            .arg(&project.input_path);
+
+        #[cfg(windows)]
+        demucs_cmd.creation_flags(CREATE_NO_WINDOW);
+
+        if let Ok(st) = demucs_cmd.status() {
+            if st.success() {
+                let cand1 = demucs_out.join("htdemucs").join(&*input_stem).join("no_vocals.wav");
+                if cand1.exists() {
+                    info!("✅ Demucs isolated BGM found: {}", cand1.display());
+                    isolated_bgm_path = Some(cand1);
+                }
+            }
+        }
+    }
+
+    emit("remuxing", 75.0, "Đang ghép audio lồng tiếng & nhạc nền vào video...", 0, 100);
 
     // 2. Mix speech segments at their start times
     let mut mix_filter = String::new();
@@ -509,6 +554,12 @@ pub fn export_dubbed_video(
     }
 
     let num_speech = speech_inputs.len();
+    let bgm_input_ref = if isolated_bgm_path.is_some() {
+        format!("[{}:a]", num_speech + 1)
+    } else {
+        "[0:a]".to_string()
+    };
+
     if num_speech > 0 {
         mix_filter.push_str(&format!(
             "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
@@ -516,13 +567,14 @@ pub fn export_dubbed_video(
             n = num_speech,
             vol = project.voice_volume
         ));
-        // Duck original background audio to bgm_volume and mix with speech
+        // Mix background track (either isolated BGM or ducked original) with speech
         mix_filter.push_str(&format!(
-            "[0:a]volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:dropout_transition=0[final_audio]",
-            bgm_vol = project.bgm_volume
+            "{bgm_src}volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:dropout_transition=0[final_audio]",
+            bgm_src = bgm_input_ref,
+            bgm_vol = if isolated_bgm_path.is_some() { 1.0 } else { project.bgm_volume }
         ));
     } else {
-        mix_filter.push_str("[0:a]anull[final_audio]");
+        mix_filter.push_str(&format!("{}anull[final_audio]", bgm_input_ref));
     }
 
     // Determine target output file path
@@ -543,6 +595,11 @@ pub fn export_dubbed_video(
     // Add all speech segment inputs
     for (audio_path, _) in &speech_inputs {
         remux.arg("-i").arg(audio_path);
+    }
+
+    // Add isolated BGM track if present
+    if let Some(ref bgm_file) = isolated_bgm_path {
+        remux.arg("-i").arg(bgm_file);
     }
 
     remux
