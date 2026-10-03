@@ -90,7 +90,7 @@ fn translate_test(
             .or(Some(cfg.translation_model.as_str())),
     );
     let pref = stt::EnginePreference::from_str(&cfg.translation_engine_preference);
-    translate::translate_text_with_options(&text, &source_lang, &target_lang, variant, pref)
+    translate::translate_text_with_config(&text, &source_lang, &target_lang, variant, pref, &cfg)
         .map_err(|e| format!("{e:#}"))
 }
 

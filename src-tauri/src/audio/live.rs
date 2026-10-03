@@ -50,6 +50,7 @@ pub struct LiveOptions {
     pub source_lang: String,
     pub target_lang: String,
     pub output_mode: String,
+    pub config: crate::config::AppConfig,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -118,6 +119,7 @@ pub fn start_live_capture(
         source_lang: src_lang,
         target_lang: tgt_lang,
         output_mode: mode.clone(),
+        config: cfg,
     };
 
     let _ = app.emit(
@@ -518,12 +520,13 @@ fn run_inference_worker(
                         && effective_src_lang.to_lowercase() != opts.target_lang.to_lowercase()
                     {
                         let t0 = Instant::now();
-                        match crate::translate::translate_text_with_options(
+                        match crate::translate::translate_text_with_config(
                             text,
                             effective_src_lang,
                             &opts.target_lang,
                             opts.translation_model,
                             opts.trans_pref,
+                            &opts.config,
                         ) {
                             Ok(t) if !t.trim().is_empty() => (
                                 t,

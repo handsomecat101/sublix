@@ -72,6 +72,26 @@ pub struct AppConfig {
     /// Click-through overlay mode (mouse clicks pass through to video player).
     #[serde(default = "default_false")]
     pub overlay_click_through: bool,
+
+    /// Translation provider: "local" (llama-server) | "ollama" (local Ollama instance) | "minimax" (MiniMax Cloud API)
+    #[serde(default = "default_provider")]
+    pub translation_provider: String,
+
+    /// MiniMax Cloud API Key
+    #[serde(default = "default_empty_string")]
+    pub minimax_api_key: String,
+
+    /// MiniMax Model Name (default: "MiniMax-Text-01")
+    #[serde(default = "default_minimax_model")]
+    pub minimax_model: String,
+
+    /// Local Ollama URL (default: "http://localhost:11434")
+    #[serde(default = "default_ollama_url")]
+    pub ollama_url: String,
+
+    /// Ollama model name (default: "smtek/qwen3.8-27b:q4_k_m")
+    #[serde(default = "default_ollama_model")]
+    pub ollama_model: String,
 }
 
 fn default_auto() -> String {
@@ -114,6 +134,26 @@ fn default_font_size() -> u32 {
     22
 }
 
+fn default_provider() -> String {
+    "local".to_string()
+}
+
+fn default_empty_string() -> String {
+    String::new()
+}
+
+fn default_minimax_model() -> String {
+    "MiniMax-Text-01".to_string()
+}
+
+fn default_ollama_url() -> String {
+    "http://localhost:11434".to_string()
+}
+
+fn default_ollama_model() -> String {
+    "smtek/qwen3.8-27b:q4_k_m".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -129,6 +169,11 @@ impl Default for AppConfig {
             overlay_font_size: default_font_size(),
             overlay_show_original: default_true(),
             overlay_click_through: default_false(),
+            translation_provider: default_provider(),
+            minimax_api_key: default_empty_string(),
+            minimax_model: default_minimax_model(),
+            ollama_url: default_ollama_url(),
+            ollama_model: default_ollama_model(),
         }
     }
 }

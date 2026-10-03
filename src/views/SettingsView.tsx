@@ -103,6 +103,16 @@ export default function SettingsView() {
   const [historySearch, setHistorySearch] = useState<string>("");
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
 
+  // Translation provider settings (MiniMax Cloud / Ollama Local / Embedded GGUF)
+  const [transProvider, setTransProvider] = useState<"local" | "ollama" | "minimax">("local");
+  const [minimaxKey, setMinimaxKey] = useState<string>("");
+  const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-Text-01");
+  const [ollamaUrl, setOllamaUrl] = useState<string>("http://localhost:11434");
+  const [ollamaModel, setOllamaModel] = useState<string>("smtek/qwen3.8-27b:q4_k_m");
+  const [showMinimaxKey, setShowMinimaxKey] = useState<boolean>(false);
+  const [providerTesting, setProviderTesting] = useState<boolean>(false);
+  const [providerTestResult, setProviderTestResult] = useState<string | null>(null);
+
   useEffect(() => {
     loadDevices();
     refreshSetup();
@@ -132,6 +142,13 @@ export default function SettingsView() {
       if (cfg.overlay_font_size) setFontSize(cfg.overlay_font_size);
       setShowOriginal(cfg.overlay_show_original ?? true);
       setClickThrough(cfg.overlay_click_through ?? false);
+      if (cfg.translation_provider === "local" || cfg.translation_provider === "ollama" || cfg.translation_provider === "minimax") {
+        setTransProvider(cfg.translation_provider);
+      }
+      if (cfg.minimax_api_key) setMinimaxKey(cfg.minimax_api_key);
+      if (cfg.minimax_model) setMinimaxModel(cfg.minimax_model);
+      if (cfg.ollama_url) setOllamaUrl(cfg.ollama_url);
+      if (cfg.ollama_model) setOllamaModel(cfg.ollama_model);
       setConfigLoaded(true);
     }).catch(() => {
       setConfigLoaded(true);
@@ -283,6 +300,82 @@ export default function SettingsView() {
     } catch (e) {
       setServerStarting(false);
       setStatus({ kind: "error", message: `Failed to switch LLM engine: ${e}` });
+    }
+  }
+
+  async function handleProviderChange(provider: "local" | "ollama" | "minimax") {
+    setTransProvider(provider);
+    if (fullConfig) {
+      const updated: AppConfig = {
+        ...fullConfig,
+        translation_provider: provider,
+        minimax_api_key: minimaxKey,
+        minimax_model: minimaxModel,
+        ollama_url: ollamaUrl,
+        ollama_model: ollamaModel,
+      };
+      try {
+        const saved = await sublix.saveConfig(updated);
+        setFullConfig(saved);
+        setStatus({
+          kind: "success",
+          message: `✅ Đã chuyển bộ dịch sang: ${
+            provider === "minimax"
+              ? "🌐 MiniMax Cloud API (Unlimited)"
+              : provider === "ollama"
+              ? "🦙 Ollama Local (Qwen 27B)"
+              : "💻 Local GGUF (llama-server)"
+          }`,
+        });
+      } catch (err) {
+        setStatus({ kind: "error", message: `Lưu cấu hình thất bại: ${err}` });
+      }
+    }
+  }
+
+  async function saveProviderSettings() {
+    if (fullConfig) {
+      const updated: AppConfig = {
+        ...fullConfig,
+        translation_provider: transProvider,
+        minimax_api_key: minimaxKey,
+        minimax_model: minimaxModel,
+        ollama_url: ollamaUrl,
+        ollama_model: ollamaModel,
+      };
+      try {
+        const saved = await sublix.saveConfig(updated);
+        setFullConfig(saved);
+        setStatus({ kind: "success", message: "✅ Đã lưu cấu hình bộ dịch thành công!" });
+      } catch (err) {
+        setStatus({ kind: "error", message: `Lưu cấu hình thất bại: ${err}` });
+      }
+    }
+  }
+
+  async function testProviderTranslation() {
+    setProviderTesting(true);
+    setProviderTestResult(null);
+    try {
+      if (fullConfig) {
+        await sublix.saveConfig({
+          ...fullConfig,
+          translation_provider: transProvider,
+          minimax_api_key: minimaxKey,
+          minimax_model: minimaxModel,
+          ollama_url: ollamaUrl,
+          ollama_model: ollamaModel,
+        });
+      }
+      const testInput = "I can't believe you actually pulled this off. You're insane, you know that?";
+      const res = await sublix.translateTest(testInput, "en", "vi", translationModel);
+      setProviderTestResult(res);
+      setStatus({ kind: "success", message: "✅ Kiểm tra dịch thoại thành công!" });
+    } catch (err) {
+      setProviderTestResult(`❌ Lỗi kết nối: ${err}`);
+      setStatus({ kind: "error", message: `Kiểm tra dịch thất bại: ${err}` });
+    } finally {
+      setProviderTesting(false);
     }
   }
 
@@ -1164,144 +1257,305 @@ export default function SettingsView() {
         </div>
       </section>
 
-      {/* SECTION 4: TRANSLATION LLM ENGINE (2026 QWEN3 / GEMMA 3) */}
+      {/* SECTION 4: TRANSLATION & CINEMATIC SCRIPTING LLM ENGINE */}
       <section className="settings-section">
-        <h2>🌐 Local AI Translation (2026 Qwen3 / Gemma 3 — llama-server)</h2>
+        <h2>🌐 Bộ Não Dịch Thuật & Biên Kịch Lồng Tiếng (AI Translation & Scripting)</h2>
         <p className="settings-help">
-          Runs 2026 GGUF instruction models in GPU VRAM with 2-line rolling dialogue memory for accurate pronouns and natural Vietnamese subtitles.
+          Lựa chọn nguồn AI dịch kịch bản: <strong>MiniMax Cloud API (Unlimited)</strong> cho văn phong điện ảnh mượt mà và 0% VRAM, <strong>Ollama Local (Qwen 27B / 32B)</strong> chạy trên máy, hoặc <strong>GGUF Embedded</strong> cục bộ.
         </p>
 
-        <div className="settings-row">
-          <label>LLM Model:</label>
-          <select
-            value={translationModel}
-            onChange={(e) => setTranslationModel(e.target.value)}
-            className="settings-select"
-          >
-            {transModels.length > 0 ? (
-              transModels.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.downloaded ? "✓ " : "⬇ "} {m.label}
-                </option>
-              ))
-            ) : (
-              <>
-                <option value="qwen3-4b">✓ Qwen3-4B-Instruct-2507 (2.5GB) — ⭐ 2026 Best</option>
-                <option value="qwen2.5-3b">✓ Qwen2.5-3B-Instruct (2.0GB) — Legacy</option>
-              </>
-            )}
-          </select>
-
-          {selectedTransInfo && !selectedTransInfo.downloaded && (
+        {/* Provider Switcher Tabs */}
+        <div className="settings-row" style={{ alignItems: "flex-start", marginBottom: 14 }}>
+          <label style={{ paddingTop: 6, minWidth: 100 }}>Nguồn Dịch:</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
             <button
-              onClick={async () => {
-                setDownloadingModel(translationModel);
-                setStatus({
-                  kind: "working",
-                  message: `Downloading ${translationModel} (~${selectedTransInfo.size_mb}MB)...`,
-                });
-                try {
-                  await sublix.downloadTranslationModel(translationModel);
-                  await refreshSetup();
-                  setStatus({ kind: "success", message: `✅ Downloaded ${translationModel}!` });
-                } catch (e) {
-                  setStatus({ kind: "error", message: `Download failed: ${e}` });
-                } finally {
-                  setDownloadingModel(null);
-                }
-              }}
-              className="settings-btn-primary"
-              disabled={downloadingModel !== null}
+              className={`settings-engine-btn ${transProvider === "minimax" ? "active" : ""}`}
+              onClick={() => handleProviderChange("minimax")}
+              style={{ padding: "8px 14px", fontWeight: transProvider === "minimax" ? 700 : 500 }}
             >
-              {downloadingModel === translationModel
-                ? "⏳ Downloading..."
-                : `⬇ Download (${selectedTransInfo.size_mb}MB)`}
-            </button>
-          )}
-        </div>
-
-        <div className="settings-row">
-          <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
-          <div className="settings-engine-toggle">
-            <button
-              className={`settings-engine-btn ${transEnginePref === "auto" ? "active" : ""}`}
-              onClick={() => handleTransEngineChange("auto")}
-              disabled={!configLoaded}
-            >
-              ⚙ AUTO
+              🌐 MiniMax Cloud API (Unlimited) ⭐ Khuyên Dùng
             </button>
             <button
-              className={`settings-engine-btn ${transEnginePref === "cpu" ? "active" : ""}`}
-              onClick={() => handleTransEngineChange("cpu")}
-              disabled={!configLoaded}
+              className={`settings-engine-btn ${transProvider === "ollama" ? "active" : ""}`}
+              onClick={() => handleProviderChange("ollama")}
+              style={{ padding: "8px 14px", fontWeight: transProvider === "ollama" ? 700 : 500 }}
             >
-              💻 CPU
+              🦙 Ollama Local (Qwen 27B / 32B)
             </button>
             <button
-              className={`settings-engine-btn ${transEnginePref === "cuda" ? "active" : ""}`}
-              onClick={() => handleTransEngineChange("cuda")}
-              disabled={!configLoaded}
+              className={`settings-engine-btn ${transProvider === "local" ? "active" : ""}`}
+              onClick={() => handleProviderChange("local")}
+              style={{ padding: "8px 14px", fontWeight: transProvider === "local" ? 700 : 500 }}
             >
-              🎮 GPU (CUDA)
+              💻 Local GGUF (llama-server)
             </button>
           </div>
-
-          <button
-            onClick={async () => {
-              setServerStarting(true);
-              setStatus({
-                kind: "working",
-                message: `Loading LLM (${translationModel}) into GPU VRAM...`,
-              });
-              try {
-                const eng = await sublix.preloadTranslationServer(translationModel);
-                setEngine(eng);
-                setStatus({
-                  kind: "success",
-                  message: `✅ Translation LLM ready on ${eng.toUpperCase()} (${translationModel})`,
-                });
-              } catch (e) {
-                setStatus({ kind: "error", message: `LLM server failed: ${e}` });
-                setEngine(null);
-              } finally {
-                setServerStarting(false);
-              }
-            }}
-            className="settings-btn-secondary"
-            disabled={serverStarting}
-          >
-            {serverStarting ? "⏳ Loading..." : engine ? "🔄 Reload LLM Server" : "▶ Pre-warm LLM Server"}
-          </button>
         </div>
 
-        <div className="settings-row">
-          <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
-          {serverStarting ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-starting" />
-              <span style={{ color: "#fbbf24" }}>Loading GGUF model into VRAM...</span>
-            </span>
-          ) : engine === "cuda" ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-cuda" />
-              <span style={{ color: "#34d399", fontWeight: 600 }}>
-                Running on NVIDIA GPU (CUDA) — ~0.1–0.2s per subtitle
+        {/* PROVIDER 1: MINIMAX CLOUD API */}
+        {transProvider === "minimax" && (
+          <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(59, 130, 246, 0.2)", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa" }}>
+                🔑 Cấu hình MiniMax Unlimited API
               </span>
-            </span>
-          ) : engine === "cpu" ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-cpu" />
-              <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                Running on CPU — ~1–2s per subtitle
+              <span style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: 4 }}>
+                0% VRAM GPU • Dịch Điện Ảnh
               </span>
-            </span>
-          ) : (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-idle" />
-              <span style={{ color: "#94a3b8" }}>Standby (auto-starts on first subtitle)</span>
-            </span>
-          )}
-        </div>
+            </div>
+            <div className="settings-row" style={{ marginBottom: 10 }}>
+              <label style={{ minWidth: 100 }}>API Key:</label>
+              <div style={{ display: "flex", gap: 6, flex: 1 }}>
+                <input
+                  type={showMinimaxKey ? "text" : "password"}
+                  value={minimaxKey}
+                  onChange={(e) => setMinimaxKey(e.target.value)}
+                  placeholder="Dán API Key MiniMax của bạn vào đây..."
+                  className="settings-input"
+                  style={{ flex: 1, fontFamily: "monospace" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMinimaxKey(!showMinimaxKey)}
+                  className="settings-btn-secondary"
+                  style={{ padding: "4px 10px", fontSize: 11 }}
+                >
+                  {showMinimaxKey ? "Ẩn" : "Hiện"}
+                </button>
+              </div>
+            </div>
+            <div className="settings-row" style={{ marginBottom: 12 }}>
+              <label style={{ minWidth: 100 }}>Model Name:</label>
+              <input
+                type="text"
+                value={minimaxModel}
+                onChange={(e) => setMinimaxModel(e.target.value)}
+                placeholder="MiniMax-Text-01 hoặc abab6.5s-chat"
+                className="settings-input"
+                style={{ flex: 1 }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+              <button
+                onClick={saveProviderSettings}
+                className="settings-btn-primary"
+                style={{ padding: "6px 14px", fontSize: 12 }}
+              >
+                💾 Lưu Cấu Hình
+              </button>
+              <button
+                onClick={testProviderTranslation}
+                className="settings-btn-secondary"
+                disabled={providerTesting}
+                style={{ padding: "6px 14px", fontSize: 12 }}
+              >
+                {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PROVIDER 2: OLLAMA LOCAL */}
+        {transProvider === "ollama" && (
+          <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(168, 85, 247, 0.2)", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#c084fc" }}>
+                🦙 Kết Nối Ollama Local (Máy Cá Nhân)
+              </span>
+              <span style={{ fontSize: 11, background: "rgba(168, 85, 247, 0.2)", color: "#d8b4fe", padding: "2px 8px", borderRadius: 4 }}>
+                Offline 100% • Model 27B / 32B
+              </span>
+            </div>
+            <div className="settings-row" style={{ marginBottom: 10 }}>
+              <label style={{ minWidth: 100 }}>Ollama URL:</label>
+              <input
+                type="text"
+                value={ollamaUrl}
+                onChange={(e) => setOllamaUrl(e.target.value)}
+                placeholder="http://localhost:11434"
+                className="settings-input"
+                style={{ flex: 1, fontFamily: "monospace" }}
+              />
+            </div>
+            <div className="settings-row" style={{ marginBottom: 12 }}>
+              <label style={{ minWidth: 100 }}>Model Name:</label>
+              <input
+                type="text"
+                value={ollamaModel}
+                onChange={(e) => setOllamaModel(e.target.value)}
+                placeholder="smtek/qwen3.8-27b:q4_k_m hoặc qwen:latest"
+                className="settings-input"
+                style={{ flex: 1, fontFamily: "monospace" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+              <button
+                onClick={saveProviderSettings}
+                className="settings-btn-primary"
+                style={{ padding: "6px 14px", fontSize: 12 }}
+              >
+                💾 Lưu Cấu Hình
+              </button>
+              <button
+                onClick={testProviderTranslation}
+                className="settings-btn-secondary"
+                disabled={providerTesting}
+                style={{ padding: "6px 14px", fontSize: 12 }}
+              >
+                {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PROVIDER TEST RESULT BOX */}
+        {providerTestResult && (
+          <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(52, 211, 153, 0.4)", borderRadius: 6, padding: "10px 14px", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+              💬 Kết quả dịch thử nghiệm: <em>"I can't believe you actually pulled this off. You're insane, you know that?"</em>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#34d399", lineHeight: 1.4 }}>
+              {providerTestResult}
+            </div>
+          </div>
+        )}
+
+        {/* PROVIDER 3: LOCAL GGUF */}
+        {transProvider === "local" && (
+          <>
+            <div className="settings-row">
+              <label>LLM Model:</label>
+              <select
+                value={translationModel}
+                onChange={(e) => setTranslationModel(e.target.value)}
+                className="settings-select"
+              >
+                {transModels.length > 0 ? (
+                  transModels.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.downloaded ? "✓ " : "⬇ "} {m.label}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="qwen3-4b">✓ Qwen3-4B-Instruct-2507 (2.5GB) — ⭐ 2026 Best</option>
+                    <option value="qwen2.5-3b">✓ Qwen2.5-3B-Instruct (2.0GB) — Legacy</option>
+                  </>
+                )}
+              </select>
+
+              {selectedTransInfo && !selectedTransInfo.downloaded && (
+                <button
+                  onClick={async () => {
+                    setDownloadingModel(translationModel);
+                    setStatus({
+                      kind: "working",
+                      message: `Downloading ${translationModel} (~${selectedTransInfo.size_mb}MB)...`,
+                    });
+                    try {
+                      await sublix.downloadTranslationModel(translationModel);
+                      await refreshSetup();
+                      setStatus({ kind: "success", message: `✅ Downloaded ${translationModel}!` });
+                    } catch (e) {
+                      setStatus({ kind: "error", message: `Download failed: ${e}` });
+                    } finally {
+                      setDownloadingModel(null);
+                    }
+                  }}
+                  className="settings-btn-primary"
+                  disabled={downloadingModel !== null}
+                >
+                  {downloadingModel === translationModel
+                    ? "⏳ Downloading..."
+                    : `⬇ Download (${selectedTransInfo.size_mb}MB)`}
+                </button>
+              )}
+            </div>
+
+            <div className="settings-row">
+              <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
+              <div className="settings-engine-toggle">
+                <button
+                  className={`settings-engine-btn ${transEnginePref === "auto" ? "active" : ""}`}
+                  onClick={() => handleTransEngineChange("auto")}
+                  disabled={!configLoaded}
+                >
+                  ⚙ AUTO
+                </button>
+                <button
+                  className={`settings-engine-btn ${transEnginePref === "cpu" ? "active" : ""}`}
+                  onClick={() => handleTransEngineChange("cpu")}
+                  disabled={!configLoaded}
+                >
+                  💻 CPU
+                </button>
+                <button
+                  className={`settings-engine-btn ${transEnginePref === "cuda" ? "active" : ""}`}
+                  onClick={() => handleTransEngineChange("cuda")}
+                  disabled={!configLoaded}
+                >
+                  🎮 GPU (CUDA)
+                </button>
+              </div>
+
+              <button
+                onClick={async () => {
+                  setServerStarting(true);
+                  setStatus({
+                    kind: "working",
+                    message: `Loading LLM (${translationModel}) into GPU VRAM...`,
+                  });
+                  try {
+                    const eng = await sublix.preloadTranslationServer(translationModel);
+                    setEngine(eng);
+                    setStatus({
+                      kind: "success",
+                      message: `✅ Translation LLM ready on ${eng.toUpperCase()} (${translationModel})`,
+                    });
+                  } catch (e) {
+                    setStatus({ kind: "error", message: `LLM server failed: ${e}` });
+                    setEngine(null);
+                  } finally {
+                    setServerStarting(false);
+                  }
+                }}
+                className="settings-btn-secondary"
+                disabled={serverStarting}
+              >
+                {serverStarting ? "⏳ Loading..." : engine ? "🔄 Reload LLM Server" : "▶ Pre-warm LLM Server"}
+              </button>
+            </div>
+
+            <div className="settings-row">
+              <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
+              {serverStarting ? (
+                <span className="settings-engine-indicator">
+                  <span className="engine-dot engine-dot-starting" />
+                  <span style={{ color: "#fbbf24" }}>Loading GGUF model into VRAM...</span>
+                </span>
+              ) : engine === "cuda" ? (
+                <span className="settings-engine-indicator">
+                  <span className="engine-dot engine-dot-cuda" />
+                  <span style={{ color: "#34d399", fontWeight: 600 }}>
+                    Running on NVIDIA GPU (CUDA) — ~0.1–0.2s per subtitle
+                  </span>
+                </span>
+              ) : engine === "cpu" ? (
+                <span className="settings-engine-indicator">
+                  <span className="engine-dot engine-dot-cpu" />
+                  <span style={{ color: "#60a5fa", fontWeight: 600 }}>
+                    Running on CPU — ~1–2s per subtitle
+                  </span>
+                </span>
+              ) : (
+                <span className="settings-engine-indicator">
+                  <span className="engine-dot engine-dot-idle" />
+                  <span style={{ color: "#94a3b8" }}>Standby (auto-starts on first subtitle)</span>
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       {/* SECTION: MODEL CATALOG & DOWNLOAD MANAGER */}

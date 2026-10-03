@@ -528,3 +528,203 @@ pub fn current_model() -> Option<TranslationModelVariant> {
 pub fn probe_engine() -> Option<Engine> {
     current_engine()
 }
+
+/// Translate text via MiniMax Cloud API (OpenAI-compatible)
+pub fn translate_via_minimax(
+    text: &str,
+    source: &str,
+    target: &str,
+    api_key: &str,
+    model: &str,
+) -> Result<String> {
+    if api_key.trim().is_empty() {
+        return Err(anyhow!("Chưa cài đặt MiniMax API Key. Vui lòng nhập API Key trong tab Cài đặt."));
+    }
+
+    let context_block = {
+        let q = RECENT_CONTEXT.lock().unwrap();
+        match q.back() {
+            Some((prev_src, prev_tgt)) => format!(
+                "\nRecent dialogue context:\n- {src}: \"{prev_src}\" → {tgt}: \"{prev_tgt}\"",
+                src = lang_name(source),
+                tgt = lang_name(target),
+                prev_src = prev_src,
+                prev_tgt = prev_tgt
+            ),
+            _ => String::new(),
+        }
+    };
+
+    let user_prompt = format!(
+        "Translate the following {src} dialogue to natural, lively spoken {tgt}. Output ONLY the {tgt} translation.{ctx}\nDialogue to translate: \"{text}\"",
+        src = lang_name(source),
+        tgt = lang_name(target),
+        ctx = context_block,
+        text = text
+    );
+
+    let system_prompt = format!(
+        "You are an expert movie scriptwriter and dialogue translator.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs). Never output foreign characters.\n\
+         RULE 2: Output ONLY the translated dialogue line. No explanations, no quotes, no conversational filler.\n\
+         RULE 3: Match the emotional tone and natural speech rhythm of the scene.",
+        tgt = lang_name(target)
+    );
+
+    let body = serde_json::json!({
+        "model": if model.trim().is_empty() { "MiniMax-Text-01" } else { model },
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": user_prompt }
+        ],
+        "temperature": 0.3
+    });
+
+    let client = Client::builder().timeout(Duration::from_secs(15)).build()?;
+    let t0 = Instant::now();
+    let resp = client
+        .post("https://api.minimax.chat/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key.trim()))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .with_context(|| "HTTP POST to MiniMax API failed")?;
+
+    let elapsed = t0.elapsed();
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_text = resp.text().unwrap_or_default();
+        return Err(anyhow!("MiniMax API returned {}: {}", status, err_text));
+    }
+
+    let chat_resp: ChatResponse = resp.json().with_context(|| "Failed to parse MiniMax response")?;
+    let raw = chat_resp
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .unwrap_or_default();
+
+    let translated = post_process(&raw, target);
+
+    if !translated.is_empty() {
+        if let Ok(mut q) = RECENT_CONTEXT.lock() {
+            if q.len() >= 2 {
+                q.pop_front();
+            }
+            q.push_back((text.to_string(), translated.clone()));
+        }
+    }
+
+    info!(
+        "🌐 MiniMax ({:.2}s, {}→{}): '{}' → '{}'",
+        elapsed.as_secs_f32(),
+        source,
+        target,
+        text,
+        translated
+    );
+    Ok(translated)
+}
+
+/// Translate text via local Ollama instance (OpenAI-compatible)
+pub fn translate_via_ollama(
+    text: &str,
+    source: &str,
+    target: &str,
+    ollama_url: &str,
+    model: &str,
+) -> Result<String> {
+    let base_url = if ollama_url.trim().is_empty() {
+        "http://localhost:11434"
+    } else {
+        ollama_url.trim().trim_end_matches('/')
+    };
+
+    let context_block = {
+        let q = RECENT_CONTEXT.lock().unwrap();
+        match q.back() {
+            Some((prev_src, prev_tgt)) => format!(
+                "\nRecent dialogue context:\n- {src}: \"{prev_src}\" → {tgt}: \"{prev_tgt}\"",
+                src = lang_name(source),
+                tgt = lang_name(target),
+                prev_src = prev_src,
+                prev_tgt = prev_tgt
+            ),
+            _ => String::new(),
+        }
+    };
+
+    let user_prompt = format!(
+        "Translate the following {src} dialogue to natural, lively spoken {tgt}. Output ONLY the {tgt} translation.{ctx}\nDialogue to translate: \"{text}\"",
+        src = lang_name(source),
+        tgt = lang_name(target),
+        ctx = context_block,
+        text = text
+    );
+
+    let system_prompt = format!(
+        "You are an expert movie scriptwriter and dialogue translator.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs). Never output foreign characters.\n\
+         RULE 2: Output ONLY the translated dialogue line. No explanations, no quotes, no conversational filler.\n\
+         RULE 3: Match the emotional tone and natural speech rhythm of the scene.",
+        tgt = lang_name(target)
+    );
+
+    let body = serde_json::json!({
+        "model": if model.trim().is_empty() { "smtek/qwen3.8-27b:q4_k_m" } else { model },
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": user_prompt }
+        ],
+        "temperature": 0.3
+    });
+
+    let client = Client::builder().timeout(Duration::from_secs(25)).build()?;
+    let t0 = Instant::now();
+    let resp = client
+        .post(format!("{}/v1/chat/completions", base_url))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .with_context(|| format!("HTTP POST to Ollama ({}) failed", base_url))?;
+
+    let elapsed = t0.elapsed();
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_text = resp.text().unwrap_or_default();
+        return Err(anyhow!("Ollama returned {}: {}", status, err_text));
+    }
+
+    let chat_resp: ChatResponse = resp.json().with_context(|| "Failed to parse Ollama response")?;
+    let raw = chat_resp
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .unwrap_or_default();
+
+    let translated = post_process(&raw, target);
+
+    if !translated.is_empty() {
+        if let Ok(mut q) = RECENT_CONTEXT.lock() {
+            if q.len() >= 2 {
+                q.pop_front();
+            }
+            q.push_back((text.to_string(), translated.clone()));
+        }
+    }
+
+    info!(
+        "🦙 Ollama ({:.2}s, {}→{}): '{}' → '{}'",
+        elapsed.as_secs_f32(),
+        source,
+        target,
+        text,
+        translated
+    );
+    Ok(translated)
+}
+

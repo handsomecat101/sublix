@@ -302,6 +302,28 @@ fn download_and_extract_zip(url: &str, dest_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Translate text using the active provider configured in AppConfig (MiniMax Cloud, Local Ollama, or Local llama-server).
+pub fn translate_text_with_config(
+    text: &str,
+    source: &str,
+    target: &str,
+    model: TranslationModelVariant,
+    pref: EnginePreference,
+    cfg: &crate::config::AppConfig,
+) -> Result<String> {
+    match cfg.translation_provider.to_lowercase().as_str() {
+        "minimax" => {
+            server::translate_via_minimax(text, source, target, &cfg.minimax_api_key, &cfg.minimax_model)
+        }
+        "ollama" => {
+            server::translate_via_ollama(text, source, target, &cfg.ollama_url, &cfg.ollama_model)
+        }
+        _ => {
+            server::translate_via_server(text, source, target, model, pref)
+        }
+    }
+}
+
 /// Translate text using the long-running `llama-server` with the specified model and engine preference.
 pub fn translate_text_with_options(
     text: &str,

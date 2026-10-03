@@ -363,8 +363,11 @@ pub fn generate_file_subtitles(
         },
     );
 
-    if let Err(e) = crate::translate::preload_server_with_options(trans_variant, EnginePreference::Auto) {
-        warn!("LLM pre-warm error: {e:#}");
+    let cfg = crate::config::AppConfig::load(&app);
+    if cfg.translation_provider == "local" {
+        if let Err(e) = crate::translate::preload_server_with_options(trans_variant, EnginePreference::Auto) {
+            warn!("LLM pre-warm error: {e:#}");
+        }
     }
 
     crate::translate::server::clear_context();
@@ -372,12 +375,13 @@ pub fn generate_file_subtitles(
     for i in 0..total {
         let original_text = segments[i].original.clone();
 
-        let trans_res = crate::translate::translate_text_with_options(
+        let trans_res = crate::translate::translate_text_with_config(
             &original_text,
             &src_lang,
             &tgt_lang,
             trans_variant,
             EnginePreference::Auto,
+            &cfg,
         );
 
         let translated_text = match trans_res {

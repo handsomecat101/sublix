@@ -69,6 +69,11 @@ export interface AppConfig {
   overlay_font_size: number;
   overlay_show_original: boolean;
   overlay_click_through: boolean;
+  translation_provider?: "local" | "ollama" | "minimax" | string;
+  minimax_api_key?: string;
+  minimax_model?: string;
+  ollama_url?: string;
+  ollama_model?: string;
 }
 
 export interface FileSubProgress {
