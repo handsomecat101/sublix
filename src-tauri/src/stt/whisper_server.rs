@@ -116,11 +116,10 @@ impl WhisperServer {
         }
         cmd.arg("-m")
             .arg(model_path)
+            .arg("--host")
+            .arg("127.0.0.1")
             .arg("--port")
-            .arg(SERVER_PORT.to_string())
-            .arg("-np")
-            .arg("1")
-            .arg("-nc");
+            .arg(SERVER_PORT.to_string());
         if engine == SttEngine::Cpu {
             cmd.arg("-ng");
         }

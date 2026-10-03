@@ -197,43 +197,113 @@ pub fn clean_whisper_transcript(raw: &str) -> String {
         return String::new();
     }
 
-    // 2. Check known Whisper silence/music hallucinations
+    if is_hallucination(&s) {
+        return String::new();
+    }
+
+    // 2. Collapse pathological repeats (e.g. same sentence/token repeated 3+ times)
+    let collapsed = collapse_repetitions(&s);
+    if is_hallucination(&collapsed) {
+        return String::new();
+    }
+
+    collapsed
+}
+
+/// Detect known Whisper silence/outro hallucinations in Japanese, English, and Vietnamese.
+pub fn is_hallucination(text: &str) -> bool {
+    let s = text.trim();
+    if s.is_empty() {
+        return true;
+    }
+
     let lower = s.to_lowercase();
+    let char_count = s.chars().count();
+
     const HALLUCINATIONS: &[&str] = &[
+        // Japanese silence / outro hallucinations (Oyasuminasai -> Chúc ngủ ngon)
+        "おやすみなさい",
+        "おやすみ",
+        "それでは、おやすみなさい",
+        "それではおやすみなさい",
+        "では、おやすみなさい",
+        "じゃあ、おやすみなさい",
         "ご視聴ありがとうございました",
         "ご視聴ありがとうございます",
+        "ご視聴",
+        "視聴ありがとう",
         "チャンネル登録",
         "高評価",
+        "またね",
+        "また次回",
+        "ではまた",
+        "それではまた",
+        "じゃあね",
+        "バイバイ",
+        "さようなら",
+        "さよなら",
+        "ありがとうございました",
+        "ありがとうございます",
         "字幕:",
         "字幕：",
         "翻訳:",
         "サブタイトル",
+
+        // English silence / outro hallucinations
+        "good night",
+        "goodnight",
         "thank you for watching",
         "thanks for watching",
-        "subtitles by",
-        "amara.org",
+        "thank you so much for watching",
         "please subscribe",
-        "hãy đăng ký kênh",
-        "cảm ơn các bạn đã theo dõi",
+        "subscribe to my channel",
+        "like and subscribe",
+        "subtitles by",
+        "subtitles:",
+        "closed captions by",
+        "amara.org",
+        "see you next time",
+        "see you tomorrow",
+        "see you in the next",
+        "see you soon",
+        "bye bye",
+        "bye-bye",
+        "goodbye",
+        "good bye",
+        "the end",
         "blank_audio",
+
+        // Vietnamese translations of silence hallucinations
+        "chúc ngủ ngon",
+        "chúc bạn ngủ ngon",
+        "chúc các bạn ngủ ngon",
+        "cảm ơn các bạn đã theo dõi",
+        "cảm ơn đã xem",
+        "cảm ơn bạn đã xem",
+        "cảm ơn vì đã xem",
+        "hãy đăng ký kênh",
+        "đăng ký kênh",
+        "hẹn gặp lại các bạn",
+        "hẹn gặp lại",
+        "tạm biệt",
     ];
+
     for h in HALLUCINATIONS {
-        if lower.contains(h) && s.chars().count() <= 45 {
-            return String::new();
+        if lower.contains(h) && char_count <= 45 {
+            return true;
         }
     }
 
-    // 3. Filter pure punctuation / single noise characters
+    // Filter pure punctuation / non-speech noises
     let meaningful_chars = s
         .chars()
-        .filter(|c| !c.is_whitespace() && !matches!(c, '.' | ',' | '!' | '?' | '。' | '、' | '！' | '？' | '…' | '-' | '—' | '「' | '」' | '"' | '\''))
+        .filter(|c| !c.is_whitespace() && !matches!(c, '.' | ',' | '!' | '?' | '。' | '、' | '！' | '？' | '…' | '-' | '—' | '「' | '」' | '"' | '\'' | ':' | '：' | '~' | '〜'))
         .count();
-    if meaningful_chars == 0 {
-        return String::new();
+    if meaningful_chars <= 1 {
+        return true;
     }
 
-    // 4. Collapse pathological repeats (e.g. same sentence/token repeated 3+ times)
-    collapse_repetitions(&s)
+    false
 }
 
 fn strip_enclosed_tags(input: &str, open: char, close: char) -> String {
@@ -487,6 +557,13 @@ pub fn model_looks_valid(variant: ModelVariant) -> bool {
 }
 
 pub fn ensure_model(variant: ModelVariant) -> Result<PathBuf> {
+    ensure_model_with_progress(variant, |_, _, _| ())
+}
+
+pub fn ensure_model_with_progress<F>(variant: ModelVariant, mut on_progress: F) -> Result<PathBuf>
+where
+    F: FnMut(u64, u64, u32),
+{
     if let Some(existing) = candidate_paths(MODELS_DIR, variant.filename())
         .into_iter()
         .find(|p| p.exists() && std::fs::metadata(p).map(|m| m.len() > 10_000_000).unwrap_or(false))
@@ -504,7 +581,7 @@ pub fn ensure_model(variant: ModelVariant) -> Result<PathBuf> {
         variant.filename(),
         variant.approximate_size_mb()
     );
-    download_file(&variant.download_url(), &temp_path)?;
+    download_file_with_progress(&variant.download_url(), &temp_path, &mut on_progress)?;
     std::fs::rename(&temp_path, &model_path)
         .with_context(|| format!("Failed to rename downloaded model to {}", model_path.display()))?;
     info!("✅ Model downloaded: {}", model_path.display());
@@ -521,10 +598,17 @@ pub fn transcribe_wav(wav_path: &str, language: Option<&str>) -> Result<Transcri
 }
 
 fn download_file(url: &str, dest: &Path) -> Result<()> {
+    download_file_with_progress(url, dest, |_, _, _| ())
+}
+
+fn download_file_with_progress<F>(url: &str, dest: &Path, mut on_progress: F) -> Result<()>
+where
+    F: FnMut(u64, u64, u32),
+{
     info!("📥 Downloading: {url}");
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("sublix/0.5.0")
+        .user_agent("sublix/0.6.0")
         .timeout(std::time::Duration::from_secs(900))
         .build()
         .context("Failed to build HTTP client")?;
@@ -554,15 +638,17 @@ fn download_file(url: &str, dest: &Path) -> Result<()> {
         downloaded += bytes_read as u64;
 
         if total_size > 0 {
-            let pct = ((downloaded * 100) / total_size) as i32;
-            if pct / 10 != last_log_pct / 10 {
+            let pct = ((downloaded * 100) / total_size) as u32;
+            on_progress(downloaded, total_size, pct);
+            let pct_i = pct as i32;
+            if pct_i / 10 != last_log_pct / 10 {
                 info!(
                     "  ⏳ {}% ({:.1} MB / {:.1} MB)",
                     pct,
                     downloaded as f64 / 1_048_576.0,
                     total_size as f64 / 1_048_576.0
                 );
-                last_log_pct = pct;
+                last_log_pct = pct_i;
             }
         }
     }

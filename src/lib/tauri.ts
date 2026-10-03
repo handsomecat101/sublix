@@ -35,6 +35,16 @@ export interface ModelStatusItem {
   downloaded: boolean;
 }
 
+export interface ModelDownloadProgress {
+  component: "stt" | "translation";
+  name: string;
+  downloaded_bytes?: number;
+  total_bytes?: number;
+  percent: number;
+  phase?: "downloading" | "done" | "error";
+  error?: string;
+}
+
 export interface SetupStatus {
   has_whisper_binary: boolean;
   stt_engine: string | null;
@@ -59,6 +69,26 @@ export interface AppConfig {
   overlay_font_size: number;
   overlay_show_original: boolean;
   overlay_click_through: boolean;
+}
+
+export interface FileSubProgress {
+  stage: string;
+  message: string;
+  percent: number;
+  current_segment: number;
+  total_segments: number;
+  current_original: string | null;
+  current_translated: string | null;
+}
+
+export interface FileSubResult {
+  input_path: string;
+  vi_srt_path: string;
+  bilingual_srt_path: string | null;
+  original_srt_path: string;
+  total_segments: number;
+  elapsed_seconds: number;
+  media_duration_seconds: number | null;
 }
 
 export const sublix = {
@@ -225,5 +255,35 @@ export const sublix = {
 
   async openModelsFolder(): Promise<void> {
     return await invoke("open_models_folder");
+  },
+
+  async selectMediaFile(): Promise<string | null> {
+    return await invoke<string | null>("select_media_file");
+  },
+
+  async generateFileSubtitles(opts: {
+    inputPath: string;
+    sourceLang?: string;
+    targetLang?: string;
+    createBilingual?: boolean;
+    sttModelName?: string;
+    translationModelName?: string;
+  }): Promise<FileSubResult> {
+    return await invoke<FileSubResult>("generate_file_subtitles", {
+      inputPath: opts.inputPath,
+      sourceLang: opts.sourceLang,
+      targetLang: opts.targetLang,
+      createBilingual: opts.createBilingual ?? true,
+      sttModelName: opts.sttModelName,
+      translationModelName: opts.translationModelName,
+    });
+  },
+
+  async revealInExplorer(path: string): Promise<void> {
+    return await invoke("reveal_in_explorer", { path });
+  },
+
+  async playInVlc(videoPath: string, srtPath: string): Promise<void> {
+    return await invoke("play_in_vlc", { videoPath, srtPath });
   },
 };

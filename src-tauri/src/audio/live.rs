@@ -329,7 +329,7 @@ fn run_continuous_capture(
                 window_peak = batch_peak;
             }
 
-            let is_voice = batch_rms >= 0.0042 || batch_peak >= 0.018;
+            let is_voice = batch_rms >= 0.0070 || batch_peak >= 0.032;
 
             if !in_speech {
                 if is_voice {
@@ -372,7 +372,16 @@ fn run_continuous_capture(
                         preroll.extend(active_chunk[start_tail..].iter().copied());
                     }
 
-                    if chunk_peak >= 0.012 && active_chunk.len() >= TARGET_SR / 2 {
+                    // Compute overall chunk RMS to guarantee genuine speech before invoking STT
+                    let chunk_sum_sq: f64 = active_chunk.iter().map(|&s| (s as f64) * (s as f64)).sum();
+                    let chunk_rms = (chunk_sum_sq / active_chunk.len().max(1) as f64).sqrt() as f32;
+
+                    // Speech requirement: Peak >= 0.032 (3.2%) AND RMS >= 0.0055 AND length >= 0.5s
+                    let has_real_speech = chunk_peak >= 0.032
+                        && chunk_rms >= 0.0055
+                        && active_chunk.len() >= (TARGET_SR / 2);
+
+                    if has_real_speech {
                         if let Ok(wav_path) = write_16k_mono_wav(&active_chunk, chunk_idx) {
                             let job = AudioChunkJob {
                                 chunk_idx,
@@ -485,7 +494,7 @@ fn run_inference_worker(
         match stt_res {
             Ok(result) => {
                 let text = result.text.trim();
-                if text.is_empty() {
+                if text.is_empty() || crate::stt::whisper_local::is_hallucination(text) {
                     continue;
                 }
                 // Deduplicate identical consecutive noise/overlap transcripts
@@ -531,6 +540,11 @@ fn run_inference_worker(
                     } else {
                         (text.to_string(), None, None, 0.0)
                     };
+
+                // Drop if translated text is a silence hallucination (e.g. "Chúc ngủ ngon")
+                if crate::stt::whisper_local::is_hallucination(&display_text) {
+                    continue;
+                }
 
                 info!(
                     "🎬 Sub #{}: '{}' → '{}' (STT {:.2}s, LLM {:.2}s)",

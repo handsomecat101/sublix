@@ -9,8 +9,9 @@ pub mod whisper_server;
 
 pub use whisper_local::{
     clean_whisper_transcript, ensure_binary_with_engine, ensure_local_whisper, ensure_model,
-    has_binary as has_whisper_binary, has_model as has_stt_model, transcribe_wav, ModelVariant,
-    SttEngine, TranscriptionResult, WhisperLocal, TRANSCRIBE_LANG_OPTIONS,
+    ensure_model_with_progress, has_binary as has_whisper_binary, has_model as has_stt_model,
+    transcribe_wav, ModelVariant, SttEngine, TranscriptionResult, WhisperLocal,
+    TRANSCRIBE_LANG_OPTIONS,
 };
 pub use whisper_server::{
     current_engine as stt_server_engine, current_model as stt_server_model,

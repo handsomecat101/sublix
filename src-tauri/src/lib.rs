@@ -1,4 +1,4 @@
-// Sublix v0.5.0 — Tauri v2 + Rust backend
+// Sublix v0.6.0 — Tauri v2 + Rust backend
 //
 // Features:
 // - Continuous WASAPI loopback audio capture + Smart VAD
@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 pub mod audio;
 pub mod config;
+pub mod file_sub;
 pub mod overlay;
 pub mod stt;
 pub mod translate;
@@ -132,7 +133,11 @@ pub fn run() {
             download_whisper_binary_cmd,
             download_stt_model_cmd,
             download_translation_model_cmd,
-            open_models_folder
+            open_models_folder,
+            select_media_file,
+            generate_file_subtitles,
+            reveal_in_explorer,
+            play_in_vlc
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -149,10 +154,18 @@ pub fn run() {
                 if cfg.overlay_click_through {
                     let _ = overlay.set_ignore_cursor_events(true);
                 }
+                let _ = overlay.hide();
                 tracing::info!(
-                    "🎨 Overlay window ready: {}",
+                    "🎨 Overlay window ready (hidden by default): {}",
                     overlay.title().unwrap_or_default()
                 );
+            }
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.center();
+                let _ = main.show();
+                let _ = main.unminimize();
+                let _ = main.set_focus();
+                tracing::info!("🖥️ Main Settings window centered, shown, and focused");
             }
             tracing::info!("🚀 Sublix v{} started", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -593,44 +606,94 @@ fn download_whisper_binary_cmd(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn download_stt_model_cmd(app: tauri::AppHandle, variant: String) -> Result<(), String> {
+async fn download_stt_model_cmd(app: tauri::AppHandle, variant: String) -> Result<(), String> {
     let v = ModelVariant::from_name(&variant).ok_or_else(|| format!("Unknown model: {variant}"))?;
     let size_mb = v.approximate_size_mb();
+    let variant_name = v.name().to_string();
+
     let _ = app.emit(
         "setup:progress",
         serde_json::json!({
             "phase": "downloading",
             "component": "stt_model",
-            "variant": variant,
+            "variant": variant_name,
             "size_mb": size_mb,
-            "message": format!("Downloading {} (~{}MB)...", v.name(), size_mb)
+            "message": format!("Downloading {} (~{}MB)...", variant_name, size_mb)
         }),
     );
-    let result = stt::whisper_local::ensure_model(v);
+
+    let app_handle = app.clone();
+    let v_clone_name = variant_name.clone();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let app_for_progress = app_handle.clone();
+        let name_for_progress = v_clone_name.clone();
+        let mut last_emitted_pct = 0u32;
+        stt::whisper_local::ensure_model_with_progress(v, move |downloaded, total, pct| {
+            if pct > last_emitted_pct || pct == 100 {
+                last_emitted_pct = pct;
+                let _ = app_for_progress.emit(
+                    "model:download_progress",
+                    serde_json::json!({
+                        "component": "stt",
+                        "name": name_for_progress,
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total,
+                        "percent": pct
+                    }),
+                );
+            }
+        })
+    })
+    .await
+    .map_err(|e| format!("Task spawn error: {e}"))?;
+
     let _ = match &result {
-        Ok(_) => app.emit(
-            "setup:progress",
-            serde_json::json!({
-                "phase": "done",
-                "component": "stt_model",
-                "variant": variant
-            }),
-        ),
-        Err(e) => app.emit(
-            "setup:progress",
-            serde_json::json!({
-                "phase": "error",
-                "component": "stt_model",
-                "variant": variant,
-                "message": format!("{e:#}")
-            }),
-        ),
+        Ok(_) => {
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({
+                    "component": "stt",
+                    "name": variant_name,
+                    "percent": 100,
+                    "phase": "done"
+                }),
+            );
+            app.emit(
+                "setup:progress",
+                serde_json::json!({
+                    "phase": "done",
+                    "component": "stt_model",
+                    "variant": variant_name
+                }),
+            )
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({
+                    "component": "stt",
+                    "name": variant_name,
+                    "phase": "error",
+                    "error": format!("{e:#}")
+                }),
+            );
+            app.emit(
+                "setup:progress",
+                serde_json::json!({
+                    "phase": "error",
+                    "component": "stt_model",
+                    "variant": variant_name,
+                    "message": format!("{e:#}")
+                }),
+            )
+        }
     };
     result.map(|_| ()).map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]
-fn download_translation_model_cmd(
+async fn download_translation_model_cmd(
     app: tauri::AppHandle,
     variant: Option<String>,
 ) -> Result<(), String> {
@@ -639,35 +702,85 @@ fn download_translation_model_cmd(
         .and_then(TranslationModelVariant::from_name)
         .unwrap_or(TranslationModelVariant::Qwen3_4B);
     let size_mb = v.approximate_size_mb();
+    let variant_name = v.name().to_string();
+
     let _ = app.emit(
         "setup:progress",
         serde_json::json!({
             "phase": "downloading",
             "component": "translation_model",
-            "variant": v.name(),
+            "variant": variant_name,
             "size_mb": size_mb,
-            "message": format!("Downloading {} (~{}MB)...", v.name(), size_mb)
+            "message": format!("Downloading {} (~{}MB)...", variant_name, size_mb)
         }),
     );
-    let result = translate::ensure_variant_model(v);
+
+    let app_handle = app.clone();
+    let v_clone_name = variant_name.clone();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let app_for_progress = app_handle.clone();
+        let name_for_progress = v_clone_name.clone();
+        let mut last_emitted_pct = 0u32;
+        translate::ensure_variant_model_with_progress(v, move |downloaded, total, pct| {
+            if pct > last_emitted_pct || pct == 100 {
+                last_emitted_pct = pct;
+                let _ = app_for_progress.emit(
+                    "model:download_progress",
+                    serde_json::json!({
+                        "component": "translation",
+                        "name": name_for_progress,
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total,
+                        "percent": pct
+                    }),
+                );
+            }
+        })
+    })
+    .await
+    .map_err(|e| format!("Task spawn error: {e}"))?;
+
     let _ = match &result {
-        Ok(_) => app.emit(
-            "setup:progress",
-            serde_json::json!({
-                "phase": "done",
-                "component": "translation_model",
-                "variant": v.name()
-            }),
-        ),
-        Err(e) => app.emit(
-            "setup:progress",
-            serde_json::json!({
-                "phase": "error",
-                "component": "translation_model",
-                "variant": v.name(),
-                "message": format!("{e:#}")
-            }),
-        ),
+        Ok(_) => {
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({
+                    "component": "translation",
+                    "name": variant_name,
+                    "percent": 100,
+                    "phase": "done"
+                }),
+            );
+            app.emit(
+                "setup:progress",
+                serde_json::json!({
+                    "phase": "done",
+                    "component": "translation_model",
+                    "variant": variant_name
+                }),
+            )
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({
+                    "component": "translation",
+                    "name": variant_name,
+                    "phase": "error",
+                    "error": format!("{e:#}")
+                }),
+            );
+            app.emit(
+                "setup:progress",
+                serde_json::json!({
+                    "phase": "error",
+                    "component": "translation_model",
+                    "variant": variant_name,
+                    "message": format!("{e:#}")
+                }),
+            )
+        }
     };
     result.map(|_| ()).map_err(|e| format!("{e:#}"))
 }
@@ -756,4 +869,44 @@ fn set_translation_engine_preference(
         cfg.translation_engine_preference
     );
     Ok(cfg)
+}
+
+#[tauri::command]
+fn select_media_file() -> Option<String> {
+    file_sub::pick_media_file()
+}
+
+#[tauri::command]
+async fn generate_file_subtitles(
+    app: tauri::AppHandle,
+    input_path: String,
+    source_lang: Option<String>,
+    target_lang: Option<String>,
+    create_bilingual: bool,
+    stt_model_name: Option<String>,
+    translation_model_name: Option<String>,
+) -> Result<file_sub::FileSubResult, String> {
+    tokio::task::spawn_blocking(move || {
+        file_sub::generate_file_subtitles(
+            app,
+            input_path,
+            source_lang,
+            target_lang,
+            create_bilingual,
+            stt_model_name,
+            translation_model_name,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    file_sub::reveal_in_explorer(&path).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn play_in_vlc(video_path: String, srt_path: String) -> Result<(), String> {
+    file_sub::launch_in_vlc(&video_path, &srt_path).map_err(|e| format!("{e:#}"))
 }

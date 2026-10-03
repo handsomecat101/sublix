@@ -195,6 +195,16 @@ pub fn ensure_binary() -> Result<PathBuf> {
 }
 
 pub fn ensure_variant_model(variant: TranslationModelVariant) -> Result<PathBuf> {
+    ensure_variant_model_with_progress(variant, |_, _, _| ())
+}
+
+pub fn ensure_variant_model_with_progress<F>(
+    variant: TranslationModelVariant,
+    mut on_progress: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(u64, u64, u32),
+{
     let dir = models_dir();
     std::fs::create_dir_all(&dir).with_context(|| format!("Create {}", dir.display()))?;
     let path = dir.join(variant.filename());
@@ -208,7 +218,7 @@ pub fn ensure_variant_model(variant: TranslationModelVariant) -> Result<PathBuf>
         variant.download_url(),
         variant.approximate_size_mb()
     );
-    download_file(variant.download_url(), &temp_path)?;
+    download_file_with_progress(variant.download_url(), &temp_path, &mut on_progress)?;
     std::fs::rename(&temp_path, &path)
         .with_context(|| format!("Failed to rename downloaded model to {}", path.display()))?;
     info!("✅ Translation model ready: {}", path.display());
@@ -219,9 +229,17 @@ pub fn ensure_model() -> Result<PathBuf> {
     ensure_variant_model(TranslationModelVariant::Qwen3_4B)
 }
 
+#[allow(dead_code)]
 fn download_file(url: &str, dest: &Path) -> Result<()> {
+    download_file_with_progress(url, dest, |_, _, _| ())
+}
+
+fn download_file_with_progress<F>(url: &str, dest: &Path, mut on_progress: F) -> Result<()>
+where
+    F: FnMut(u64, u64, u32),
+{
     let client = reqwest::blocking::Client::builder()
-        .user_agent("sublix/0.5.0")
+        .user_agent("sublix/0.6.0")
         .timeout(std::time::Duration::from_secs(1800))
         .build()?;
     let mut response = client.get(url).send()?.error_for_status()?;
@@ -238,15 +256,17 @@ fn download_file(url: &str, dest: &Path) -> Result<()> {
         dest_file.write_all(&buffer[..n])?;
         downloaded += n as u64;
         if total > 0 {
-            let pct = ((downloaded * 100) / total) as i32;
-            if pct / 10 != last_pct / 10 {
+            let pct = ((downloaded * 100) / total) as u32;
+            on_progress(downloaded, total, pct);
+            let pct_i = pct as i32;
+            if pct_i / 10 != last_pct / 10 {
                 info!(
                     "    ⏳ {}% ({:.1} MB / {:.1} MB)",
                     pct,
                     downloaded as f64 / 1_048_576.0,
                     total as f64 / 1_048_576.0
                 );
-                last_pct = pct;
+                last_pct = pct_i;
             }
         }
     }

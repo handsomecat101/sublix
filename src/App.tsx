@@ -37,6 +37,9 @@ function App() {
   useEffect(() => {
     if (windowLabel === null) return;
     if (windowLabel === "overlay") {
+      document.documentElement.style.background = "transparent";
+      document.body.style.background = "transparent";
+      document.body.style.overflow = "hidden";
       setPhase("settings"); // unused for overlay, but avoids stuck loading
       return;
     }

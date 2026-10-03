@@ -1,0 +1,382 @@
+/* File Subtitle Studio Styles */
+
+.file-sub-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-sub-intro {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(167, 139, 250, 0.08));
+  border: 1px solid rgba(147, 197, 253, 0.2);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.file-sub-intro h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.file-sub-intro p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.file-sub-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-sub-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.file-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-browse-btn {
+  white-space: nowrap;
+  padding: 9px 18px;
+  font-size: 13px;
+}
+
+.file-selected-path {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.file-has-path {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.file-has-path strong {
+  color: #60a5fa;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-full-path {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.file-placeholder {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.file-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+@media (max-width: 720px) {
+  .file-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.file-config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-config-item label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.file-sub-checkbox-row {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-top: 3px;
+  accent-color: #3b82f6;
+}
+
+.file-sub-action-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.file-run-btn {
+  padding: 12px 32px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+.file-sub-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* Progress bar card */
+.file-sub-progress-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-stage-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.progress-percent {
+  font-size: 14px;
+  font-weight: 700;
+  color: #60a5fa;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.progress-detail-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+}
+
+/* Subtitle Preview Card */
+.file-sub-preview-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-card-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.preview-counter {
+  color: #93c5fd;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.preview-scroll-area {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.preview-item {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid #3b82f6;
+  border-radius: 4px;
+}
+
+.preview-item-num {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  min-width: 32px;
+}
+
+.preview-item-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preview-item-trans {
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.preview-item-orig {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+/* Result Card */
+.file-sub-result-card {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.04));
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.result-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.result-header h3 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  color: #86efac;
+}
+
+.result-header p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.result-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.result-file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.result-tag {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
+.result-file-item code {
+  color: rgba(255, 255, 255, 0.85);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

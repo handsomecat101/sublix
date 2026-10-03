@@ -115,18 +115,16 @@ export default function OverlayView() {
             v{version}
           </span>
         )}
+        {!clickThrough && (
+          <button
+            className="overlay-close-btn"
+            onClick={handleClose}
+            title="Đóng / Ẩn Overlay (Dừng Live Subtitles)"
+          >
+            ×
+          </button>
+        )}
       </div>
-
-      {/* Close button */}
-      {!clickThrough && (
-        <button
-          className="overlay-close-btn"
-          onClick={handleClose}
-          title="Hide overlay (stops live capture too)"
-        >
-          ×
-        </button>
-      )}
 
       {/* Subtitle area */}
       <div className="overlay-subtitle" data-tauri-drag-region>
