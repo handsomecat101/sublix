@@ -14,6 +14,11 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = format!("PANIC in sublix main: {:?}\nLocation: {:?}\n", info, info.location());
+        let _ = std::fs::write(std::env::temp_dir().join("sublix_crash.log"), &msg);
+    }));
+
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(String::as_str) {
