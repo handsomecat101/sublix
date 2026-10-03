@@ -17,6 +17,7 @@ import {
   type ModelDownloadProgress,
 } from "../lib/tauri";
 import FileSubView from "./FileSubView";
+import DubbingStudioView from "./DubbingStudioView";
 import "./SettingsView.css";
 
 type Status =
@@ -99,7 +100,7 @@ export default function SettingsView() {
   const [transEnginePref, setTransEnginePref] = useState<"auto" | "cpu" | "cuda">("auto");
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
   const [fullConfig, setFullConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<"file_sub" | "live" | "models" | "history" | "overlay">("file_sub");
+  const [activeTab, setActiveTab] = useState<"file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("file_sub");
   const [historySearch, setHistorySearch] = useState<string>("");
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
 
@@ -643,6 +644,16 @@ export default function SettingsView() {
 
             <button
               type="button"
+              className={`sidebar-nav-item ${activeTab === "dubbing" ? "active" : ""}`}
+              onClick={() => setActiveTab("dubbing")}
+            >
+              <span className="sidebar-nav-icon">🎬</span>
+              <span className="sidebar-nav-label">Studio Lồng Tiếng AI</span>
+              <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>NEW</span>
+            </button>
+
+            <button
+              type="button"
               className={`sidebar-nav-item ${activeTab === "live" ? "active" : ""}`}
               onClick={() => setActiveTab("live")}
             >
@@ -712,6 +723,7 @@ export default function SettingsView() {
         <div className="main-topbar">
           <div className="main-topbar-title">
             {activeTab === "file_sub" && "📁 Tạo Phụ Đề Cho File Media (Video / Audio)"}
+            {activeTab === "dubbing" && "🎬 Studio Lồng Tiếng AI Đa Vai (Diarization + Neural TTS)"}
             {activeTab === "live" && "🎙️ Dịch Phụ Đề Trực Tiếp Thời Gian Thực (Live Stream)"}
             {activeTab === "models" && "⚙️ Quản Lý Mô Hình AI & Bộ Cấu Hình Phần Cứng"}
             {activeTab === "history" && "📜 Lịch Sử Lời Thoại & Xuất File Phụ Đề"}
@@ -736,6 +748,10 @@ export default function SettingsView() {
           defaultSttModel={model}
           defaultTransModel={translationModel}
         />
+      )}
+
+      {activeTab === "dubbing" && (
+        <DubbingStudioView defaultSourceLang={language} />
       )}
 
       {activeTab === "live" && (

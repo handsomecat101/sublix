@@ -41,10 +41,9 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
-| `TSK-011` | Thử nghiệm tách Vocal/BGM bằng Demucs v4 ONNX | Antigravity / Claude | 🔴 HIGH | Tầng 1 của AI Dubbing pipeline (xem `SPEC_AI_DUBBING_AND_LLM.md`) |
-| `TSK-012` | Tích hợp Sherpa-ONNX Speaker Diarization phân vai | Antigravity | 🔴 HIGH | Tầng 2: Gán nhãn Speaker 0, Speaker 1 cho từng câu |
-| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng vai nhân vật |
-| `TSK-014` | Tích hợp FFmpeg `atempo` time-stretching khớp thời lượng | - | 🟡 MEDIUM | Tầng 5: Co giãn audio khớp video gốc |
+| `TSK-012` | Tích hợp Sherpa-ONNX 3D-Speaker Diarization nâng cao | Antigravity | 🔴 HIGH | Nhận diện giọng nói đa vai bằng vector embedding |
+| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật |
+| `TSK-014` | Tách Vocal/BGM bằng Demucs v4 ONNX | Antigravity / Claude | 🟡 MEDIUM | Tách nhạc nền và lời ca sĩ không bị lẫn |
 
 ---
 
@@ -52,6 +51,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-011` | Triển khai Module AI Dubbing Studio (Diarization, TTS, Remux) | Antigravity | 2026-10-04 | Hoàn thành Studio phân vai, nghe thử TTS, biên kịch MiniMax-M3 và xuất video FFmpeg |
 | `TSK-010` | Tích hợp Collaborator Kit v1.1 vào Sublix & hệ thống app | Antigravity | 2026-10-04 | Hoàn thành bộ 4 file cốt lõi + quy trình 6 bước + skill `.agents/skills/jimmyvu-agent-collab` |
 | `TSK-009` | Cấu hình MiniMax-M3 API (`sk-cp-`) & nút chọn model | Antigravity | 2026-10-04 | Đã cấu hình gateway `api.minimax.io`, cờ `reasoning_split`, test Anh/Nhật/Trung mượt mà |
 | `TSK-008` | Soạn thảo Đặc tả Kỹ thuật Lồng Tiếng AI SOTA | Antigravity | 2026-10-04 | Hoàn thành `docs/SPEC_AI_DUBBING_AND_LLM.md` cho reviewer đánh giá |

@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 pub mod audio;
 pub mod config;
+pub mod dubbing;
 pub mod file_sub;
 pub mod overlay;
 pub mod stt;
@@ -137,7 +138,12 @@ pub fn run() {
             select_media_file,
             generate_file_subtitles,
             reveal_in_explorer,
-            play_in_vlc
+            play_in_vlc,
+            dubbing_pick_media_file,
+            dubbing_get_voices,
+            dubbing_analyze,
+            dubbing_preview_tts,
+            dubbing_export
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -910,3 +916,57 @@ fn reveal_in_explorer(path: String) -> Result<(), String> {
 fn play_in_vlc(video_path: String, srt_path: String) -> Result<(), String> {
     file_sub::launch_in_vlc(&video_path, &srt_path).map_err(|e| format!("{e:#}"))
 }
+
+#[tauri::command]
+fn dubbing_pick_media_file() -> Option<String> {
+    file_sub::pick_media_file()
+}
+
+#[tauri::command]
+fn dubbing_get_voices() -> Vec<dubbing::VoicePreset> {
+    dubbing::get_preset_voices()
+}
+
+#[tauri::command]
+async fn dubbing_analyze(
+    app: tauri::AppHandle,
+    file_path: String,
+    source_lang: Option<String>,
+) -> Result<dubbing::DubbingProject, String> {
+    tokio::task::spawn_blocking(move || {
+        dubbing::analyze_and_create_project(&app, &file_path, source_lang)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn dubbing_preview_tts(
+    text: String,
+    voice: String,
+    rate: Option<String>,
+    pitch: Option<String>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        dubbing::preview_single_line(&text, &voice, rate.as_deref(), pitch.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn dubbing_export(
+    app: tauri::AppHandle,
+    project: dubbing::DubbingProject,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        dubbing::export_dubbed_video(&app, project, output_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
+}
+

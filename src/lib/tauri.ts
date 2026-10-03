@@ -291,4 +291,69 @@ export const sublix = {
   async playInVlc(videoPath: string, srtPath: string): Promise<void> {
     return await invoke("play_in_vlc", { videoPath, srtPath });
   },
+
+  async dubbingPickMediaFile(): Promise<string | null> {
+    return await invoke<string | null>("dubbing_pick_media_file");
+  },
+
+  async dubbingGetVoices(): Promise<VoicePreset[]> {
+    return await invoke<VoicePreset[]>("dubbing_get_voices");
+  },
+
+  async dubbingAnalyze(filePath: string, sourceLang?: string): Promise<DubbingProject> {
+    return await invoke<DubbingProject>("dubbing_analyze", { filePath, sourceLang });
+  },
+
+  async dubbingPreviewTts(text: string, voice: string, rate?: string, pitch?: string): Promise<string> {
+    return await invoke<string>("dubbing_preview_tts", { text, voice, rate, pitch });
+  },
+
+  async dubbingExport(project: DubbingProject, outputPath?: string): Promise<string> {
+    return await invoke<string>("dubbing_export", { project, outputPath });
+  },
 };
+
+export interface VoicePreset {
+  id: string;
+  name: string;
+  gender: "male" | "female";
+  lang: string;
+  description: string;
+}
+
+export interface DubbingSpeaker {
+  id: string;
+  label: string;
+  voice: string;
+  pitch: string;
+  rate: string;
+}
+
+export interface DubbingSegment {
+  id: number;
+  speaker_id: string;
+  start_sec: number;
+  end_sec: number;
+  original_text: string;
+  dubbed_text: string;
+  audio_duration_sec?: number | null;
+  status: string;
+}
+
+export interface DubbingProject {
+  input_path: string;
+  media_duration_sec: number;
+  speakers: DubbingSpeaker[];
+  segments: DubbingSegment[];
+  bgm_volume: number;
+  voice_volume: number;
+}
+
+export interface DubbingProgress {
+  stage: string;
+  percent: number;
+  message: string;
+  current_item: number;
+  total_items: number;
+}
+

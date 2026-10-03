@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 01:32 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Đã hoàn thiện và tích hợp module **Studio Lồng Tiếng AI (AI Dubbing)**: tự động phân vai diễn viên, nghe thử giọng đọc TTS tức thì, biên kịch kịch bản qua MiniMax-M3, time-stretching và xuất video FFmpeg.
+- **Files đã tạo/sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `src/views/SettingsView.tsx`.
+- **Verify/Deploy:** Bản Release `sublix.exe` đã build thành công 100%, không lỗi lầm.
+- **Việc tiếp theo:** Sẵn sàng nhận video thực tế để chạy thử nghiệm pipeline lồng tiếng.
+
+---
+
 ### 2026-10-04 01:14 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Tích hợp thành công bộ quy chuẩn Agent Collaborator Kit v1.1 của anh Tuấn (`handsomecat101/agent-team`) vào Sublix và tạo kỹ năng `.agents/skills/jimmyvu-agent-collab`.
