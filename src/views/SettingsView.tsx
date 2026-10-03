@@ -106,7 +106,7 @@ export default function SettingsView() {
   // Translation provider settings (MiniMax Cloud / Ollama Local / Embedded GGUF)
   const [transProvider, setTransProvider] = useState<"local" | "ollama" | "minimax">("local");
   const [minimaxKey, setMinimaxKey] = useState<string>("");
-  const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-Text-01");
+  const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-M3");
   const [ollamaUrl, setOllamaUrl] = useState<string>("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState<string>("smtek/qwen3.8-27b:q4_k_m");
   const [showMinimaxKey, setShowMinimaxKey] = useState<boolean>(false);
@@ -1326,14 +1326,57 @@ export default function SettingsView() {
             </div>
             <div className="settings-row" style={{ marginBottom: 12 }}>
               <label style={{ minWidth: 100 }}>Model Name:</label>
-              <input
-                type="text"
-                value={minimaxModel}
-                onChange={(e) => setMinimaxModel(e.target.value)}
-                placeholder="MiniMax-Text-01 hoặc abab6.5s-chat"
-                className="settings-input"
-                style={{ flex: 1 }}
-              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                <input
+                  type="text"
+                  value={minimaxModel}
+                  onChange={(e) => setMinimaxModel(e.target.value)}
+                  placeholder="MiniMax-M3 (Token Plan) hoặc MiniMax-Text-01"
+                  className="settings-input"
+                  style={{ width: "100%" }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setMinimaxModel("MiniMax-M3")}
+                    className="settings-btn-secondary"
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: minimaxModel === "MiniMax-M3" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                      borderColor: minimaxModel === "MiniMax-M3" ? "#3b82f6" : undefined,
+                    }}
+                  >
+                    ⭐ MiniMax-M3 (Token Plan)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMinimaxModel("MiniMax-Text-01")}
+                    className="settings-btn-secondary"
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: minimaxModel === "MiniMax-Text-01" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                      borderColor: minimaxModel === "MiniMax-Text-01" ? "#3b82f6" : undefined,
+                    }}
+                  >
+                    MiniMax-Text-01
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMinimaxModel("abab6.5s-chat")}
+                    className="settings-btn-secondary"
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: minimaxModel === "abab6.5s-chat" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                      borderColor: minimaxModel === "abab6.5s-chat" ? "#3b82f6" : undefined,
+                    }}
+                  >
+                    abab6.5s-chat
+                  </button>
+                </div>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
               <button

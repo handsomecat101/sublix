@@ -571,19 +571,27 @@ pub fn translate_via_minimax(
         tgt = lang_name(target)
     );
 
+    let model_name = if model.trim().is_empty() {
+        "MiniMax-M3"
+    } else {
+        model.trim()
+    };
+
     let body = serde_json::json!({
-        "model": if model.trim().is_empty() { "MiniMax-Text-01" } else { model },
+        "model": model_name,
         "messages": [
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": user_prompt }
         ],
-        "temperature": 0.3
+        "temperature": 0.2,
+        "reasoning_split": true
     });
 
-    let client = Client::builder().timeout(Duration::from_secs(15)).build()?;
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
     let t0 = Instant::now();
+    let endpoint = "https://api.minimax.io/v1/chat/completions";
     let resp = client
-        .post("https://api.minimax.chat/v1/chat/completions")
+        .post(endpoint)
         .header("Authorization", format!("Bearer {}", api_key.trim()))
         .header("Content-Type", "application/json")
         .json(&body)

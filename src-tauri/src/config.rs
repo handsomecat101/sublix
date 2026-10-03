@@ -143,7 +143,7 @@ fn default_empty_string() -> String {
 }
 
 fn default_minimax_model() -> String {
-    "MiniMax-Text-01".to_string()
+    "MiniMax-M3".to_string()
 }
 
 fn default_ollama_url() -> String {
