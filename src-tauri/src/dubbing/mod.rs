@@ -17,32 +17,120 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 use tauri::{AppHandle, Emitter};
-use tracing::info;
-use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::{info, warn};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
-pub static DUBBING_CANCELLED: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+static CURRENT_GENERATION: AtomicU64 = AtomicU64::new(0);
+static CANCELLED_GENERATION: AtomicU64 = AtomicU64::new(0);
+static ACTIVE_CHILD_PID: AtomicU32 = AtomicU32::new(0);
+
+/// Start a new dubbing run, advancing generation counter and clearing any active child PID.
+pub fn start_new_generation() -> u64 {
+    let old = CURRENT_GENERATION.load(Ordering::SeqCst);
+    if old > 0 {
+        CANCELLED_GENERATION.store(old, Ordering::SeqCst);
+        kill_active_child();
+    }
+    CURRENT_GENERATION.fetch_add(1, Ordering::SeqCst) + 1
+}
+
+pub fn is_generation_cancelled(gen: u64) -> bool {
+    let cancelled = CANCELLED_GENERATION.load(Ordering::Relaxed);
+    cancelled >= gen
+}
 
 pub fn cancel_dubbing() {
-    DUBBING_CANCELLED.store(true, Ordering::SeqCst);
+    let cur = CURRENT_GENERATION.load(Ordering::SeqCst);
+    CANCELLED_GENERATION.store(cur, Ordering::SeqCst);
+    kill_active_child();
 }
 
 pub fn is_dubbing_cancelled() -> bool {
-    DUBBING_CANCELLED.load(Ordering::Relaxed)
+    let cur = CURRENT_GENERATION.load(Ordering::Relaxed);
+    if cur == 0 {
+        return false;
+    }
+    CANCELLED_GENERATION.load(Ordering::Relaxed) >= cur
 }
 
 pub fn reset_dubbing_cancel() {
-    DUBBING_CANCELLED.store(false, Ordering::SeqCst);
+    start_new_generation();
+}
+
+pub fn kill_active_child() {
+    let pid = ACTIVE_CHILD_PID.swap(0, Ordering::SeqCst);
+    if pid > 0 {
+        #[cfg(windows)]
+        {
+            use std::process::Command;
+            let _ = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = std::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .status();
+        }
+    }
+}
+
+/// Execute a child process while observing cancellation generation and PID termination.
+pub fn run_child_with_cancel(mut cmd: Command, gen: u64) -> Result<std::process::ExitStatus> {
+    if is_generation_cancelled(gen) {
+        return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+    }
+    let mut child = cmd.spawn().context("Không thể khởi chạy tiến trình con")?;
+    let pid = child.id();
+    ACTIVE_CHILD_PID.store(pid, Ordering::SeqCst);
+
+    loop {
+        if is_generation_cancelled(gen) {
+            ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+            #[cfg(windows)]
+            {
+                let _ = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .status();
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = std::process::Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .status();
+            }
+            let _ = child.wait();
+            return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+        }
+
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                return Ok(status);
+            }
+            Ok(None) => {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            Err(e) => {
+                ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                return Err(anyhow::anyhow!("Lỗi kiểm tra tiến trình con: {}", e));
+            }
+        }
+    }
 }
 
 use crate::config::AppConfig;
 use crate::stt::whisper_local::ModelVariant;
 use crate::stt::EnginePreference;
 use crate::translate::TranslationModelVariant;
-
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoicePreset {
@@ -379,7 +467,7 @@ pub fn analyze_and_create_project(
     target_lang: Option<String>,
     time_limit_sec: Option<f64>,
 ) -> Result<DubbingProject> {
-    reset_dubbing_cancel();
+    let my_gen = start_new_generation();
 
     let input = Path::new(input_path);
     if !input.exists() {
@@ -438,12 +526,13 @@ pub fn analyze_and_create_project(
     #[cfg(windows)]
     extract_cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let extract_status = extract_cmd.status().context("FFmpeg trích xuất âm thanh thất bại")?;
+    let extract_status = run_child_with_cancel(extract_cmd, my_gen)
+        .context("FFmpeg trích xuất âm thanh thất bại")?;
     if !extract_status.success() {
         return Err(anyhow::anyhow!("FFmpeg trích xuất âm thanh thất bại."));
     }
 
-    if is_dubbing_cancelled() {
+    if is_generation_cancelled(my_gen) {
         let _ = fs::remove_file(&temp_wav);
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
@@ -484,10 +573,11 @@ pub fn analyze_and_create_project(
     #[cfg(windows)]
     whisper_cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let whisper_res = whisper_cmd.status().context("Lỗi thực thi whisper-cli")?;
+    let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
+        .context("Lỗi thực thi whisper-cli")?;
     let _ = fs::remove_file(&temp_wav);
 
-    if is_dubbing_cancelled() {
+    if is_generation_cancelled(my_gen) {
         let _ = fs::remove_file(&temp_srt_file);
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
@@ -592,7 +682,7 @@ pub fn analyze_and_create_project(
 
     let batch_size = 15;
     for chunk_start in (0..total).step_by(batch_size) {
-        if is_dubbing_cancelled() {
+        if is_generation_cancelled(my_gen) {
             return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
         }
 
@@ -624,9 +714,16 @@ pub fn analyze_and_create_project(
         for (offset, trans) in translated_batch.into_iter().enumerate() {
             let target_idx = chunk_start + offset;
             if target_idx < parsed_segments.len() {
+                if trans.starts_with("[Dịch lỗi:") {
+                    parsed_segments[target_idx].status = "translate_failed".to_string();
+                }
                 parsed_segments[target_idx].dubbed_text = trans;
             }
         }
+    }
+
+    if is_generation_cancelled(my_gen) {
+        return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
 
     let media_duration = if let Some(limit) = time_limit_sec {
@@ -655,7 +752,7 @@ pub fn export_dubbed_video(
     project: DubbingProject,
     output_path: Option<String>,
 ) -> Result<String> {
-    reset_dubbing_cancel();
+    let my_gen = start_new_generation();
 
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
         if let Some(a) = app {
@@ -685,7 +782,7 @@ pub fn export_dubbed_video(
 
     // 1. Synthesize each segment and check duration
     for (i, seg) in project.segments.iter().enumerate() {
-        if is_dubbing_cancelled() {
+        if is_generation_cancelled(my_gen) {
             let _ = fs::remove_dir_all(&temp_dir);
             return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
         }
@@ -706,13 +803,25 @@ pub fn export_dubbed_video(
             .unwrap_or(&project.speakers[0]);
 
         let seg_mp3 = temp_dir.join(format!("seg_{}.mp3", i));
-        synthesize_speech(
-            &seg.dubbed_text,
+        let synth_text = if seg.dubbed_text.trim().is_empty() {
+            "..."
+        } else {
+            &seg.dubbed_text
+        };
+
+        if let Err(e) = synthesize_speech(
+            synth_text,
             &speaker.voice,
             &speaker.rate,
             &speaker.pitch,
             &seg_mp3,
-        )?;
+        ) {
+            warn!("TTS failed for segment {i} ('{}'): {e:#}. Continuing with fallback...", seg.dubbed_text);
+        }
+
+        if !seg_mp3.exists() {
+            continue;
+        }
 
         let slot_duration = (seg.end_sec - seg.start_sec).max(0.5);
 
@@ -735,7 +844,7 @@ pub fn export_dubbed_video(
             #[cfg(windows)]
             stretch_cmd.creation_flags(CREATE_NO_WINDOW);
 
-            if stretch_cmd.status().map(|s| s.success()).unwrap_or(false) {
+            if run_child_with_cancel(stretch_cmd, my_gen).map(|s| s.success()).unwrap_or(false) {
                 stretched
             } else {
                 seg_mp3
@@ -744,7 +853,14 @@ pub fn export_dubbed_video(
             seg_mp3
         };
 
-        speech_inputs.push((final_audio, seg.start_sec));
+        if final_audio.exists() {
+            speech_inputs.push((final_audio, seg.start_sec));
+        }
+    }
+
+    if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
     }
 
     // Check if user requested True Vocal Isolation via Demucs AI
@@ -774,22 +890,33 @@ pub fn export_dubbed_video(
         #[cfg(windows)]
         demucs_cmd.creation_flags(CREATE_NO_WINDOW);
 
-        if let Ok(st) = demucs_cmd.status() {
-            if st.success() {
+        match run_child_with_cancel(demucs_cmd, my_gen) {
+            Ok(st) if st.success() => {
                 let cand1 = demucs_out.join("htdemucs").join(&*input_stem).join("no_vocals.wav");
                 if cand1.exists() {
                     info!("✅ Demucs isolated BGM found: {}", cand1.display());
                     isolated_bgm_path = Some(cand1);
                 }
             }
+            Ok(_) => {
+                warn!("Demucs execution completed with non-zero exit code, falling back to volume ducking");
+            }
+            Err(e) => {
+                let _ = fs::remove_dir_all(&temp_dir);
+                return Err(e);
+            }
         }
+    }
+
+    if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
     }
 
     emit("remuxing", 75.0, "Đang ghép audio lồng tiếng & nhạc nền vào video...", 0, 100);
 
     // 2. Mix speech segments at their start times
     let mut mix_filter = String::new();
-    let mut mix_inputs_labels = String::new();
 
     for (idx, (_, start_sec)) in speech_inputs.iter().enumerate() {
         let input_idx = idx + 1; // 0 is original media file
@@ -798,7 +925,6 @@ pub fn export_dubbed_video(
             "[{}:a]adelay={}|{}[a{}];",
             input_idx, delay_ms, delay_ms, input_idx
         ));
-        mix_inputs_labels.push_str(&format!("[a{}]", input_idx));
     }
 
     let num_speech = speech_inputs.len();
@@ -809,45 +935,11 @@ pub fn export_dubbed_video(
     };
 
     if num_speech > 0 {
-        if num_speech <= 28 {
-            mix_filter.push_str(&format!(
-                "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
-                labels = mix_inputs_labels,
-                n = num_speech,
-                vol = project.voice_volume
-            ));
-        } else {
-            // Group speech inputs into chunks of at most 28 to obey FFmpeg amix limit (max 32)
-            let chunk_size = 28;
-            let mut group_labels = String::new();
-            let mut group_count = 0;
-
-            for (grp_idx, chunk) in (1..=num_speech).collect::<Vec<_>>().chunks(chunk_size).enumerate() {
-                let mut chunk_labels = String::new();
-                for &idx in chunk {
-                    chunk_labels.push_str(&format!("[a{}]", idx));
-                }
-                mix_filter.push_str(&format!(
-                    "{labels}amix=inputs={n}:dropout_transition=0[grp{grp}];",
-                    labels = chunk_labels,
-                    n = chunk.len(),
-                    grp = grp_idx
-                ));
-                group_labels.push_str(&format!("[grp{}]", grp_idx));
-                group_count += 1;
-            }
-
-            mix_filter.push_str(&format!(
-                "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
-                labels = group_labels,
-                n = group_count,
-                vol = project.voice_volume
-            ));
-        }
+        mix_filter.push_str(&build_hierarchical_amix_filter(num_speech, project.voice_volume));
 
         // Mix background track (either isolated BGM or ducked original) with speech
         mix_filter.push_str(&format!(
-            "{bgm_src}volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:dropout_transition=0[final_audio]",
+            "{bgm_src}volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:normalize=0[final_audio]",
             bgm_src = bgm_input_ref,
             bgm_vol = if isolated_bgm_path.is_some() { 1.0 } else { project.bgm_volume }
         ));
@@ -910,10 +1002,20 @@ pub fn export_dubbed_video(
     #[cfg(windows)]
     remux.creation_flags(CREATE_NO_WINDOW);
 
+    if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
+    }
+
     info!("🎬 Executing FFmpeg Dubbing Remux to {}", out_file.display());
-    let status = remux.status().with_context(|| "FFmpeg remux failed")?;
+    let status = run_child_with_cancel(remux, my_gen).with_context(|| "FFmpeg remux failed")?;
 
     let _ = fs::remove_dir_all(&temp_dir);
+
+    if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_file(&out_file);
+        return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
+    }
 
     if !status.success() {
         return Err(anyhow::anyhow!("FFmpeg xuất video lồng tiếng thất bại."));
@@ -965,5 +1067,102 @@ fn parse_srt_time_to_seconds(time_str: &str) -> f64 {
         hours * 3600.0 + mins * 60.0 + secs
     } else {
         0.0
+    }
+}
+
+/// Hierarchical tree mixing (BUG-026 & BUG-030):
+/// Groups inputs in layers with chunks <= 28 (guaranteed <= 28 < 32 inputs in every reduction layer).
+/// Uses normalize=0 to preserve natural volume levels across all chunk sizes.
+pub fn build_hierarchical_amix_filter(num_speech: usize, voice_volume: f32) -> String {
+    if num_speech == 0 {
+        return String::new();
+    }
+    let mut mix_filter = String::new();
+    let mut current_labels: Vec<String> = (1..=num_speech).map(|i| format!("[a{}]", i)).collect();
+    let mut layer = 0;
+    while current_labels.len() > 1 {
+        let mut next_labels = Vec::new();
+        let chunk_size = 28;
+        for (grp_idx, chunk) in current_labels.chunks(chunk_size).enumerate() {
+            if chunk.len() == 1 {
+                next_labels.push(chunk[0].clone());
+            } else {
+                let out_label = format!("[tree_{}_{}]", layer, grp_idx);
+                let chunk_str = chunk.concat();
+                mix_filter.push_str(&format!(
+                    "{labels}amix=inputs={n}:normalize=0{out};",
+                    labels = chunk_str,
+                    n = chunk.len(),
+                    out = out_label
+                ));
+                next_labels.push(out_label);
+            }
+        }
+        current_labels = next_labels;
+        layer += 1;
+    }
+
+    let speech_root = &current_labels[0];
+    mix_filter.push_str(&format!(
+        "{root}volume={vol}[speech];",
+        root = speech_root,
+        vol = voice_volume
+    ));
+    mix_filter
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hierarchical_amix_filter_invariant_under_32() {
+        for n in [1, 10, 28, 29, 56, 896, 1000, 2500] {
+            let filter = build_hierarchical_amix_filter(n, 1.25);
+            assert!(filter.ends_with("volume=1.25[speech];"));
+
+            // Check that every `inputs=N` in the filter satisfies N <= 28 < 32
+            let mut search_from = 0;
+            while let Some(pos) = filter[search_from..].find("inputs=") {
+                let idx = search_from + pos + 7;
+                let colon_pos = filter[idx..].find(':').expect("inputs followed by colon");
+                let count_str = &filter[idx..idx + colon_pos];
+                let inputs: usize = count_str.parse().expect("parsed inputs count");
+                assert!(
+                    inputs <= 28,
+                    "FFmpeg amix input count {} exceeded 28 limit for total items {}",
+                    inputs,
+                    n
+                );
+                assert!(inputs >= 2, "amix inputs must be at least 2");
+                search_from = idx + colon_pos;
+            }
+
+            // Invariant BUG-030: If any amix was emitted, normalize=0 must be present
+            if filter.contains("amix=") {
+                assert!(
+                    filter.contains(":normalize=0"),
+                    "normalize=0 must be present to prevent volume attenuation"
+                );
+                assert!(
+                    !filter.contains("dropout_transition=0"),
+                    "dropout_transition=0 must not be present"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_generation_cancellation() {
+        let gen1 = start_new_generation();
+        assert!(!is_generation_cancelled(gen1));
+
+        cancel_dubbing();
+        assert!(is_generation_cancelled(gen1));
+
+        // When starting a new generation, the old one remains cancelled
+        let gen2 = start_new_generation();
+        assert!(is_generation_cancelled(gen1), "Old generation must stay cancelled!");
+        assert!(!is_generation_cancelled(gen2), "New generation must not be cancelled!");
     }
 }

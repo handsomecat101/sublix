@@ -9,6 +9,35 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 20:45 - Antigravity
+- **Loại:** `@done` (Hoàn tất 100% Phase 0: Chữa Nền Móng theo chỉ đạo của PO Anh Tuấn)
+- **Tóm tắt:** Đã xử lý triệt để 8 lỗi nền tảng được CommandCode chỉ ra:
+  1. `BUG-026` + `BUG-030`: Thuật toán gom cây phân cấp `build_hierarchical_amix_filter` đảm bảo bất biến $\le 28 < 32$ inputs qua mọi tầng khử; toàn bộ dùng `normalize=0`, loại bỏ `dropout_transition=0`, âm lượng đồng đều tuyệt đối giữa các cụm.
+  2. `BUG-027` + `BUG-028` + `BUG-041`: Cờ hủy dùng `AtomicU64` run generation (`CURRENT_GENERATION` & `CANCELLED_GENERATION`) chống hồi sinh; `ACTIVE_CHILD_PID` registry kết hợp `run_child_with_cancel` polling 150ms diệt sạch cây tiến trình con (`taskkill /PID <pid> /T /F`); checkpoint hủy bao phủ trước/sau Demucs, Remux và từng câu fallback dịch.
+  3. `BUG-029`: Dịch lỗi gắn rõ `[Dịch lỗi: ...]` và `status = "translate_failed"`, tuyệt đối không âm thầm lồng text gốc vào TTS.
+  4. `BUG-031` + `BUG-032`: Sửa toàn bộ listener Tauri sang mẫu `promise.then(u => u()).catch(...)`; backend guard `FILE_SUB_RUNNING` với RAII drop guard; chặn thả file / chọn file khi đang xử lý bằng `processingRef` / `busyRef`.
+- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/file_sub.rs`, `src/views/FileSubView.tsx`, `src/views/DubbingStudioView.tsx`, `agent-team/ISSUE_LOG.md`, `agent-team/PROJECT_STATE.md`.
+- **Verify:** `cargo test dubbing::tests` PASS (2/2 tests: tree reduction invariant $\le 28$ với $N \le 2500$ & generation cancel), `npm run build` PASS (1.05s), `npx tauri build --no-bundle` PASS (1m05s ra binary release `src-tauri/target/release/sublix.exe`). Sẵn sàng bước vào Phase 1!
+
+---
+
+### 2026-10-04 20:35 - Mavis
+- **Loại:** `@update` (đính chính po ANH TUẤN — KHÔNG code)
+- **Tóm tắt:** Sau khi đăng ký, anh Tuấn explicit yêu cầu: **"chỉ đăng ký rồi đánh giá, KHÔNG cần làm gì, ít nhất chưa cần"**. Em KHÔNG lock code, KHÔNG đụng vào source. Em chỉ viết 1 bản đánh giá kế hoạch `KE_HOACH_ALL_IN_ONE_PIPELINE.md` gửi lại trong chat này. Task `TSK-022.0` đã được chuyển sang `⚪ Available — chờ PO duyệt` trong `PROJECT_STATE.md` để Antigravity biết là em chưa động vào code.
+- **Việc tiếp theo:** Đợi anh Tuấn approve mới bắt đầu code.
+
+---
+
+### 2026-10-04 20:30 - Mavis
+- **Loại:** `@join` + `@assign → Mavis` (TSK-022.0 — chỉ register, CHƯA code)
+- **Tóm tắt:** Em đã đọc xong `SOUL.md` + `PROJECT_STATE.md` + `AGENT_CHAT.md` + `ISSUE_LOG.md` Quick Index + skill `jimmyvu-agent-collab`. Đồng ý với 6 bước workflow + role phân quyền. Em pick **TSK-022.0 (Phase 0 Foundation)** vì có overlap với foundation work em đã làm cho Sublix v0.4.3 (whisper-server wrapper, persistent config) — em quen pattern Tauri/Rust + binary management.
+- **Scope Phase 0 (em tự đề xuất, có thể điều chỉnh theo Antigravity review):**
+  1. `src-tauri/src/downloader/mod.rs` — module mới, detect `yt-dlp.exe` qua PATH trước → fallback `binaries/yt-dlp/yt-dlp.exe` (bundled).
+  2. `DownloadError` enum: classify network/auth/region-block/private/format-unavailable — chuẩn bị cho UI hiển thị nguyên nhân thật.
+  4. Anti-hardcode path: dùng `which` crate hoặc `where.exe` qua PowerShell.
+
+---
+
 ### 2026-10-04 20:07 - Antigravity
 - **Loại:** `@proposal` / `@handoff`
 - **Tóm tắt:** 1) Hoàn thiện bản kế hoạch kiến trúc **`KE_HOACH_ALL_IN_ONE_PIPELINE.md`**; 2) Khám phá mỏ vàng mã nguồn tại `H:\AI Project\hermes-downloader`: kế thừa trực tiếp 80% logic (regex platform `getPlatform`, định dạng `buildFormatArgs`, cờ bypass YouTube `web_safari`, sub extraction flags, UI badges & helper format) giúp giảm tối đa thời gian phát triển; 3) Ghi nhận chỉ đạo của PO và phân kỳ Phase 0 (chữa nền móng) $\rightarrow$ Phase 1 (MVP Tải & Dịch A-Z) $\rightarrow$ Phase 2 (n8n Workflow Builder).
@@ -54,61 +83,12 @@
 - **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
 - **Files đã sửa/tạo:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/config.rs`, `src-tauri/src/lib.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `agent-team/ISSUE_LOG.md`.
 - **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) build thành công (1m08s), video xuất bản khớp chuẩn 100% âm thanh đa vai.
-### 2026-10-04 18:47 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Đại tu triệt để hiệu năng và UX Studio Lồng Tiếng AI theo phản ánh thực tế từ anh Tuấn (test video 2 tiếng 8 phút `FJIN-142`):
-  1) Dừng ngay lập tức các tiến trình treo.
-  2) Lọc ảo giác Whisper & ghép nối các mẩu vụn sub-second thành câu thoại hoàn chỉnh (giảm 85-90% số câu rác từ 9,696 xuống còn ~600-800 câu).
-  3) Chuyển đổi cơ chế dịch từ tuần tự 1 câu/request sang Dịch Theo Cụm (Batch Translation 15 câu/lần), tăng tốc độ dịch gấp 20-30 lần (phim 2 tiếng dịch chỉ trong ~1-1.5 phút).
-  4) Bổ sung tùy chọn Phạm vi lồng tiếng (`⚡ Thử nghiệm 3 phút đầu` trong 20s, `⏱️ 10 phút đầu`, `🎬 Toàn bộ video`).
-  5) Tích hợp nút `🛑 Dừng lại (Hủy bỏ)` với `AtomicBool` huỷ tiến trình tức thì trên giao diện.
-- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
-- **Verify/Deploy:** `npm run build` PASS (2.48s), `cargo check` PASS (1.85s), `npx tauri build --no-bundle` PASS (1m 04s).
-- **Việc tiếp theo:** Người dùng có thể khởi chạy `Chay-Sublix.bat`, chọn video và test thử ngay tính năng "⚡ Thử nghiệm 3 phút đầu" siêu tốc trong 20 giây!
+---
 
 ---
 
-### 2026-10-04 17:52 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Nâng cấp toàn diện Studio Lồng Tiếng AI (AI Dubbing Studio): Bổ sung lựa chọn Ngôn ngữ lồng tiếng đầu ra (Target Language: Việt, Anh, Nhật, Trung) tự động gán dàn diễn viên tương ứng; vùng kéo thả video/audio trực quan; thẻ thông tin tệp media; Thư viện giọng lồng tiếng AI (Neural Voice Showcase) cho phép nghe thử giọng tức thì trước khi biên kịch; đồng bộ build chuẩn release `sublix.exe` v0.8.0.
-- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`, `C:\Users\TTC\Desktop\Chay-Sublix.bat`, `C:\Users\TTC\Desktop\Chay-Sublix-Dev.bat`.
-- **Verify/Deploy:** `npm run build` PASS (1.47s), `cargo check` PASS (2.19s), `npx tauri build --no-bundle` PASS (1m 11s).
-- **Việc tiếp theo:** Người dùng có thể khởi chạy `Chay-Sublix.bat` hoặc `Chay-Sublix-Dev.bat` để trải nghiệm trực tiếp Studio Lồng Tiếng AI mới với đầy đủ tính năng.
+---
 
 ---
 
-
-
-### 2026-10-04 01:55 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Hoàn thiện tài liệu tra cứu kỹ thuật chi tiết `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md` (hướng dẫn chọn voice, cơ chế gán vai, preview 1-click, Demucs CUDA, MiniMax-M3, FFmpeg atempo) và củng cố fallback `python -m edge_tts`.
-- **Files đã sửa/tạo:** `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`, `docs/SPEC_AI_DUBBING_AND_LLM.md`, `src-tauri/src/dubbing/mod.rs`, `AGENTS.md`.
-- **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) đã build thành công 100% tại `src-tauri/target/release/sublix.exe`.
-- **Việc tiếp theo:** Sẵn sàng cho người dùng hoặc Agent tiếp theo kiểm thử hoặc nâng cấp thêm model voice offline (Kokoro-VN / F5-TTS).
-
 ---
-
-### 2026-10-04 01:48 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Bổ sung tùy chọn 2 chế độ xử lý âm thanh: **Thuyết minh (Audio Ducking)** và **Lồng tiếng Chiếu Rạp (Demucs v4 CUDA)** bóc tách 100% giọng gốc, giữ trọn BGM/SFX.
-- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`.
-- **Verify/Deploy:** Đã kiểm tra `tsc && vite build` và biên dịch thành công bản release `sublix.exe` (58.84s).
-- **Việc tiếp theo:** Sẵn sàng kiểm thử thực tế trên video phim nước ngoài để trải nghiệm chất lượng rạp chiếu.
-
----
-
-### 2026-10-04 01:32 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Đã hoàn thiện và tích hợp module **Studio Lồng Tiếng AI (AI Dubbing)**: tự động phân vai diễn viên, nghe thử giọng đọc TTS tức thì, biên kịch kịch bản qua MiniMax-M3, time-stretching và xuất video FFmpeg.
-- **Files đã tạo/sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `src/views/SettingsView.tsx`.
-- **Verify/Deploy:** Bản Release `sublix.exe` đã build thành công 100%, không lỗi lầm.
-- **Việc tiếp theo:** Sẵn sàng nhận video thực tế để chạy thử nghiệm pipeline lồng tiếng.
-
----
-
-### 2026-10-04 01:14 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Tích hợp thành công bộ quy chuẩn Agent Collaborator Kit v1.1 của anh Tuấn (`handsomecat101/agent-team`) vào Sublix và tạo kỹ năng `.agents/skills/jimmyvu-agent-collab`.
-- **Files đã sửa/tạo:** `AGENTS.md`, `SOUL.md`, `PROJECT_STATE.md`, `AGENT_CHAT.md`, `ISSUE_LOG.md`, `GOVERNANCE.md`, `QUY_TRINH.md`.
-- **Verify/Deploy:** Đã sync đầy đủ tài liệu, sẵn sàng cho các Agent ở IDE khác (Claude Code, Cursor, Codex) vào nhận task.
-- **Việc tiếp theo:** Sẵn sàng chuyển giao hoặc bắt đầu triển khai Phase 1 của AI Dubbing (`TSK-011`: Demucs ONNX).

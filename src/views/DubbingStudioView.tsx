@@ -53,6 +53,10 @@ export default function DubbingStudioView({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [rendering, setRendering] = useState<boolean>(false);
+  const isBusy = analyzing || rendering;
+  const busyRef = useRef<boolean>(isBusy);
+  busyRef.current = isBusy;
+
   const [progress, setProgress] = useState<DubbingProgress | null>(null);
   const [project, setProject] = useState<DubbingProject | null>(null);
   const [voices, setVoices] = useState<VoicePreset[]>([]);
@@ -80,29 +84,29 @@ export default function DubbingStudioView({
       console.warn("Failed to load config:", err);
     });
 
-    let unlistenProgress: (() => void) | undefined;
-    (async () => {
-      unlistenProgress = await listen<DubbingProgress>("dubbing:progress", (event) => {
-        setProgress(event.payload);
-      });
-    })();
+    const pProgress = listen<DubbingProgress>("dubbing:progress", (event) => {
+      setProgress(event.payload);
+    });
 
     return () => {
-      if (unlistenProgress) unlistenProgress();
+      pProgress.then((u) => u()).catch(() => {});
     };
   }, []);
 
   // Handle Drag & Drop via Tauri API
   useEffect(() => {
-    let unlistenDragDrop: (() => void) | undefined;
-    (async () => {
+    const pDragDrop = (async () => {
       try {
         const webview = getCurrentWebview();
-        unlistenDragDrop = await webview.onDragDropEvent((event) => {
+        return await webview.onDragDropEvent((event) => {
           if (event.payload.type === "enter" || event.payload.type === "over") {
             setIsDragging(true);
           } else if (event.payload.type === "drop") {
             setIsDragging(false);
+            if (busyRef.current) {
+              console.warn("Studio is currently processing, ignoring dropped file");
+              return;
+            }
             const droppedPaths = event.payload.paths;
             if (droppedPaths && droppedPaths.length > 0) {
               handleSetFile(droppedPaths[0]);
@@ -113,15 +117,22 @@ export default function DubbingStudioView({
         });
       } catch (err) {
         console.warn("Tauri drag-drop in DubbingStudioView failed:", err);
+        return () => {};
       }
     })();
 
     return () => {
-      if (unlistenDragDrop) unlistenDragDrop();
+      pDragDrop.then((u) => {
+        if (typeof u === "function") u();
+      }).catch(() => {});
     };
   }, []);
 
   const handleSetFile = (path: string) => {
+    if (busyRef.current) {
+      console.warn("Studio is currently processing, ignoring file change");
+      return;
+    }
     const ext = path.split(".").pop()?.toLowerCase() || "";
     const valid = ["mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "mp3", "wav", "m4a", "flac"];
     if (ext && valid.includes(ext)) {
@@ -135,6 +146,7 @@ export default function DubbingStudioView({
   };
 
   async function handleSelectFile() {
+    if (busyRef.current) return;
     try {
       const picked = await sublix.dubbingPickMediaFile();
       if (picked) {

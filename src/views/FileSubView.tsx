@@ -63,6 +63,9 @@ export default function FileSubView({
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const [processing, setProcessing] = useState<boolean>(false);
+  const processingRef = useRef<boolean>(processing);
+  processingRef.current = processing;
+
   const [progress, setProgress] = useState<FileSubProgress | null>(null);
   const [result, setResult] = useState<FileSubResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -76,6 +79,10 @@ export default function FileSubView({
   };
 
   const handleSetSelectedFile = (path: string) => {
+    if (processingRef.current) {
+      console.warn("Processing in progress, ignoring file change");
+      return;
+    }
     const ext = path.split(".").pop()?.toLowerCase() || "";
     const validExts = [
       "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "ts",
@@ -94,15 +101,18 @@ export default function FileSubView({
 
   // Drag & Drop Listener via Tauri API
   useEffect(() => {
-    let unlistenDragDrop: (() => void) | undefined;
-    (async () => {
+    const pDragDrop = (async () => {
       try {
         const webview = getCurrentWebview();
-        unlistenDragDrop = await webview.onDragDropEvent((event) => {
+        return await webview.onDragDropEvent((event) => {
           if (event.payload.type === "enter" || event.payload.type === "over") {
             setIsDragging(true);
           } else if (event.payload.type === "drop") {
             setIsDragging(false);
+            if (processingRef.current) {
+              console.warn("Processing in progress, ignoring dropped file");
+              return;
+            }
             const droppedPaths = event.payload.paths;
             if (droppedPaths && droppedPaths.length > 0) {
               handleSetSelectedFile(droppedPaths[0]);
@@ -113,49 +123,47 @@ export default function FileSubView({
         });
       } catch (err) {
         console.warn("Tauri onDragDropEvent listener failed:", err);
+        return () => {};
       }
     })();
 
     return () => {
-      if (unlistenDragDrop) unlistenDragDrop();
+      pDragDrop.then((u) => {
+        if (typeof u === "function") u();
+      }).catch(() => {});
     };
   }, []);
 
   // Listen to live progress events from Rust
   useEffect(() => {
-    let unlistenProgress: (() => void) | undefined;
-    let unlistenComplete: (() => void) | undefined;
+    const pProgress = listen<FileSubProgress>("file_sub:progress", (event) => {
+      const p = event.payload;
+      setProgress(p);
 
-    (async () => {
-      unlistenProgress = await listen<FileSubProgress>("file_sub:progress", (event) => {
-        const p = event.payload;
-        setProgress(p);
+      if (p.current_original && p.current_translated) {
+        setPreviewList((prev) => {
+          const next = [
+            ...prev,
+            {
+              id: p.current_segment,
+              original: p.current_original!,
+              translated: p.current_translated!,
+            },
+          ];
+          // keep latest 50 for performance
+          return next.length > 50 ? next.slice(next.length - 50) : next;
+        });
+      }
+    });
 
-        if (p.current_original && p.current_translated) {
-          setPreviewList((prev) => {
-            const next = [
-              ...prev,
-              {
-                id: p.current_segment,
-                original: p.current_original!,
-                translated: p.current_translated!,
-              },
-            ];
-            // keep latest 50 for performance
-            return next.length > 50 ? next.slice(next.length - 50) : next;
-          });
-        }
-      });
-
-      unlistenComplete = await listen<FileSubResult>("file_sub:complete", (event) => {
-        setResult(event.payload);
-        setProcessing(false);
-      });
-    })();
+    const pComplete = listen<FileSubResult>("file_sub:complete", (event) => {
+      setResult(event.payload);
+      setProcessing(false);
+    });
 
     return () => {
-      if (unlistenProgress) unlistenProgress();
-      if (unlistenComplete) unlistenComplete();
+      pProgress.then((u) => u()).catch(() => {});
+      pComplete.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -165,6 +173,7 @@ export default function FileSubView({
   }, [previewList]);
 
   const handlePickFile = async () => {
+    if (processingRef.current) return;
     try {
       const selected = await sublix.selectMediaFile();
       if (selected) {

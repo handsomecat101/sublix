@@ -203,6 +203,17 @@ pub fn write_srt_file(path: &Path, segments: &[SubtitleSegment], mode: &str) -> 
     Ok(())
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static FILE_SUB_RUNNING: AtomicBool = AtomicBool::new(false);
+
+struct FileSubGuard;
+impl Drop for FileSubGuard {
+    fn drop(&mut self) {
+        FILE_SUB_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Run full end-to-end file subtitle generation.
 pub fn generate_file_subtitles(
     app: AppHandle,
@@ -213,6 +224,11 @@ pub fn generate_file_subtitles(
     stt_model_name: Option<String>,
     translation_model_name: Option<String>,
 ) -> Result<FileSubResult, String> {
+    if FILE_SUB_RUNNING.swap(true, Ordering::SeqCst) {
+        return Err("Tiến trình tạo phụ đề cho tệp đang chạy. Vui lòng đợi hoàn tất.".to_string());
+    }
+    let _running_guard = FileSubGuard;
+
     let t_start = Instant::now();
     let media_path = PathBuf::from(&input_path);
     if !media_path.exists() {
@@ -229,9 +245,13 @@ pub fn generate_file_subtitles(
         .unwrap_or("subtitle")
         .to_string();
 
-    let temp_wav = std::env::temp_dir().join(format!("sublix-file-{}.wav", std::process::id()));
-    let temp_srt_stem = std::env::temp_dir().join(format!("sublix-raw-{}", std::process::id()));
-    let temp_srt_file = std::env::temp_dir().join(format!("sublix-raw-{}.srt", std::process::id()));
+    let uid = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let temp_wav = std::env::temp_dir().join(format!("sublix-file-{uid}.wav"));
+    let temp_srt_stem = std::env::temp_dir().join(format!("sublix-raw-{uid}"));
+    let temp_srt_file = std::env::temp_dir().join(format!("sublix-raw-{uid}.srt"));
 
     // 1. Stage: Extract audio
     let _ = app.emit(

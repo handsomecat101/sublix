@@ -368,11 +368,20 @@ impl TranslationServer {
 
         let mut final_res = Vec::with_capacity(items.len());
         for (idx, item) in items.iter().enumerate() {
+            if crate::dubbing::is_dubbing_cancelled() {
+                warn!("🛑 Translation server batch loop cancelled");
+                break;
+            }
             if let Some(ref trans) = parsed[idx] {
                 final_res.push(trans.clone());
             } else {
-                let single = self.translate(item, source, target).unwrap_or_else(|_| item.clone());
-                final_res.push(single);
+                match self.translate(item, source, target) {
+                    Ok(single) => final_res.push(single),
+                    Err(e) => {
+                        warn!("Single fallback translate failed for '{item}': {e:#}");
+                        final_res.push(format!("[Dịch lỗi: {}]", item));
+                    }
+                }
             }
         }
 
@@ -967,13 +976,21 @@ pub fn translate_batch_via_minimax(
 
     let mut final_res = Vec::with_capacity(items.len());
     for (idx, item) in items.iter().enumerate() {
+        if crate::dubbing::is_dubbing_cancelled() {
+            warn!("🛑 MiniMax batch loop cancelled");
+            break;
+        }
         if let Some(ref trans) = parsed[idx] {
             final_res.push(trans.clone());
         } else {
             // Fallback for missing item
-            let single = translate_via_minimax(item, source, target, api_key, model)
-                .unwrap_or_else(|_| item.clone());
-            final_res.push(single);
+            match translate_via_minimax(item, source, target, api_key, model) {
+                Ok(single) => final_res.push(single),
+                Err(e) => {
+                    warn!("MiniMax single fallback failed for '{item}': {e:#}");
+                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                }
+            }
         }
     }
 
@@ -1059,12 +1076,20 @@ pub fn translate_batch_via_ollama(
 
     let mut final_res = Vec::with_capacity(items.len());
     for (idx, item) in items.iter().enumerate() {
+        if crate::dubbing::is_dubbing_cancelled() {
+            warn!("🛑 Ollama batch loop cancelled");
+            break;
+        }
         if let Some(ref trans) = parsed[idx] {
             final_res.push(trans.clone());
         } else {
-            let single = translate_via_ollama(item, source, target, ollama_url, model)
-                .unwrap_or_else(|_| item.clone());
-            final_res.push(single);
+            match translate_via_ollama(item, source, target, ollama_url, model) {
+                Ok(single) => final_res.push(single),
+                Err(e) => {
+                    warn!("Ollama single fallback failed for '{item}': {e:#}");
+                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                }
+            }
         }
     }
 

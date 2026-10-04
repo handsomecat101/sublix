@@ -341,15 +341,32 @@ pub fn translate_batch_with_config(
     let chunk_size = 15;
 
     for chunk in items.chunks(chunk_size) {
+        if crate::dubbing::is_dubbing_cancelled() {
+            warn!("🛑 Translation batch cancelled by user");
+            break;
+        }
+
         let chunk_res = match cfg.translation_provider.to_lowercase().as_str() {
             "minimax" => {
                 match server::translate_batch_via_minimax(chunk, source, target, &cfg.minimax_api_key, &cfg.minimax_model) {
                     Ok(res) => res,
                     Err(e) => {
                         warn!("Batch translation via MiniMax failed: {e:#}, falling back to single items");
-                        chunk.iter().map(|item| {
-                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
-                        }).collect()
+                        let mut sub_res = Vec::with_capacity(chunk.len());
+                        for item in chunk {
+                            if crate::dubbing::is_dubbing_cancelled() {
+                                warn!("🛑 Sub-item translation cancelled");
+                                break;
+                            }
+                            match translate_text_with_config(item, source, target, model, pref, cfg) {
+                                Ok(t) => sub_res.push(t),
+                                Err(err) => {
+                                    warn!("Single translation failed for '{item}': {err:#}");
+                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
+                                }
+                            }
+                        }
+                        sub_res
                     }
                 }
             }
@@ -358,9 +375,21 @@ pub fn translate_batch_with_config(
                     Ok(res) => res,
                     Err(e) => {
                         warn!("Batch translation via Ollama failed: {e:#}, falling back to single items");
-                        chunk.iter().map(|item| {
-                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
-                        }).collect()
+                        let mut sub_res = Vec::with_capacity(chunk.len());
+                        for item in chunk {
+                            if crate::dubbing::is_dubbing_cancelled() {
+                                warn!("🛑 Sub-item translation cancelled");
+                                break;
+                            }
+                            match translate_text_with_config(item, source, target, model, pref, cfg) {
+                                Ok(t) => sub_res.push(t),
+                                Err(err) => {
+                                    warn!("Single translation failed for '{item}': {err:#}");
+                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
+                                }
+                            }
+                        }
+                        sub_res
                     }
                 }
             }
@@ -369,9 +398,21 @@ pub fn translate_batch_with_config(
                     Ok(res) => res,
                     Err(e) => {
                         warn!("Batch translation via local llama-server failed: {e:#}, falling back to single items");
-                        chunk.iter().map(|item| {
-                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
-                        }).collect()
+                        let mut sub_res = Vec::with_capacity(chunk.len());
+                        for item in chunk {
+                            if crate::dubbing::is_dubbing_cancelled() {
+                                warn!("🛑 Sub-item translation cancelled");
+                                break;
+                            }
+                            match translate_text_with_config(item, source, target, model, pref, cfg) {
+                                Ok(t) => sub_res.push(t),
+                                Err(err) => {
+                                    warn!("Single translation failed for '{item}': {err:#}");
+                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
+                                }
+                            }
+                        }
+                        sub_res
                     }
                 }
             }
