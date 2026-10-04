@@ -157,17 +157,34 @@ Sau khi video được tải về thành công, Tab Downloader sẽ cung cấp *
 
 ---
 
-## ❓ 5. Các Điểm Cần Thảo Luận & Lấy Ý Kiến (Discussion Points)
+## 🔒 5. Quyết Định Thiết Kế Đã Chốt (Decisions Locked - Anh Tuấn Duyệt 2026-10-04)
 
-Kính chuyển anh Tuấn và bạn Agent cộng sự (CommandCode / Claude Code / Codex) kiểm tra và góp ý vào các điểm sau:
+Hội ý với Product Owner (Anh Tuấn) đã chốt các định hướng kiến trúc cụ thể như sau:
 
-1. **Vị trí lưu trữ mặc định:**
-   - Nên lưu video tải về vào thư mục Windows tiêu chuẩn (`C:\Users\<User>\Downloads\Sublix`) để người dùng dễ tìm thấy, hay lưu vào thư mục cache nội bộ của app? *(Đề xuất: Lưu vào `Downloads/Sublix` kèm nút "Mở thư mục" trực tiếp trên giao diện)*.
-2. **Cơ chế Cookie Trình Duyệt cho Nền Tảng Trung Quốc:**
-   - Video Douyin / Bilibili chất lượng 1080p đôi khi cần đăng nhập. Chúng ta có nên thêm một công tắc bật/tắt trong Cài đặt: `"Sử dụng Cookie từ trình duyệt Chrome / Edge để tải video chất lượng cao nhất"` không?
-3. **Chế độ Ghép Phụ Đề vào Video (Burn Subtitles):**
-   - Khi làm phụ đề từ link video, người dùng thường thích xuất ra file `.srt` rời hay muốn app tự động dùng FFmpeg ghép chữ cứng vào video luôn? *(Đề xuất: Hỗ trợ cả 2 — mặc định tạo file `.srt` và có nút 1-click "Ghép sub vào video")*.
+| Quyết định | Nội dung đã chốt | Ghi chú lộ trình (Phases) |
+| :--- | :--- | :--- |
+| **1. Thư mục tải về (Storage Scope)** | **Lưu trong phạm vi nội bộ của phần mềm** (`%APPDATA%/com.sublix.desktop/downloads`). Tránh xả rác ra ổ đĩa cá nhân của người dùng khi đang phát triển. | **Phase 1 (Hiện tại):** Lưu nội bộ ngầm.<br>**Phase 2 (Public Release):** Mở thêm nút chọn thư mục tùy ý (Custom Folder Picker). |
+| **2. Cookie Trình duyệt (High Quality Douyin/Bilibili)** | **Có tích hợp cookie đăng nhập** để cẩu video độ nét cao nhất (1080p/4K) từ các nền tảng Trung Quốc (Douyin, Bilibili) và YouTube. | Hỗ trợ tự động trích xuất cookie từ Edge / Chrome (`--cookies-from-browser edge`) giúp video nét căng không bị bóp băng thông. |
+| **3. Phụ đề rời vs Ghép chữ (Hardsub)** | **Trước mắt (Phase 1):** Tập trung xuất video gốc kèm file phụ đề rời `.srt` (Vietsub / Song ngữ) chuẩn timing.<br>**Nâng cao (Phase 2):** Nghiên cứu FFmpeg Burn-in Hardsub (ghép chữ cứng trực tiếp lên khung hình video). | **Phase 1:** File `.srt` rời chuẩn UTF-8.<br>**Phase 2:** FFmpeg Video Filter (`subtitles=...`) tùy chỉnh font chữ, màu sắc, viền bóng. |
 
 ---
 
-*Tài liệu được soạn thảo bởi **Antigravity** — Sẵn sàng cho toàn bộ Agent Team vào rà soát và triển khai.*
+## 🚀 6. Phân Kỳ Phát Triển (Phase Roadmap)
+
+### 🟢 Phase 1: MVP Trọn Gói Tải & Dịch Video (Triển khai ngay)
+1. Backend Rust `downloader/mod.rs` bọc `yt-dlp.exe` có sẵn, tải video/audio về cache nội bộ app.
+2. Hỗ trợ cơ chế Cookie từ trình duyệt (`--cookies-from-browser`).
+3. Giao diện Tab `DownloaderView.tsx`: Ô dán link thông minh, xem trước Thumbnail, chọn chất lượng (1080p / 720p / Audio MP3).
+4. Cầu nối tự động:
+   - Tải xong $\rightarrow$ Chuyển sang **File Sub** (tạo file `.srt` Vietsub).
+   - Tải xong $\rightarrow$ Chuyển sang **AI Dubbing** (lồng tiếng đa vai, audio ducking / demucs).
+
+### 🟡 Phase 2: Bản Nâng Cao (Advanced Video Studio)
+1. **FFmpeg Burn-in Hardsub:** Ghép chữ cứng trực tiếp lên video với tùy chọn phong cách (Màu vàng rạp chiếu, viền đen, font chữ điện ảnh, vị trí canh lề).
+2. **Bộ chọn thư mục xuất bản:** Cho phép người dùng tùy chọn lưu ra Desktop / Thư mục tải về riêng khi public ra cộng đồng.
+3. **Batch Downloader Queue:** Tải hàng loạt danh sách video / toàn bộ playlist hoặc kênh TikTok/Douyin.
+
+---
+
+*Tài liệu được cập nhật bởi **Antigravity** — Đã khóa các quyết định của Product Owner để Agent Team thực thi.*
+

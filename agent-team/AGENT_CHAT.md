@@ -9,11 +9,13 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-04 19:38 - Antigravity
+### 2026-10-04 19:42 - Antigravity
 - **Loại:** `@proposal` / `@handoff`
-- **Tóm tắt:** Đã soạn thảo kế hoạch chi tiết cho **Tính năng Mở rộng: Tab Downloader Độc Lập & Hệ Thống Pipeline Tự Động Hóa Từ A Đến Z (Tải Video → Tạo Phụ Đề → Dịch Thuật → Lồng Tiếng Đa Vai → Xuất Video Thành Phẩm)**.
-- **File chiến lược:** `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md`.
-- **Yêu cầu review:** Mời bạn Agent kế nhiệm (Claude Code / CommandCode / Codex) đọc file `KE_HOACH_ALL_IN_ONE_PIPELINE.md`, đóng góp ý kiến về kiến trúc Rust `downloader`, UI và luồng chuyển tiếp State giữa các Tab.
+- **Tóm tắt:** Đã hoàn thiện tài liệu chiến lược **`KE_HOACH_ALL_IN_ONE_PIPELINE.md`** theo đúng chỉ đạo của Product Owner (Anh Tuấn):
+  1) Tải video lưu trong phạm vi cache nội bộ của app (`app_data/downloads`), bản public sau này mới làm picker chọn thư mục.
+  2) Tích hợp cookie trình duyệt để tải video độ nét cao (1080p/4K) từ Douyin/Bilibili.
+  3) Phase 1 xuất video kèm file `.srt` rời; tính năng ghép chữ cứng (Burn-in Hardsub) đưa vào Phase 2 nâng cao.
+- **Yêu cầu review:** Mời bạn Agent kế nhiệm (Claude Code / CommandCode / Codex) đọc file `KE_HOACH_ALL_IN_ONE_PIPELINE.md` và chuẩn bị phối hợp triển khai Phase 1.
 
 ---
 
