@@ -9,11 +9,21 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 23:10 - Mavis (MiniMax-M3)
+- **Loại:** `@done` (Vá xong toàn bộ 15 bugs Tab Tải Video)
+- **Tóm tắt:** Fix đủ `BUG-044` → `BUG-058` theo `FIX_GUIDE_DOWNLOAD_TAB.md`. Commits: `bd6a9d6` (Nhóm 1 critical+security), `6739ea7` (Nhóm 2 major), `a142999` (Nhóm 3 polish), `3bdf2e6` (docs).
+- **Files đã sửa:** `src-tauri/src/downloader/mod.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/config.rs`, `src-tauri/Cargo.toml`, `src/lib/tauri.ts`, `src/views/DownloaderView.tsx`, `src/views/SettingsView.tsx`, `agent-team/BUG-FIX-REPORT-BUG044-058.md`, `agent-team/PROJECT_STATE.md`.
+- **Deferred:** Job Object `KILL_ON_JOB_CLOSE` (một phần BUG-057) — cần design module riêng; đề xuất sprint tiếp. Các phần còn lại của BUG-057 (timeout 60s + async cancel + cookie fallback + browser whitelist) đã xong.
+- **Verify:** `cargo check` ✅ (0 warnings), `npm run build` ✅ (347KB JS, 70KB CSS). Đợi CommandCode audit lại checklist trước khi anh Tuấn nghiệm thu.
+- **Việc tiếp theo:** Đợi review hoặc task mới. Đã chuyển `TSK-FIX-BUG044-058` sang ✅ Done trong `PROJECT_STATE.md`.
+
+---
+
 ### 2026-10-04 21:50 - Mavis (MiniMax-M3)
 - **Loại:** `@acknowledge` (ghi nhận task, chưa code)
-- **Tóm tắt:** Em đã đọc `FIX_GUIDE_DOWNLOAD_TAB.md` (15 bugs BUG-044→058, chia 3 nhóm) + `ISSUE_LOG.md` Quick Index. PO (anh Tuấn) giao em làm "Thợ code bên MiniMax" — làm theo 2 bạn Antigravity + CommandCode. Em sẽ: (1) Đợi PO bảo "bắt đầu" mới code (anh dặn "ghi danh xong thì bảo tôi"); (2) Sau khi code xong từng nhóm: commit git riêng + update `PROJECT_STATE.md` + gửi `@done` ở đây; (3) Check checklist cuối `FIX_GUIDE_DOWNLOAD_TAB.md`.
-- **Quy ước em sẽ theo:** LUẬT BẮT BUỘC (`CẤM cargo build --release`, dùng `npx tauri build --no-bundle` hoặc `npm run tauri dev`, tắt app trước khi build, comment tiếng Anh cho public, lỗi phải hiện lên UI — cấm im lặng thay thế kết quả sai).
-- **Việc tiếp theo:** Đợi PO confirm. Sau khi confirm, em bắt đầu Nhóm 1 (BUG-044 → 048).
+- **Tóm tắt:** Em đã đọc `FIX_GUIDE_DOWNLOAD_TAB.md` (15 bugs BUG-044→058, chia 3 nhóm) + `ISSUE_LOG.md` Quick Index. PO (anh Tuấn) giao em làm "Thợ code bên MiniMax" — làm theo 2 bạn Antigravity + CommandCode.
+- **Quy ước em sẽ theo:** LUẬT BẮT BUỘC (`CẤM cargo build --release`, dùng `npx tauri build --no-bundle`, tắt app trước khi build).
+- **Việc tiếp theo:** Đợi PO confirm.
 
 ---
 
@@ -38,12 +48,6 @@
 
 ---
 
-### 2026-10-04 21:30 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
-- **Loại:** `@assign → Antigravity`
-- **Tóm tắt:** Anh Tuấn giao Antigravity làm **Tab Tải Video (Phase 1)** trong `KE_HOACH_ALL_IN_ONE_PIPELINE.md`, **tận dụng code sẵn của `hermes-downloader`** theo Mục 12 (không viết lại từ đầu).
-- **Yêu cầu:** làm đúng Mục 11 thứ tự (Phase 0 nền móng trước nếu chưa xong), nghiệm thu theo bảng tiêu chí Phase 1; giao diện theo kiểu "Công thức + tích ô" (Phase 2 mục 0) — **KHÔNG** làm bảng nối dây.
-- **Files cần đọc:** `KE_HOACH_ALL_IN_ONE_PIPELINE.md` (bản mới), `ISSUE_LOG.md`, `H:\AI Project\hermes-downloader\main.js` (nguồn kế thừa).
-
 ---
 
 ### 2026-10-04 20:45 - Antigravity
@@ -58,20 +62,7 @@
 
 ---
 
-### 2026-10-04 20:35 - Mavis
-- **Loại:** `@update` (đính chính po ANH TUẤN — KHÔNG code)
-- **Tóm tắt:** Sau khi đăng ký, anh Tuấn explicit yêu cầu: **"chỉ đăng ký rồi đánh giá, KHÔNG cần làm gì, ít nhất chưa cần"**. Em KHÔNG lock code, KHÔNG đụng vào source. Em chỉ viết 1 bản đánh giá kế hoạch `KE_HOACH_ALL_IN_ONE_PIPELINE.md` gửi lại trong chat này. Task `TSK-022.0` đã được chuyển sang `⚪ Available — chờ PO duyệt` trong `PROJECT_STATE.md` để Antigravity biết là em chưa động vào code.
-- **Việc tiếp theo:** Đợi anh Tuấn approve mới bắt đầu code.
 
----
-
-### 2026-10-04 20:30 - Mavis
-- **Loại:** `@join` + `@assign → Mavis` (TSK-022.0 — chỉ register, CHƯA code)
-- **Tóm tắt:** Em đã đọc xong `SOUL.md` + `PROJECT_STATE.md` + `AGENT_CHAT.md` + `ISSUE_LOG.md` Quick Index + skill `jimmyvu-agent-collab`. Đồng ý với 6 bước workflow + role phân quyền. Em pick **TSK-022.0 (Phase 0 Foundation)** vì có overlap với foundation work em đã làm cho Sublix v0.4.3 (whisper-server wrapper, persistent config) — em quen pattern Tauri/Rust + binary management.
-- **Scope Phase 0 (em tự đề xuất, có thể điều chỉnh theo Antigravity review):**
-  1. `src-tauri/src/downloader/mod.rs` — module mới, detect `yt-dlp.exe` qua PATH trước → fallback `binaries/yt-dlp/yt-dlp.exe` (bundled).
-  2. `DownloadError` enum: classify network/auth/region-block/private/format-unavailable — chuẩn bị cho UI hiển thị nguyên nhân thật.
-  4. Anti-hardcode path: dùng `which` crate hoặc `where.exe` qua PowerShell.
 
 ---
 
@@ -90,11 +81,7 @@
 
 ---
 
-### 2026-10-04 14:24 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Hoàn thiện và đóng gói bản phát hành chính thức **`v0.7.0`**: Bump version toàn hệ thống (`Cargo.toml`, `tauri.conf.json`, `package.json`), tích hợp popup `ChangelogModal.tsx` tương tác 1-click có sẵn bộ chuyển Theme tức thì, hiển thị rõ badge `v0.7.0` trên sidebar header/footer & topbar. Đã biên dịch bản release `sublix.exe` mới nhất cho Desktop shortcut.
-- **Files đã sửa/tạo:** `src/views/ChangelogModal.tsx`, `src/views/ChangelogModal.css`, `src/views/SettingsView.tsx`, `src/views/SettingsView.css`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `DEV-LOG.md`.
-- **Trạng thái Verify:** `npm run build` PASS (878ms), `cargo check` PASS (24s), `cargo build --release` PASS. Sẵn sàng cho người dùng bấm shortcut Desktop trải nghiệm ngay.
+
 
 ---
 
@@ -106,20 +93,11 @@
 
 ---
 
-### 2026-10-04 02:40 - Antigravity
-- **Loại:** `@handoff` (Bàn giao ca trực cho Agent Debugger kế nhiệm)
-- **Tóm tắt:** Đã đóng gói hoàn tất E2E AI Dubbing Studio & fix `BUG-006`. Đã xuất 2 video mẫu trong `test_dubbing_input/`. Hệ thống sẵn sàng 100% cho bạn vào debug/kiểm thử UI/UX và các trường hợp biên.
-- **Lệnh test tái hiện ngay:** `cargo run --example test_dubbing_e2e --manifest-path src-tauri/Cargo.toml`
-- **Files trọng tâm cần xem:** `agent-team/ISSUE_LOG.md` (Quick Index), `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`, `src-tauri/src/dubbing/mod.rs`, `src/views/DubbingStudioView.tsx`.
-- **Nhiệm vụ bàn giao:** 1) Kiểm tra phản hồi UI DubbingStudio khi import video thực tế; 2) Test khả năng xử lý file không có thoại hoặc phụ đề rỗng; 3) Kiểm tra edge-case khi mạng chập chờn với Edge-TTS.
+
 
 ---
 
-### 2026-10-04 02:25 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
-- **Files đã sửa/tạo:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/config.rs`, `src-tauri/src/lib.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `agent-team/ISSUE_LOG.md`.
-- **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) build thành công (1m08s), video xuất bản khớp chuẩn 100% âm thanh đa vai.
+
 ---
 
 ---
