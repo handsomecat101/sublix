@@ -7,7 +7,7 @@
 //! - 2026 Local LLM Translation models (Qwen3-4B-Instruct-2507, Gemma-3-4B-IT, Qwen3-8B, Qwen2.5) + hot-swap GPU/CPU server
 //! - Overlay appearance controls (font size, bilingual original line, click-through mode)
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   sublix,
@@ -19,6 +19,11 @@ import {
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import { ChangelogModal } from "./ChangelogModal";
+import {
+  IconFilm, IconClapper, IconMic, IconBox, IconClock, IconPanel,
+  IconSparkles, IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
+  IconPlay, IconStop,
+} from "../icons";
 import logoUrl from "../assets/logo.png";
 import spotHistoryUrl from "../assets/spot-history.jpg";
 import spotModelsUrl from "../assets/spot-models.jpg";
@@ -110,6 +115,8 @@ export default function SettingsView() {
   const [historySearch, setHistorySearch] = useState<string>("");
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
   const [theme, setTheme] = useState<string>("cinema");
+  const [bgOpacity, setBgOpacity] = useState<number>(85);
+  const [textColor, setTextColor] = useState<string>("white");
   const [showChangelog, setShowChangelog] = useState<boolean>(false);
 
   // Translation provider settings (MiniMax Cloud / Ollama Local / Embedded GGUF)
@@ -155,6 +162,8 @@ export default function SettingsView() {
         setTheme(cfg.theme);
         document.documentElement.dataset.theme = cfg.theme;
       }
+      setBgOpacity(cfg.overlay_bg_opacity ?? 85);
+      setTextColor(cfg.overlay_text_color ?? "white");
       if (cfg.translation_provider === "local" || cfg.translation_provider === "ollama" || cfg.translation_provider === "minimax") {
         setTransProvider(cfg.translation_provider);
       }
@@ -235,11 +244,77 @@ export default function SettingsView() {
     }
   }
 
-  async function persistOverlayConfig(
-    nextFontSize: number,
-    nextShowOrig: boolean,
-    nextClickThrough: boolean,
-  ) {
+  const liveBusyRef = useRef(false);
+
+  async function handleStartLive() {
+    if (liveBusyRef.current || isLive) return;
+    liveBusyRef.current = true;
+    setStatus({ kind: "working", message: "Starting GPU Live Subtitle Pipeline..." });
+    try {
+      const deviceIndex = selectedDevice === "default"
+        ? undefined
+        : Number(selectedDevice.replace("index:", ""));
+      await sublix.startLive({
+        deviceIndex,
+        model,
+        chunkSeconds,
+        outputMode,
+        targetLang,
+        sourceLang: language,
+        translationModel,
+        vadEnabled,
+      });
+      setIsLive(true);
+      setStatus({
+        kind: "success",
+        message: "Live subtitle stream running! Overlay window is active.",
+      });
+    } catch (e) {
+      setStatus({ kind: "error", message: `Failed to start: ${e}` });
+    } finally {
+      liveBusyRef.current = false;
+    }
+  }
+
+  async function handleStopLive() {
+    if (liveBusyRef.current || !isLive) return;
+    liveBusyRef.current = true;
+    setStatus({ kind: "working", message: "Stopping live stream..." });
+    try {
+      await sublix.stopLive();
+      setIsLive(false);
+      setStatus({ kind: "success", message: "Live capture stopped." });
+    } catch (e) {
+      setStatus({ kind: "error", message: `Failed to stop: ${e}` });
+    } finally {
+      liveBusyRef.current = false;
+    }
+  }
+
+  // Hotkeys while the app has focus: Ctrl+Shift+L = toggle live, Ctrl+Shift+O = toggle overlay
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.shiftKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "l") {
+        e.preventDefault();
+        if (isLive) void handleStopLive();
+        else void handleStartLive();
+      } else if (k === "o") {
+        e.preventDefault();
+        if (overlayVisible) {
+          sublix.hideOverlay().then(() => setOverlayVisible(false)).catch(() => {});
+        } else {
+          sublix.showOverlay().then(() => setOverlayVisible(true)).catch(() => {});
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive, overlayVisible]);
+
+  async function persistOverlayConfig(patch: Partial<AppConfig>) {
     if (!fullConfig) return;
     const updated: AppConfig = {
       ...fullConfig,
@@ -250,9 +325,7 @@ export default function SettingsView() {
       output_mode: outputMode,
       chunk_seconds: chunkSeconds,
       vad_enabled: vadEnabled,
-      overlay_font_size: nextFontSize,
-      overlay_show_original: nextShowOrig,
-      overlay_click_through: nextClickThrough,
+      ...patch,
     };
     setFullConfig(updated);
     try {
@@ -661,7 +734,7 @@ export default function SettingsView() {
           {/* Hardware Status Pill */}
           <div className="sidebar-hw-pill">
             <span className="sidebar-hw-pill-icon">
-              {sttServerEngine === "cuda" || engine === "cuda" ? "🎮" : "💻"}
+              {sttServerEngine === "cuda" || engine === "cuda" ? <IconZap size={14} /> : <IconCpu size={14} />}
             </span>
             <div className="sidebar-hw-pill-info">
               <span className="sidebar-hw-pill-title">
@@ -680,7 +753,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "file_sub" ? "active" : ""}`}
               onClick={() => setActiveTab("file_sub")}
             >
-              <span className="sidebar-nav-icon">📁</span>
+              <IconFilm className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Tạo Phụ Đề File</span>
             </button>
 
@@ -689,7 +762,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "dubbing" ? "active" : ""}`}
               onClick={() => setActiveTab("dubbing")}
             >
-              <span className="sidebar-nav-icon">🎬</span>
+              <IconClapper className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Studio Lồng Tiếng AI</span>
               <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>NEW</span>
             </button>
@@ -699,7 +772,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "live" ? "active" : ""}`}
               onClick={() => setActiveTab("live")}
             >
-              <span className="sidebar-nav-icon">🎙️</span>
+              <IconMic className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Dịch Trực Tiếp Live</span>
             </button>
 
@@ -708,7 +781,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "models" ? "active" : ""}`}
               onClick={() => setActiveTab("models")}
             >
-              <span className="sidebar-nav-icon">⚙️</span>
+              <IconBox className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Mô Hình & Cấu Hình</span>
             </button>
 
@@ -717,7 +790,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "history" ? "active" : ""}`}
               onClick={() => setActiveTab("history")}
             >
-              <span className="sidebar-nav-icon">📜</span>
+              <IconClock className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Lịch Sử Lời Thoại</span>
             </button>
 
@@ -726,7 +799,7 @@ export default function SettingsView() {
               className={`sidebar-nav-item ${activeTab === "overlay" ? "active" : ""}`}
               onClick={() => setActiveTab("overlay")}
             >
-              <span className="sidebar-nav-icon">🎨</span>
+              <IconPanel className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Kiểu Dáng Overlay</span>
             </button>
           </nav>
@@ -734,9 +807,27 @@ export default function SettingsView() {
 
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
+          <div className="sidebar-theme-row" title="Đổi giao diện (Theme)">
+            {([
+              { id: "cinema", label: "Rạp phim", dot: "#e8a33d" },
+              { id: "studio", label: "Phòng dựng", dot: "#2dd4bf" },
+              { id: "light", label: "Sáng nhẹ", dot: "#b45309" },
+              { id: "vibrant", label: "Vibrant", dot: "#e11d48" },
+            ]).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`sidebar-theme-dot ${theme === t.id ? "active" : ""}`}
+                style={{ background: t.dot }}
+                title={t.label}
+                onClick={() => handleThemeChange(t.id)}
+              />
+            ))}
+          </div>
           <button
             type="button"
             className="sidebar-quick-btn"
+            title="Phím tắt: Ctrl+Shift+O"
             onClick={async () => {
               if (overlayVisible) {
                 await sublix.hideOverlay();
@@ -747,21 +838,22 @@ export default function SettingsView() {
               }
             }}
           >
-            {overlayVisible ? "👁️ Ẩn Cửa Sổ Overlay" : "👁️ Hiện Cửa Sổ Overlay"}
+            {overlayVisible ? <IconEyeOff size={13} /> : <IconEye size={13} />}
+            {overlayVisible ? "Ẩn Cửa Sổ Overlay" : "Hiện Cửa Sổ Overlay"}
           </button>
           <button
             type="button"
             className="sidebar-quick-btn"
             onClick={() => sublix.openModelsFolder()}
           >
-            📁 Mở Thư Mục Models
+            <IconFolder size={13} /> Mở Thư Mục Models
           </button>
           <button
             type="button"
             className="sidebar-quick-btn changelog-btn"
             onClick={() => setShowChangelog(true)}
           >
-            📜 Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
+            <IconFileText size={13} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
           </button>
         </div>
       </aside>
@@ -771,12 +863,12 @@ export default function SettingsView() {
         {/* Topbar */}
         <div className="main-topbar">
           <div className="main-topbar-title">
-            {activeTab === "file_sub" && "📁 Tạo Phụ Đề Cho File Media (Video / Audio)"}
-            {activeTab === "dubbing" && "🎬 Studio Lồng Tiếng AI Đa Vai (Diarization + Neural TTS)"}
-            {activeTab === "live" && "🎙️ Dịch Phụ Đề Trực Tiếp Thời Gian Thực (Live Stream)"}
-            {activeTab === "models" && "⚙️ Quản Lý Mô Hình AI & Bộ Cấu Hình Phần Cứng"}
-            {activeTab === "history" && "📜 Lịch Sử Lời Thoại & Xuất File Phụ Đề"}
-            {activeTab === "overlay" && "🎨 Tùy Biến Giao Diện & Kiểu Dáng Cửa Sổ Phụ Đề"}
+            {activeTab === "file_sub" && <><IconFilm size={15} /> Tạo Phụ Đề Cho File Media (Video / Audio)</>}
+            {activeTab === "dubbing" && <><IconClapper size={15} /> Studio Lồng Tiếng AI Đa Vai (Diarization + Neural TTS)</>}
+            {activeTab === "live" && <><IconMic size={15} /> Dịch Phụ Đề Trực Tiếp Thời Gian Thực (Live Stream)</>}
+            {activeTab === "models" && <><IconBox size={15} /> Quản Lý Mô Hình AI & Bộ Cấu Hình Phần Cứng</>}
+            {activeTab === "history" && <><IconClock size={15} /> Lịch Sử Lời Thoại & Xuất File Phụ Đề</>}
+            {activeTab === "overlay" && <><IconPanel size={15} /> Tùy Biến Giao Diện & Kiểu Dáng Cửa Sổ Phụ Đề</>}
           </div>
 
           <div className="main-topbar-actions">
@@ -786,7 +878,7 @@ export default function SettingsView() {
               onClick={() => setShowChangelog(true)}
               title="Bấm để xem các tính năng mới trong v0.8.0"
             >
-              ✨ v{appInfo?.version ?? "0.8.0"} Changelog
+              <IconSparkles size={13} /> v{appInfo?.version ?? "0.8.0"} Changelog
             </button>
             <div className={`main-topbar-status status-${status.kind}`}>
               {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch..." : "✓ Sẵn sàng")}
@@ -892,47 +984,16 @@ export default function SettingsView() {
         <div className="settings-row" style={{ marginTop: 10 }}>
           {!isLive ? (
             <button
-              onClick={async () => {
-                setStatus({ kind: "working", message: "Starting GPU Live Subtitle Pipeline..." });
-                try {
-                  const deviceIndex = selectedDevice === "default"
-                    ? undefined
-                    : Number(selectedDevice.replace("index:", ""));
-                  await sublix.startLive({
-                    deviceIndex,
-                    model,
-                    chunkSeconds,
-                    outputMode,
-                    targetLang,
-                    sourceLang: language,
-                    translationModel,
-                    vadEnabled,
-                  });
-                  setIsLive(true);
-                  setStatus({
-                    kind: "success",
-                    message: "Live subtitle stream running! Overlay window is active.",
-                  });
-                } catch (e) {
-                  setStatus({ kind: "error", message: `Failed to start: ${e}` });
-                }
-              }}
+              onClick={handleStartLive}
               className="settings-btn-primary"
+              title="Phím tắt: Ctrl+Shift+L"
             >
-              ▶ Start Live Subtitles
+              <IconPlay size={13} /> Start Live Subtitles
             </button>
           ) : (
             <button
-              onClick={async () => {
-                setStatus({ kind: "working", message: "Stopping live stream..." });
-                try {
-                  await sublix.stopLive();
-                  setIsLive(false);
-                  setStatus({ kind: "success", message: "Live capture stopped." });
-                } catch (e) {
-                  setStatus({ kind: "error", message: `Failed to stop: ${e}` });
-                }
-              }}
+              onClick={handleStopLive}
+              title="Phím tắt: Ctrl+Shift+L"
               className="settings-btn-secondary"
               style={{
                 background: "rgba(248, 113, 113, 0.22)",
@@ -941,15 +1002,16 @@ export default function SettingsView() {
                 fontWeight: 600,
               }}
             >
-              ■ Stop Live
+              <IconStop size={13} /> Stop Live
             </button>
           )}
 
           <button
             onClick={() => sublix.showOverlay()}
             className="settings-btn-secondary"
+            title="Phím tắt: Ctrl+Shift+O"
           >
-            🪟 Show Overlay
+            <IconEye size={13} /> Show Overlay
           </button>
         </div>
 
@@ -1946,31 +2008,6 @@ export default function SettingsView() {
   {activeTab === "overlay" && (
     <>
       <section className="settings-section">
-        <h2>🎭 Giao Diện (Theme)</h2>
-        <p className="settings-help">
-          Chuyển đổi phong cách màu sắc của toàn bộ ứng dụng. Lưu ý: cửa sổ phụ đề nổi luôn giữ nền tối để đọc rõ trên mọi video.
-        </p>
-        <div className="theme-switch">
-          {([
-            { id: "cinema", label: "🎬 Rạp phim", dot: "#e8a33d" },
-            { id: "studio", label: "🎛 Phòng dựng", dot: "#2dd4bf" },
-            { id: "light", label: "☀ Sáng nhẹ", dot: "#b45309" },
-            { id: "vibrant", label: "🌸 Vibrant", dot: "#e11d48" },
-          ]).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`theme-chip ${theme === t.id ? "active" : ""}`}
-              onClick={() => handleThemeChange(t.id)}
-            >
-              <span className="theme-chip-dot" style={{ background: t.dot }} />
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="settings-section">
         <h2>🎨 Tùy Biến Cửa Sổ Phụ Đề Nổi (Overlay Window)</h2>
         <p className="settings-help">
           Cửa sổ phụ đề luôn nổi trên cùng màn hình (Always-on-top), bạn có thể thoải mái kéo thả cửa sổ đến vị trí mong muốn trên video.
@@ -1984,14 +2021,52 @@ export default function SettingsView() {
             max={36}
             step={1}
             value={fontSize}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setFontSize(v);
-              persistOverlayConfig(v, showOriginal, clickThrough);
-            }}
+            onChange={(e) => setFontSize(Number(e.target.value))}
+            onPointerUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
+            onKeyUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
             className="settings-slider"
           />
           <span className="settings-slider-value">{fontSize}px</span>
+        </div>
+
+        <div className="settings-row">
+          <label>Độ trong suốt nền:</label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={bgOpacity}
+            onChange={(e) => setBgOpacity(Number(e.target.value))}
+            onPointerUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
+            onKeyUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
+            className="settings-slider"
+          />
+          <span className="settings-slider-value">{bgOpacity}%</span>
+        </div>
+
+        <div className="settings-row">
+          <label>Màu chữ phụ đề:</label>
+          <div className="theme-switch">
+            {([
+              { id: "white", label: "Trắng", dot: "#ffffff" },
+              { id: "yellow", label: "Vàng", dot: "#ffdf6b" },
+              { id: "amber", label: "Cam ấm", dot: "#ffb454" },
+            ]).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`theme-chip ${textColor === c.id ? "active" : ""}`}
+                onClick={() => {
+                  setTextColor(c.id);
+                  persistOverlayConfig({ overlay_text_color: c.id });
+                }}
+              >
+                <span className="theme-chip-dot" style={{ background: c.dot }} />
+                {c.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="settings-row" style={{ gap: 20, marginTop: 10 }}>
@@ -2002,7 +2077,7 @@ export default function SettingsView() {
               onChange={(e) => {
                 const v = e.target.checked;
                 setShowOriginal(v);
-                persistOverlayConfig(fontSize, v, clickThrough);
+                persistOverlayConfig({ overlay_show_original: v });
               }}
             />
             <span>🌐 Hiển thị dòng gốc song ngữ (Bilingual Line)</span>
@@ -2034,15 +2109,17 @@ export default function SettingsView() {
             type="button"
             className="settings-btn-primary"
             onClick={() => sublix.showOverlay()}
+            title="Phím tắt: Ctrl+Shift+O"
           >
-            👁️ Hiện Cửa Sổ Overlay
+            <IconEye size={13} /> Hiện Cửa Sổ Overlay
           </button>
           <button
             type="button"
             className="settings-btn-secondary"
             onClick={() => sublix.hideOverlay()}
+            title="Phím tắt: Ctrl+Shift+O"
           >
-            🙈 Ẩn Cửa Sổ Overlay
+            <IconEyeOff size={13} /> Ẩn Cửa Sổ Overlay
           </button>
         </div>
       </section>
@@ -2050,34 +2127,51 @@ export default function SettingsView() {
       {/* Overlay Live Preview Card */}
       <section className="settings-section">
         <h2>👀 Xem Trước Mẫu Phụ Đề (Preview)</h2>
+        <p className="settings-help">Preview hiển thị đúng cài đặt thật: cỡ chữ, màu chữ và độ trong suốt nền.</p>
         <div
           style={{
-            padding: "20px 24px",
-            background: "rgba(0, 0, 0, 0.75)",
+            padding: "28px 24px",
+            background: "linear-gradient(135deg, #1c2433, #0d1017)",
             borderRadius: 8,
-            border: "1px dashed rgba(255, 255, 255, 0.2)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 6,
+            border: "1px dashed var(--line)",
             marginTop: 8,
           }}
         >
           <div
             style={{
-              fontSize: fontSize,
-              fontWeight: 600,
-              color: "#facc15",
-              textShadow: "0 2px 4px rgba(0,0,0,0.8), 0 0 2px #000",
+              background: `rgba(20, 20, 25, ${Math.min(100, bgOpacity) / 100})`,
+              borderRadius: 8,
+              padding: "10px 18px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
             }}
           >
-            Đây là đoạn phụ đề mẫu hiển thị trên màn hình của bạn.
-          </div>
-          {showOriginal && (
-            <div style={{ fontSize: Math.max(12, fontSize - 6), color: "#94a3b8" }}>
-              これは字幕のサンプルテキストです。
+            <div
+              style={{
+                fontSize: fontSize,
+                fontWeight: 600,
+                color: textColor === "yellow" ? "#ffdf6b" : textColor === "amber" ? "#ffb454" : "rgba(255, 255, 255, 0.98)",
+                textShadow: "0 2px 4px rgba(0,0,0,0.8), 0 0 2px #000",
+                textAlign: "center",
+              }}
+            >
+              Đây là đoạn phụ đề mẫu hiển thị trên màn hình của bạn.
             </div>
-          )}
+            {showOriginal && (
+              <div
+                style={{
+                  fontSize: Math.max(12, Math.round(fontSize * 0.62)),
+                  color: "rgba(255, 255, 255, 0.55)",
+                  fontStyle: "italic",
+                  textAlign: "center",
+                }}
+              >
+                これは字幕のサンプルテキストです。
+              </div>
+            )}
+          </div>
         </div>
       </section>
     </>

@@ -73,6 +73,14 @@ pub struct AppConfig {
     #[serde(default = "default_false")]
     pub overlay_click_through: bool,
 
+    /// Overlay subtitle bar background opacity percent (0 = fully transparent, 100 = solid).
+    #[serde(default = "default_overlay_bg_opacity")]
+    pub overlay_bg_opacity: u32,
+
+    /// Overlay translated text color preset: "white" | "yellow" | "amber".
+    #[serde(default = "default_text_color")]
+    pub overlay_text_color: String,
+
     /// Translation provider: "local" (llama-server) | "ollama" (local Ollama instance) | "minimax" (MiniMax Cloud API)
     #[serde(default = "default_provider")]
     pub translation_provider: String,
@@ -138,6 +146,14 @@ fn default_font_size() -> u32 {
     22
 }
 
+fn default_overlay_bg_opacity() -> u32 {
+    85
+}
+
+fn default_text_color() -> String {
+    "white".to_string()
+}
+
 fn default_provider() -> String {
     "local".to_string()
 }
@@ -177,6 +193,8 @@ impl Default for AppConfig {
             overlay_font_size: default_font_size(),
             overlay_show_original: default_true(),
             overlay_click_through: default_false(),
+            overlay_bg_opacity: default_overlay_bg_opacity(),
+            overlay_text_color: default_text_color(),
             translation_provider: default_provider(),
             minimax_api_key: default_empty_string(),
             minimax_model: default_minimax_model(),

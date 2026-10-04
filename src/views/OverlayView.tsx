@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import "./OverlayView.css";
 import { sublix, type AppConfig } from "../lib/tauri";
 
@@ -19,6 +20,12 @@ interface Subtitle {
   translate_duration?: number;
 }
 
+const TEXT_COLORS: Record<string, string> = {
+  white: "rgba(255, 255, 255, 0.98)",
+  yellow: "#ffdf6b",
+  amber: "#ffb454",
+};
+
 export default function OverlayView() {
   const [status, setStatus] = useState<Status>("idle");
   const [version, setVersion] = useState<string>("");
@@ -28,7 +35,10 @@ export default function OverlayView() {
   const [fontSize, setFontSize] = useState<number>(22);
   const [showOriginal, setShowOriginal] = useState<boolean>(true);
   const [clickThrough, setClickThrough] = useState<boolean>(false);
+  const [bgOpacity, setBgOpacity] = useState<number>(85);
+  const [textColor, setTextColor] = useState<string>("white");
   const subtitleHistoryRef = useRef<Subtitle[]>([]);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     sublix.appInfo().then((info) => setVersion(info.version)).catch(() => {});
@@ -36,6 +46,8 @@ export default function OverlayView() {
       if (cfg.overlay_font_size) setFontSize(cfg.overlay_font_size);
       setShowOriginal(cfg.overlay_show_original ?? true);
       setClickThrough(cfg.overlay_click_through ?? false);
+      setBgOpacity(cfg.overlay_bg_opacity ?? 85);
+      setTextColor(cfg.overlay_text_color ?? "white");
     }).catch(() => {});
 
     const unlistens: UnlistenFn[] = [];
@@ -51,6 +63,8 @@ export default function OverlayView() {
       if (cfg.overlay_font_size) setFontSize(cfg.overlay_font_size);
       setShowOriginal(cfg.overlay_show_original ?? true);
       setClickThrough(cfg.overlay_click_through ?? false);
+      setBgOpacity(cfg.overlay_bg_opacity ?? 85);
+      setTextColor(cfg.overlay_text_color ?? "white");
     }).then((u) => unlistens.push(u));
 
     listen<{ peak: number; timestamp: number }>("audio:level", (event) => {
@@ -68,7 +82,27 @@ export default function OverlayView() {
       setStatus("capturing");
     }).then((u) => unlistens.push(u));
 
-    return () => unlistens.forEach((u) => u());
+    // VU decay so the meter does not freeze at its last value between events
+    const decay = window.setInterval(() => {
+      setAudioPeak((p) => (p > 0.004 ? p * 0.8 : 0));
+    }, 200);
+
+    return () => {
+      unlistens.forEach((u) => u());
+      window.clearInterval(decay);
+    };
+  }, []);
+
+  // Grow/shrink the overlay window to fit the subtitle content (no clipping)
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const h = Math.min(340, Math.max(84, el.scrollHeight + 30));
+      getCurrentWindow().setSize(new LogicalSize(720, h)).catch(() => {});
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const handleClose = async () => {
@@ -85,7 +119,10 @@ export default function OverlayView() {
   };
 
   return (
-    <div className="overlay-root">
+    <div
+      className="overlay-root"
+      style={{ background: `rgba(20, 20, 25, ${Math.min(100, bgOpacity) / 100})` }}
+    >
       {/* Audio level VU meter */}
       {audioPeak > 0.005 && (
         <div className="overlay-vu" data-active={audioPeak > 0.02}>
@@ -127,12 +164,15 @@ export default function OverlayView() {
       </div>
 
       {/* Subtitle area */}
-      <div className="overlay-subtitle" data-tauri-drag-region>
+      <div className="overlay-subtitle" data-tauri-drag-region ref={contentRef}>
         {subtitle ? (
           <>
             <div
               className="overlay-translated"
-              style={{ fontSize: `${fontSize}px` }}
+              style={{
+                fontSize: `${fontSize}px`,
+                color: TEXT_COLORS[textColor] ?? TEXT_COLORS.white,
+              }}
               data-tauri-drag-region
             >
               {subtitle.text}

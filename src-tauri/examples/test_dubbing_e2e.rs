@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     println!("⏳ BƯỚC 1: Phân tích video, nhận diện giọng nói, tách vai và biên kịch bằng MiniMax-M3...");
 
     let start_time = std::time::Instant::now();
-    let mut project = analyze_and_create_project(None, input_video, Some("en".to_string()))?;
+    let mut project = analyze_and_create_project(None, input_video, Some("en".to_string()), Some("vi".to_string()))?;
     let analyze_dur = start_time.elapsed();
 
     println!("\n✅ PHÂN TÍCH THÀNH CÔNG trong {:.2}s!", analyze_dur.as_secs_f32());

@@ -229,6 +229,14 @@ button {
   cursor: pointer;
 }
 
+svg {
+  flex-shrink: 0;
+}
+
+button svg {
+  vertical-align: -2px;
+}
+
 :focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;

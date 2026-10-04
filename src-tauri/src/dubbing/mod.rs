@@ -259,6 +259,7 @@ pub fn analyze_and_create_project(
     app: Option<&AppHandle>,
     input_path: &str,
     source_lang: Option<String>,
+    target_lang: Option<String>,
 ) -> Result<DubbingProject> {
     let input = Path::new(input_path);
     if !input.exists() {
@@ -393,26 +394,78 @@ pub fn analyze_and_create_project(
         });
     }
 
-    // Default speakers setup
-    let speakers = vec![
-        DubbingSpeaker {
-            id: "speaker_0".to_string(),
-            label: "Người nói 1 (Nam Chính)".to_string(),
-            voice: "vi-VN-NamMinhNeural".to_string(),
-            pitch: "+0Hz".to_string(),
-            rate: "+0%".to_string(),
-        },
-        DubbingSpeaker {
-            id: "speaker_1".to_string(),
-            label: "Người nói 2 (Nữ / Đối thoại)".to_string(),
-            voice: "vi-VN-HoaiMyNeural".to_string(),
-            pitch: "+0Hz".to_string(),
-            rate: "+0%".to_string(),
-        },
-    ];
+    let tgt_lang = target_lang.unwrap_or_else(|| "vi".to_string());
 
-    // 4. Translate dialogue lines to Vietnamese via MiniMax-M3 / Ollama
-    emit("scripting", 50.0, "Đang viết kịch bản thoại điện ảnh (MiniMax-M3)...", 0, total);
+    // Default speakers setup based on target language
+    let speakers = match tgt_lang.as_str() {
+        "en" => vec![
+            DubbingSpeaker {
+                id: "speaker_0".to_string(),
+                label: "Speaker 1 (Male Lead)".to_string(),
+                voice: "en-US-GuyNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+            DubbingSpeaker {
+                id: "speaker_1".to_string(),
+                label: "Speaker 2 (Female Co-star)".to_string(),
+                voice: "en-US-JennyNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+        ],
+        "ja" => vec![
+            DubbingSpeaker {
+                id: "speaker_0".to_string(),
+                label: "話者 1 (男性・主役)".to_string(),
+                voice: "ja-JP-KeitaNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+            DubbingSpeaker {
+                id: "speaker_1".to_string(),
+                label: "話者 2 (女性・対話)".to_string(),
+                voice: "ja-JP-NanamiNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+        ],
+        "zh" => vec![
+            DubbingSpeaker {
+                id: "speaker_0".to_string(),
+                label: "讲述人 1 (男主)".to_string(),
+                voice: "zh-CN-YunxiNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+            DubbingSpeaker {
+                id: "speaker_1".to_string(),
+                label: "讲述人 2 (女主)".to_string(),
+                voice: "zh-CN-XiaoxiaoNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+        ],
+        _ => vec![
+            DubbingSpeaker {
+                id: "speaker_0".to_string(),
+                label: "Người nói 1 (Nam Chính)".to_string(),
+                voice: "vi-VN-NamMinhNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+            DubbingSpeaker {
+                id: "speaker_1".to_string(),
+                label: "Người nói 2 (Nữ / Đối thoại)".to_string(),
+                voice: "vi-VN-HoaiMyNeural".to_string(),
+                pitch: "+0Hz".to_string(),
+                rate: "+0%".to_string(),
+            },
+        ],
+    };
+
+    // 4. Translate dialogue lines to target language via MiniMax-M3 / Ollama
+    emit("scripting", 50.0, &format!("Đang viết kịch bản thoại ({tgt_lang})..."), 0, total);
     let trans_variant = TranslationModelVariant::resolve_or_best(Some(&cfg.translation_model));
     let engine_pref = EnginePreference::from_str(&cfg.translation_engine_preference);
 
@@ -429,7 +482,7 @@ pub fn analyze_and_create_project(
         match crate::translate::translate_text_with_config(
             &seg.original_text,
             &src_lang,
-            "vi",
+            &tgt_lang,
             trans_variant,
             engine_pref,
             &cfg,

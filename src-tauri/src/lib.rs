@@ -159,6 +159,7 @@ pub fn run() {
                 }
                 if cfg.overlay_click_through {
                     let _ = overlay.set_ignore_cursor_events(true);
+                    let _ = overlay::window::set_click_through(&overlay, true);
                 }
                 let _ = overlay.hide();
                 tracing::info!(
@@ -202,6 +203,9 @@ fn set_overlay_click_through(app: tauri::AppHandle, enabled: bool) -> Result<con
         window
             .set_ignore_cursor_events(enabled)
             .map_err(|e| format!("Failed to set click-through: {e}"))?;
+        // Belt & braces: also set WS_EX_TRANSPARENT at the Win32 level (with frame
+        // refresh) so clicks reliably pass through to the window below.
+        let _ = overlay::window::set_click_through(&window, enabled);
     }
     let mut cfg = config::AppConfig::load(&app);
     cfg.overlay_click_through = enabled;
@@ -837,6 +841,7 @@ fn save_user_config(
     new_config.save(&app).map_err(|e| format!("{e:#}"))?;
     if let Some(window) = app.get_webview_window("overlay") {
         let _ = window.set_ignore_cursor_events(new_config.overlay_click_through);
+        let _ = overlay::window::set_click_through(&window, new_config.overlay_click_through);
     }
     let _ = app.emit("config:updated", &new_config);
     Ok(new_config)
@@ -933,9 +938,10 @@ async fn dubbing_analyze(
     app: tauri::AppHandle,
     file_path: String,
     source_lang: Option<String>,
+    target_lang: Option<String>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang)
+        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang, target_lang)
     })
     .await
     .map_err(|e| e.to_string())?

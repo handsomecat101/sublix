@@ -447,4 +447,55 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-04 — v0.8.0 Release (Drag & Drop + Custom Glass Select + AI Visual Identity)*
+## Session 10 — 2026-10-04 (Overlay Transparency Fix + UI Polish Pass)
+
+### What was done
+- **Fixed the click-through ("transparent") toggle** (user report): `overlay::window::set_click_through` (Win32 `WS_EX_TRANSPARENT`) was dead code and its disabled-path stripped `WS_EX_LAYERED` (which transparency needs). Now wired into `set_overlay_click_through`, `save_user_config`, and startup; keeps `WS_EX_LAYERED` and refreshes the frame via `SetWindowPos`.
+- **Real subtitle-bar transparency control**: new `overlay_bg_opacity` (0–100%) + `overlay_text_color` (white/yellow/amber) config fields with slider & chips in the Overlay tab, applied live; preview shows the exact real settings.
+- **SVG icon set** (`src/icons.tsx`) replacing emoji across sidebar nav, hardware pill, footer, topbar and action buttons.
+- **Hotkeys**: `Ctrl+Shift+L` (toggle live), `Ctrl+Shift+O` (toggle overlay) with tooltips.
+- **Overlay auto-height** (ResizeObserver + `window.setSize`) — long subtitles no longer clip.
+- Extracted `handleStartLive`/`handleStopLive` with busy-ref guard (fixes double-fire BUG-011); VU meter decay + slider persist-on-release (BUG-024 items); theme switcher consolidated to mini dots in the sidebar footer.
+
+### Verification
+- ✅ `npm run build` (tsc + vite) pass
+- ✅ `cargo check` + `cargo build --release` pass (v0.8.0)
+- ⏳ Runtime check pending: click-through actually passing clicks; bg-opacity slider going transparent live
+
+### Lessons learned
+- A "does nothing" toggle is usually a dead code path — always grep for callers of the helper a setting claims to use
+- Never remove `WS_EX_LAYERED` on a transparent window; only toggle `WS_EX_TRANSPARENT`
+
+## Session 11 — 2026-10-04 (AI Dubbing Studio: Target Language Selection, Voice Showcase & Drag-Drop)
+
+### What was done
+- **Target Language Selection (Ngôn ngữ lồng tiếng đầu ra)**:
+  - Trước đây: Dubbing Studio chỉ có dropdown "Ngôn ngữ gốc" và cố định dịch sang tiếng Việt (`vi`). Người dùng mở app cảm thấy tính năng chưa hoàn thiện và thiếu lựa chọn đích.
+  - Cập nhật Rust backend (`src-tauri/src/dubbing/mod.rs` & `src-tauri/src/lib.rs`): bổ sung tham số `target_lang: Option<String>` vào `analyze_and_create_project` và lệnh `dubbing_analyze`. Dịch thuật tự động sử dụng `target_lang` đã chọn.
+  - Tự động gán diễn viên (Speaker Casting) phù hợp với ngôn ngữ đích:
+    - Tiếng Việt (`vi`): Nam Minh (`vi-VN-NamMinhNeural`), Hoài My (`vi-VN-HoaiMyNeural`).
+    - Tiếng Anh (`en`): Guy (`en-US-GuyNeural`), Jenny (`en-US-JennyNeural`).
+    - Tiếng Nhật (`ja`): Keita (`ja-JP-KeitaNeural`), Nanami (`ja-JP-NanamiNeural`).
+    - Tiếng Trung (`zh`): Yunxi (`zh-CN-YunxiNeural`), Xiaoxiao (`zh-CN-XiaoxiaoNeural`).
+- **Drag & Drop Media Zone cho Dubbing Studio**:
+  - Tích hợp vùng kéo thả tệp (`.dubbing-dropzone`) hỗ trợ MP4, MKV, MOV, AVI, WEBM, MP3, WAV.
+  - Card hiển thị tệp đang chọn (`.dubbing-active-card`) với tên tệp, định dạng, đường dẫn và nút đổi/xoá tệp.
+- **Thư Viện Giọng Lồng Tiếng AI (Neural Voice Showcase - Luôn hiển thị)**:
+  - Hiển thị danh thiếp của các diễn viên lồng tiếng AI ngay khi mở tab mà không cần chờ phân tích video xong.
+  - Tích hợp nút **"🔊 Nghe thử"** (Instant Audition) gọi `dubbingPreviewTts` phát giọng mẫu tức thì qua thẻ `<audio>` ẩn.
+- **Bộ Điều Khiển Cấu Hình Toàn Diện (Section 2)**:
+  - Bố trí 2 ô `CustomSelect` kính mờ chuyên nghiệp đặt cạnh nhau: Ngôn ngữ gốc (Source) và Ngôn ngữ lồng tiếng đầu ra (Target).
+  - Lựa chọn chế độ âm thanh: Thuyết minh (Audio Ducking) vs Chiếu rạp (Demucs v4 CUDA).
+  - Nút CTA rõ ràng: `🚀 Bắt Đầu Phân Tích & Lập Kịch Bản Lồng Tiếng [TARGET_LANG]`.
+- **Cập nhật Desktop Shortcuts**:
+  - Đồng bộ tiêu đề cửa sổ trong `Chay-Sublix.bat` và `Chay-Sublix-Dev.bat` lên `Sublix v0.8.0`.
+
+### Verification
+- ✅ `npm run build` (tsc + vite) PASS (1.47s, 0 errors).
+- ✅ `cargo check` (src-tauri) PASS (2.19s, 0 errors).
+- ✅ `npx tauri build --no-bundle` PASS (1m 11s, nhúng tĩnh 100% web assets vào `sublix.exe`).
+
+---
+
+*Last updated: 2026-10-04 — AI Dubbing Studio Target Language & Voice Showcase (v0.8.0)*
+

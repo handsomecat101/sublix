@@ -47,9 +47,16 @@
 - **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
 - **Files đã sửa/tạo:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/config.rs`, `src-tauri/src/lib.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `agent-team/ISSUE_LOG.md`.
 - **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) build thành công (1m08s), video xuất bản khớp chuẩn 100% âm thanh đa vai.
-- **Việc tiếp theo:** Người dùng có thể xem video thành phẩm và thử nghiệm trực tiếp trên giao diện Studio.
+### 2026-10-04 17:52 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Nâng cấp toàn diện Studio Lồng Tiếng AI (AI Dubbing Studio): Bổ sung lựa chọn Ngôn ngữ lồng tiếng đầu ra (Target Language: Việt, Anh, Nhật, Trung) tự động gán dàn diễn viên tương ứng; vùng kéo thả video/audio trực quan; thẻ thông tin tệp media; Thư viện giọng lồng tiếng AI (Neural Voice Showcase) cho phép nghe thử giọng tức thì trước khi biên kịch; đồng bộ build chuẩn release `sublix.exe` v0.8.0.
+- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`, `C:\Users\TTC\Desktop\Chay-Sublix.bat`, `C:\Users\TTC\Desktop\Chay-Sublix-Dev.bat`.
+- **Verify/Deploy:** `npm run build` PASS (1.47s), `cargo check` PASS (2.19s), `npx tauri build --no-bundle` PASS (1m 11s).
+- **Việc tiếp theo:** Người dùng có thể khởi chạy `Chay-Sublix.bat` hoặc `Chay-Sublix-Dev.bat` để trải nghiệm trực tiếp Studio Lồng Tiếng AI mới với đầy đủ tính năng.
 
 ---
+
+
 
 ### 2026-10-04 01:55 - Antigravity
 - **Loại:** `@done`

@@ -533,3 +533,332 @@
   padding-top: 14px;
   border-top: 1px solid #1e293b;
 }
+
+/* ========================================================
+   DUBBING DROPZONE & ACTIVE MEDIA CARD
+   ======================================================== */
+.dubbing-card-desc {
+  margin: -6px 0 14px 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.dubbing-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 30px 20px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 2px dashed rgba(139, 92, 246, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+  user-select: none;
+}
+
+.dubbing-dropzone:hover {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: #8b5cf6;
+  transform: translateY(-2px);
+}
+
+.dubbing-dropzone.is-drag-over {
+  border-color: #a78bfa;
+  background: rgba(139, 92, 246, 0.16);
+  transform: scale(1.015);
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.3);
+}
+
+.dubbing-dropzone-icon-box {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: transform 0.25s ease;
+}
+
+.dubbing-dropzone:hover .dubbing-dropzone-icon-box,
+.dubbing-dropzone.is-drag-over .dubbing-dropzone-icon-box {
+  transform: scale(1.1);
+  border-color: #a78bfa;
+}
+
+.dubbing-dropzone-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.dubbing-dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dropzone-headline {
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.dropzone-subline {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.dropzone-browse-link {
+  color: #a78bfa;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dropzone-format-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.dropzone-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  letter-spacing: 0.04em;
+}
+
+/* Active Media Card */
+.dubbing-active-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.dubbing-active-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.dubbing-active-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dubbing-active-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dubbing-active-filename {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dubbing-active-ext {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: rgba(139, 92, 246, 0.25);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 4px;
+}
+
+.dubbing-active-path {
+  font-size: 0.74rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.dubbing-active-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dubbing-btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.dubbing-btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* ========================================================
+   SECTION 2: CONFIGURATION GRID (INPUT & TARGET)
+   ======================================================== */
+.dubbing-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .dubbing-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dubbing-config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dubbing-start-row {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dubbing-btn-large {
+  padding: 12px 28px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ========================================================
+   SECTION 3: VOICE SHOWCASE & INSTANT AUDITION
+   ======================================================== */
+.dubbing-voice-header {
+  margin-bottom: 14px;
+}
+
+.dubbing-voice-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.voice-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.voice-card:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: #131c31;
+  transform: translateY(-1px);
+}
+
+.voice-avatar-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.voice-avatar {
+  font-size: 20px;
+}
+
+.voice-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voice-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #f1f5f9;
+}
+
+.voice-lang-pill {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.voice-desc {
+  font-size: 0.73rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-audition-btn {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.voice-audition-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.3);
+  color: #e9d5ff;
+  border-color: #c084fc;
+}
+
+.voice-audition-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

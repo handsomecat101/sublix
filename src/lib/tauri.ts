@@ -69,6 +69,8 @@ export interface AppConfig {
   overlay_font_size: number;
   overlay_show_original: boolean;
   overlay_click_through: boolean;
+  overlay_bg_opacity?: number;
+  overlay_text_color?: string;
   translation_provider?: "local" | "ollama" | "minimax" | string;
   minimax_api_key?: string;
   minimax_model?: string;
@@ -301,8 +303,8 @@ export const sublix = {
     return await invoke<VoicePreset[]>("dubbing_get_voices");
   },
 
-  async dubbingAnalyze(filePath: string, sourceLang?: string): Promise<DubbingProject> {
-    return await invoke<DubbingProject>("dubbing_analyze", { filePath, sourceLang });
+  async dubbingAnalyze(filePath: string, sourceLang?: string, targetLang?: string): Promise<DubbingProject> {
+    return await invoke<DubbingProject>("dubbing_analyze", { filePath, sourceLang, targetLang });
   },
 
   async dubbingPreviewTts(text: string, voice: string, rate?: string, pitch?: string): Promise<string> {
