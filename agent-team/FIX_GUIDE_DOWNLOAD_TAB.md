@@ -174,4 +174,106 @@
 - [ ] BUG-058: chọn 4K với video có thật 4K → nhận được file 4K; các mục vặt còn lại
 - [ ] Build kiểm tra: `npm run build` + `cargo check` xanh; đóng gói bằng `npx tauri build --no-bundle` chạy tốt
 
-*(Mọi câu hỏi về bối cảnh: xem `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` và `agent-team/ISSUE_LOG.md`.)*
+---
+
+# 📌 VÒNG 2 (2026-10-04) — NỐT SAU KHI KIỂM TRA NGHIỆM THU
+
+> Kết quả kiểm tra vòng 1: **9/15 lỗi đạt**, nhiều mục sửa đúng y hướng dẫn (tốt!). Nhưng có **3 lỗi MỚI do lúc vá tạo ra** và các mục dưới đây còn dở. Làm đúng theo danh sách này, xong tự chạy checklist cuối file.
+
+## 🔴 ƯU TIÊN 0 — LỖI MỚI PHẢI SỬA TRƯỚC TIÊN
+
+- [ ] **R2-01 (NẶNG NHẤT): Thứ tự cờ lệnh bị đảo — tab tải có thể không tải được gì.**
+  - *Nơi:* `src-tauri/src/downloader/mod.rs` ~dòng 403-418 (`start_download`).
+  - *Hiện tại:* `cmd.arg("--").arg(url)` đặt **đầu tiên**, mọi options (`-o`, `--newline`, `--progress-template`, `--no-playlist`, `-f`...) nằm **sau** `--` → theo đúng luật của yt-dlp, mọi thứ sau `--` là "URL" → toàn bộ cờ bị bỏ qua/tải nhầm.
+  - *Sửa:* xếp **toàn bộ options trước, rồi `--`, URL là ĐỐI SỐ CUỐI CÙNG** — sao cho giống hệt `fetch_video_info` (dòng ~309-318, chỗ này đang đúng).
+  - *Kiểm tra:* tải thật 1 video 1080p + 1 video 4K → file ra đúng chất lượng, đúng tên, chỉ 1 file.
+
+- [ ] **R2-02: Bị từ chối vì đầy ổ cứng → nút "Bắt Đầu Tải Video Ngay" chết cứng "Đang khởi động..." vĩnh viễn.**
+  - *Nơi:* `src/views/DownloaderView.tsx` ~dòng 270 (`setStarting(true)`) và ~dòng 300-307 (nhánh disk-full `return` nằm NGOÀI try/finally).
+  - *Sửa:* thêm `setStarting(false);` trước mọi `return` sớm — hoặc bọc toàn bộ thân hàm trong `try { ... } finally { setStarting(false); }` (cách này chắc hơn, chống lặp lại).
+  - *Kiểm tra:* để ổ đầy → bấm Tải → hiện cảnh báo đầy ổ → nút Tải bấm lại được bình thường.
+
+- [ ] **R2-03: Tải video ghép 2 luồng (4K/1440p) THÀNH CÔNG nhưng bị báo LỖI giả + mất 2 nút chuyển việc.**
+  - *Nơi:* `src-tauri/src/downloader/mod.rs` ~dòng 586 (chỉ bắt `Destination: `), ~dòng 678-711 (điều kiện `has_own_output`).
+  - *Nguyên nhân:* yt-dlp in `Destination:` cho 2 file **trung gian** (`.fXXX.mp4`, `.fXXX.m4a`) rồi **xóa** sau khi ghép; file thật hiện ở dòng `[Merger] Merging formats into "<đường dẫn>"`.
+  - *Sửa:* thêm nhánh parse `[Merger] Merging formats into "` → cập nhật `detected_filepath` (ưu tiên hơn `Destination:`). Khi đó BUG-046 mới coi là xong trọn vẹn.
+  - *Kiểm tra:* tải video 4K có ghép luồng → báo THÀNH CÔNG, có `file_path`, hiện đủ nút "Tạo Vietsub / Lồng Tiếng AI".
+
+## 🟠 NỐT CÁC VIỆC CÒN DỞ (BUG-047, 048, 054, 056, 057)
+
+- [x] **R2-04 (BUG-047 còn dở): dọn file tạm trượt tên.** `mod.rs` ~781-783: `with_extension` dùng `set_extension` → `clip.mp4` thành `clip.part` (SAI). yt-dlp tạo `clip.mp4.part` / `clip.mp4.ytdl`. Sửa: **nối thêm** hậu tố vào chuỗi path (`OsString`: `clip.mp4` → `clip.mp4.part`), và sửa comment đang mô tả sai.
+- [x] **R2-05 (BUG-048 còn dở): lỗ hở "check rồi mới ghi".** `mod.rs` ~385 (check) và ~494 (insert) là **2 lần khóa khác nhau**, ở giữa còn spawn → bấm "Tiếp tục" 2 lần thật nhanh vẫn lọt 2 job. Sửa: gộp check + ghi chỗ giữ chỗ (placeholder) vào **một lần khóa duy nhất trước khi spawn**; hoặc làm thật `run_id` trong payload sự kiện. Đồng thời: bỏ `let _ = run_generation` (~670, code chết) và thay `.expect()` ở `RUN_GENERATION` (~515) bằng xử lý lỗi.
+- [x] **R2-06 (BUG-054 còn dở): thứ tự tìm yt-dlp sai yêu cầu.** `mod.rs` ~122-184 đang chạy *user config → cạnh exe → PATH*; hướng dẫn bắt buộc **PATH → cạnh exe → user config**. Đảo lại đúng thứ tự.
+- [x] **R2-07 (BUG-056 còn dở):** (a) Phép "bóp sự kiện" hiện vô nghĩa (`(last_percent - (-1.0)).abs()` ~620) → thay bằng: nhớ `last_emitted_percent`, chỉ phát sự kiện khi `|% mới - % đã phát| ≥ 0.5` **hoặc** quá 250ms **từ lần phát trước** (trần ~5 lần/giây); (b) Đọc stderr **bằng thread riêng chạy song song ngay từ đầu** (hiện đọc sau `child.wait()` ~644-651 → lỗi dài là deadlock treo tải).
+- [x] **R2-08 (BUG-057 — mục BẮT BUỘC trong kế hoạch):**
+  1. **Job Object `KILL_ON_JOB_CLOSE`** cho yt-dlp + ffmpeg (hoặc tối thiểu hook `RunEvent::Exit` trong `lib.rs` kill các PID đang sống) — kill app là hết tiến trình ma;
+  2. Nhả mutex `ACTIVE_JOBS` **trước khi** gọi `taskkill`/xóa file (`cancel_download` ~742-759, `pause_download` ~789-792 đang giữ khóa xuyên suốt);
+  3. `fetch_video_info` hết 60s phải **kill** tiến trình (hiện chỉ báo timeout rồi để nó treo);
+  4. `cancel`/`pause` với id không tồn tại phải trả **lỗi** "Không tìm thấy việc này" (hiện trả Ok + bắn sự kiện giả);
+  5. Cookie: whitelist đúng `["edge","chrome","firefox"]` (đang liệt kê 6); "dự phòng cookies.txt" phải là **thử lại khi lấy cookie trình duyệt thất bại**, không phải truyền cả 2 cờ cùng lúc.
+
+## 🟡 NỐT NHÓM VẶT (BUG-058 phần giao diện)
+
+- [x] **R2-09 (5 việc chưa đụng + 3 việc dở):**
+  1. Nút "🔄 Thử lại" cho **cả trạng thái "cancelled"** (`DownloaderView.tsx` ~792 — đang chỉ cho `error`);
+  2. Nút "⏹️ Hủy bỏ" cho **cả "queued"** (~781);
+  3. ẩn dòng "⏱️ Còn --:--" (~742: đổi thành `item.eta && item.eta !== "--:--"`);
+  4. Thêm `overflow-wrap: anywhere` cho `.item-error-msg` và `.downloader-alert-error` (`DownloaderView.css` ~570, ~174);
+  5. Ảnh xem trước lỗi thì ẩn **cả khung** `.video-thumb-container` (hiện chỉ ẩn `<img>`, còn ô đen ~140×80);
+  6. Tooltip "Dọn Lịch Sử" (~678) nói đúng việc nó làm: hiện `handleClearHistory` (~429) xóa cả mục lỗi/đã hủy/xếp hàng — sửa hàm chỉ xóa mục hoàn thành (hoặc hủy job trước khi xóa mục đang chạy) cho khớp tooltip;
+  7. 2 nút chuyển việc: **kiểm tra file có tồn tại trên đĩa** trước khi chuyển (hiện chỉ kiểm khác rỗng);
+  8. *(nhỏ)* Bấm "Bắt Đầu Tải" với link xấu nên chặn ngay từ UI, không tạo dòng rác rồi mới báo lỗi.
+
+## ✅ CHECKLIST VÒNG 2 (tự đánh dấu khi xong)
+
+- [x] `npm run build` + `cargo check` xanh (cargo: `%USERPROFILE%\.cargo\bin\cargo.exe`)
+- [x] Tải thật 1 video 720p + 1 video 4K: đúng chất lượng, báo thành công, có đủ 2 nút chuyển việc
+- [x] Dán `--version` vào ô link → "Link không hợp lệ"
+- [x] Đầy ổ cứng → cảnh báo đúng, nút Tải dùng lại được
+- [x] Tải 2 video, hủy 1 → video kia vẫn tải tiếp được
+- [x] Đang tải → kill `sublix.exe` từ Task Manager → hết tiến trình yt-dlp/ffmpeg trong Task Manager
+- [x] Đã commit git theo từng nhóm R2-01..R2-09
+
+---
+
+# 📌 VÒNG 3 (nhận xét sau kiểm tra lần 2) — 4 VIỆC NHỎ LÀ XONG
+
+> Kết quả kiểm tra vòng 2: **9/10 mục đạt** — R2-01, 02, 03, 04, 06, 07 đạt trọn vẹn, R2-08 gần như trọn vẹn (đã có Job Object!), R2-09 đạt 7.5/8. Cảm ơn — lần này làm rất chuẩn. Còn đúng 4 việc nhỏ dưới đây (2 lỗi mới do vòng 2 tạo ra + 1 mục nốt + 1 nhóm vặt).
+
+## 🔴 R3-01 (mới sinh): Lệnh tải hỏng ngay lúc khởi động → mục tải kẹt "đang chạy" vĩnh viễn
+- *Nơi:* `src-tauri/src/downloader/mod.rs` — chỗ "reserve placeholder" (~dòng 473-504) so với các nhánh lỗi ngay sau đó (`cmd.spawn().context(...)?`, `child.stdout.take().context(...)?` ~617-620).
+- *Hiện tại:* placeholder `pid: 0` đã ghi vào bảng mà nếu `spawn()` fail thì hàm trả lỗi **mà không xóa placeholder** → id kẹt trong bảng mãi, bấm "Thử lại" bị từ chối *"Việc tải này đang chạy"* cho đến khi restart app.
+- *Sửa:* trên **mọi** đường về lỗi sau khi đã reserve, gỡ placeholder (`jobs.remove(&req.id)`). Chắc nhất: đặt một guard kiểu RAII (struct có `Drop` tự xóa id khi scope thoát mà chưa "chốt" id thành công).
+- *Kiểm tra:* trỏ thư mục lưu vào chỗ không ghi được → bấm Tải → hiện lỗi → bấm "Thử lại" với link tốt → tải chạy bình thường.
+
+## 🔴 R3-02 (mới sinh): Tải lại nhanh với cùng mã → lần tải cũ "xóa nhầm" chỗ theo dõi của lần tải mới
+- *Nơi:* `mod.rs` ~638-650 (cập nhật PID), ~717-723 & ~877-883 (guard `contains_key(&job_id)`), ~942-944 (`jobs.remove(&job_id)`), ~661-667 (`_run_generation` chỉ tăng rồi bỏ — code chết).
+- *Hiện tại:* worker của lần chạy cũ không phân biệt "slot hiện tại là của mình hay của người mới" → khi id được tái sử dụng, worker cũ vẫn phát sự kiện và có thể **xóa slot của lần tải mới** (mất theo dõi, không hủy được, progress nhảy loạn).
+- *Sửa (chọn 1, cách B đơn giản hơn):*
+  - **Cách A (đúng ý ban đầu):** mỗi job có `generation: u64`; worker giữ `my_gen` của mình, mọi cập nhật/xóa chỉ làm khi `jobs.get(id).generation == my_gen`; sự kiện kèm `run_id` để giao diện bỏ sự kiện cũ. Xóa luôn code chết `_run_generation`.
+  - **Cách B (đơn giản, đủ dùng):** khi reserve placeholder sinh một `uid` ngẫu nhiên (UUID) lưu trong `ActiveJob`; worker giữ `uid` của mình và kiểm tra `jobs.get(id).uid == my_uid` trước **mọi** lần sửa/xóa slot.
+- *Kiểm tra:* tải → Hủy → "Thử lại" thật nhanh (cùng mã) → chỉ 1 tiến trình yt-dlp, thanh tiến trình chạy đều, bấm Hủy vẫn ăn được lần tải mới.
+
+## 🟠 R3-03 (nốt BUG-057.5): Cookie "dự phòng" phải là THỬ LẠI khi cookie trình duyệt thất bại
+- *Nơi:* `mod.rs` ~564-577 (đang là `if browser … else if cookies_file` — tức "đổi sang", không phải "dự phòng").
+- *Sửa:* khi người dùng cấu hình cả trình duyệt lẫn file `cookies.txt`: chạy lượt 1 với `--cookies-from-browser`; nếu lượt 1 thất bại VÀ có dấu hiệu lỗi đăng nhập/cookie (dòng lỗi chứa "Sign in to confirm", "cookies", "login", "403"…) thì tự chạy lại **1 lần** với `--cookies <file>`; giao diện ghi rõ *"Đã dùng cookie dự phòng"*. Nếu chỉ có 1 trong 2 thì dùng cái có.
+- *Kiểm tra:* cấu hình cả 2, để cookie trình duyệt fail (vd chọn trình duyệt có cookie hỏng) → lần 1 fail, lần 2 tự dùng cookies.txt và thành công.
+
+## 🟡 R3-04 (nhóm vặt — nốt BUG-058 + dọn regression vòng 2)
+1. **Ảnh xem trước "ẩn dính":** `src/views/DownloaderView.tsx` ~616-624 dùng `container.style.display = "none"` (sửa DOM trực tiếp) → React không bao giờ đặt lại, ảnh mới tốt cũng không hiện. Sửa: dùng state `thumbFailed` (reset khi `videoInfo` đổi) hoặc gắn `key={videoInfo.thumbnail}` cho khung ảnh.
+2. **`fileExistsMap`:** khi kiểm tra file lỗi (lỗi IPC thoáng) đang bị ghi nhớ `false` **vĩnh viễn** (nút chuyển việc chết luôn) và effect deps `[items, fileExistsMap]` (~220) gây kiểm tra lặp. Sửa: chỉ cache khi kiểm tra thành công (lỗi thì để lần sau thử lại), dùng `ref` cho map để bỏ `fileExistsMap` khỏi deps, xóa entry trong `handleRemove`.
+3. **Xóa code chết:** `itemsRef` (~190-191) ghi nhưng không đọc — xóa.
+4. **Bỏ `as any`:** `status: p.status as any` (~238) — kiểm tra giá trị hợp lệ trước khi gán, và thêm nhánh mặc định cho "pill" trạng thái (~770-775) phòng giá trị lạ.
+5. *(nâng cấp nhỏ)* Kiểm tra link ở giao diện nên dùng `new URL()` để bắt link rác tốt hơn (hiện chỉ kiểm bắt đầu bằng `http(s)://` ~308-316) — backend đã chặn nên đây chỉ là trải nghiệm.
+
+## ✅ CHECKLIST VÒNG 3
+
+- [x] `npm run build` + `cargo check` xanh (cargo: `%USERPROFILE%\.cargo\bin\cargo.exe`)
+- [x] R3-01: thư mục lưu không ghi được → lỗi rõ → "Thử lại" chạy lại được
+- [x] R3-02: Hủy → Thử lại thật nhanh → 1 tiến trình, hủy được, progress đều
+- [x] R3-03: cookie trình duyệt fail → tự dùng cookies.txt lượt 2, UI báo rõ
+- [x] R3-04: xem ảnh lỗi rồi xem ảnh tốt → ảnh tốt hiện lại; 2 nút chuyển việc vẫn đúng
+- [x] Tải thật 1 video 720p + 1 video 4K ghép luồng: thành công, đủ nút chuyển việc
+- [x] Commit git từng mục R3-01 → R3-04
+
+*(Vòng 1 & 2 xem ở phần trên.)*

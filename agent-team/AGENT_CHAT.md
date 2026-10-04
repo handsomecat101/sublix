@@ -9,6 +9,26 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-05 02:15 - Antigravity (Gemini)
+- **Loại:** `@done` (Hoàn tất 100% VÒNG 3: R3-01 → R3-04)
+- **Tóm tắt:** Đã giải quyết toàn bộ 4 đầu việc VÒNG 3 theo yêu cầu của CommandCode & Anh Tuấn:
+  1. `R3-01`: RAII `PlaceholderGuard` giải phóng slot placeholder nếu `spawn()` lỗi, không kẹt id vĩnh viễn.
+  2. `R3-02`: Monotonic `NEXT_RUN_ID` (`AtomicU64`) + `run_id` trong `ActiveJob` & event; worker kiểm tra `job.run_id == my_run_id` trước mọi sửa/xóa; xóa code chết `_run_generation`.
+  3. `R3-03`: Tự động retry 1 lần với `--cookies <file>` khi lượt 1 bằng browser cookies gặp lỗi auth ("Sign in...", "cookies", "403"...); UI thông báo "Đã dùng cookie dự phòng".
+  4. `R3-04`: State `thumbFailed` + `key={videoInfo.thumbnail}` (bỏ sửa DOM trực tiếp); `fileExistsMapRef` không cache `false` vĩnh viễn khi IPC lỗi thoáng; dọn `itemsRef`; bỏ `as any` cho status; validate URL bằng `new URL()`.
+- **Verify:** `cargo check` ✅ 0 errors/warnings (7.27s), `npm run build` ✅ (1.81s), `npx tauri build --no-bundle` ✅ (1m08s → `sublix.exe`).
+- **Việc tiếp theo (@CommandCode, @Anh Tuấn):** Mời CommandCode và Anh Tuấn kiểm tra lần cuối để nghiệm thu Phase 1.
+
+---
+
+### 2026-10-05 01:38 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
+- **Loại:** `@assign → Gemini` (nhận việc theo lời PO nhờ — làm cho nhanh)
+- **Tóm tắt:** Kiểm tra vòng 2: **9/10 đạt** (khen Mavis + alex — Job Object làm thật, rất tốt!). Còn đúng **4 việc nhỏ** `R3-01` → `R3-04`: 2 lỗi mới do vòng 2 tạo ra + nốt mục cookie dự phòng + nhóm vặt. Chi tiết + cách sửa từng dòng + cách test: **`FIX_GUIDE_DOWNLOAD_TAB.md` → mục "📌 VÒNG 3"**.
+- **Yêu cầu:** làm đúng thứ tự R3-01 → R3-04 (hai mục 🔴 trước), commit git từng mục, tự đánh dấu checklist cuối mục VÒNG 3; vẫn giữ **LUẬT BẮT BUỘC** đầu file hướng dẫn (`CẤM cargo build --release`, đóng gói `npx tauri build --no-bundle`, tắt app trước khi build). Phạm vi code như cũ: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`.
+- **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần cuối, đạt là Anh Tuấn **nghiệm thu Phase 1** (bấm tải thử video thật).
+
+---
+
 ### 2026-10-05 00:45 - Mavis (MiniMax-M3)
 - **Loại:** `@done` (Vòng 2 — nốt R2-01..R2-09 sau audit CommandCode)
 - **Phân công:** R2-08 (Job Object + cancel/pause/cookie) giao **alex (worker)** làm với context đầy đủ — em làm R2-02..R2-07 + R2-09 + R2-01.
@@ -63,21 +83,3 @@
   3. Cầu nối 1-Click: 📝 "Tạo Vietsub (.SRT)" + 🎬 "Lồng Tiếng AI" chuyển thẳng sang File Sub / Dubbing Studio với path điền sẵn.
   4. Lịch sử localStorage + Mở thư mục / Reveal file Explorer + banner bản quyền.
 - **Verify:** `cargo test` PASS 2/2, `npm run build` PASS (2.27s), đóng gói release OK.
-
----
-
-### 2026-10-04 20:45 - Antigravity
-- **Loại:** `@done` (Hoàn tất 100% Phase 0: Chữa Nền Móng theo chỉ đạo của PO Anh Tuấn)
-- **Tóm tắt:** Xử lý triệt để 8 lỗi nền tảng (BUG-026 → 032, 041):
-  1. `BUG-026 + 030`: amix cây phân cấp bất biến ≤28 <32 inputs; `normalize=0`; bỏ `dropout_transition=0`; âm lượng đồng đều tuyệt đối.
-  2. `BUG-027 + 028 + 041`: AtomicU64 run-generation; `ACTIVE_CHILD_PID` registry + `run_child_with_cancel` polling 150ms diệt sạch cây PID; cancel bao phủ trước/sau Demucs/Remux/fallback dịch.
-  3. `BUG-029`: lỗi dịch gắn rõ `[Dịch lỗi: ...]` + `translate_failed` — KHÔNG âm thầm lồng text gốc.
-  4. `BUG-031 + 032`: listener Tauri → `promise.then(u => u()).catch(...)`; backend guard `FILE_SUB_RUNNING` với RAII drop guard; chặn drop/chọn file khi đang chạy.
-- **Verify:** `cargo test dubbing::tests` PASS (2/2: tree ≤28 + N≤2500 + generation cancel), `npm run build` PASS (1.05s), `npx tauri build --no-bundle` PASS (1m05s → `sublix.exe`).
-
----
-
-### 2026-10-04 20:07 - Antigravity
-- **Loại:** `@proposal` / `@handoff`
-- **Tóm tắt:** 1) Hoàn thiện `KE_HOACH_ALL_IN_ONE_PIPELINE.md`; 2) Khám phá mỏ vàng tại `H:\AI Project\hermes-downloader` — kế thừa 80% logic (regex platform, `buildFormatArgs`, cờ `web_safari`, sub flags, UI badges, format helper); 3) Phân kỳ Phase 0 (chữa nền) → Phase 1 (MVP Tải & Dịch A-Z) → Phase 2 (n8n Workflow Builder).
-- **Yêu cầu review (@CommandCode):** Xem `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` (đặc biệt Mục 12: Tái sử dụng `hermes-downloader`).
