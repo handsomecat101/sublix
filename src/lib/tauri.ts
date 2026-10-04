@@ -431,6 +431,7 @@ export interface DownloadRequest {
   url: string;
   format: string; // "1080p" | "720p" | "480p" | "360p" | "audio-mp3" | "audio-m4a" | "max"
   browser_cookies?: string | null; // "edge" | "chrome" | "firefox" | "none"
+  cookies_file?: string | null;
   extract_subtitles: boolean;
   subtitle_langs?: string[] | null;
 }
@@ -445,6 +446,7 @@ export interface DownloadProgressPayload {
   filename: string;
   file_path?: string | null;
   error?: string | null;
+  run_id?: number | null;
 }
 
 export async function downloaderGetInfo(url: string): Promise<VideoInfo> {

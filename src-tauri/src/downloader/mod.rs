@@ -10,6 +10,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
@@ -76,11 +77,14 @@ pub struct DownloadProgressPayload {
     pub filename: String,
     pub file_path: Option<String>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub run_id: Option<u64>,
 }
 
 #[allow(dead_code)]
 struct ActiveJob {
     pub pid: u32,
+    pub run_id: u64,
     pub req: DownloadRequest,
     pub save_dir: PathBuf,
     pub last_file_path: Option<PathBuf>,
@@ -101,10 +105,48 @@ struct ActiveJob {
 static ACTIVE_JOBS: LazyLock<Mutex<HashMap<String, ActiveJob>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Run-generation counter to prevent zombie jobs when an id is reused
-/// (BUG-048 fix). Each `start_download` increments this; events for stale
-/// generations are ignored by the worker thread.
-static RUN_GENERATION: LazyLock<Mutex<u64>> = LazyLock::new(|| Mutex::new(0));
+/// R3-02: Monotonic run-generation counter for atomic job ownership and stale worker suppression.
+static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
+
+/// R3-01: RAII guard to ensure uncommitted placeholder slots (pid: 0) are stripped
+/// from ACTIVE_JOBS if spawning or setup fails prematurely.
+struct PlaceholderGuard {
+    id: String,
+    run_id: u64,
+    committed: bool,
+}
+
+impl Drop for PlaceholderGuard {
+    fn drop(&mut self) {
+        if !self.committed {
+            if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+                if let Some(job) = jobs.get(&self.id) {
+                    if job.run_id == self.run_id {
+                        warn!("⚠️ Cleaning up uncommitted downloader placeholder for job {}", self.id);
+                        jobs.remove(&self.id);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// R3-03: Helper to detect if a failure on stderr is caused by authentication / cookie issues.
+fn is_cookie_or_login_error(stderr: &str) -> bool {
+    let lower = stderr.to_lowercase();
+    lower.contains("sign in to confirm")
+        || lower.contains("cookies")
+        || lower.contains("login")
+        || lower.contains("403")
+        || lower.contains("forbidden")
+        || lower.contains("private video")
+        || lower.contains("authenticate")
+        || lower.contains("permission denied")
+        || lower.contains("account")
+        || lower.contains("blocked")
+        || lower.contains("bot")
+        || lower.contains("could not send cookie")
+}
 
 /// Validate URL is a safe http(s) URL. yt-dlp accepts anything starting with `-`
 /// as a flag, so passing user input directly is a shell-injection vector.
@@ -445,138 +487,40 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
     })
 }
 
-/// Execute video download with real-time stdout streaming and pause/cancel support
-pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
-    // BUG-044: Validate URL (prevent shell injection via `--` / `-x`).
-    if !is_valid_http_url(&req.url) {
-        return Err(anyhow::anyhow!(
-            "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
-        ));
-    }
-
-    // BUG-048: Reject duplicate id OR auto-cancel old job (we choose reject to
-    // surface bugs in caller UI; callers can cancel manually if needed).
-    if let Ok(jobs) = ACTIVE_JOBS.lock() {
-        if jobs.contains_key(&req.id) {
-            return Err(anyhow::anyhow!(
-                "Việc tải này đang chạy (id: {})",
-                req.id
-            ));
-        }
-    }
-
-    let cfg = crate::config::AppConfig::load(&app);
-    let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
-    let save_dir = get_downloads_dir(&app);
+/// Helper to construct the yt-dlp Command with proper argument ordering (R2-01).
+/// All options precede `--`, and `--` is followed solely by the target URL.
+fn build_download_command(
+    ytdlp_bin: &Path,
+    save_dir: &Path,
+    req: &DownloadRequest,
+    use_browser_cookie: Option<&str>,
+    use_cookies_file: Option<&str>,
+) -> Command {
+    let mut cmd = Command::new(ytdlp_bin);
+    let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
     let platform = get_platform(&req.url);
 
-    // R2-05: reserve the slot in ACTIVE_JOBS BEFORE spawning. The previous
-    // implementation did check → spawn → insert as three separate mutex
-    // acquisitions, which left a tiny window where two rapid duplicate-id
-    // callers (e.g. hammering "Tiếp tục" on a paused item) could both pass
-    // the check, both spawn, and the second `jobs.insert` would silently
-    // overwrite the first PID. Now we do atomic check + reserve in ONE
-    // lock; the real PID / job handle get filled in below after spawn.
-    {
-        let mut jobs = ACTIVE_JOBS
-            .lock()
-            .map_err(|e| anyhow::anyhow!("ACTIVE_JOBS lock poisoned: {}", e))?;
-        if jobs.contains_key(&req.id) {
-            return Err(anyhow::anyhow!(
-                "Việc tải này đang chạy (id: {})",
-                req.id
-            ));
-        }
-        jobs.insert(
-            req.id.clone(),
-            ActiveJob {
-                pid: 0, // placeholder; real pid filled in after spawn
-                req: req.clone(),
-                save_dir: save_dir.clone(),
-                last_file_path: None,
-                dest_path: None,
-                #[cfg(windows)]
-                job_handle: None,
-                #[cfg(not(windows))]
-                job_handle: None,
-            },
-        );
-    }
-
-    let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
-
-    let mut cmd = Command::new(&ytdlp_bin);
-    // R2-01: every option must come BEFORE `--`. yt-dlp treats everything
-    // after `--` as a positional arg, so a flag placed after `--` is silently
-    // ignored. The previous code put `cmd.arg("--").arg(url)` first and
-    // chained every other flag after it — which meant yt-dlp saw just a URL
-    // and used its defaults (no output template, no progress template,
-    // pulled whole playlists, etc.). Put the URL LAST.
     cmd.arg("-o")
         .arg(&out_template)
         .arg("--newline")
-        .arg("--no-ansi")  // BUG-056: kill ANSI colour codes so our parser
-                          // never sees escape sequences.
+        .arg("--no-ansi")
         .arg("--no-warnings")
-        .arg("--no-playlist")    // BUG-055: do not silently pull a whole playlist
-        // BUG-056: machine-parseable progress. Field order:
-        //   downloaded_bytes|total_bytes|total_bytes_estimate|speed|eta
-        // We compute percent ourselves so live streams (no total) report
-        // something sensible instead of NaN.
+        .arg("--no-playlist")
         .arg("--progress-template")
         .arg("download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s")
-        .arg("--continue"); // Native resume from .part file
+        .arg("--continue");
 
     if platform == "youtube" {
         cmd.arg("--extractor-args")
             .arg("youtube:player_client=web_safari,android_vr,ios");
     }
 
-    // R2-08.5: Cookie integration. Whitelist is strictly the three browsers
-    // yt-dlp actually supports via `--cookies-from-browser` on Windows without
-    // extra plugins — edge / chrome / firefox. Opera/Safari/Brave were removed:
-    //   - Safari: macOS-only.
-    //   - Opera / Brave: yt-dlp accepts the names but App-Bound Encryption has
-    //     been progressively breaking them since 2024; surfacing a silent
-    //     failure is worse than a hard reject.
-    // yt-dlp's own extractor doc agrees: only chromium-derivatives + firefox
-    // are reliable on Windows today.
-    //
-    // Priority: if a whitelisted browser is set, use it. Otherwise fall back
-    // to a Netscape `cookies.txt` the user explicitly picked. Never pass both
-    // flags — yt-dlp's behaviour when both are set is undocumented and has
-    // been observed to ignore the file in practice (BUG-057).
-    let browser_cookie_enabled = req
-        .browser_cookies
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty() && s.to_lowercase() != "none")
-        .map(|s| s.to_lowercase())
-        .and_then(|b| {
-            if matches!(b.as_str(), "edge" | "chrome" | "firefox") {
-                Some(b)
-            } else {
-                warn!("Bỏ qua browser_cookies={} (không nằm trong whitelist)", b);
-                None
-            }
-        });
-
-    if let Some(b) = browser_cookie_enabled {
-        cmd.arg("--cookies-from-browser").arg(&b);
-    } else if let Some(ref cookies_file) = req.cookies_file {
-        // BUG-057 fallback: only when we are NOT using browser cookies.
-        let cf = cookies_file.trim();
-        if !cf.is_empty() {
-            let p = std::path::Path::new(cf);
-            if p.exists() {
-                cmd.arg("--cookies").arg(cf);
-            } else {
-                warn!("cookies_file không tồn tại: {}", cf);
-            }
-        }
+    if let Some(b) = use_browser_cookie {
+        cmd.arg("--cookies-from-browser").arg(b);
+    } else if let Some(cf) = use_cookies_file {
+        cmd.arg("--cookies").arg(cf);
     }
 
-    // Subtitle extraction flags (Phase 1)
     if req.extract_subtitles {
         cmd.arg("--write-subs")
             .arg("--write-auto-subs")
@@ -593,7 +537,6 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         }
     }
 
-    // Audio format or Video format
     let is_audio = req.format.starts_with("audio");
     if !is_audio {
         cmd.arg("--merge-output-format").arg("mp4");
@@ -602,10 +545,6 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         cmd.arg(arg);
     }
 
-    // R2-01: the URL must be the LAST argument, after `--` (the positional
-    // separator). Putting it last — after every option above — lets yt-dlp
-    // actually parse all our flags instead of treating them as part of the
-    // URL.
     cmd.arg("--").arg(&req.url);
 
     cmd.stdout(Stdio::piped());
@@ -614,122 +553,69 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let mut child = cmd.spawn().context("Không thể khởi động yt-dlp")?;
-    let pid = child.id();
-    let stdout = child.stdout.take().context("Không thể pipe stdout")?;
-    let stderr = child.stderr.take().context("Không thể pipe stderr")?;
+    cmd
+}
 
-    // R2-08.1: wrap the freshly-spawned yt-dlp in a Windows Job Object with
-    // KILL_ON_JOB_CLOSE so the entire grandchild tree (yt-dlp → ffmpeg/ffprobe)
-    // dies when our process terminates or when we close the job handle. On
-    // non-Windows this is a no-op (job_handle stays None).
-    #[cfg(windows)]
-    let job_handle_raw: Option<isize> = unsafe { create_kill_on_close_job(pid) };
-    #[cfg(not(windows))]
-    let job_handle_raw: Option<isize> = None;
+struct DrainResult {
+    is_success: bool,
+    detected_filepath: Option<PathBuf>,
+    detected_filename: String,
+    stderr_text: String,
+    current_size: String,
+    last_percent: f32,
+}
 
-    let download_id = req.id.clone();
+/// Drains stdout/stderr of a child process, updates progress, and tracks destination paths.
+fn drain_child_process(
+    mut child: std::process::Child,
+    app_clone: &AppHandle,
+    job_id: &str,
+    my_run_id: u64,
+    size_prefix: Option<&str>,
+) -> DrainResult {
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
 
-    // R2-05: update the placeholder slot reserved BEFORE spawn with the real
-    // PID and Job Object handle. If something went wrong and the slot is no
-    // longer ours (e.g. the user cancelled between reserve and spawn — race
-    // is benign because cancel removes the entry, and we just skip the update
-    // and let the worker thread report the orphan state).
-    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-        if let Some(job) = jobs.get_mut(&download_id) {
-            job.pid = pid;
-            #[cfg(windows)]
-            {
-                job.job_handle = job_handle_raw;
-            }
-            #[cfg(not(windows))]
-            {
-                job.job_handle = job_handle_raw;
-            }
-        }
-    }
-
-    // Spawn async background worker to track stdout lines and process completion
-    let app_clone = app.clone();
-    let job_id = download_id.clone();
-
-    // BUG-048: run-generation — a duplicate id request would otherwise silently
-    // overwrite the old job's PID; workers from previous generations must not
-    // emit events after the id was re-registered. (R2-05: replaced `.expect()`
-    // with graceful `unwrap_or(0)` so a poisoned mutex doesn't crash the app —
-    // generation tracking degrades to "treat everything as gen 0".)
-    let _run_generation: u64 = RUN_GENERATION
-        .lock()
-        .map(|mut g| {
-            *g += 1;
-            *g
-        })
-        .unwrap_or(0);
-
-    // R2-07 (b): drain stderr in a dedicated background thread INSTEAD OF
-    // waiting for child exit then reading stderr at the end. The previous
-    // code did `child.wait()` and THEN `BufReader::new(stderr).read_to_string`
-    // — if yt-dlp emitted enough stderr to fill the OS pipe buffer (Windows
-    // default ~4 KB), the child would block writing stderr until our reader
-    // drained it, but we were blocked waiting for the child → deadlock.
-    // Symptoms: download hangs partway, "freeze" reported, eventually
-    // times out with no error. Spawn the reader thread FIRST, share the
-    // accumulated text via Arc<Mutex<String>>, join + collect at the end.
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let stderr_buf_for_reader = Arc::clone(&stderr_buf);
     let stderr_handle = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = BufReader::new(stderr).read_to_string(&mut text);
-        if let Ok(mut buf) = stderr_buf_for_reader.lock() {
-            *buf = text;
-        } else if let Err(poisoned) = stderr_buf_for_reader.lock() {
-            // Recover even from a poisoned mutex — the buffer is still valid.
-            *poisoned.into_inner() = text;
+        if let Some(pipe) = stderr {
+            let mut text = String::new();
+            let _ = BufReader::new(pipe).read_to_string(&mut text);
+            if let Ok(mut buf) = stderr_buf_for_reader.lock() {
+                *buf = text;
+            } else if let Err(poisoned) = stderr_buf_for_reader.lock() {
+                *poisoned.into_inner() = text;
+            }
         }
     });
 
-    // Move the stderr handle + shared buffer into the stdout worker so it
-    // can join + collect after the child has exited.
-    let stderr_handle_for_worker = stderr_handle;
-    let stderr_buf_for_worker = stderr_buf;
+    let mut last_percent: f32 = -1.0;
+    let mut last_emitted_percent: f32 = -1.0;
+    let mut current_speed = String::new();
+    let mut current_eta = String::new();
+    let mut current_size = String::new();
+    let mut detected_filename = String::new();
+    let mut detected_filepath: Option<PathBuf> = None;
+    let mut last_emit = std::time::Instant::now();
 
-    std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        let mut last_percent: f32 = -1.0; // sentinel so first emit always fires
-        // R2-07 (a): track the LAST EMITTED percent separately from
-        // `last_percent` (the latest computed one). The previous code did
-        // `(last_percent - (-1.0)).abs()` which was always ≥1.0, so the
-        // throttle "percent changed ≥0.5%" gate was effectively disabled
-        // and we emitted a UI event for every stdout line — flooding the
-        // frontend and making the progress bar jittery.
-        let mut last_emitted_percent: f32 = -1.0;
-        let mut current_speed = String::new();
-        let mut current_eta = String::new();
-        let mut current_size = String::new();
-        let mut detected_filename = String::new();
-        let mut detected_filepath: Option<PathBuf> = None;
-        let mut last_emit = std::time::Instant::now();
-
+    if let Some(stdout_pipe) = stdout {
+        let reader = BufReader::new(stdout_pipe);
         for line_res in reader.lines() {
             if let Ok(line) = line_res {
-                // BUG-048: if the id was overwritten by a new job with the
-                // same id, stop touching the UI — events are stale.
+                // R3-02: Check if slot still belongs to our specific run_id
                 let still_current = ACTIVE_JOBS
                     .lock()
-                    .map(|jobs| jobs.contains_key(&job_id))
+                    .map(|jobs| {
+                        jobs.get(job_id)
+                            .map(|j| j.run_id == my_run_id)
+                            .unwrap_or(false)
+                    })
                     .unwrap_or(false);
                 if !still_current {
                     break;
                 }
 
-                // BUG-056: parse the machine-parseable progress template we
-                // pass to yt-dlp. Lines look like:
-                //   download:1024|0|2048000|123456|00:42
-                // where fields are bytes downloaded | known total |
-                // estimate total | speed (bytes/s) | ETA (mm:ss).
-                // We compute percent from bytes ourselves — much more
-                // robust than the old text-grep against `%`, which broke
-                // when a video title contained "at 100%".
                 let pct: Option<f32> = if let Some(rest) = line.strip_prefix("download:") {
                     let parts: Vec<&str> = rest.split('|').collect();
                     if parts.len() >= 2 {
@@ -750,12 +636,9 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                         };
                         if total > 0 {
                             let p = (downloaded as f64 / total as f64) * 100.0;
-                            // Surface a useful "of N MiB" string for the UI.
                             current_size = format!("{:.1} MiB", total as f64 / 1_048_576.0);
                             Some(p as f32)
                         } else {
-                            // Live stream / unknown size — keep last percent,
-                            // never NaN.
                             Some(last_percent.max(0.0))
                         }
                     } else {
@@ -765,28 +648,20 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     None
                 };
 
-                // Destination file detection (unchanged)
-                // R2-03: yt-dlp prints Destination for INTERMEDIATE files
-                // (the separate video + audio streams used to assemble a 4K/1440p
-                // download), then prints "[Merger] Merging formats into \"…\""
-                // for the actual muxed output. The Merger line replaces
-                // detected_filepath with the real final file — without this,
-                // BUG-046's "is_success && has_own_output" check fires with
-                // the intermediate path (which gets deleted by the merger)
-                // and the download is wrongly reported as failed.
+                // Parse Destination / Merger (R2-03)
                 if let Some(pos) = line.find("[Merger] Merging formats into \"") {
-                    let marker = "[Merger] Merging formats into \"";
-                    let start = pos + marker.len();
-                    if let Some(end_rel) = line[start..].find('"') {
-                        let path_str = line[start..start + end_rel].trim();
+                    let after = &line[pos + 31..];
+                    if let Some(end_quote) = after.find('"') {
+                        let path_str = &after[..end_quote];
                         let p = PathBuf::from(path_str);
-                        detected_filename =
-                            p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
                         detected_filepath = Some(p.clone());
                         if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-                            if let Some(job) = jobs.get_mut(&job_id) {
-                                job.dest_path = Some(p.clone());
-                                job.last_file_path = Some(p);
+                            if let Some(job) = jobs.get_mut(job_id) {
+                                if job.run_id == my_run_id {
+                                    job.dest_path = Some(p.clone());
+                                    job.last_file_path = Some(p);
+                                }
                             }
                         }
                     }
@@ -795,12 +670,12 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     let p = PathBuf::from(path_str);
                     detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
                     detected_filepath = Some(p.clone());
-                    // BUG-047: record it on the active job so cancel only
-                    // touches this exact file.
                     if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-                        if let Some(job) = jobs.get_mut(&job_id) {
-                            job.dest_path = Some(p.clone());
-                            job.last_file_path = Some(p);
+                        if let Some(job) = jobs.get_mut(job_id) {
+                            if job.run_id == my_run_id {
+                                job.dest_path = Some(p.clone());
+                                job.last_file_path = Some(p);
+                            }
                         }
                     }
                 } else if let Some(pos) = line.find("has already been downloaded") {
@@ -809,9 +684,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
                     detected_filepath = Some(p.clone());
                     if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-                        if let Some(job) = jobs.get_mut(&job_id) {
-                            job.dest_path = Some(p.clone());
-                            job.last_file_path = Some(p);
+                        if let Some(job) = jobs.get_mut(job_id) {
+                            if job.run_id == my_run_id {
+                                job.dest_path = Some(p.clone());
+                                job.last_file_path = Some(p);
+                            }
                         }
                     }
                 }
@@ -820,28 +697,28 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     last_percent = p;
                 }
 
-                // BUG-056 (2): throttle event emission. yt-dlp can spew a
-                // progress line every few hundred ms; the UI can't keep up
-                // and it makes the progress bar jittery. Emit when (a) the
-                // percent moved at least 0.5% OR (b) 250 ms have passed.
-                // (R2-07 (a): compare against `last_emitted_percent`, not the
-                // sentinel -1.0 — the old code never actually throttled.)
                 let percent_delta = (last_percent - last_emitted_percent).abs();
                 let pct_changed = pct.is_some() && percent_delta >= 0.5;
                 let time_elapsed = last_emit.elapsed();
                 if pct_changed || time_elapsed.as_millis() >= 250 {
+                    let formatted_size = match size_prefix {
+                        Some(prefix) if !current_size.is_empty() => format!("{} • {}", prefix, current_size),
+                        Some(prefix) => prefix.to_string(),
+                        None => current_size.clone(),
+                    };
                     let _ = app_clone.emit(
                         "downloader:progress",
                         DownloadProgressPayload {
-                            id: job_id.clone(),
+                            id: job_id.to_string(),
                             status: "downloading".to_string(),
                             percent: last_percent.max(0.0),
                             speed: current_speed.clone(),
                             eta: current_eta.clone(),
-                            size_text: current_size.clone(),
+                            size_text: formatted_size,
                             filename: detected_filename.clone(),
                             file_path: detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
                             error: None,
+                            run_id: Some(my_run_id),
                         },
                     );
                     last_emitted_percent = last_percent;
@@ -849,98 +726,323 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 }
             }
         }
+    }
 
-        // Wait for child process exit status
-        let status_res = child.wait();
+    let status_res = child.wait();
+    let _ = stderr_handle.join();
 
-        // R2-07 (b): wait for the dedicated stderr reader thread to finish
-        // (it's been draining in parallel since spawn, so by now it's
-        // already done — the join is cheap). Then collect the accumulated
-        // text from the shared buffer. Trim and cap at ~2 KB so a runaway
-        // log doesn't blow up the payload.
-        let _ = stderr_handle_for_worker.join();
-        let stderr_text_raw = match stderr_buf_for_worker.lock() {
-            Ok(s) => s.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
+    let stderr_text_raw = match stderr_buf.lock() {
+        Ok(s) => s.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    };
+    let mut stderr_text = stderr_text_raw.trim().to_string();
+    if stderr_text.len() > 2048 {
+        stderr_text.truncate(2048);
+        stderr_text.push_str("\n…(đã cắt bớt)");
+    }
+
+    let is_success = status_res.map(|s| s.success()).unwrap_or(false);
+
+    DrainResult {
+        is_success,
+        detected_filepath,
+        detected_filename,
+        stderr_text,
+        current_size,
+        last_percent,
+    }
+}
+
+/// Execute video download with real-time stdout streaming and pause/cancel support
+pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
+    // BUG-044: Validate URL (prevent shell injection via `--` / `-x`).
+    if !is_valid_http_url(&req.url) {
+        return Err(anyhow::anyhow!(
+            "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
+        ));
+    }
+
+    let cfg = crate::config::AppConfig::load(&app);
+    let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
+    let save_dir = get_downloads_dir(&app);
+
+    // R3-02: Allocate monotonic run ID
+    let my_run_id = NEXT_RUN_ID.fetch_add(1, Ordering::SeqCst);
+
+    // R2-05 + R3-01: reserve the slot in ACTIVE_JOBS BEFORE spawning.
+    // Use PlaceholderGuard (RAII) to remove the placeholder if spawn fails.
+    {
+        let mut jobs = ACTIVE_JOBS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("ACTIVE_JOBS lock poisoned: {}", e))?;
+        if jobs.contains_key(&req.id) {
+            return Err(anyhow::anyhow!(
+                "Việc tải này đang chạy (id: {})",
+                req.id
+            ));
+        }
+        jobs.insert(
+            req.id.clone(),
+            ActiveJob {
+                pid: 0, // placeholder; real pid filled in after spawn
+                run_id: my_run_id,
+                req: req.clone(),
+                save_dir: save_dir.clone(),
+                last_file_path: None,
+                dest_path: None,
+                #[cfg(windows)]
+                job_handle: None,
+                #[cfg(not(windows))]
+                job_handle: None,
+            },
+        );
+    }
+
+    let mut placeholder_guard = PlaceholderGuard {
+        id: req.id.clone(),
+        run_id: my_run_id,
+        committed: false,
+    };
+
+    // Determine cookie options (R2-08.5 & R3-03)
+    let browser_cookie_enabled: Option<String> = req
+        .browser_cookies
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && s.to_lowercase() != "none")
+        .map(|s| s.to_lowercase())
+        .and_then(|b| {
+            if matches!(b.as_str(), "edge" | "chrome" | "firefox") {
+                Some(b)
+            } else {
+                warn!("Bỏ qua browser_cookies={} (không nằm trong whitelist)", b);
+                None
+            }
+        });
+
+    let valid_cookies_file: Option<String> = req
+        .cookies_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|cf| !cf.is_empty() && Path::new(cf).exists())
+        .map(|cf| cf.to_string());
+
+    // Primary strategy:
+    // If browser cookie configured, use it first.
+    // If no browser cookie configured but cookies file exists, use cookies file.
+    let (primary_browser, primary_file) = if let Some(ref b) = browser_cookie_enabled {
+        (Some(b.as_str()), None)
+    } else if let Some(ref cf) = valid_cookies_file {
+        (None, Some(cf.as_str()))
+    } else {
+        (None, None)
+    };
+
+    // Backup cookie file available if we used browser cookie first AND cookies file exists:
+    let backup_cookies_file: Option<String> = if browser_cookie_enabled.is_some() {
+        valid_cookies_file.clone()
+    } else {
+        None
+    };
+
+    let mut cmd = build_download_command(
+        &ytdlp_bin,
+        &save_dir,
+        &req,
+        primary_browser,
+        primary_file,
+    );
+
+    let child = cmd.spawn().context("Không thể khởi động yt-dlp")?;
+    let pid = child.id();
+
+    #[cfg(windows)]
+    let job_handle_raw: Option<isize> = unsafe { create_kill_on_close_job(pid) };
+    #[cfg(not(windows))]
+    let job_handle_raw: Option<isize> = None;
+
+    let download_id = req.id.clone();
+
+    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+        if let Some(job) = jobs.get_mut(&download_id) {
+            if job.run_id == my_run_id {
+                job.pid = pid;
+                #[cfg(windows)]
+                {
+                    job.job_handle = job_handle_raw;
+                }
+                #[cfg(not(windows))]
+                {
+                    job.job_handle = job_handle_raw;
+                }
+            }
+        }
+    }
+
+    // Now that PID and job handle are safely recorded, commit placeholder guard
+    placeholder_guard.committed = true;
+
+    // Spawn background worker thread
+    let app_clone = app.clone();
+    let job_id = download_id.clone();
+    let req_clone = req.clone();
+    let ytdlp_bin_clone = ytdlp_bin.clone();
+    let save_dir_clone = save_dir.clone();
+
+    std::thread::spawn(move || {
+        let drain_res = drain_child_process(child, &app_clone, &job_id, my_run_id, None);
+
+        // Check if retry with backup cookies is needed (R3-03)
+        let is_auth_fail = !drain_res.is_success && is_cookie_or_login_error(&drain_res.stderr_text);
+
+        let final_res = if is_auth_fail && backup_cookies_file.is_some() {
+            let backup_file = backup_cookies_file.as_ref().unwrap();
+            info!(
+                "⚠️ Downloader job {} failed with browser cookies ({}), retrying with backup cookies file: {}",
+                job_id, drain_res.stderr_text, backup_file
+            );
+
+            // Check if still current run before retrying
+            let still_current = ACTIVE_JOBS
+                .lock()
+                .map(|jobs| jobs.get(&job_id).map(|j| j.run_id == my_run_id).unwrap_or(false))
+                .unwrap_or(false);
+
+            if still_current {
+                let _ = app_clone.emit(
+                    "downloader:progress",
+                    DownloadProgressPayload {
+                        id: job_id.clone(),
+                        status: "downloading".to_string(),
+                        percent: drain_res.last_percent.max(0.0),
+                        speed: "".to_string(),
+                        eta: "".to_string(),
+                        size_text: "Đang thử lại với cookie dự phòng...".to_string(),
+                        filename: drain_res.detected_filename.clone(),
+                        file_path: drain_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
+                        error: None,
+                        run_id: Some(my_run_id),
+                    },
+                );
+
+                let mut retry_cmd = build_download_command(
+                    &ytdlp_bin_clone,
+                    &save_dir_clone,
+                    &req_clone,
+                    None,
+                    Some(backup_file.as_str()),
+                );
+
+                match retry_cmd.spawn() {
+                    Ok(retry_child) => {
+                        let retry_pid = retry_child.id();
+                        #[cfg(windows)]
+                        let retry_job_handle: Option<isize> = unsafe { create_kill_on_close_job(retry_pid) };
+                        #[cfg(not(windows))]
+                        let retry_job_handle: Option<isize> = None;
+
+                        if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+                            if let Some(job) = jobs.get_mut(&job_id) {
+                                if job.run_id == my_run_id {
+                                    job.pid = retry_pid;
+                                    #[cfg(windows)]
+                                    {
+                                        job.job_handle = retry_job_handle;
+                                    }
+                                    #[cfg(not(windows))]
+                                    {
+                                        job.job_handle = retry_job_handle;
+                                    }
+                                }
+                            }
+                        }
+
+                        drain_child_process(
+                            retry_child,
+                            &app_clone,
+                            &job_id,
+                            my_run_id,
+                            Some("Đã dùng cookie dự phòng"),
+                        )
+                    }
+                    Err(e) => {
+                        warn!("❌ Failed to spawn retry with backup cookie for {}: {}", job_id, e);
+                        drain_res
+                    }
+                }
+            } else {
+                drain_res
+            }
+        } else {
+            drain_res
         };
-        let mut stderr_text = stderr_text_raw.trim().to_string();
-        if stderr_text.len() > 2048 {
-            stderr_text.truncate(2048);
-            stderr_text.push_str("\n…(đã cắt bớt)");
+
+        // R3-02: Check if this job still belongs to our run_id (not canceled or overwritten)
+        let is_current_run = ACTIVE_JOBS
+            .lock()
+            .map(|jobs| jobs.get(&job_id).map(|j| j.run_id == my_run_id).unwrap_or(false))
+            .unwrap_or(false);
+
+        if !is_current_run {
+            info!("ℹ️ Job {} worker finished but run_id {} is no longer active", job_id, my_run_id);
+            return;
         }
 
-        let is_success = status_res.map(|s| s.success()).unwrap_or(false);
-
-        // Check whether this job was actively removed or paused.
-        // BUG-048: also bail out if a newer generation of the same id has
-        // already taken over the slot — events from this old worker are stale.
-        let is_paused = {
-            if let Ok(jobs) = ACTIVE_JOBS.lock() {
-                !jobs.contains_key(&job_id)
-            } else {
-                false
-            }
-        };
-
-        // BUG-046: only treat the download as successful if BOTH the subprocess
-        // exited cleanly AND yt-dlp reported its own destination file path
-        // (via "Destination:" or "has already been downloaded"). Falling back to
-        // "find the newest file in the directory" is removed because that
-        // approach happily returned files produced by a *different* job —
-        // silent substitution of wrong results is forbidden by project rules.
-        let has_own_output = detected_filepath
+        let has_own_output = final_res
+            .detected_filepath
             .as_ref()
             .map(|p| p.exists())
             .unwrap_or(false);
 
-        if !is_paused {
-            if is_success && has_own_output {
-                info!("✅ Downloader job {} finished successfully", job_id);
-                let _ = app_clone.emit(
-                    "downloader:progress",
-                    DownloadProgressPayload {
-                        id: job_id.clone(),
-                        status: "completed".to_string(),
-                        percent: 100.0,
-                        speed: "0 B/s".to_string(),
-                        eta: "00:00".to_string(),
-                        size_text: current_size,
-                        filename: detected_filename,
-                        file_path: detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
-                        error: None,
-                    },
-                );
+        if final_res.is_success && has_own_output {
+            info!("✅ Downloader job {} finished successfully", job_id);
+            let _ = app_clone.emit(
+                "downloader:progress",
+                DownloadProgressPayload {
+                    id: job_id.clone(),
+                    status: "completed".to_string(),
+                    percent: 100.0,
+                    speed: "0 B/s".to_string(),
+                    eta: "00:00".to_string(),
+                    size_text: final_res.current_size,
+                    filename: final_res.detected_filename,
+                    file_path: final_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
+                    error: None,
+                    run_id: Some(my_run_id),
+                },
+            );
+        } else {
+            let err_msg = if !final_res.stderr_text.trim().is_empty() {
+                final_res.stderr_text.trim().to_string()
+            } else if final_res.is_success && !has_own_output {
+                "yt-dlp đã thoát thành công nhưng không in ra đường dẫn file (có thể link chết hoặc bị chặn khu vực)".to_string()
             } else {
-                // Distinguish: clean exit but no reported file → likely wrong
-                // link / dead URL / silent fail. Tell the truth.
-                let err_msg = if !stderr_text.trim().is_empty() {
-                    stderr_text.trim().to_string()
-                } else if is_success && !has_own_output {
-                    format!(
-                        "yt-dlp đã thoát thành công nhưng không in ra đường dẫn file (có thể link chết hoặc bị chặn khu vực)"
-                    )
-                } else {
-                    "Tải video thất bại (kiểm tra kết nối mạng hoặc bản quyền)".to_string()
-                };
-                warn!("❌ Downloader job {} failed: {}", job_id, err_msg);
-                let _ = app_clone.emit(
-                    "downloader:progress",
-                    DownloadProgressPayload {
-                        id: job_id.clone(),
-                        status: "error".to_string(),
-                        percent: last_percent,
-                        speed: "0 B/s".to_string(),
-                        eta: "--:--".to_string(),
-                        size_text: current_size,
-                        filename: detected_filename,
-                        file_path: None,
-                        error: Some(err_msg),
-                    },
-                );
-            }
+                "Tải video thất bại (kiểm tra kết nối mạng hoặc bản quyền)".to_string()
+            };
+            warn!("❌ Downloader job {} failed: {}", job_id, err_msg);
+            let _ = app_clone.emit(
+                "downloader:progress",
+                DownloadProgressPayload {
+                    id: job_id.clone(),
+                    status: "error".to_string(),
+                    percent: final_res.last_percent,
+                    speed: "0 B/s".to_string(),
+                    eta: "--:--".to_string(),
+                    size_text: final_res.current_size,
+                    filename: final_res.detected_filename,
+                    file_path: None,
+                    error: Some(err_msg),
+                    run_id: Some(my_run_id),
+                },
+            );
+        }
 
-            if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-                jobs.remove(&job_id);
+        // R3-02: Only remove if still our run_id
+        if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+            if let Some(job) = jobs.get(&job_id) {
+                if job.run_id == my_run_id {
+                    jobs.remove(&job_id);
+                }
             }
         }
     });
@@ -1010,6 +1112,7 @@ pub fn cancel_download(app: &AppHandle, id: &str) -> Result<()> {
             filename: "".to_string(),
             file_path: None,
             error: None,
+            run_id: Some(job.run_id),
         },
     );
     Ok(())
@@ -1066,6 +1169,7 @@ pub fn pause_download(app: &AppHandle, id: &str) -> Result<()> {
             filename: "".to_string(),
             file_path: None,
             error: None,
+            run_id: Some(job.run_id),
         },
     );
     Ok(())
