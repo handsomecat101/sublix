@@ -99,6 +99,18 @@ function detectPlatform(url: string): string {
   return "generic_video";
 }
 
+function isValidHttpUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString.trim());
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      Boolean(parsed.hostname && parsed.hostname.includes("."))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function formatDuration(sec?: number | null): string {
   if (!sec || isNaN(sec)) return "";
   const h = Math.floor(sec / 3600);
@@ -143,6 +155,8 @@ export default function DownloaderView({
   const [inspecting, setInspecting] = useState<boolean>(false);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [inspectError, setInspectError] = useState<string | null>(null);
+  // R3-04 (1): React state to track broken thumbnail without direct DOM manipulation
+  const [thumbFailed, setThumbFailed] = useState<boolean>(false);
 
   // Downloads state
   // BUG-050: any item that was mid-flight when the app died is now a
@@ -182,13 +196,11 @@ export default function DownloaderView({
   // BUG-053: lock the Start button while a click is in flight so a frantic
   // double-click doesn't spawn two parallel yt-dlp processes.
   const [starting, setStarting] = useState<boolean>(false);
-  // R2-09.7: cache of file-exists check for completed items, so the
-  // pipeline-bridge buttons (Tạo Phụ Đề / Lồng Tiếng AI) can disable
-  // themselves when the file yt-dlp reported has been deleted or was
-  // never actually written. Keyed by item id.
+  // R2-09.7 & R3-04 (2): cache of file-exists check for completed items.
+  // Using fileExistsMapRef to avoid re-triggering useEffect loops.
   const [fileExistsMap, setFileExistsMap] = useState<Record<string, boolean>>({});
-  const itemsRef = useRef<DownloadItem[]>(items);
-  itemsRef.current = items;
+  const fileExistsMapRef = useRef<Record<string, boolean>>({});
+  fileExistsMapRef.current = fileExistsMap;
 
   // Save history on change
   useEffect(() => {
@@ -199,25 +211,24 @@ export default function DownloaderView({
     }
   }, [items]);
 
-  // R2-09.7: when an item becomes completed with a file path, probe the
-  // disk so the pipeline-bridge buttons can enable/disable correctly.
-  // We only probe NEW (item.id not yet in map) completed-with-path items
-  // — once cached, the result stays until the user removes the row.
+  // R2-09.7 & R3-04 (2): when an item becomes completed with a file path, probe disk.
+  // We do not cache false permanently on transient IPC errors, and avoid fileExistsMap in deps.
   useEffect(() => {
     items.forEach((item) => {
       if (
         item.status === "completed" &&
         item.filePath &&
-        !(item.id in fileExistsMap)
+        fileExistsMapRef.current[item.id] === undefined
       ) {
         sublix.downloaderFileExists(item.filePath).then((exists) => {
           setFileExistsMap((prev) => ({ ...prev, [item.id]: exists }));
-        }).catch(() => {
-          setFileExistsMap((prev) => ({ ...prev, [item.id]: false }));
+        }).catch((err) => {
+          // Do not cache false permanently on transient IPC errors
+          console.warn("downloaderFileExists IPC error:", err);
         });
       }
     });
-  }, [items, fileExistsMap]);
+  }, [items]);
 
   // Listen to progress events from backend
   useEffect(() => {
@@ -233,9 +244,25 @@ export default function DownloaderView({
           const safePct = Number.isFinite(p.percent)
             ? Math.min(100, Math.max(0, p.percent))
             : item.percent;
+
+          // R3-04 (4): validate status strictly without `as any`
+          const VALID_STATUSES: DownloadItem["status"][] = [
+            "queued",
+            "downloading",
+            "paused",
+            "completed",
+            "error",
+            "cancelled",
+          ];
+          const validatedStatus: DownloadItem["status"] = VALID_STATUSES.includes(
+            p.status as DownloadItem["status"]
+          )
+            ? (p.status as DownloadItem["status"])
+            : "error";
+
           return {
             ...item,
-            status: p.status as any,
+            status: validatedStatus,
             percent: safePct,
             speed: p.speed || item.speed,
             eta: p.eta || item.eta,
@@ -261,11 +288,21 @@ export default function DownloaderView({
     const targetUrl = (overrideUrl || url).trim();
     if (!targetUrl) return;
 
+    // R3-04 (5): validate target URL via new URL()
+    if (!isValidHttpUrl(targetUrl)) {
+      setInspectError(
+        `Link không hợp lệ: phải là URL http(s):// hợp lệ (hiện tại: "${targetUrl.slice(0, 40)}")`
+      );
+      return;
+    }
+
     setInspecting(true);
     setInspectError(null);
+    setThumbFailed(false);
     try {
       const info = await sublix.downloaderGetInfo(targetUrl);
       setVideoInfo(info);
+      setThumbFailed(false);
     } catch (e: any) {
       setInspectError(formatError(e, "Không thể lấy thông tin video"));
     } finally {
@@ -301,16 +338,11 @@ export default function DownloaderView({
       const targetUrl = url.trim();
       if (!targetUrl) return;
 
-      // R2-09.8: reject obviously-invalid URLs at the UI layer BEFORE
-      // hitting the backend. Backend still validates, but blocking here
-      // means no spurious "Đang tải..." card + immediate error flicker
-      // when someone pastes `--version` or `javascript:...`.
-      if (
-        !targetUrl.startsWith("http://") &&
-        !targetUrl.startsWith("https://")
-      ) {
+      // R2-09.8 & R3-04 (5): reject obviously-invalid URLs at the UI layer BEFORE
+      // hitting the backend using robust new URL() validation.
+      if (!isValidHttpUrl(targetUrl)) {
         setInspectError(
-          `Link không hợp lệ: phải bắt đầu bằng http:// hoặc https:// (hiện tại: "${targetUrl.slice(0, 40)}")`
+          `Link không hợp lệ: phải là URL http(s):// hợp lệ (hiện tại: "${targetUrl.slice(0, 40)}")`
         );
         return;
       }
@@ -480,13 +512,27 @@ export default function DownloaderView({
       }
     }
     setItems((prev) => prev.filter((item) => item.id !== id));
+    setFileExistsMap((prev) => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
   };
 
   const handleClearHistory = () => {
     // R2-09.6: tooltip says "Xóa các mục đã tải xong" — only drop items that
-    // are actually `completed`. Old code kept everything except active, which
-    // meant cancelled/errored/queued cards piled up and the tooltip lied.
+    // are actually `completed`.
+    const completedIds = new Set(
+      items.filter((item) => item.status === "completed").map((item) => item.id)
+    );
     setItems((prev) => prev.filter((item) => item.status !== "completed"));
+    setFileExistsMap((prev) => {
+      const copy = { ...prev };
+      for (const id of completedIds) {
+        delete copy[id];
+      }
+      return copy;
+    });
   };
 
   const handleReveal = async (path?: string | null) => {
@@ -556,6 +602,7 @@ export default function DownloaderView({
                 setUrl(e.target.value);
                 setVideoInfo(null);
                 setInspectError(null);
+                setThumbFailed(false);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -571,6 +618,7 @@ export default function DownloaderView({
                   setUrl("");
                   setVideoInfo(null);
                   setInspectError(null);
+                  setThumbFailed(false);
                 }}
                 title="Xóa URL"
               >
@@ -607,20 +655,15 @@ export default function DownloaderView({
         {/* METADATA INSPECTED CARD */}
         {videoInfo && (
           <div className="video-info-preview">
-            {videoInfo.thumbnail ? (
-              <div className="video-thumb-container">
+            {videoInfo.thumbnail && !thumbFailed ? (
+              <div className="video-thumb-container" key={videoInfo.thumbnail}>
                 <img
                   src={videoInfo.thumbnail}
                   alt={videoInfo.title}
                   className="video-thumb-img"
-                  onError={(e) => {
-                    // R2-09.5: hide the WHOLE 140×80 black box on error,
-                    // not just the <img>. The HTML error event does NOT
-                    // bubble through React, so we walk up to the container
-                    // and hide it directly.
-                    const img = e.currentTarget as HTMLElement;
-                    const container = img.closest(".video-thumb-container") as HTMLElement | null;
-                    if (container) container.style.display = "none";
+                  onError={() => {
+                    // R3-04 (1): React state to hide container instead of DOM manipulation
+                    setThumbFailed(true);
                   }}
                 />
                 {videoInfo.duration && (
@@ -773,6 +816,7 @@ export default function DownloaderView({
                       {item.status === "error" && "❌ Lỗi"}
                       {item.status === "cancelled" && "⏹️ Đã hủy"}
                       {item.status === "queued" && "⏳ Đang đợi"}
+                      {!["downloading", "paused", "completed", "error", "cancelled", "queued"].includes(item.status) && "ℹ️ Không xác định"}
                     </span>
                   </div>
 
