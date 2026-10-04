@@ -916,12 +916,22 @@ export default function SettingsView() {
         {/* Scrollable Body */}
         <div className="main-body">
 
-      {activeTab === "downloader" && (
+      {/* BUG-045: always mount DownloaderView, hide with CSS when not active.
+          This keeps the event listener alive across tab switches so events
+          fired while the user is on another tab (e.g. completed downloads)
+          are not lost. */}
+      <div
+        data-tab="downloader"
+        style={{
+          display: activeTab === "downloader" ? "block" : "none",
+          height: "100%",
+        }}
+      >
         <DownloaderView
           onNavigateToFileSub={handleRouteToFileSub}
           onNavigateToDubbing={handleRouteToDubbing}
         />
-      )}
+      </div>
 
       {activeTab === "file_sub" && (
         <FileSubView

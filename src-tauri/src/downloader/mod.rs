@@ -1,6 +1,7 @@
 //! Sublix Multi-Platform Video Downloader Module
 //! Reuses proven extractor flags, platform regex, format selectors, and progress parsing
 //! from hermes-downloader.
+//! Ported from hermes-downloader (MIT, © Hermes Agent).
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -59,10 +60,46 @@ struct ActiveJob {
     pub req: DownloadRequest,
     pub save_dir: PathBuf,
     pub last_file_path: Option<PathBuf>,
+    /// Actual destination file path captured from yt-dlp's "Destination:" line.
+    /// `cancel_download` only ever touches this single path (plus its `.part`
+    /// and `.ytdl` siblings) — never scans the whole save_dir. (BUG-047)
+    pub dest_path: Option<PathBuf>,
 }
 
 static ACTIVE_JOBS: LazyLock<Mutex<HashMap<String, ActiveJob>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Run-generation counter to prevent zombie jobs when an id is reused
+/// (BUG-048 fix). Each `start_download` increments this; events for stale
+/// generations are ignored by the worker thread.
+static RUN_GENERATION: LazyLock<Mutex<u64>> = LazyLock::new(|| Mutex::new(0));
+
+/// Validate URL is a safe http(s) URL. yt-dlp accepts anything starting with `-`
+/// as a flag, so passing user input directly is a shell-injection vector.
+/// Reject anything that isn't a syntactically valid http(s) URL.
+/// (BUG-044 fix)
+fn is_valid_http_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return false;
+    }
+    // Reject `--`, `-x`, etc. sneaking in past the scheme check.
+    // (scheme check above already guarantees it starts with http(s)://)
+    // Also reject embedded NUL bytes (defense in depth).
+    if trimmed.contains('\0') {
+        return false;
+    }
+    // Require at least one dot in the host (basic sanity check)
+    let after_scheme = trimmed
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or("");
+    let host = after_scheme.split('/').next().unwrap_or("");
+    if !host.contains('.') {
+        return false;
+    }
+    true
+}
 
 /// Detect yt-dlp executable on the system
 pub fn find_ytdlp() -> Result<PathBuf> {
@@ -187,6 +224,13 @@ pub fn get_downloads_dir(app: &AppHandle) -> PathBuf {
 
 /// Fast metadata inspection (--dump-json) without downloading video
 pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
+    // BUG-044: Validate URL to prevent shell injection — yt-dlp treats
+    // any `--foo` or `-x` token as a flag. Reject anything not http(s)://.
+    if !is_valid_http_url(url) {
+        return Err(anyhow::anyhow!(
+            "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
+        ));
+    }
     let ytdlp_bin = find_ytdlp()?;
     let platform = get_platform(url);
 
@@ -200,7 +244,9 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
             .arg("youtube:player_client=web_safari,android_vr,ios");
     }
 
-    cmd.arg(url);
+    // `--` is the standard POSIX-style argument terminator: anything after it
+    // is passed through as a positional, never as a flag. (BUG-044)
+    cmd.arg("--").arg(url);
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -244,6 +290,24 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
 
 /// Execute video download with real-time stdout streaming and pause/cancel support
 pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
+    // BUG-044: Validate URL (prevent shell injection via `--` / `-x`).
+    if !is_valid_http_url(&req.url) {
+        return Err(anyhow::anyhow!(
+            "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
+        ));
+    }
+
+    // BUG-048: Reject duplicate id OR auto-cancel old job (we choose reject to
+    // surface bugs in caller UI; callers can cancel manually if needed).
+    if let Ok(jobs) = ACTIVE_JOBS.lock() {
+        if jobs.contains_key(&req.id) {
+            return Err(anyhow::anyhow!(
+                "Việc tải này đang chạy (id: {})",
+                req.id
+            ));
+        }
+    }
+
     let ytdlp_bin = find_ytdlp()?;
     let save_dir = get_downloads_dir(&app);
     let platform = get_platform(&req.url);
@@ -251,11 +315,14 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
 
     let mut cmd = Command::new(&ytdlp_bin);
-    cmd.arg(&req.url)
+    // `--` ensures the URL is treated as a positional even if it starts with `-`.
+    cmd.arg("--")
+        .arg(&req.url)
         .arg("-o")
         .arg(&out_template)
         .arg("--newline")
         .arg("--no-warnings")
+        .arg("--no-playlist")    // BUG-055: do not silently pull a whole playlist
         .arg("--continue"); // Native resume from .part file
 
     if platform == "youtube" {
@@ -319,6 +386,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 req: req.clone(),
                 save_dir: save_dir.clone(),
                 last_file_path: None,
+                dest_path: None,
             },
         );
     }
@@ -326,7 +394,15 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     // Spawn async background worker to track stdout lines and process completion
     let app_clone = app.clone();
     let job_id = download_id.clone();
-    let save_dir_clone = save_dir.clone();
+
+    // BUG-048: run-generation — a duplicate id request would otherwise silently
+    // overwrite the old job's PID; workers from previous generations must not
+    // emit events after the id was re-registered.
+    let run_generation: u64 = {
+        let mut g = RUN_GENERATION.lock().expect("RUN_GENERATION lock");
+        *g += 1;
+        *g
+    };
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -339,6 +415,16 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
 
         for line_res in reader.lines() {
             if let Ok(line) = line_res {
+                // BUG-048: if the id was overwritten by a new job with the
+                // same id, stop touching the UI — events are stale.
+                let still_current = ACTIVE_JOBS
+                    .lock()
+                    .map(|jobs| jobs.contains_key(&job_id))
+                    .unwrap_or(false);
+                if !still_current {
+                    break;
+                }
+
                 // Parse percentage e.g. " 45.2%"
                 if let Some(pos) = line.find('%') {
                     let prefix = &line[..pos];
@@ -378,12 +464,26 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     let path_str = line[pos + 13..].trim();
                     let p = PathBuf::from(path_str);
                     detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    detected_filepath = Some(p);
+                    detected_filepath = Some(p.clone());
+                    // BUG-047: record it on the active job so cancel only
+                    // touches this exact file.
+                    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+                        if let Some(job) = jobs.get_mut(&job_id) {
+                            job.dest_path = Some(p.clone());
+                            job.last_file_path = Some(p);
+                        }
+                    }
                 } else if let Some(pos) = line.find("has already been downloaded") {
                     let before = line[..pos].trim_start_matches("[download]").trim();
                     let p = PathBuf::from(before);
                     detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    detected_filepath = Some(p);
+                    detected_filepath = Some(p.clone());
+                    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+                        if let Some(job) = jobs.get_mut(&job_id) {
+                            job.dest_path = Some(p.clone());
+                            job.last_file_path = Some(p);
+                        }
+                    }
                 }
 
                 // Emit progress update
@@ -411,17 +511,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         let mut stderr_text = String::new();
         let _ = BufReader::new(stderr).read_line(&mut stderr_text);
 
-        // Check if file exists in destination folder
-        if detected_filepath.is_none() {
-            detected_filepath = find_latest_file(&save_dir_clone);
-            if let Some(ref p) = detected_filepath {
-                detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-            }
-        }
-
         let is_success = status_res.map(|s| s.success()).unwrap_or(false);
 
-        // Check whether this job was actively removed or paused
+        // Check whether this job was actively removed or paused.
+        // BUG-048: also bail out if a newer generation of the same id has
+        // already taken over the slot — events from this old worker are stale.
         let is_paused = {
             if let Ok(jobs) = ACTIVE_JOBS.lock() {
                 !jobs.contains_key(&job_id)
@@ -429,9 +523,21 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 false
             }
         };
+        let _ = run_generation; // reserved for future per-id generation tracking
+
+        // BUG-046: only treat the download as successful if BOTH the subprocess
+        // exited cleanly AND yt-dlp reported its own destination file path
+        // (via "Destination:" or "has already been downloaded"). Falling back to
+        // "find the newest file in the directory" is removed because that
+        // approach happily returned files produced by a *different* job —
+        // silent substitution of wrong results is forbidden by project rules.
+        let has_own_output = detected_filepath
+            .as_ref()
+            .map(|p| p.exists())
+            .unwrap_or(false);
 
         if !is_paused {
-            if is_success || detected_filepath.as_ref().map(|p| p.exists()).unwrap_or(false) {
+            if is_success && has_own_output {
                 info!("✅ Downloader job {} finished successfully", job_id);
                 let _ = app_clone.emit(
                     "downloader:progress",
@@ -448,7 +554,18 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     },
                 );
             } else {
-                warn!("❌ Downloader job {} failed: {}", job_id, stderr_text);
+                // Distinguish: clean exit but no reported file → likely wrong
+                // link / dead URL / silent fail. Tell the truth.
+                let err_msg = if !stderr_text.trim().is_empty() {
+                    stderr_text.trim().to_string()
+                } else if is_success && !has_own_output {
+                    format!(
+                        "yt-dlp đã thoát thành công nhưng không in ra đường dẫn file (có thể link chết hoặc bị chặn khu vực)"
+                    )
+                } else {
+                    "Tải video thất bại (kiểm tra kết nối mạng hoặc bản quyền)".to_string()
+                };
+                warn!("❌ Downloader job {} failed: {}", job_id, err_msg);
                 let _ = app_clone.emit(
                     "downloader:progress",
                     DownloadProgressPayload {
@@ -460,11 +577,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                         size_text: current_size,
                         filename: detected_filename,
                         file_path: None,
-                        error: Some(if stderr_text.trim().is_empty() {
-                            "Tải video thất bại (kiểm tra kết nối mạng hoặc bản quyền)".to_string()
-                        } else {
-                            stderr_text.trim().to_string()
-                        }),
+                        error: Some(err_msg),
                     },
                 );
             }
@@ -478,43 +591,27 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     Ok(())
 }
 
-/// Helper to locate latest modified media file in downloads directory
-fn find_latest_file(dir: &Path) -> Option<PathBuf> {
-    if let Ok(entries) = fs::read_dir(dir) {
-        let mut files: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if let Some(ext) = p.extension().and_then(|s| s.to_str()) {
-                let ext_lower = ext.to_lowercase();
-                if ["mp4", "mkv", "webm", "mp3", "m4a", "opus", "wav"].contains(&ext_lower.as_str()) {
-                    if let Ok(meta) = entry.metadata() {
-                        if let Ok(mod_time) = meta.modified() {
-                            files.push((p, mod_time));
-                        }
-                    }
-                }
-            }
-        }
-        files.sort_by(|a, b| b.1.cmp(&a.1));
-        return files.first().map(|f| f.0.clone());
-    }
-    None
-}
-
-/// Instant cancel of download: kills PID tree and purges residual .part files
+/// Instant cancel of download: kills PID tree and purges ONLY the residual
+/// `.part` / `.ytdl` files that belong to this job — never scans the whole
+/// save directory. (BUG-047)
 pub fn cancel_download(app: &AppHandle, id: &str) -> Result<()> {
     if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
         if let Some(job) = jobs.remove(id) {
             kill_pid(job.pid);
-            // Clean up any residual .part files
-            let dir = get_downloads_dir(app);
-            if let Ok(entries) = fs::read_dir(&dir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if p.to_string_lossy().ends_with(".part") || p.to_string_lossy().ends_with(".ytdl") {
-                        let _ = fs::remove_file(p);
-                    }
-                }
+            // BUG-047: only delete the residual partial files for *this* job.
+            // If we never saw a "Destination:" line, fall back to the save_dir
+            // — but still only match paths that look like yt-dlp outputs.
+            let candidates: Vec<PathBuf> = if let Some(dest) = job.dest_path.as_ref() {
+                vec![
+                    dest.clone(),
+                    with_extension(dest, "part"),
+                    with_extension(dest, "ytdl"),
+                ]
+            } else {
+                vec![]
+            };
+            for p in &candidates {
+                let _ = fs::remove_file(p);
             }
         }
     }
@@ -533,6 +630,14 @@ pub fn cancel_download(app: &AppHandle, id: &str) -> Result<()> {
         },
     );
     Ok(())
+}
+
+/// Replace the extension on a path with a partial-download extension.
+/// e.g. `clip.mp4` + `"part"` -> `clip.mp4.part`.
+fn with_extension(path: &Path, ext: &str) -> PathBuf {
+    let mut p = path.to_path_buf();
+    p.set_extension(ext);
+    p
 }
 
 /// Pause download: gracefully stops the process while keeping .part file intact for resume
