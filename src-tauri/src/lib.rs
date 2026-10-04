@@ -138,6 +138,7 @@ pub fn run() {
             open_models_folder,
             select_media_file,
             generate_file_subtitles,
+            is_file_sub_running,
             reveal_in_explorer,
             play_in_vlc,
             dubbing_pick_media_file,
@@ -932,6 +933,11 @@ async fn generate_file_subtitles(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn is_file_sub_running() -> bool {
+    file_sub::is_running()
 }
 
 #[tauri::command]

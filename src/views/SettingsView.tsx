@@ -15,11 +15,16 @@ import {
   type AudioDevice,
   type ModelStatusItem,
   type ModelDownloadProgress,
+  type FileSubProgress,
+  type FileSubResult,
+  type DubbingProgress,
+  type DownloadProgressPayload,
 } from "../lib/tauri";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import DownloaderView from "./DownloaderView";
 import { ChangelogModal } from "./ChangelogModal";
+import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
 import {
   IconFilm, IconClapper, IconMic, IconBox, IconClock, IconPanel,
   IconSparkles, IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
@@ -142,6 +147,37 @@ export default function SettingsView() {
   const [providerTesting, setProviderTesting] = useState<boolean>(false);
   const [providerTestResult, setProviderTestResult] = useState<string | null>(null);
 
+  // Global Process & Activity Tracker (tracks background GPU/AI jobs)
+  const [showProcessCenter, setShowProcessCenter] = useState<boolean>(false);
+  const [globalTasks, setGlobalTasks] = useState<Record<string, AppTaskItem>>({});
+  const [processHistory, setProcessHistory] = useState<AppTaskItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("sublix_process_history_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveToProcessHistory = (item: AppTaskItem) => {
+    setProcessHistory((prev) => {
+      const next = [item, ...prev.slice(0, 49)];
+      try {
+        localStorage.setItem("sublix_process_history_v1", JSON.stringify(next));
+      } catch (err) {
+        console.warn("Failed to persist process history:", err);
+      }
+      return next;
+    });
+  };
+
+  const handleClearProcessHistory = () => {
+    setProcessHistory([]);
+    try {
+      localStorage.removeItem("sublix_process_history_v1");
+    } catch {}
+  };
+
   useEffect(() => {
     loadDevices();
     refreshSetup();
@@ -225,6 +261,245 @@ export default function SettingsView() {
       }));
       if (p.percent === 100 || p.phase === "done") {
         refreshSetup();
+        setGlobalTasks((prev) => {
+          const taskId = `model_${p.name}`;
+          const existing = prev[taskId];
+          if (existing) {
+            saveToProcessHistory({
+              ...existing,
+              status: "completed",
+              percent: 100,
+              stage: "Tải hoàn tất",
+              completedAt: Date.now(),
+            });
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+          }
+          return prev;
+        });
+      } else {
+        setGlobalTasks((prev) => ({
+          ...prev,
+          [`model_${p.name}`]: {
+            id: `model_${p.name}`,
+            type: "model",
+            title: `Mô hình: ${p.name}`,
+            stage: p.phase || "Đang tải dữ liệu...",
+            percent: p.percent,
+            status: "running",
+            startedAt: prev[`model_${p.name}`]?.startedAt || Date.now(),
+            targetTab: "models",
+          },
+        }));
+      }
+    });
+
+    const pFileSub = listen<FileSubProgress>("file_sub:progress", (e) => {
+      const p = e.payload;
+      const taskId = "file_sub_active";
+      if (p.stage === "done") {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          saveToProcessHistory({
+            id: taskId,
+            type: "file_sub",
+            title: existing?.title || "Dự án tạo phụ đề",
+            stage: "Hoàn tất tạo phụ đề",
+            percent: 100,
+            status: "completed",
+            detail: p.message || "Tạo phụ đề thành công",
+            startedAt: existing?.startedAt || Date.now() - 5000,
+            completedAt: Date.now(),
+            targetTab: "file_sub",
+          });
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        });
+      } else if (p.stage === "error") {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          saveToProcessHistory({
+            id: taskId,
+            type: "file_sub",
+            title: existing?.title || "Dự án tạo phụ đề",
+            stage: "Lỗi xử lý",
+            percent: p.percent || 0,
+            status: "error",
+            error: p.message,
+            startedAt: existing?.startedAt || Date.now() - 5000,
+            completedAt: Date.now(),
+            targetTab: "file_sub",
+          });
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        });
+      } else {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          const stageLabels: Record<string, string> = {
+            extracting_audio: "Tách âm thanh FFmpeg",
+            transcribing: "Nhận dạng giọng nói (Whisper)",
+            translating: "Dịch AI (LLM / API)",
+            burning_subtitles: "Ghép phụ đề vào video",
+            packaging: "Đóng gói file kết quả",
+          };
+          const stageText = stageLabels[p.stage] || p.stage;
+          return {
+            ...prev,
+            [taskId]: {
+              id: taskId,
+              type: "file_sub",
+              title: existing?.title || "Dự án tạo phụ đề AI",
+              stage: stageText,
+              percent: Math.min(100, Math.max(0, p.percent)),
+              status: "running",
+              detail: p.message,
+              eta: p.total_segments > 0 ? `${p.current_segment}/${p.total_segments} câu` : undefined,
+              startedAt: existing?.startedAt || Date.now(),
+              targetTab: "file_sub",
+            },
+          };
+        });
+      }
+    });
+
+    const pFileSubComplete = listen<FileSubResult>("file_sub:complete", (e) => {
+      const res = e.payload;
+      setGlobalTasks((prev) => {
+        const keys = Object.keys(prev).filter((k) => k.startsWith("file_sub_"));
+        const next = { ...prev };
+        for (const k of keys) {
+          const existing = prev[k];
+          saveToProcessHistory({
+            ...existing,
+            status: "completed",
+            percent: 100,
+            completedAt: Date.now(),
+            outputPath: res.vi_srt_path || (res.bilingual_srt_path ?? undefined) || res.original_srt_path,
+            detail: `Hoàn tất: ${res.total_segments} câu thoại (${(res.elapsed_seconds || 0).toFixed(1)}s)`,
+          });
+          delete next[k];
+        }
+        return next;
+      });
+    });
+
+    const pDubbing = listen<DubbingProgress>("dubbing:progress", (e) => {
+      const p = e.payload;
+      const taskId = "dubbing_active";
+      if (p.stage === "done" || p.percent >= 100) {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          if (existing) {
+            saveToProcessHistory({
+              ...existing,
+              status: "completed",
+              percent: 100,
+              stage: "Hoàn tất lồng tiếng",
+              completedAt: Date.now(),
+            });
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+          }
+          return prev;
+        });
+      } else if (p.stage === "error") {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          if (existing) {
+            saveToProcessHistory({
+              ...existing,
+              status: "error",
+              error: p.message,
+              completedAt: Date.now(),
+            });
+            const next = { ...prev };
+            delete next[taskId];
+            return next;
+          }
+          return prev;
+        });
+      } else {
+        setGlobalTasks((prev) => ({
+          ...prev,
+          [taskId]: {
+            id: taskId,
+            type: "dubbing",
+            title: "Studio Lồng Tiếng AI",
+            stage: p.message || p.stage,
+            percent: p.percent,
+            status: "running",
+            detail: p.total_items > 0 ? `${p.current_item}/${p.total_items} câu thoại` : undefined,
+            startedAt: prev[taskId]?.startedAt || Date.now(),
+            targetTab: "dubbing",
+          },
+        }));
+      }
+    });
+
+    const pDownloader = listen<DownloadProgressPayload>("downloader:progress", (e) => {
+      const p = e.payload;
+      const taskId = `dl_${p.id}`;
+      if (p.status === "completed") {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          saveToProcessHistory({
+            id: taskId,
+            type: "downloader",
+            title: p.filename || existing?.title || "Tải video",
+            stage: "Tải hoàn tất",
+            percent: 100,
+            status: "completed",
+            outputPath: p.file_path || p.filename || undefined,
+            detail: p.size_text,
+            startedAt: existing?.startedAt || Date.now() - 10000,
+            completedAt: Date.now(),
+            targetTab: "downloader",
+          });
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        });
+      } else if (p.status === "error" || p.status === "cancelled") {
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          saveToProcessHistory({
+            id: taskId,
+            type: "downloader",
+            title: p.filename || existing?.title || "Tải video",
+            stage: p.status === "error" ? "Lỗi tải video" : "Đã hủy",
+            percent: p.percent || 0,
+            status: p.status === "error" ? "error" : "paused",
+            error: p.error || undefined,
+            startedAt: existing?.startedAt || Date.now() - 10000,
+            completedAt: Date.now(),
+            targetTab: "downloader",
+          });
+          const next = { ...prev };
+          delete next[taskId];
+          return next;
+        });
+      } else {
+        setGlobalTasks((prev) => ({
+          ...prev,
+          [taskId]: {
+            id: taskId,
+            type: "downloader",
+            title: p.filename || "Đang tải video",
+            stage: p.status === "downloading" ? "Đang tải..." : "Tạm dừng",
+            percent: p.percent,
+            status: p.status === "paused" ? "paused" : "running",
+            speed: p.speed,
+            eta: p.eta,
+            detail: p.size_text,
+            startedAt: prev[taskId]?.startedAt || Date.now(),
+            targetTab: "downloader",
+          },
+        }));
       }
     });
 
@@ -232,6 +507,10 @@ export default function SettingsView() {
       pStatus.then((u) => u()).catch(() => {});
       pSub.then((u) => u()).catch(() => {});
       pProgress.then((u) => u()).catch(() => {});
+      pFileSub.then((u) => u()).catch(() => {});
+      pFileSubComplete.then((u) => u()).catch(() => {});
+      pDubbing.then((u) => u()).catch(() => {});
+      pDownloader.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -720,6 +999,12 @@ export default function SettingsView() {
   const selectedSttInfo = sttModels.find((m) => m.name === model);
   const selectedTransInfo = transModels.find((m) => m.name === translationModel);
 
+  const runningFileSub = Object.values(globalTasks).find((t) => t.type === "file_sub" && t.status === "running");
+  const runningDubbing = Object.values(globalTasks).find((t) => t.type === "dubbing" && t.status === "running");
+  const runningDownloads = Object.values(globalTasks).filter((t) => t.type === "downloader" && t.status === "running");
+  const runningModels = Object.values(globalTasks).filter((t) => t.type === "model" && t.status === "running");
+  const totalActiveTasksCount = Object.values(globalTasks).filter((t) => t.status === "running").length;
+
   return (
     <div className="app-shell">
       {/* LEFT SIDEBAR */}
@@ -768,7 +1053,13 @@ export default function SettingsView() {
             >
               <IconGlobe className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Tải Video Đa Nền Tảng</span>
-              <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>HOT</span>
+              {runningDownloads.length > 0 ? (
+                <span className="sidebar-process-badge pulse-blue">
+                  ⬇ {runningDownloads.length}
+                </span>
+              ) : (
+                <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>HOT</span>
+              )}
             </button>
 
             <button
@@ -778,6 +1069,11 @@ export default function SettingsView() {
             >
               <IconFilm className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Tạo Phụ Đề File</span>
+              {runningFileSub ? (
+                <span className="sidebar-process-badge pulse-amber">
+                  ⚡ {runningFileSub.percent.toFixed(0)}%
+                </span>
+              ) : null}
             </button>
 
             <button
@@ -787,7 +1083,13 @@ export default function SettingsView() {
             >
               <IconClapper className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Studio Lồng Tiếng AI</span>
-              <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>NEW</span>
+              {runningDubbing ? (
+                <span className="sidebar-process-badge pulse-purple">
+                  🎬 {runningDubbing.percent.toFixed(0)}%
+                </span>
+              ) : (
+                <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>NEW</span>
+              )}
             </button>
 
             <button
@@ -806,6 +1108,11 @@ export default function SettingsView() {
             >
               <IconBox className="sidebar-nav-icon" />
               <span className="sidebar-nav-label">Mô Hình & Cấu Hình</span>
+              {runningModels.length > 0 && (
+                <span className="sidebar-process-badge pulse-blue">
+                  📥 {runningModels.length}
+                </span>
+              )}
             </button>
 
             <button
@@ -898,6 +1205,17 @@ export default function SettingsView() {
           <div className="main-topbar-actions">
             <button
               type="button"
+              className={`topbar-process-btn ${totalActiveTasksCount > 0 ? "has-active" : ""}`}
+              onClick={() => setShowProcessCenter(true)}
+              title="Xem trung tâm toàn bộ tiến trình ứng dụng (Background Jobs)"
+            >
+              <span className={totalActiveTasksCount > 0 ? "process-icon-spin" : ""}>
+                {totalActiveTasksCount > 0 ? "⚡" : "📊"}
+              </span>
+              <span>Tiến Trình ({totalActiveTasksCount})</span>
+            </button>
+            <button
+              type="button"
               className="topbar-changelog-btn"
               onClick={() => setShowChangelog(true)}
               title="Bấm để xem các tính năng mới trong v0.8.0"
@@ -933,7 +1251,15 @@ export default function SettingsView() {
         />
       </div>
 
-      {activeTab === "file_sub" && (
+      {/* PERSISTENT MOUNT: Keep FileSubView mounted across tab switching
+          so user never loses active subtitle jobs, transcripts, or progress */}
+      <div
+        data-tab="file_sub"
+        style={{
+          display: activeTab === "file_sub" ? "block" : "none",
+          height: "100%",
+        }}
+      >
         <FileSubView
           sttModels={sttModels}
           transModels={transModels}
@@ -941,14 +1267,22 @@ export default function SettingsView() {
           defaultTransModel={translationModel}
           initialFilePath={pendingFileSubPath}
         />
-      )}
+      </div>
 
-      {activeTab === "dubbing" && (
+      {/* PERSISTENT MOUNT: Keep DubbingStudioView mounted across tab switching
+          so user never loses active multi-speaker dubbing jobs or audio clips */}
+      <div
+        data-tab="dubbing"
+        style={{
+          display: activeTab === "dubbing" ? "block" : "none",
+          height: "100%",
+        }}
+      >
         <DubbingStudioView
           defaultSourceLang={language}
           initialFilePath={pendingDubbingPath}
         />
-      )}
+      </div>
 
       {activeTab === "live" && (
         <>
@@ -2223,6 +2557,54 @@ export default function SettingsView() {
   )}
         </div>
       </main>
+
+      {/* Floating Background Task Toast (shown when a job is running and user is on another tab) */}
+      {(() => {
+        const primaryTask = Object.values(globalTasks).find(
+          (t) => t.status === "running" && t.targetTab !== activeTab
+        );
+        if (!primaryTask) return null;
+        return (
+          <div
+            className="floating-task-toast"
+            onClick={() => {
+              setActiveTab(primaryTask.targetTab);
+            }}
+            title="Bấm để chuyển ngay đến tab đang xử lý"
+          >
+            <div className="floating-task-toast-icon">⚡</div>
+            <div className="floating-task-toast-info">
+              <div className="floating-task-toast-title">
+                {primaryTask.title} — {primaryTask.percent.toFixed(0)}%
+              </div>
+              <div className="floating-task-toast-stage">{primaryTask.stage}</div>
+            </div>
+            <button
+              type="button"
+              className="floating-task-toast-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowProcessCenter(true);
+              }}
+            >
+              Mở Tiến Trình
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Central Process & Activity Monitor Modal */}
+      <ProcessCenterModal
+        isOpen={showProcessCenter}
+        onClose={() => setShowProcessCenter(false)}
+        activeTasks={Object.values(globalTasks)}
+        historyTasks={processHistory}
+        onNavigateToTab={(tab) => {
+          setActiveTab(tab);
+          setShowProcessCenter(false);
+        }}
+        onClearHistory={handleClearProcessHistory}
+      />
 
       <ChangelogModal
         isOpen={showChangelog}

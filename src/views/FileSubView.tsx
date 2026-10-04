@@ -142,11 +142,23 @@ export default function FileSubView({
     };
   }, []);
 
+  // Check backend running state on mount
+  useEffect(() => {
+    sublix.isFileSubRunning().then((running) => {
+      if (running) {
+        setProcessing(true);
+      }
+    }).catch(() => {});
+  }, []);
+
   // Listen to live progress events from Rust
   useEffect(() => {
     const pProgress = listen<FileSubProgress>("file_sub:progress", (event) => {
       const p = event.payload;
       setProgress(p);
+      if (p.stage !== "done") {
+        setProcessing(true);
+      }
 
       if (p.current_original && p.current_translated) {
         setPreviewList((prev) => {

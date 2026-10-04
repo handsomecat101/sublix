@@ -207,6 +207,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static FILE_SUB_RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// Query whether a file subtitle generation job is currently running
+pub fn is_running() -> bool {
+    FILE_SUB_RUNNING.load(Ordering::SeqCst)
+}
+
 struct FileSubGuard;
 impl Drop for FileSubGuard {
     fn drop(&mut self) {

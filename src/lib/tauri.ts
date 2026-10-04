@@ -287,6 +287,10 @@ export const sublix = {
     });
   },
 
+  async isFileSubRunning(): Promise<boolean> {
+    return await invoke<boolean>("is_file_sub_running");
+  },
+
   async revealInExplorer(path: string): Promise<void> {
     return await invoke("reveal_in_explorer", { path });
   },
