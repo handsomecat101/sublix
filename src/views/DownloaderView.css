@@ -178,6 +178,10 @@
   border: 1px solid rgba(239, 68, 68, 0.4);
   color: #fca5a5;
   font-size: 0.85rem;
+  /* R2-09.4: long URLs / error paths used to push the card wider than the
+     layout; force them to wrap inside the alert box instead. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Metadata Preview */
@@ -570,6 +574,10 @@
 .item-error-msg {
   font-size: 0.78rem;
   color: #f87171;
+  /* R2-09.4: long yt-dlp error strings / Windows paths used to push the
+     card wider than its grid column. Wrap inside the box instead. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Actions Row */

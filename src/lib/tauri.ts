@@ -358,6 +358,13 @@ export const sublix = {
   async downloaderCheckDisk(path?: string): Promise<number> {
     return await invoke<number>("downloader_check_disk", { path });
   },
+
+  // R2-09.7: cheap file existence probe so the pipeline-bridge buttons
+  // (Tạo Phụ Đề / Lồng Tiếng AI) can disable themselves when the file
+  // yt-dlp reported has been deleted or was never actually written.
+  async downloaderFileExists(path: string): Promise<boolean> {
+    return await invoke<boolean>("downloader_file_exists", { path });
+  },
 };
 
 export interface VoicePreset {

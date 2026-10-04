@@ -152,7 +152,8 @@ pub fn run() {
             downloader_cancel,
             downloader_open_folder,
             downloader_reveal_file,
-            downloader_check_disk
+            downloader_check_disk,
+            downloader_file_exists
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -1070,6 +1071,14 @@ fn downloader_check_disk(app: tauri::AppHandle, path: Option<String>) -> Result<
         _ => downloader::get_downloads_dir(&app),
     };
     downloader::disk_free_bytes(&target).map_err(|e| format!("{e:#}"))
+}
+
+/// R2-09.7: lightweight existence check used by the pipeline-bridge
+/// buttons (Tạo Phụ Đề / Lồng Tiếng AI) so they disable themselves when
+/// the file yt-dlp reported is actually missing. Cheap — single syscall.
+#[tauri::command]
+fn downloader_file_exists(path: String) -> bool {
+    downloader::check_file_exists(&path)
 }
 
 

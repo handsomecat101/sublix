@@ -182,6 +182,11 @@ export default function DownloaderView({
   // BUG-053: lock the Start button while a click is in flight so a frantic
   // double-click doesn't spawn two parallel yt-dlp processes.
   const [starting, setStarting] = useState<boolean>(false);
+  // R2-09.7: cache of file-exists check for completed items, so the
+  // pipeline-bridge buttons (Tạo Phụ Đề / Lồng Tiếng AI) can disable
+  // themselves when the file yt-dlp reported has been deleted or was
+  // never actually written. Keyed by item id.
+  const [fileExistsMap, setFileExistsMap] = useState<Record<string, boolean>>({});
   const itemsRef = useRef<DownloadItem[]>(items);
   itemsRef.current = items;
 
@@ -193,6 +198,26 @@ export default function DownloaderView({
       console.warn("Failed to save downloads history:", e);
     }
   }, [items]);
+
+  // R2-09.7: when an item becomes completed with a file path, probe the
+  // disk so the pipeline-bridge buttons can enable/disable correctly.
+  // We only probe NEW (item.id not yet in map) completed-with-path items
+  // — once cached, the result stays until the user removes the row.
+  useEffect(() => {
+    items.forEach((item) => {
+      if (
+        item.status === "completed" &&
+        item.filePath &&
+        !(item.id in fileExistsMap)
+      ) {
+        sublix.downloaderFileExists(item.filePath).then((exists) => {
+          setFileExistsMap((prev) => ({ ...prev, [item.id]: exists }));
+        }).catch(() => {
+          setFileExistsMap((prev) => ({ ...prev, [item.id]: false }));
+        });
+      }
+    });
+  }, [items, fileExistsMap]);
 
   // Listen to progress events from backend
   useEffect(() => {
@@ -268,93 +293,108 @@ export default function DownloaderView({
     // here too because the disabled prop only flips after React commits.
     if (starting) return;
     setStarting(true);
-
-    const targetUrl = url.trim();
-    if (!targetUrl) {
-      setStarting(false);
-      return;
-    }
-
-    // BUG-053 (extended): don't queue the same URL twice while it's still
-    // running. Pasting a link and double-clicking should not create two
-    // parallel jobs.
-    const dup = items.find(
-      (i) => i.url === targetUrl &&
-        (i.status === "downloading" || i.status === "paused" || i.status === "queued")
-    );
-    if (dup) {
-      setInspectError(`URL này đang được tải (mục "${dup.title}"). Bấm Thử lại trên mục đó nếu muốn tiếp tục.`);
-      setStarting(false);
-      return;
-    }
-
-    // BUG-051: refuse to start if the destination volume cannot hold the
-    // estimated file size plus a 1 GB safety margin. Without this check,
-    // a 4K download on an almost-full disk dies partway through with a
-    // cryptic ffmpeg/io error.
-    if (videoInfo?.filesize_approx) {
-      try {
-        const free = await sublix.downloaderCheckDisk();
-        const required = videoInfo.filesize_approx;
-        const SAFETY_MARGIN = 1024 * 1024 * 1024; // 1 GB
-        if (free < required + SAFETY_MARGIN) {
-          const freeGB = (free / 1024 / 1024 / 1024).toFixed(1);
-          const needGB = (required / 1024 / 1024 / 1024).toFixed(1);
-          setInspectError(
-            `Ổ đĩa không đủ dung lượng trống (cần ${needGB} GB + 1 GB dự phòng, còn ${freeGB} GB).`
-          );
-          return;
-        }
-      } catch (e) {
-        // If we can't check disk, don't block — let the user try and surface
-        // the failure naturally if it really is too small.
-        console.warn("disk check failed:", e);
-      }
-    }
-
-    const id = "dl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
-    const title = videoInfo?.title || "Video " + (currentPlatformMeta.label || "Download");
-    const newItem: DownloadItem = {
-      id,
-      url: targetUrl,
-      title,
-      thumbnail: videoInfo?.thumbnail,
-      platform: currentPlatform,
-      format,
-      browserCookies: browserCookie !== "none" ? browserCookie : null,
-      extractSubtitles,
-      status: "downloading",
-      percent: 0,
-      speed: "0 B/s",
-      eta: "--:--",
-      sizeText: "",
-      filename: title,
-      filePath: null,
-      error: null,
-      createdAt: Date.now(),
-    };
-
-    setItems((prev) => [newItem, ...prev]);
-
-    const req: DownloadRequest = {
-      id,
-      url: targetUrl,
-      format,
-      browser_cookies: browserCookie !== "none" ? browserCookie : undefined,
-      extract_subtitles: extractSubtitles,
-      subtitle_langs: ["vi", "en", "ja", "zh"],
-    };
-
+    // R2-02: wrap the whole body in try/finally so EVERY early return path
+    // (empty URL, duplicate, disk-full, network error, etc.) resets the
+    // button. Without this, a disk-full rejection left the button stuck on
+    // "Đang khởi động..." forever.
     try {
-      await sublix.downloaderStart(req);
-    } catch (e: any) {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? { ...item, status: "error", error: formatError(e, "Lỗi tải video") }
-            : item
-        )
+      const targetUrl = url.trim();
+      if (!targetUrl) return;
+
+      // R2-09.8: reject obviously-invalid URLs at the UI layer BEFORE
+      // hitting the backend. Backend still validates, but blocking here
+      // means no spurious "Đang tải..." card + immediate error flicker
+      // when someone pastes `--version` or `javascript:...`.
+      if (
+        !targetUrl.startsWith("http://") &&
+        !targetUrl.startsWith("https://")
+      ) {
+        setInspectError(
+          `Link không hợp lệ: phải bắt đầu bằng http:// hoặc https:// (hiện tại: "${targetUrl.slice(0, 40)}")`
+        );
+        return;
+      }
+
+      // BUG-053 (extended): don't queue the same URL twice while it's still
+      // running. Pasting a link and double-clicking should not create two
+      // parallel jobs.
+      const dup = items.find(
+        (i) => i.url === targetUrl &&
+          (i.status === "downloading" || i.status === "paused" || i.status === "queued")
       );
+      if (dup) {
+        setInspectError(`URL này đang được tải (mục "${dup.title}"). Bấm Thử lại trên mục đó nếu muốn tiếp tục.`);
+        return;
+      }
+
+      // BUG-051: refuse to start if the destination volume cannot hold the
+      // estimated file size plus a 1 GB safety margin. Without this check,
+      // a 4K download on an almost-full disk dies partway through with a
+      // cryptic ffmpeg/io error.
+      if (videoInfo?.filesize_approx) {
+        try {
+          const free = await sublix.downloaderCheckDisk();
+          const required = videoInfo.filesize_approx;
+          const SAFETY_MARGIN = 1024 * 1024 * 1024; // 1 GB
+          if (free < required + SAFETY_MARGIN) {
+            const freeGB = (free / 1024 / 1024 / 1024).toFixed(1);
+            const needGB = (required / 1024 / 1024 / 1024).toFixed(1);
+            setInspectError(
+              `Ổ đĩa không đủ dung lượng trống (cần ${needGB} GB + 1 GB dự phòng, còn ${freeGB} GB).`
+            );
+            return;
+          }
+        } catch (e) {
+          // If we can't check disk, don't block — let the user try and surface
+          // the failure naturally if it really is too small.
+          console.warn("disk check failed:", e);
+        }
+      }
+
+      const id = "dl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+      const title = videoInfo?.title || "Video " + (currentPlatformMeta.label || "Download");
+      const newItem: DownloadItem = {
+        id,
+        url: targetUrl,
+        title,
+        thumbnail: videoInfo?.thumbnail,
+        platform: currentPlatform,
+        format,
+        browserCookies: browserCookie !== "none" ? browserCookie : null,
+        extractSubtitles,
+        status: "downloading",
+        percent: 0,
+        speed: "0 B/s",
+        eta: "--:--",
+        sizeText: "",
+        filename: title,
+        filePath: null,
+        error: null,
+        createdAt: Date.now(),
+      };
+
+      setItems((prev) => [newItem, ...prev]);
+
+      const req: DownloadRequest = {
+        id,
+        url: targetUrl,
+        format,
+        browser_cookies: browserCookie !== "none" ? browserCookie : undefined,
+        extract_subtitles: extractSubtitles,
+        subtitle_langs: ["vi", "en", "ja", "zh"],
+      };
+
+      try {
+        await sublix.downloaderStart(req);
+      } catch (e: any) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? { ...item, status: "error", error: formatError(e, "Lỗi tải video") }
+              : item
+          )
+        );
+      }
     } finally {
       setStarting(false);
     }
@@ -443,7 +483,10 @@ export default function DownloaderView({
   };
 
   const handleClearHistory = () => {
-    setItems((prev) => prev.filter((item) => item.status === "downloading" || item.status === "paused"));
+    // R2-09.6: tooltip says "Xóa các mục đã tải xong" — only drop items that
+    // are actually `completed`. Old code kept everything except active, which
+    // meant cancelled/errored/queued cards piled up and the tooltip lied.
+    setItems((prev) => prev.filter((item) => item.status !== "completed"));
   };
 
   const handleReveal = async (path?: string | null) => {
@@ -571,7 +614,13 @@ export default function DownloaderView({
                   alt={videoInfo.title}
                   className="video-thumb-img"
                   onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
+                    // R2-09.5: hide the WHOLE 140×80 black box on error,
+                    // not just the <img>. The HTML error event does NOT
+                    // bubble through React, so we walk up to the container
+                    // and hide it directly.
+                    const img = e.currentTarget as HTMLElement;
+                    const container = img.closest(".video-thumb-container") as HTMLElement | null;
+                    if (container) container.style.display = "none";
                   }}
                 />
                 {videoInfo.duration && (
@@ -755,7 +804,12 @@ export default function DownloaderView({
                           <div className="item-progress-meta">
                             <span className="percent-text">{item.percent.toFixed(1)}%</span>
                             {item.speed && <span className="speed-text">🚀 {item.speed}</span>}
-                            {item.eta && <span className="eta-text">⏱️ Còn {item.eta}</span>}
+                            {/* R2-09.3: hide ETA when yt-dlp hasn't given one yet
+                                (sentinel "--:--" or empty). Otherwise the bar
+                                shows "⏱️ Còn --:--" which is meaningless UI. */}
+                            {item.eta && item.eta !== "--:--" && (
+                              <span className="eta-text">⏱️ Còn {item.eta}</span>
+                            )}
                             {item.sizeText && <span className="size-text">📦 {item.sizeText}</span>}
                           </div>
                         </div>
@@ -794,7 +848,7 @@ export default function DownloaderView({
                       </button>
                     )}
 
-                    {(item.status === "downloading" || item.status === "paused") && (
+                    {(item.status === "downloading" || item.status === "paused" || item.status === "queued") && (
                       <button
                         type="button"
                         className="item-btn danger"
@@ -805,7 +859,7 @@ export default function DownloaderView({
                       </button>
                     )}
 
-                    {item.status === "error" && (
+                    {(item.status === "error" || item.status === "cancelled") && (
                       <button
                         type="button"
                         className="item-btn primary"
@@ -820,17 +874,28 @@ export default function DownloaderView({
                     {item.status === "completed" && (
                       <div className="pipeline-bridges">
                         {(() => {
-                          // BUG-058 (4): normalise + verify the path before
-                          // letting the user route it to another module.
-                          // Forwarding an empty / non-existent path silently
-                          // breaks the next stage's "no input file" error.
+                          // BUG-058 (4) + R2-09.7: normalise the path AND
+                          // verify the file is still on disk before letting
+                          // the user route it to another module. Forwarding
+                          // an empty / non-existent path silently breaks the
+                          // next stage's "no input file" error.
                           const safe = item.filePath
                             ? item.filePath.replace(/\//g, "\\").trim()
                             : "";
-                          const pathReady = safe.length > 0;
-                          const tip = pathReady
-                            ? ""
-                            : "Đường dẫn file chưa sẵn sàng (hãy thử Mở Thư Mục Download)";
+                          const fileExists = fileExistsMap[item.id];
+                          // Three states:
+                          //   - safe empty    → path not yet known
+                          //   - fileExists === undefined → still probing
+                          //   - fileExists === false → file is gone
+                          //   - fileExists === true  → ready
+                          const pathReady = safe.length > 0 && fileExists === true;
+                          const tip = !safe
+                            ? "Đường dẫn file chưa sẵn sàng (hãy thử Mở Thư Mục Download)"
+                            : fileExists === undefined
+                            ? "Đang kiểm tra file trên ổ đĩa…"
+                            : fileExists === false
+                            ? `File không còn trên đĩa: ${safe}`
+                            : "";
                           return (
                             <>
                               <button

@@ -10,7 +10,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
 
@@ -133,43 +133,19 @@ fn is_valid_http_url(url: &str) -> bool {
     true
 }
 
-/// Detect yt-dlp executable. Search order (BUG-054):
-///   1. User-configured absolute path (`user_path`)
+/// Detect yt-dlp executable. Search order (R2-06 — corrected from BUG-054):
+///   1. `$PATH` (via `where yt-dlp` on Windows / `which yt-dlp` elsewhere)
 ///   2. Same directory as the running `sublix.exe` (portable bundle)
-///   3. `$PATH` (via `where yt-dlp` on Windows / `which yt-dlp` elsewhere)
-///   4. Fallback: bare `"yt-dlp.exe"` so spawn still has a chance if the
-///      binary is on PATH at exec time.
+///   3. User-configured absolute path (`user_path`) — LAST so the user can
+///      override when neither PATH nor the bundled copy is right (e.g. dev
+///      build pointing at a fork), but the user's machine default wins on a
+///      vanilla install.
 ///
 /// Hardcoded machine paths like `C:\Program Files\AI Automation\...`
 /// are forbidden — they break every other machine and conflict with
 /// `BUG-001`/`BUG-017`.
 pub fn find_ytdlp(user_path: Option<&str>) -> Result<PathBuf> {
-    // 1. User-configured path
-    if let Some(p) = user_path.map(str::trim).filter(|s| !s.is_empty()) {
-        let path = PathBuf::from(p);
-        if path.exists() {
-            return Ok(path);
-        } else {
-            return Err(anyhow::anyhow!(
-                "Đường dẫn yt-dlp cấu hình thủ công không tồn tại: {}",
-                path.display()
-            ));
-        }
-    }
-
-    // 2. Same dir as `sublix.exe` (portable bundle case)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            for name in &["yt-dlp.exe", "yt-dlp"] {
-                let p = dir.join(name);
-                if p.exists() {
-                    return Ok(p);
-                }
-            }
-        }
-    }
-
-    // 3. System PATH via `where` (Windows) or `which` fallback
+    // 1. System PATH via `where` (Windows) or `which` fallback
     #[cfg(windows)]
     {
         if let Ok(output) = Command::new("where")
@@ -200,6 +176,31 @@ pub fn find_ytdlp(user_path: Option<&str>) -> Result<PathBuf> {
                     }
                 }
             }
+        }
+    }
+
+    // 2. Same dir as `sublix.exe` (portable bundle case)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for name in &["yt-dlp.exe", "yt-dlp"] {
+                let p = dir.join(name);
+                if p.exists() {
+                    return Ok(p);
+                }
+            }
+        }
+    }
+
+    // 3. User-configured path (LAST — escape hatch for forks / dev builds)
+    if let Some(p) = user_path.map(str::trim).filter(|s| !s.is_empty()) {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            return Ok(path);
+        } else {
+            return Err(anyhow::anyhow!(
+                "Đường dẫn yt-dlp cấu hình thủ công không tồn tại: {}",
+                path.display()
+            ));
         }
     }
 
@@ -469,6 +470,39 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     let save_dir = get_downloads_dir(&app);
     let platform = get_platform(&req.url);
 
+    // R2-05: reserve the slot in ACTIVE_JOBS BEFORE spawning. The previous
+    // implementation did check → spawn → insert as three separate mutex
+    // acquisitions, which left a tiny window where two rapid duplicate-id
+    // callers (e.g. hammering "Tiếp tục" on a paused item) could both pass
+    // the check, both spawn, and the second `jobs.insert` would silently
+    // overwrite the first PID. Now we do atomic check + reserve in ONE
+    // lock; the real PID / job handle get filled in below after spawn.
+    {
+        let mut jobs = ACTIVE_JOBS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("ACTIVE_JOBS lock poisoned: {}", e))?;
+        if jobs.contains_key(&req.id) {
+            return Err(anyhow::anyhow!(
+                "Việc tải này đang chạy (id: {})",
+                req.id
+            ));
+        }
+        jobs.insert(
+            req.id.clone(),
+            ActiveJob {
+                pid: 0, // placeholder; real pid filled in after spawn
+                req: req.clone(),
+                save_dir: save_dir.clone(),
+                last_file_path: None,
+                dest_path: None,
+                #[cfg(windows)]
+                job_handle: None,
+                #[cfg(not(windows))]
+                job_handle: None,
+            },
+        );
+    }
+
     let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
 
     let mut cmd = Command::new(&ytdlp_bin);
@@ -596,19 +630,23 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
 
     let download_id = req.id.clone();
 
-    // Register active job
+    // R2-05: update the placeholder slot reserved BEFORE spawn with the real
+    // PID and Job Object handle. If something went wrong and the slot is no
+    // longer ours (e.g. the user cancelled between reserve and spawn — race
+    // is benign because cancel removes the entry, and we just skip the update
+    // and let the worker thread report the orphan state).
     if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-        jobs.insert(
-            download_id.clone(),
-            ActiveJob {
-                pid,
-                req: req.clone(),
-                save_dir: save_dir.clone(),
-                last_file_path: None,
-                dest_path: None,
-                job_handle: job_handle_raw,
-            },
-        );
+        if let Some(job) = jobs.get_mut(&download_id) {
+            job.pid = pid;
+            #[cfg(windows)]
+            {
+                job.job_handle = job_handle_raw;
+            }
+            #[cfg(not(windows))]
+            {
+                job.job_handle = job_handle_raw;
+            }
+        }
     }
 
     // Spawn async background worker to track stdout lines and process completion
@@ -617,16 +655,54 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
 
     // BUG-048: run-generation — a duplicate id request would otherwise silently
     // overwrite the old job's PID; workers from previous generations must not
-    // emit events after the id was re-registered.
-    let run_generation: u64 = {
-        let mut g = RUN_GENERATION.lock().expect("RUN_GENERATION lock");
-        *g += 1;
-        *g
-    };
+    // emit events after the id was re-registered. (R2-05: replaced `.expect()`
+    // with graceful `unwrap_or(0)` so a poisoned mutex doesn't crash the app —
+    // generation tracking degrades to "treat everything as gen 0".)
+    let _run_generation: u64 = RUN_GENERATION
+        .lock()
+        .map(|mut g| {
+            *g += 1;
+            *g
+        })
+        .unwrap_or(0);
+
+    // R2-07 (b): drain stderr in a dedicated background thread INSTEAD OF
+    // waiting for child exit then reading stderr at the end. The previous
+    // code did `child.wait()` and THEN `BufReader::new(stderr).read_to_string`
+    // — if yt-dlp emitted enough stderr to fill the OS pipe buffer (Windows
+    // default ~4 KB), the child would block writing stderr until our reader
+    // drained it, but we were blocked waiting for the child → deadlock.
+    // Symptoms: download hangs partway, "freeze" reported, eventually
+    // times out with no error. Spawn the reader thread FIRST, share the
+    // accumulated text via Arc<Mutex<String>>, join + collect at the end.
+    let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let stderr_buf_for_reader = Arc::clone(&stderr_buf);
+    let stderr_handle = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = BufReader::new(stderr).read_to_string(&mut text);
+        if let Ok(mut buf) = stderr_buf_for_reader.lock() {
+            *buf = text;
+        } else if let Err(poisoned) = stderr_buf_for_reader.lock() {
+            // Recover even from a poisoned mutex — the buffer is still valid.
+            *poisoned.into_inner() = text;
+        }
+    });
+
+    // Move the stderr handle + shared buffer into the stdout worker so it
+    // can join + collect after the child has exited.
+    let stderr_handle_for_worker = stderr_handle;
+    let stderr_buf_for_worker = stderr_buf;
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
         let mut last_percent: f32 = -1.0; // sentinel so first emit always fires
+        // R2-07 (a): track the LAST EMITTED percent separately from
+        // `last_percent` (the latest computed one). The previous code did
+        // `(last_percent - (-1.0)).abs()` which was always ≥1.0, so the
+        // throttle "percent changed ≥0.5%" gate was effectively disabled
+        // and we emitted a UI event for every stdout line — flooding the
+        // frontend and making the progress bar jittery.
+        let mut last_emitted_percent: f32 = -1.0;
         let mut current_speed = String::new();
         let mut current_eta = String::new();
         let mut current_size = String::new();
@@ -690,7 +766,31 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 };
 
                 // Destination file detection (unchanged)
-                if let Some(pos) = line.find("Destination: ") {
+                // R2-03: yt-dlp prints Destination for INTERMEDIATE files
+                // (the separate video + audio streams used to assemble a 4K/1440p
+                // download), then prints "[Merger] Merging formats into \"…\""
+                // for the actual muxed output. The Merger line replaces
+                // detected_filepath with the real final file — without this,
+                // BUG-046's "is_success && has_own_output" check fires with
+                // the intermediate path (which gets deleted by the merger)
+                // and the download is wrongly reported as failed.
+                if let Some(pos) = line.find("[Merger] Merging formats into \"") {
+                    let marker = "[Merger] Merging formats into \"";
+                    let start = pos + marker.len();
+                    if let Some(end_rel) = line[start..].find('"') {
+                        let path_str = line[start..start + end_rel].trim();
+                        let p = PathBuf::from(path_str);
+                        detected_filename =
+                            p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        detected_filepath = Some(p.clone());
+                        if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
+                            if let Some(job) = jobs.get_mut(&job_id) {
+                                job.dest_path = Some(p.clone());
+                                job.last_file_path = Some(p);
+                            }
+                        }
+                    }
+                } else if let Some(pos) = line.find("Destination: ") {
                     let path_str = line[pos + 13..].trim();
                     let p = PathBuf::from(path_str);
                     detected_filename = p.file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -724,7 +824,9 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 // progress line every few hundred ms; the UI can't keep up
                 // and it makes the progress bar jittery. Emit when (a) the
                 // percent moved at least 0.5% OR (b) 250 ms have passed.
-                let percent_delta = (last_percent - (-1.0)).abs();
+                // (R2-07 (a): compare against `last_emitted_percent`, not the
+                // sentinel -1.0 — the old code never actually throttled.)
+                let percent_delta = (last_percent - last_emitted_percent).abs();
                 let pct_changed = pct.is_some() && percent_delta >= 0.5;
                 let time_elapsed = last_emit.elapsed();
                 if pct_changed || time_elapsed.as_millis() >= 250 {
@@ -742,6 +844,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                             error: None,
                         },
                     );
+                    last_emitted_percent = last_percent;
                     last_emit = std::time::Instant::now();
                 }
             }
@@ -750,13 +853,17 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         // Wait for child process exit status
         let status_res = child.wait();
 
-        // BUG-056 (3): read the *entire* stderr buffer, not just one line.
-        // yt-dlp can emit several warnings (cookie, geo, private video, …)
-        // and surfacing only the first one is a UX regression. Trim and
-        // cap at ~2 KB so a runaway log doesn't blow up the payload.
-        let mut stderr_text = String::new();
-        let _ = BufReader::new(stderr).read_to_string(&mut stderr_text);
-        stderr_text = stderr_text.trim().to_string();
+        // R2-07 (b): wait for the dedicated stderr reader thread to finish
+        // (it's been draining in parallel since spawn, so by now it's
+        // already done — the join is cheap). Then collect the accumulated
+        // text from the shared buffer. Trim and cap at ~2 KB so a runaway
+        // log doesn't blow up the payload.
+        let _ = stderr_handle_for_worker.join();
+        let stderr_text_raw = match stderr_buf_for_worker.lock() {
+            Ok(s) => s.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
+        let mut stderr_text = stderr_text_raw.trim().to_string();
         if stderr_text.len() > 2048 {
             stderr_text.truncate(2048);
             stderr_text.push_str("\n…(đã cắt bớt)");
@@ -774,7 +881,6 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 false
             }
         };
-        let _ = run_generation; // reserved for future per-id generation tracking
 
         // BUG-046: only treat the download as successful if BOTH the subprocess
         // exited cleanly AND yt-dlp reported its own destination file path
@@ -909,12 +1015,18 @@ pub fn cancel_download(app: &AppHandle, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Replace the extension on a path with a partial-download extension.
-/// e.g. `clip.mp4` + `"part"` -> `clip.mp4.part`.
+/// Append a partial-download extension to a path.
+/// e.g. `clip.mp4` + `"part"` -> `clip.mp4.part`,
+///      `clip.mp4` + `"ytdl"` -> `clip.mp4.ytdl`.
+/// (R2-04: the previous version used `Path::set_extension`, which REPLACES
+/// the extension. That meant `clip.mp4` + `"part"` collapsed to `clip.part`
+/// and we never found the leftover partial download on cancel. yt-dlp keeps
+/// the full original filename and appends the suffix.)
 fn with_extension(path: &Path, ext: &str) -> PathBuf {
-    let mut p = path.to_path_buf();
-    p.set_extension(ext);
-    p
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".");
+    s.push(ext);
+    PathBuf::from(s)
 }
 
 /// Pause download: gracefully stops the process while keeping .part file intact for resume
@@ -1059,6 +1171,17 @@ pub fn open_downloads_folder(app: &AppHandle) -> Result<()> {
         cmd.spawn()?;
     }
     Ok(())
+}
+
+/// R2-09.7: lightweight existence check so the UI can disable the
+/// "Tạo Phụ Đề / Lồng Tiếng" pipeline-bridge buttons when the file yt-dlp
+/// reported has since been deleted (or was never really written).
+/// Cheap on Windows — just a `GetFileAttributesExW` underneath.
+pub fn check_file_exists(path_str: &str) -> bool {
+    if path_str.trim().is_empty() {
+        return false;
+    }
+    Path::new(path_str).exists()
 }
 
 /// Reveal downloaded file in Windows Explorer
