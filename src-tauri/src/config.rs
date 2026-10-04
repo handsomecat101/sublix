@@ -92,6 +92,10 @@ pub struct AppConfig {
     /// Ollama model name (default: "smtek/qwen3.8-27b:q4_k_m")
     #[serde(default = "default_ollama_model")]
     pub ollama_model: String,
+
+    /// UI theme: "cinema" | "studio" | "light" | "vibrant".
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_auto() -> String {
@@ -154,6 +158,10 @@ fn default_ollama_model() -> String {
     "smtek/qwen3.8-27b:q4_k_m".to_string()
 }
 
+fn default_theme() -> String {
+    "cinema".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -174,6 +182,7 @@ impl Default for AppConfig {
             minimax_model: default_minimax_model(),
             ollama_url: default_ollama_url(),
             ollama_model: default_ollama_model(),
+            theme: default_theme(),
         }
     }
 }

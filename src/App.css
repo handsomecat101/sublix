@@ -1,3 +1,169 @@
+/* Sublix — Design tokens & theme system
+   4 themes: cinema (default) | studio | light | vibrant
+   Switch by setting data-theme on <html>. */
+
+:root {
+  --font-ui: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  /* Cinema — "rạp phim thu nhỏ": warm near-black + projector amber */
+  --bg: #12100e;
+  --bg-side: #191511;
+  --bg-top: rgba(25, 21, 17, 0.72);
+  --bg-card: rgba(244, 236, 222, 0.03);
+  --bg-card-2: rgba(244, 236, 222, 0.02);
+  --bg-inset: rgba(0, 0, 0, 0.32);
+  --line: rgba(244, 236, 222, 0.1);
+  --line-soft: rgba(244, 236, 222, 0.055);
+  --hover: rgba(244, 236, 222, 0.055);
+  --t1: #f6f0e4;
+  --t2: rgba(246, 240, 228, 0.8);
+  --t3: rgba(246, 240, 228, 0.56);
+  --t4: rgba(246, 240, 228, 0.38);
+  --ac: #e8a33d;
+  --ac-2: #b4561f;
+  --ac-txt: #f3c57c;
+  --ac-br: rgba(232, 163, 61, 0.4);
+  --ac-soft: rgba(232, 163, 61, 0.14);
+  --grad-ac: linear-gradient(135deg, #e8a33d, #b4561f);
+  --grad-ac-soft: linear-gradient(90deg, rgba(232, 163, 61, 0.18), rgba(180, 86, 31, 0.08));
+  --grad-progress: linear-gradient(90deg, #e8a33d, #f0d9a8);
+  --ok: #5ebd6b;
+  --ok-soft: rgba(94, 189, 107, 0.1);
+  --ok-br: rgba(94, 189, 107, 0.3);
+  --ok-txt: #a3ddaa;
+  --warn: #e4b33c;
+  --warn-soft: rgba(228, 179, 60, 0.1);
+  --warn-br: rgba(228, 179, 60, 0.28);
+  --warn-txt: #f2d98c;
+  --dang: #e05b4b;
+  --dang-soft: rgba(224, 91, 75, 0.1);
+  --dang-br: rgba(224, 91, 75, 0.3);
+  --dang-txt: #f2a99f;
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-btn: 0 2px 8px rgba(180, 86, 31, 0.35);
+}
+
+[data-theme="studio"] {
+  /* Phòng dựng: cool graphite + signal teal */
+  --bg: #0d1013;
+  --bg-side: #12161c;
+  --bg-top: rgba(18, 22, 28, 0.72);
+  --bg-card: rgba(222, 232, 240, 0.03);
+  --bg-card-2: rgba(222, 232, 240, 0.02);
+  --bg-inset: rgba(0, 0, 0, 0.35);
+  --line: rgba(222, 232, 240, 0.1);
+  --line-soft: rgba(222, 232, 240, 0.055);
+  --hover: rgba(222, 232, 240, 0.055);
+  --t1: #dfe8f0;
+  --t2: rgba(223, 232, 240, 0.78);
+  --t3: rgba(223, 232, 240, 0.55);
+  --t4: rgba(223, 232, 240, 0.36);
+  --ac: #2dd4bf;
+  --ac-2: #0ea5e9;
+  --ac-txt: #7fe3d4;
+  --ac-br: rgba(45, 212, 191, 0.4);
+  --ac-soft: rgba(45, 212, 191, 0.13);
+  --grad-ac: linear-gradient(135deg, #2dd4bf, #0ea5e9);
+  --grad-ac-soft: linear-gradient(90deg, rgba(45, 212, 191, 0.16), rgba(14, 165, 233, 0.08));
+  --grad-progress: linear-gradient(90deg, #2dd4bf, #7dd3fc);
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.1);
+  --ok-br: rgba(52, 211, 153, 0.3);
+  --ok-txt: #86efac;
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.1);
+  --warn-br: rgba(251, 191, 36, 0.28);
+  --warn-txt: #fde68a;
+  --dang: #f87171;
+  --dang-soft: rgba(248, 113, 113, 0.1);
+  --dang-br: rgba(248, 113, 113, 0.3);
+  --dang-txt: #fecaca;
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-btn: 0 2px 8px rgba(45, 212, 191, 0.3);
+}
+
+[data-theme="light"] {
+  /* Sáng nhẹ: cream ấm + hổ phách cháy */
+  --bg: #f4efe4;
+  --bg-side: #ece5d5;
+  --bg-top: rgba(244, 239, 228, 0.85);
+  --bg-card: #fffdf8;
+  --bg-card-2: rgba(36, 31, 23, 0.03);
+  --bg-inset: rgba(36, 31, 23, 0.05);
+  --line: rgba(36, 31, 23, 0.13);
+  --line-soft: rgba(36, 31, 23, 0.07);
+  --hover: rgba(36, 31, 23, 0.055);
+  --t1: #241f17;
+  --t2: rgba(36, 31, 23, 0.78);
+  --t3: rgba(36, 31, 23, 0.56);
+  --t4: rgba(36, 31, 23, 0.4);
+  --ac: #b45309;
+  --ac-2: #92400e;
+  --ac-txt: #92400e;
+  --ac-br: rgba(180, 83, 9, 0.35);
+  --ac-soft: rgba(180, 83, 9, 0.1);
+  --grad-ac: linear-gradient(135deg, #b45309, #92400e);
+  --grad-ac-soft: linear-gradient(90deg, rgba(180, 83, 9, 0.12), rgba(146, 64, 14, 0.05));
+  --grad-progress: linear-gradient(90deg, #b45309, #d9a441);
+  --ok: #15803d;
+  --ok-soft: rgba(21, 128, 61, 0.09);
+  --ok-br: rgba(21, 128, 61, 0.25);
+  --ok-txt: #15803d;
+  --warn: #b45309;
+  --warn-soft: rgba(180, 83, 9, 0.09);
+  --warn-br: rgba(180, 83, 9, 0.25);
+  --warn-txt: #92400e;
+  --dang: #b91c1c;
+  --dang-soft: rgba(185, 28, 28, 0.08);
+  --dang-br: rgba(185, 28, 28, 0.25);
+  --dang-txt: #b91c1c;
+  --shadow-1: 0 4px 16px rgba(36, 31, 23, 0.12);
+  --shadow-btn: 0 2px 8px rgba(146, 64, 14, 0.25);
+}
+
+[data-theme="vibrant"] {
+  /* Vibrant (theo đề xuất skill ui-ux-pro-max): rose engagement + blue CTA */
+  --bg: #fff1f2;
+  --bg-side: #ffe4e6;
+  --bg-top: rgba(255, 241, 242, 0.85);
+  --bg-card: #ffffff;
+  --bg-card-2: rgba(76, 5, 25, 0.03);
+  --bg-inset: rgba(76, 5, 25, 0.05);
+  --line: rgba(76, 5, 25, 0.12);
+  --line-soft: rgba(76, 5, 25, 0.06);
+  --hover: rgba(76, 5, 25, 0.05);
+  --t1: #4c0519;
+  --t2: rgba(76, 5, 25, 0.78);
+  --t3: rgba(76, 5, 25, 0.55);
+  --t4: rgba(76, 5, 25, 0.4);
+  --ac: #e11d48;
+  --ac-2: #be123c;
+  --ac-txt: #be123c;
+  --ac-br: rgba(225, 29, 72, 0.32);
+  --ac-soft: rgba(225, 29, 72, 0.09);
+  --grad-ac: linear-gradient(135deg, #e11d48, #2563eb);
+  --grad-ac-soft: linear-gradient(90deg, rgba(225, 29, 72, 0.1), rgba(37, 99, 235, 0.06));
+  --grad-progress: linear-gradient(90deg, #e11d48, #2563eb);
+  --ok: #15803d;
+  --ok-soft: rgba(21, 128, 61, 0.09);
+  --ok-br: rgba(21, 128, 61, 0.25);
+  --ok-txt: #15803d;
+  --warn: #b45309;
+  --warn-soft: rgba(180, 83, 9, 0.09);
+  --warn-br: rgba(180, 83, 9, 0.25);
+  --warn-txt: #92400e;
+  --dang: #dc2626;
+  --dang-soft: rgba(220, 38, 38, 0.08);
+  --dang-br: rgba(220, 38, 38, 0.25);
+  --dang-txt: #b91c1c;
+  --shadow-1: 0 4px 16px rgba(76, 5, 25, 0.12);
+  --shadow-btn: 0 2px 8px rgba(225, 29, 72, 0.25);
+}
+
 /* Global app styles */
 
 * {
@@ -12,24 +178,60 @@ body,
   height: 100%;
 }
 
-.overlay-root {
-  overflow: hidden !important;
+body {
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--t1);
+  overflow: hidden;
 }
 
-::-webkit-scrollbar {
+/* Only the overlay window blocks scrolling; other views scroll normally */
+.overlay-root {
+  overflow: hidden !important;
+  scrollbar-width: none;
+}
+
+.overlay-root::-webkit-scrollbar {
   display: none;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: #0f1115;
-  color: #e5e7eb;
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--t4);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 button {
   font-family: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 2px;
 }
 
 .app-loading {
@@ -37,7 +239,18 @@ button {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: #0f1115;
-  color: rgba(255, 255, 255, 0.5);
+  background: var(--bg);
+  color: var(--t3);
   font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

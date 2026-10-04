@@ -72,6 +72,7 @@ export interface AppConfig {
   translation_provider?: "local" | "ollama" | "minimax" | string;
   minimax_api_key?: string;
   minimax_model?: string;
+  theme?: string;
   ollama_url?: string;
   ollama_model?: string;
 }

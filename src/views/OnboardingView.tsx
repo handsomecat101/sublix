@@ -314,10 +314,10 @@ function StepCard({
           </div>
         )}
         {state === "error" && message && (
-          <div className="onb-step-error">⚠ {message}</div>
+          <div className="onb-error-msg">⚠ {message}</div>
         )}
         {state === "skipped" && (
-          <div className="onb-step-skipped">Skipped — you can download later in Settings.</div>
+          <div className="onb-skip-msg">Skipped — you can download later in Settings.</div>
         )}
       </div>
       <div className="onb-step-state">

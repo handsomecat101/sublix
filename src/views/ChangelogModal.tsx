@@ -1,0 +1,226 @@
+import React, { useEffect } from "react";
+import "./ChangelogModal.css";
+
+interface ChangelogModalProps {
+  currentVersion: string;
+  isOpen: boolean;
+  onClose: () => void;
+  currentTheme?: string;
+  onThemeChange?: (theme: string) => void;
+}
+
+interface VersionEntry {
+  version: string;
+  date: string;
+  title: string;
+  isCurrent?: boolean;
+  highlights: {
+    category: string;
+    icon: string;
+    items: string[];
+  }[];
+}
+
+const CHANGELOG_DATA: VersionEntry[] = [
+  {
+    version: "v0.7.0",
+    date: "04/10/2026",
+    title: "Đại Tu Giao Diện Cinema Studio & AI Dubbing Đa Vai",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Giao Diện & Hệ Thống 4 Theme (UI/UX Pro Max)",
+        icon: "🎨",
+        items: [
+          "Bổ sung 4 phong cách giao diện: Cinema (Rạp phim ấm), Studio (Phòng dựng than chì), Light (Sáng dịu nhẹ), Vibrant (Tương phản cao hiện đại).",
+          "Bộ chọn Theme nhanh với nút chuyển đổi tức thì, tự động ghi nhớ cấu hình khi khởi động lại.",
+          "Chuẩn hóa toàn bộ màu sắc sang Design Tokens (CSS Variables), thanh cuộn siêu mỏng tinh tế.",
+          "Sửa triệt để lỗi khóa cuộn màn hình (BUG-006) và chuẩn hóa thứ tự dòng phụ đề mẫu (BUG-024).",
+        ],
+      },
+      {
+        category: "Studio Lồng Tiếng AI (AI Dubbing Engine)",
+        icon: "🎬",
+        items: [
+          "Tách giọng gốc sạch 100% bằng Demucs v4 CUDA GPU, giữ nguyên vẹn âm thanh nền BGM và hiệu ứng SFX.",
+          "Tự động nhận diện phân vai diễn viên qua kịch bản ngữ cảnh MiniMax M3.",
+          "Hỗ trợ bộ giọng đọc Neural siêu tự nhiên (Edge-TTS) và tự động co giãn tốc độ (FFmpeg atempo) khớp từng câu thoại.",
+        ],
+      },
+      {
+        category: "Sửa Lỗi Kỹ Thuật Trọng Yếu (Sprint 1)",
+        icon: "🛠️",
+        items: [
+          "Chuyển toàn bộ đường dẫn biên dịch tĩnh sang phân giải động runtime (app_base_dir), chống lỗi portable.",
+          "Khắc phục giới hạn FFmpeg amix 32 inputs bằng thuật toán gộp luồng phân cấp chunk 28.",
+          "Vá lỗ hổng rò rỉ bộ nhớ Promise EventListener trong React khi chuyển tab (BUG-007).",
+          "Bộ lọc ảo giác Whisper thông minh (giữ lại các câu chào phim tự nhiên) và xuất phụ đề SRT UTF-8 chuẩn xác.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.6.0",
+    date: "04/10/2026",
+    title: "Nâng Cấp CUDA RTX 3090 & Local LLM Translation",
+    highlights: [
+      {
+        category: "Tăng Tốc Phần Cứng & AI Models 2026",
+        icon: "⚡",
+        items: [
+          "Tích hợp Whisper Large-v3-Turbo Q8 (874MB) chạy trực tiếp trên GPU CUDA cho độ chính xác cao.",
+          "Tích hợp mô hình dịch thuật tự nhiên Qwen3-4B-Instruct-2507 GGUF với bộ nhớ ngữ cảnh hội thoại 2 dòng cuốn chiếu.",
+          "Tách biệt thư mục DLL tránh xung đột ggml giữa whisper-server và llama-server, độ trễ dịch siêu tốc ~120ms.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.5.0",
+    date: "03/10/2026",
+    title: "WASAPI Loopback Zero-Gap & Smart VAD",
+    highlights: [
+      {
+        category: "Thu Âm Luồng & Nhận Diện Thời Gian Thực",
+        icon: "🎙️",
+        items: [
+          "Xây dựng pipeline thu âm Producer-Consumer 2 luồng liên tục không ngắt quãng (0ms audio gap).",
+          "Thuật toán Smart VAD (Voice Activity Detection) ngắt câu thông minh sau 360ms ngưng nói.",
+          "Hỗ trợ dịch song ngữ Anh-Việt, Nhật-Việt, Trung-Việt trực tiếp từ phim và video đang phát.",
+        ],
+      },
+    ],
+  },
+];
+
+export const ChangelogModal: React.FC<ChangelogModalProps> = ({
+  currentVersion,
+  isOpen,
+  onClose,
+  currentTheme = "cinema",
+  onThemeChange,
+}) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="changelog-overlay" onClick={onClose}>
+      <div
+        className="changelog-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        {/* Header */}
+        <div className="changelog-header">
+          <div className="changelog-header-left">
+            <span className="changelog-badge-icon">🚀</span>
+            <div>
+              <div className="changelog-title-row">
+                <h2 className="changelog-title">Nhật Ký Cập Nhật & Tính Năng Mới</h2>
+                <span className="changelog-version-tag">Phiên bản {currentVersion}</span>
+              </div>
+              <p className="changelog-subtitle">
+                Xem lại những cải tiến, tính năng mới và các bản vá lỗi được bổ sung trong Sublix.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="changelog-close-btn"
+            onClick={onClose}
+            aria-label="Đóng"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Quick Theme Switcher Bar inside Modal */}
+        {onThemeChange && (
+          <div className="changelog-theme-bar">
+            <span className="changelog-theme-label">🎭 Đổi nhanh Theme ứng dụng:</span>
+            <div className="changelog-theme-chips">
+              {[
+                { id: "cinema", label: "🎬 Rạp phim", dot: "#e8a33d" },
+                { id: "studio", label: "🎛 Phòng dựng", dot: "#2dd4bf" },
+                { id: "light", label: "☀ Sáng nhẹ", dot: "#b45309" },
+                { id: "vibrant", label: "🌸 Vibrant", dot: "#e11d48" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`changelog-theme-chip ${currentTheme === t.id ? "active" : ""}`}
+                  onClick={() => onThemeChange(t.id)}
+                >
+                  <span className="changelog-dot" style={{ background: t.dot }} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Scrollable Content Body */}
+        <div className="changelog-body">
+          {CHANGELOG_DATA.map((entry) => (
+            <div
+              key={entry.version}
+              className={`changelog-version-card ${entry.isCurrent ? "is-current" : ""}`}
+            >
+              <div className="changelog-version-card-header">
+                <div className="changelog-version-meta">
+                  <span className="changelog-version-number">{entry.version}</span>
+                  {entry.isCurrent && (
+                    <span className="changelog-current-pill">Bản Đang Dùng</span>
+                  )}
+                  <span className="changelog-release-date">📅 {entry.date}</span>
+                </div>
+                <h3 className="changelog-entry-title">{entry.title}</h3>
+              </div>
+
+              <div className="changelog-sections">
+                {entry.highlights.map((sec, idx) => (
+                  <div key={idx} className="changelog-section">
+                    <h4 className="changelog-section-title">
+                      <span className="sec-icon">{sec.icon}</span> {sec.category}
+                    </h4>
+                    <ul className="changelog-item-list">
+                      {sec.items.map((item, itemIdx) => (
+                        <li key={itemIdx} className="changelog-item">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="changelog-footer">
+          <span className="changelog-footer-brand">
+            Sublix — Local AI Subtitle & Dubbing Studio
+          </span>
+          <button
+            type="button"
+            className="changelog-ack-btn"
+            onClick={onClose}
+          >
+            Đã Hiểu & Tiếp Tục Dùng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

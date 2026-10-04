@@ -18,6 +18,7 @@ import {
 } from "../lib/tauri";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
+import { ChangelogModal } from "./ChangelogModal";
 import "./SettingsView.css";
 
 type Status =
@@ -105,6 +106,8 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<"file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("file_sub");
   const [historySearch, setHistorySearch] = useState<string>("");
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
+  const [theme, setTheme] = useState<string>("cinema");
+  const [showChangelog, setShowChangelog] = useState<boolean>(false);
 
   // Translation provider settings (MiniMax Cloud / Ollama Local / Embedded GGUF)
   const [transProvider, setTransProvider] = useState<"local" | "ollama" | "minimax">("local");
@@ -145,6 +148,10 @@ export default function SettingsView() {
       if (cfg.overlay_font_size) setFontSize(cfg.overlay_font_size);
       setShowOriginal(cfg.overlay_show_original ?? true);
       setClickThrough(cfg.overlay_click_through ?? false);
+      if (cfg.theme) {
+        setTheme(cfg.theme);
+        document.documentElement.dataset.theme = cfg.theme;
+      }
       if (cfg.translation_provider === "local" || cfg.translation_provider === "ollama" || cfg.translation_provider === "minimax") {
         setTransProvider(cfg.translation_provider);
       }
@@ -244,6 +251,19 @@ export default function SettingsView() {
       overlay_show_original: nextShowOrig,
       overlay_click_through: nextClickThrough,
     };
+    setFullConfig(updated);
+    try {
+      await sublix.saveConfig(updated);
+    } catch (e) {
+      console.error("saveConfig failed:", e);
+    }
+  }
+
+  async function handleThemeChange(next: string) {
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    if (!fullConfig) return;
+    const updated: AppConfig = { ...fullConfig, theme: next };
     setFullConfig(updated);
     try {
       await sublix.saveConfig(updated);
@@ -621,7 +641,15 @@ export default function SettingsView() {
             <div className="sidebar-brand-icon">⚡</div>
             <div className="sidebar-brand-text">
               <span className="sidebar-brand-title">
-                Sublix <span className="sidebar-version-badge">v{appInfo?.version ?? "0.6.0"}</span>
+                Sublix{" "}
+                <button
+                  type="button"
+                  className="sidebar-version-badge clickable"
+                  onClick={() => setShowChangelog(true)}
+                  title="Bấm để xem chi tiết cập nhật & tính năng mới (Changelog)"
+                >
+                  v{appInfo?.version ?? "0.7.0"}
+                </button>
               </span>
               <span className="sidebar-brand-slogan">Local AI Subtitle Studio</span>
             </div>
@@ -725,6 +753,13 @@ export default function SettingsView() {
           >
             📁 Mở Thư Mục Models
           </button>
+          <button
+            type="button"
+            className="sidebar-quick-btn changelog-btn"
+            onClick={() => setShowChangelog(true)}
+          >
+            📜 Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.7.0"})
+          </button>
         </div>
       </aside>
 
@@ -741,11 +776,21 @@ export default function SettingsView() {
             {activeTab === "overlay" && "🎨 Tùy Biến Giao Diện & Kiểu Dáng Cửa Sổ Phụ Đề"}
           </div>
 
-          <div className={`main-topbar-status status-${status.kind}`}>
-            {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch..." : "✓ Sẵn sàng")}
-            {status.kind === "working" && `⏳ ${status.message}`}
-            {status.kind === "error" && `⚠ ${status.message}`}
-            {status.kind === "success" && `✓ ${status.message}`}
+          <div className="main-topbar-actions">
+            <button
+              type="button"
+              className="topbar-changelog-btn"
+              onClick={() => setShowChangelog(true)}
+              title="Bấm để xem các tính năng mới trong v0.7.0"
+            >
+              ✨ v{appInfo?.version ?? "0.7.0"} Changelog
+            </button>
+            <div className={`main-topbar-status status-${status.kind}`}>
+              {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch..." : "✓ Sẵn sàng")}
+              {status.kind === "working" && `⏳ ${status.message}`}
+              {status.kind === "error" && `⚠ ${status.message}`}
+              {status.kind === "success" && `✓ ${status.message}`}
+            </div>
           </div>
         </div>
 
@@ -1896,6 +1941,31 @@ export default function SettingsView() {
   {activeTab === "overlay" && (
     <>
       <section className="settings-section">
+        <h2>🎭 Giao Diện (Theme)</h2>
+        <p className="settings-help">
+          Chuyển đổi phong cách màu sắc của toàn bộ ứng dụng. Lưu ý: cửa sổ phụ đề nổi luôn giữ nền tối để đọc rõ trên mọi video.
+        </p>
+        <div className="theme-switch">
+          {([
+            { id: "cinema", label: "🎬 Rạp phim", dot: "#e8a33d" },
+            { id: "studio", label: "🎛 Phòng dựng", dot: "#2dd4bf" },
+            { id: "light", label: "☀ Sáng nhẹ", dot: "#b45309" },
+            { id: "vibrant", label: "🌸 Vibrant", dot: "#e11d48" },
+          ]).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`theme-chip ${theme === t.id ? "active" : ""}`}
+              onClick={() => handleThemeChange(t.id)}
+            >
+              <span className="theme-chip-dot" style={{ background: t.dot }} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-section">
         <h2>🎨 Tùy Biến Cửa Sổ Phụ Đề Nổi (Overlay Window)</h2>
         <p className="settings-help">
           Cửa sổ phụ đề luôn nổi trên cùng màn hình (Always-on-top), bạn có thể thoải mái kéo thả cửa sổ đến vị trí mong muốn trên video.
@@ -1988,11 +2058,6 @@ export default function SettingsView() {
             marginTop: 8,
           }}
         >
-          {showOriginal && (
-            <div style={{ fontSize: Math.max(12, fontSize - 6), color: "#94a3b8" }}>
-              これは字幕のサンプルテキストです。
-            </div>
-          )}
           <div
             style={{
               fontSize: fontSize,
@@ -2003,12 +2068,25 @@ export default function SettingsView() {
           >
             Đây là đoạn phụ đề mẫu hiển thị trên màn hình của bạn.
           </div>
+          {showOriginal && (
+            <div style={{ fontSize: Math.max(12, fontSize - 6), color: "#94a3b8" }}>
+              これは字幕のサンプルテキストです。
+            </div>
+          )}
         </div>
       </section>
     </>
   )}
         </div>
       </main>
+
+      <ChangelogModal
+        isOpen={showChangelog}
+        onClose={() => setShowChangelog(false)}
+        currentVersion={`v${appInfo?.version ?? "0.7.0"}`}
+        currentTheme={theme}
+        onThemeChange={handleThemeChange}
+      />
     </div>
   );
 }

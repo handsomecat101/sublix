@@ -368,4 +368,39 @@ sublix/
 
 ---
 
-*Last updated: 2026-09-27 — v0.5.0 Ready*
+## Session 6 — 2026-10-04 (UI Theme System + Design Refresh)
+
+### What was done
+- Redesigned UI around a token-based theme system (`src/App.css`): 4 switchable themes — **cinema** (default: warm cinema dark + projector amber), **studio** (graphite + teal), **light** (cream + burnt amber), **vibrant** (rose + blue, the `ui-ux-pro-max` skill recommendation).
+- Rewrote all view CSS (`SettingsView`, `FileSubView`, `OnboardingView`, `OverlayView`) onto `var(--...)` tokens. Overlay keeps its own always-dark palette (must stay readable over any video).
+- Theme switcher UI in "Overlay Customizer" tab, persisted via new `theme` field in `AppConfig` (`config.rs` + `tauri.ts`).
+- Fixed BUG-006 (scroll clipping: onboarding now scrolls, only overlay blocks scrolling, overlay subtitles wrap instead of clipping) and part of BUG-024 (onboarding CSS class collisions, preview line order now matches overlay, topbar ellipsis, visible thin scrollbars).
+- Reference skill: `nextlevelbuilder/ui-ux-pro-max-skill` (design-system generator + pre-delivery checklist).
+
+### Verification
+- ✅ `npm run build` (tsc + vite) pass
+- ✅ `cargo check` pass
+- ⏳ Visual check on running app pending — switch through all 4 themes to confirm
+
+### Lessons learned
+- ui-ux-pro-max is landing-page oriented; its "Vibrant" output needed adapting for a desktop studio tool — kept as one theme option, not the default
+- Hardcoded colors across many CSS files make theming expensive; tokens from day 1 avoid the rewrite
+
+## Session 7 — 2026-10-04 (Version Bump v0.7.0 + In-App Interactive Changelog)
+
+### What was done
+- **Version Bumped to `v0.7.0`**: Synchronized across `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (window titles & product version), and `package.json`.
+- **In-App Interactive Changelog (`ChangelogModal.tsx` & `ChangelogModal.css`)**:
+  - Clickable version badges in sidebar brand header (`v0.7.0`), sidebar footer (`📜 Nhật Ký Cập Nhật`), and topbar (`✨ v0.7.0 Changelog`).
+  - Full modal display detailing new features across v0.7.0, v0.6.0, and v0.5.0.
+  - Embedded quick Theme Switcher inside the changelog modal (`🎬 Cinema`, `🎛 Studio`, `☀ Light`, `🌸 Vibrant`) allowing instant preview of theme switching directly from the changelog.
+- **Compiled Release Binary**: Rebuilt `src-tauri/target/release/sublix.exe` with new embedded assets, updating the desktop shortcut executable.
+
+### Verification
+- ✅ `npm run build` (tsc + vite) PASS (878ms, 0 errors).
+- ✅ `cargo check` PASS (24.10s, 0 errors).
+- ✅ `cargo build --release` compiled to release binary.
+
+---
+
+*Last updated: 2026-10-04 — v0.7.0 Release (UI Theme System + In-App Changelog)*

@@ -9,6 +9,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 14:24 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Hoàn thiện và đóng gói bản phát hành chính thức **`v0.7.0`**: Bump version toàn hệ thống (`Cargo.toml`, `tauri.conf.json`, `package.json`), tích hợp popup `ChangelogModal.tsx` tương tác 1-click có sẵn bộ chuyển Theme tức thì, hiển thị rõ badge `v0.7.0` trên sidebar header/footer & topbar. Đã biên dịch bản release `sublix.exe` mới nhất cho Desktop shortcut.
+- **Files đã sửa/tạo:** `src/views/ChangelogModal.tsx`, `src/views/ChangelogModal.css`, `src/views/SettingsView.tsx`, `src/views/SettingsView.css`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `DEV-LOG.md`.
+- **Trạng thái Verify:** `npm run build` PASS (878ms), `cargo check` PASS (24s), `cargo build --release` PASS. Sẵn sàng cho người dùng bấm shortcut Desktop trải nghiệm ngay.
+
+---
+
 ### 2026-10-04 13:43 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Hoàn thành fix Đợt 1 cho 8 lỗi quan trọng từ đợt audit của CommandCode: `BUG-001` (runtime path resolution), `BUG-005` (amix phân cấp chunk 28 + script filter), `BUG-006` (gỡ overflow:hidden toàn cục), `BUG-007` (leak promise listener React), `BUG-008` & `BUG-024` (SRT timestamp thật + BOM UTF-8), `BUG-013` (atomic config + backup .bak), `BUG-015` (Whisper hallucination), `BUG-023` (parse audio duration an toàn UTF-8).

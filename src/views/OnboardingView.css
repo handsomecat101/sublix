@@ -2,17 +2,18 @@
 
 .onb-root {
   min-height: 100vh;
-  background: #0f1115;
-  color: #e5e7eb;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: var(--font-ui);
   padding: 32px 40px 40px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
 }
 
 .onb-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--line-soft);
   padding-bottom: 16px;
 }
 
@@ -20,7 +21,7 @@
   margin: 0;
   font-size: 26px;
   font-weight: 700;
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  background: var(--grad-ac);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -29,7 +30,7 @@
 .onb-tagline {
   margin: 6px 0 0;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--t3);
 }
 
 .onb-step {
@@ -37,21 +38,21 @@
   grid-template-columns: 40px 1fr auto auto;
   align-items: center;
   gap: 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
   padding: 16px 18px;
   transition: border-color 0.2s, background 0.2s;
 }
 
 .onb-step-error {
-  border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.05);
+  border-color: var(--dang-br);
+  background: var(--dang-soft);
 }
 
 .onb-step-done {
-  border-color: rgba(74, 222, 128, 0.2);
-  background: rgba(74, 222, 128, 0.04);
+  border-color: var(--ok-br);
+  background: var(--ok-soft);
 }
 
 .onb-step-skipped {
@@ -78,36 +79,36 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #e5e7eb;
+  color: var(--t1);
 }
 
 .onb-step-size {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: var(--t4);
+  font-family: var(--font-mono);
 }
 
 .onb-step-desc {
   margin: 4px 0 6px;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--t3);
 }
 
-.onb-step-error {
+.onb-error-msg {
   margin-top: 6px;
   padding: 6px 10px;
   font-size: 11px;
-  color: #fecaca;
-  background: rgba(248, 113, 113, 0.1);
+  color: var(--dang-txt);
+  background: var(--dang-soft);
   border-radius: 4px;
-  border: 1px solid rgba(248, 113, 113, 0.2);
+  border: 1px solid var(--dang-br);
 }
 
-.onb-step-skipped {
+.onb-skip-msg {
   margin-top: 4px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--t4);
   font-style: italic;
 }
 
@@ -117,11 +118,11 @@
   min-width: 24px;
 }
 
-.onb-state-pending { color: rgba(255, 255, 255, 0.3); }
-.onb-state-downloading { color: #fbbf24; animation: onb-pulse 1.2s ease-in-out infinite; }
-.onb-state-done { color: #4ade80; }
-.onb-state-error { color: #f87171; }
-.onb-state-skipped { color: rgba(255, 255, 255, 0.4); }
+.onb-state-pending { color: var(--t4); }
+.onb-state-downloading { color: var(--warn); animation: onb-pulse 1.2s ease-in-out infinite; }
+.onb-state-done { color: var(--ok); }
+.onb-state-error { color: var(--dang); }
+.onb-state-skipped { color: var(--t4); }
 
 @keyframes onb-pulse {
   0%, 100% { opacity: 1; }
@@ -144,13 +145,13 @@
 
 .onb-model-picker label {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--t3);
 }
 
 .onb-select {
-  background: rgba(0, 0, 0, 0.3);
-  color: #e5e7eb;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-inset);
+  color: var(--t1);
+  border: 1px solid var(--line);
   border-radius: 5px;
   padding: 4px 8px;
   font-size: 12px;
@@ -159,8 +160,8 @@
   max-width: 280px;
 }
 
-.onb-select:hover { border-color: rgba(255, 255, 255, 0.2); }
-.onb-select:focus { outline: none; border-color: #60a5fa; }
+.onb-select:hover { border-color: var(--t4); }
+.onb-select:focus { outline: none; border-color: var(--ac); }
 .onb-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Indeterminate progress bar */
@@ -173,17 +174,18 @@
 
 .onb-progress-bar {
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--line);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
 }
 
 .onb-progress-bar-indeterminate {
-  background: linear-gradient(90deg,
-    rgba(96, 165, 250, 0.1) 0%,
-    rgba(96, 165, 250, 0.6) 50%,
-    rgba(96, 165, 250, 0.1) 100%
+  background: var(--ac-soft);
+  background-image: linear-gradient(90deg,
+    var(--ac-soft) 0%,
+    var(--ac) 50%,
+    var(--ac-soft) 100%
   );
   background-size: 200% 100%;
   animation: onb-progress-slide 1.5s linear infinite;
@@ -196,7 +198,7 @@
 
 .onb-progress-message {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--t3);
   font-style: italic;
 }
 
@@ -210,51 +212,50 @@
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: filter 0.15s, background 0.15s, color 0.15s;
 }
 
 .onb-btn-primary {
   padding: 9px 18px;
-  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  background: var(--grad-ac);
   color: white;
 }
 
 .onb-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
+  filter: brightness(0.93);
 }
 
 .onb-btn-primary:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.5);
+  background: var(--bg-card-2);
+  color: var(--t4);
 }
 
 .onb-btn-secondary {
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-2);
+  color: var(--t2);
+  border: 1px solid var(--line);
   font-size: 12px;
 }
 
 .onb-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: var(--hover);
+  color: var(--t1);
 }
 
 .onb-btn-link {
   padding: 4px 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--t4);
   font-size: 11px;
   text-decoration: underline;
-  text-decoration-color: rgba(255, 255, 255, 0.2);
+  text-decoration-color: var(--line);
 }
 
 .onb-btn-link:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--t2);
 }
 
 .onb-actions {
@@ -269,7 +270,7 @@
   margin-top: auto;
   padding-top: 16px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--t4);
   text-align: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--line-soft);
 }

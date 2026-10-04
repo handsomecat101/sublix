@@ -1,4 +1,5 @@
-/* Overlay window — dark, minimal, draggable */
+/* Overlay window — always dark (must stay readable over any video),
+   minimal, draggable. Independent of the app theme on purpose. */
 
 .overlay-root {
   width: 100%;
@@ -9,11 +10,12 @@
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   color: white;
   overflow: hidden;
   user-select: none;
   cursor: default;
+  position: relative;
 }
 
 /* Top drag handle — thin bar, only this is draggable */
@@ -61,7 +63,7 @@
   box-shadow: 0 0 10px rgba(74, 222, 128, 0.9);
 }
 
-/* Audio VU meter — animated bar at the very top of the overlay, shows capture activity */
+/* Audio VU meter — animated bar at the very top of the overlay */
 .overlay-vu {
   position: absolute;
   top: 0;
@@ -100,36 +102,16 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overlay-version {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   margin-right: 4px;
-}
-
-.overlay-close-btn {
-  width: 18px;
-  height: 18px;
-  background: rgba(255, 80, 80, 0.15);
-  border: 1px solid rgba(255, 80, 80, 0.3);
-  color: rgba(255, 180, 180, 0.9);
-  font-size: 14px;
-  font-weight: bold;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin-left: 2px;
-}
-
-.overlay-close-btn:hover {
-  background: rgba(255, 80, 80, 0.35);
-  color: white;
 }
 
 .overlay-hint-btn {
@@ -148,47 +130,57 @@
   filter: brightness(1.1);
 }
 
-/* Subtitle text — main content */
+/* Subtitle text — main content (long lines must wrap, never clip) */
 .overlay-subtitle {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 24px;
+  padding: 6px 24px;
   text-align: center;
   min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  scrollbar-width: none;
 }
 
-/* Translated (main, prominent) — shown in translated mode */
+.overlay-subtitle::-webkit-scrollbar {
+  display: none;
+}
+
+/* Translated (main, prominent) */
 .overlay-translated {
   font-size: 20px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.98);
-  margin-bottom: 4px;
-  line-height: 1.3;
+  margin-bottom: 2px;
+  line-height: 1.25;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
   text-align: center;
+  max-width: 100%;
 }
 
-/* Original (secondary, smaller) — only shown when translated mode is on */
+/* Original (secondary, smaller) — only shown in bilingual mode */
 .overlay-original {
   font-size: 13px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.55);
-  line-height: 1.3;
+  line-height: 1.25;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   text-align: center;
   font-style: italic;
-  margin-bottom: 2px;
+  margin-bottom: 0;
+  max-width: 100%;
 }
 
 .overlay-meta {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);
   text-align: center;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  margin-top: 4px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  margin-top: 2px;
 }
 
 .overlay-empty {
@@ -203,7 +195,7 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.3);
   font-style: normal;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
 /* Close button — top right corner, OUTSIDE drag handle, well-separated */
@@ -226,7 +218,7 @@
   justify-content: center;
   padding: 0;
   z-index: 10;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .overlay-close-btn:hover {
