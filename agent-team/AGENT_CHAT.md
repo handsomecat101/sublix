@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 02:40 - Antigravity
+- **Loại:** `@handoff` (Bàn giao ca trực cho Agent Debugger kế nhiệm)
+- **Tóm tắt:** Đã đóng gói hoàn tất E2E AI Dubbing Studio & fix `BUG-006`. Đã xuất 2 video mẫu trong `test_dubbing_input/`. Hệ thống sẵn sàng 100% cho bạn vào debug/kiểm thử UI/UX và các trường hợp biên.
+- **Lệnh test tái hiện ngay:** `cargo run --example test_dubbing_e2e --manifest-path src-tauri/Cargo.toml`
+- **Files trọng tâm cần xem:** `agent-team/ISSUE_LOG.md` (Quick Index), `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`, `src-tauri/src/dubbing/mod.rs`, `src/views/DubbingStudioView.tsx`.
+- **Nhiệm vụ bàn giao:** 1) Kiểm tra phản hồi UI DubbingStudio khi import video thực tế; 2) Test khả năng xử lý file không có thoại hoặc phụ đề rỗng; 3) Kiểm tra edge-case khi mạng chập chờn với Edge-TTS.
+
+---
+
 ### 2026-10-04 02:25 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
@@ -51,21 +60,3 @@
 - **Files đã sửa/tạo:** `AGENTS.md`, `SOUL.md`, `PROJECT_STATE.md`, `AGENT_CHAT.md`, `ISSUE_LOG.md`, `GOVERNANCE.md`, `QUY_TRINH.md`.
 - **Verify/Deploy:** Đã sync đầy đủ tài liệu, sẵn sàng cho các Agent ở IDE khác (Claude Code, Cursor, Codex) vào nhận task.
 - **Việc tiếp theo:** Sẵn sàng chuyển giao hoặc bắt đầu triển khai Phase 1 của AI Dubbing (`TSK-011`: Demucs ONNX).
-
----
-
-### 2026-10-04 01:11 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Đã cấu hình gateway riêng cho key `sk-cp-` (`https://api.minimax.io/v1`), cờ `reasoning_split: true`, model mặc định `MiniMax-M3`, bóc tách thẻ `<think>` và thêm nút chọn nhanh model trên UI (`BUG-003`, `BUG-004`).
-- **Files đã sửa:** `src-tauri/src/config.rs`, `src-tauri/src/translate/server.rs`, `src/views/SettingsView.tsx`.
-- **Verify/Deploy:** Bản Release `sublix.exe` build thành công, test dịch Anh/Nhật/Trung ra văn phong điện ảnh cực mượt, đã push commit `37f83df`.
-- **Việc tiếp theo:** Tiếp tục chuẩn hóa quy trình làm việc đa Agent.
-
----
-
-### 2026-10-04 00:55 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Soạn thảo hoàn chỉnh tài liệu Đặc tả Kỹ thuật Lồng Tiếng AI Đa Vai SOTA (`SPEC_AI_DUBBING_AND_LLM.md`) và triển khai 3 Provider dịch thuật (MiniMax, Ollama 27B, Local GGUF).
-- **Files đã sửa:** `docs/SPEC_AI_DUBBING_AND_LLM.md`, `src-tauri/src/translate/mod.rs`, `src/lib/tauri.ts`.
-- **Verify/Deploy:** Release build `sublix.exe` hoàn tất, commit `2d5f497` đã push lên GitHub.
-- **Việc tiếp theo:** Nhận key MiniMax từ anh Tuấn để cấu hình thực tế.

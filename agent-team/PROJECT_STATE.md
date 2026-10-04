@@ -13,8 +13,8 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.6.0` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
-| **Git Commit** | `37f83df` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟡 Active (Đang hoàn thiện hệ thống Multi-Agent & chuẩn bị Lồng tiếng AI) |
+| **Git Commit** | `66af825` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟡 Active (E2E Dubbing Studio hoàn tất, sẵn sàng bàn giao Agent debug) |
 
 ---
 
