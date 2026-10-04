@@ -38,6 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Cloud OpenAI API remains as opt-in for users who want better quality.
 reqwest = { version = "0.12", features = ["blocking", "stream", "json", "multipart"] }  # Download binary + model + JSON for llama-server HTTP + multipart for whisper-server
 zip = { version = "2", default-features = false, features = ["deflate"] }  # Extract whisper.cpp release zip
+url = "2"  # BUG-058: parse URL host for accurate platform matching
 tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
 
 # === M4: Overlay UI — Win32 API for click-through + always-on-top ===

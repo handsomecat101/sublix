@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{LazyLock, Mutex};
@@ -41,6 +41,10 @@ pub struct DownloadRequest {
     pub url: String,
     pub format: String, // "1080p" | "720p" | "480p" | "360p" | "audio-mp3" | "audio-m4a" | "max"
     pub browser_cookies: Option<String>, // "edge" | "chrome" | "firefox" | "none"
+    /// Optional path to a Netscape-format `cookies.txt`. Used as a fallback
+    /// when `--cookies-from-browser` fails (BUG-057).
+    #[serde(default)]
+    pub cookies_file: Option<String>,
     pub extract_subtitles: bool,
     pub subtitle_langs: Option<Vec<String>>,
 }
@@ -105,21 +109,43 @@ fn is_valid_http_url(url: &str) -> bool {
     true
 }
 
-/// Detect yt-dlp executable on the system
-pub fn find_ytdlp() -> Result<PathBuf> {
-    let candidates = [
-        PathBuf::from(r"C:\Program Files\AI Automation\bin\yt-dlp.exe"),
-        PathBuf::from(r"C:\Program Files\AI Automation\bin\yt-dlp"),
-        PathBuf::from(r"C:\Program Files (x86)\AI Automation\bin\yt-dlp.exe"),
-    ];
-
-    for c in &candidates {
-        if c.exists() {
-            return Ok(c.clone());
+/// Detect yt-dlp executable. Search order (BUG-054):
+///   1. User-configured absolute path (`user_path`)
+///   2. Same directory as the running `sublix.exe` (portable bundle)
+///   3. `$PATH` (via `where yt-dlp` on Windows / `which yt-dlp` elsewhere)
+///   4. Fallback: bare `"yt-dlp.exe"` so spawn still has a chance if the
+///      binary is on PATH at exec time.
+///
+/// Hardcoded machine paths like `C:\Program Files\AI Automation\...`
+/// are forbidden — they break every other machine and conflict with
+/// `BUG-001`/`BUG-017`.
+pub fn find_ytdlp(user_path: Option<&str>) -> Result<PathBuf> {
+    // 1. User-configured path
+    if let Some(p) = user_path.map(str::trim).filter(|s| !s.is_empty()) {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            return Ok(path);
+        } else {
+            return Err(anyhow::anyhow!(
+                "Đường dẫn yt-dlp cấu hình thủ công không tồn tại: {}",
+                path.display()
+            ));
         }
     }
 
-    // Try finding via `where` on Windows
+    // 2. Same dir as `sublix.exe` (portable bundle case)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for name in &["yt-dlp.exe", "yt-dlp"] {
+                let p = dir.join(name);
+                if p.exists() {
+                    return Ok(p);
+                }
+            }
+        }
+    }
+
+    // 3. System PATH via `where` (Windows) or `which` fallback
     #[cfg(windows)]
     {
         if let Ok(output) = Command::new("where")
@@ -138,45 +164,71 @@ pub fn find_ytdlp() -> Result<PathBuf> {
             }
         }
     }
+    #[cfg(not(windows))]
+    {
+        if let Ok(output) = Command::new("which").arg("yt-dlp").output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = stdout.lines().next() {
+                    let p = PathBuf::from(first_line.trim());
+                    if p.exists() {
+                        return Ok(p);
+                    }
+                }
+            }
+        }
+    }
 
-    // Default fallback
-    Ok(PathBuf::from("yt-dlp.exe"))
+    // 4. Last-resort fallback — spawn by name, rely on PATH at exec time.
+    Ok(PathBuf::from(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" }))
 }
 
-/// Platform detector matching regex patterns from hermes-downloader
+/// Platform detector matching regex patterns from hermes-downloader.
+/// BUG-058: match against the *host* of the parsed URL, not raw substring
+/// search — otherwise `u.contains("x.com")` happily matches
+/// `https://www.fox.com/some-clip`.
 pub fn get_platform(url: &str) -> &'static str {
     let u = url.trim().to_lowercase();
-    if u.contains("youtube.com") || u.contains("youtu.be") {
+    let host = url::Url::parse(&u)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(|h| h.to_lowercase()))
+        .unwrap_or_default();
+
+    // Exact host match (no substring search — `facebook.com` won't false-match
+    // `evil-facebook.com.scam.io`).
+    let host_matches = |domain: &str| host == domain || host.ends_with(&format!(".{domain}"));
+
+    if host_matches("youtube.com") || host_matches("youtu.be") {
         return "youtube";
     }
-    if u.contains("tiktok.com") {
+    if host_matches("tiktok.com") {
         return "tiktok";
     }
-    if u.contains("douyin.com") {
+    if host_matches("douyin.com") {
         return "douyin";
     }
-    if u.contains("bilibili.com") {
+    if host_matches("bilibili.com") {
         return "bilibili";
     }
-    if u.contains("facebook.com") || u.contains("fb.watch") || u.contains("fb.com") {
+    if host_matches("facebook.com") || host_matches("fb.watch") || host_matches("fb.com") {
         return "facebook";
     }
-    if u.contains("twitter.com") || u.contains("x.com") {
+    if host_matches("twitter.com") || host_matches("x.com") {
         return "twitter";
     }
-    if u.contains("instagram.com") {
+    if host_matches("instagram.com") {
         return "instagram";
     }
-    if u.contains("vimeo.com") {
+    if host_matches("vimeo.com") {
         return "vimeo";
     }
-    if u.contains("soundcloud.com") {
+    if host_matches("soundcloud.com") {
         return "soundcloud";
     }
-    if u.contains("reddit.com") {
+    if host_matches("reddit.com") {
         return "reddit";
     }
-    if u.contains("twitch.tv") {
+    if host_matches("twitch.tv") {
         return "twitch";
     }
     "generic_video"
@@ -203,10 +255,19 @@ pub fn build_format_args(format: &str) -> Vec<String> {
         "480p" => vec!["-f".to_string(), "best[height<=480]/best".to_string()],
         "720p" => vec!["-f".to_string(), "best[height<=720]/best".to_string()],
         "1080p" => vec!["-f".to_string(), "best[height<=1080]/best".to_string()],
-        "1440p" | "2k" => vec!["-f".to_string(), "best[height<=1440]/best".to_string()],
+        "1440p" | "2k" => vec![
+            "-f".to_string(),
+            // BUG-058: separate video + audio streams so a 1440p result
+            // is genuinely 1440p; YouTube's pre-muxed stream tops out at
+            // 1080p on most videos.
+            "bestvideo[height<=1440]+bestaudio/bestvideo[height<=1080]+bestaudio/best".to_string(),
+        ],
         "4k" | "2160p" => vec![
             "-f".to_string(),
-            "best[height>=2160]/best[height>=1440]/best".to_string(),
+            // BUG-058: same fix as 1440p — only way to get a real 4K file
+            // out of yt-dlp is to grab video+audio separately and let
+            // `--merge-output-format mp4` mux them.
+            "bestvideo[height>=2160]+bestaudio/bestvideo[height>=1440]+bestaudio/best".to_string(),
         ],
         _ => vec![
             "-S".to_string(),
@@ -226,8 +287,10 @@ pub fn get_downloads_dir(app: &AppHandle) -> PathBuf {
     dir
 }
 
-/// Fast metadata inspection (--dump-json) without downloading video
-pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
+/// Fast metadata inspection (--dump-json) without downloading video.
+/// BUG-057: hard 60s watchdog — if yt-dlp hangs on a private/region-locked
+/// URL the inspector used to lock the UI forever.
+pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
     // BUG-044: Validate URL to prevent shell injection — yt-dlp treats
     // any `--foo` or `-x` token as a flag. Reject anything not http(s)://.
     if !is_valid_http_url(url) {
@@ -235,28 +298,40 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
             "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
         ));
     }
-    let ytdlp_bin = find_ytdlp()?;
+    let cfg = crate::config::AppConfig::load(app);
+    let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
     let platform = get_platform(url);
+    let url_owned = url.to_string();
 
-    let mut cmd = Command::new(&ytdlp_bin);
-    cmd.arg("--dump-json")
-        .arg("--no-playlist")
-        .arg("--no-warnings");
+    let (tx, rx) = std::sync::mpsc::channel::<Result<std::process::Output>>();
+    std::thread::spawn(move || {
+        let mut cmd = Command::new(&ytdlp_bin);
+        cmd.arg("--dump-json")
+            .arg("--no-playlist")
+            .arg("--no-warnings");
 
-    if platform == "youtube" {
-        cmd.arg("--extractor-args")
-            .arg("youtube:player_client=web_safari,android_vr,ios");
-    }
+        if platform == "youtube" {
+            cmd.arg("--extractor-args")
+                .arg("youtube:player_client=web_safari,android_vr,ios");
+        }
 
-    // `--` is the standard POSIX-style argument terminator: anything after it
-    // is passed through as a positional, never as a flag. (BUG-044)
-    cmd.arg("--").arg(url);
+        cmd.arg("--").arg(&url_owned);
 
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-    info!("🔍 Inspecting video metadata via yt-dlp: {}", url);
-    let output = cmd.output().context("Thực thi yt-dlp metadata thất bại")?;
+        info!("🔍 Inspecting video metadata via yt-dlp: {}", url_owned);
+        let result = cmd.output().context("Thực thi yt-dlp metadata thất bại");
+        let _ = tx.send(result);
+    });
+
+    let output = rx
+        .recv_timeout(std::time::Duration::from_secs(60))
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Không lấy được thông tin video trong 60 giây (link chết, video riêng tư, hoặc bị chặn khu vực)"
+            )
+        })??;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -316,7 +391,8 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         }
     }
 
-    let ytdlp_bin = find_ytdlp()?;
+    let cfg = crate::config::AppConfig::load(&app);
+    let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
     let save_dir = get_downloads_dir(&app);
     let platform = get_platform(&req.url);
 
@@ -329,8 +405,16 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         .arg("-o")
         .arg(&out_template)
         .arg("--newline")
+        .arg("--no-ansi")  // BUG-056: kill ANSI colour codes so our parser
+                          // never sees escape sequences.
         .arg("--no-warnings")
         .arg("--no-playlist")    // BUG-055: do not silently pull a whole playlist
+        // BUG-056: machine-parseable progress. Field order:
+        //   downloaded_bytes|total_bytes|total_bytes_estimate|speed|eta
+        // We compute percent ourselves so live streams (no total) report
+        // something sensible instead of NaN.
+        .arg("--progress-template")
+        .arg("download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s")
         .arg("--continue"); // Native resume from .part file
 
     if platform == "youtube" {
@@ -341,8 +425,29 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     // Cookie integration: Edge / Chrome / Firefox
     if let Some(ref browser) = req.browser_cookies {
         let b = browser.trim().to_lowercase();
+        // BUG-057: only allow known browsers — App-Bound Encryption on
+        // Edge/Chrome can silently fail, and we don't want users passing
+        // arbitrary names that yt-dlp might interpret differently.
         if !b.is_empty() && b != "none" {
-            cmd.arg("--cookies-from-browser").arg(&b);
+            if matches!(b.as_str(), "edge" | "chrome" | "firefox" | "opera" | "safari" | "brave") {
+                cmd.arg("--cookies-from-browser").arg(&b);
+            } else {
+                warn!("Bỏ qua browser_cookies={} (không nằm trong whitelist)", b);
+            }
+        }
+    }
+
+    // BUG-057: fallback to a Netscape cookies.txt the user selected.
+    // Used when `--cookies-from-browser` fails (App-Bound Encryption, etc.)
+    if let Some(ref cookies_file) = req.cookies_file {
+        let cf = cookies_file.trim();
+        if !cf.is_empty() {
+            let p = std::path::Path::new(cf);
+            if p.exists() {
+                cmd.arg("--cookies").arg(cf);
+            } else {
+                warn!("cookies_file không tồn tại: {}", cf);
+            }
         }
     }
 
@@ -414,12 +519,13 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
 
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        let mut last_percent = 0.0f32;
+        let mut last_percent: f32 = -1.0; // sentinel so first emit always fires
         let mut current_speed = String::new();
         let mut current_eta = String::new();
         let mut current_size = String::new();
         let mut detected_filename = String::new();
         let mut detected_filepath: Option<PathBuf> = None;
+        let mut last_emit = std::time::Instant::now();
 
         for line_res in reader.lines() {
             if let Ok(line) = line_res {
@@ -433,41 +539,50 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     break;
                 }
 
-                // Parse percentage e.g. " 45.2%"
-                if let Some(pos) = line.find('%') {
-                    let prefix = &line[..pos];
-                    if let Some(num_str) = prefix.split_whitespace().last() {
-                        if let Ok(p) = num_str.parse::<f32>() {
-                            last_percent = p;
+                // BUG-056: parse the machine-parseable progress template we
+                // pass to yt-dlp. Lines look like:
+                //   download:1024|0|2048000|123456|00:42
+                // where fields are bytes downloaded | known total |
+                // estimate total | speed (bytes/s) | ETA (mm:ss).
+                // We compute percent from bytes ourselves — much more
+                // robust than the old text-grep against `%`, which broke
+                // when a video title contained "at 100%".
+                let pct: Option<f32> = if let Some(rest) = line.strip_prefix("download:") {
+                    let parts: Vec<&str> = rest.split('|').collect();
+                    if parts.len() >= 2 {
+                        let downloaded: u64 = parts[0].parse().unwrap_or(0);
+                        let known_total: u64 = parts[1].parse().unwrap_or(0);
+                        let estimate_total: u64 = parts.get(2)
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0);
+                        current_speed = parts.get(3).unwrap_or(&"").to_string();
+                        current_eta = parts.get(4).unwrap_or(&"").to_string();
+
+                        let total = if known_total > 0 {
+                            known_total
+                        } else if estimate_total > 0 {
+                            estimate_total
+                        } else {
+                            0
+                        };
+                        if total > 0 {
+                            let p = (downloaded as f64 / total as f64) * 100.0;
+                            // Surface a useful "of N MiB" string for the UI.
+                            current_size = format!("{:.1} MiB", total as f64 / 1_048_576.0);
+                            Some(p as f32)
+                        } else {
+                            // Live stream / unknown size — keep last percent,
+                            // never NaN.
+                            Some(last_percent.max(0.0))
                         }
+                    } else {
+                        None
                     }
-                }
+                } else {
+                    None
+                };
 
-                // Parse speed e.g. "at 12.34MiB/s"
-                if let Some(pos) = line.find("at ") {
-                    let after = &line[pos + 3..];
-                    if let Some(token) = after.split_whitespace().next() {
-                        current_speed = token.to_string();
-                    }
-                }
-
-                // Parse ETA e.g. "ETA 00:15"
-                if let Some(pos) = line.find("ETA ") {
-                    let after = &line[pos + 4..];
-                    if let Some(token) = after.split_whitespace().next() {
-                        current_eta = token.to_string();
-                    }
-                }
-
-                // Parse size e.g. "of ~ 125.40MiB" or "of 85.12MiB"
-                if let Some(pos) = line.find("of ") {
-                    let after = line[pos + 3..].trim_start_matches('~').trim();
-                    if let Some(token) = after.split_whitespace().next() {
-                        current_size = token.to_string();
-                    }
-                }
-
-                // Destination file detection
+                // Destination file detection (unchanged)
                 if let Some(pos) = line.find("Destination: ") {
                     let path_str = line[pos + 13..].trim();
                     let p = PathBuf::from(path_str);
@@ -494,30 +609,51 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     }
                 }
 
-                // Emit progress update
-                let _ = app_clone.emit(
-                    "downloader:progress",
-                    DownloadProgressPayload {
-                        id: job_id.clone(),
-                        status: "downloading".to_string(),
-                        percent: last_percent,
-                        speed: current_speed.clone(),
-                        eta: current_eta.clone(),
-                        size_text: current_size.clone(),
-                        filename: detected_filename.clone(),
-                        file_path: detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
-                        error: None,
-                    },
-                );
+                if let Some(p) = pct {
+                    last_percent = p;
+                }
+
+                // BUG-056 (2): throttle event emission. yt-dlp can spew a
+                // progress line every few hundred ms; the UI can't keep up
+                // and it makes the progress bar jittery. Emit when (a) the
+                // percent moved at least 0.5% OR (b) 250 ms have passed.
+                let percent_delta = (last_percent - (-1.0)).abs();
+                let pct_changed = pct.is_some() && percent_delta >= 0.5;
+                let time_elapsed = last_emit.elapsed();
+                if pct_changed || time_elapsed.as_millis() >= 250 {
+                    let _ = app_clone.emit(
+                        "downloader:progress",
+                        DownloadProgressPayload {
+                            id: job_id.clone(),
+                            status: "downloading".to_string(),
+                            percent: last_percent.max(0.0),
+                            speed: current_speed.clone(),
+                            eta: current_eta.clone(),
+                            size_text: current_size.clone(),
+                            filename: detected_filename.clone(),
+                            file_path: detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
+                            error: None,
+                        },
+                    );
+                    last_emit = std::time::Instant::now();
+                }
             }
         }
 
         // Wait for child process exit status
         let status_res = child.wait();
 
-        // Read any remaining stderr if error occurred
+        // BUG-056 (3): read the *entire* stderr buffer, not just one line.
+        // yt-dlp can emit several warnings (cookie, geo, private video, …)
+        // and surfacing only the first one is a UX regression. Trim and
+        // cap at ~2 KB so a runaway log doesn't blow up the payload.
         let mut stderr_text = String::new();
-        let _ = BufReader::new(stderr).read_line(&mut stderr_text);
+        let _ = BufReader::new(stderr).read_to_string(&mut stderr_text);
+        stderr_text = stderr_text.trim().to_string();
+        if stderr_text.len() > 2048 {
+            stderr_text.truncate(2048);
+            stderr_text.push_str("\n…(đã cắt bớt)");
+        }
 
         let is_success = status_res.map(|s| s.success()).unwrap_or(false);
 

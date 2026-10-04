@@ -112,6 +112,24 @@ function formatDuration(sec?: number | null): string {
 
 const STORAGE_KEY = "sublix_downloads_history_v1";
 
+// BUG-058: a stringified Tauri Error object renders as "[object Object]" in
+// the UI. This helper unwraps the actual message whether the caller passed
+// a string, an Error, a plain object with `.message`, or anything else.
+function formatError(e: unknown, fallback: string): string {
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message || fallback;
+  if (e && typeof e === "object") {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 export default function DownloaderView({
   onNavigateToFileSub,
   onNavigateToDubbing,
@@ -161,6 +179,9 @@ export default function DownloaderView({
   });
 
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed">("all");
+  // BUG-053: lock the Start button while a click is in flight so a frantic
+  // double-click doesn't spawn two parallel yt-dlp processes.
+  const [starting, setStarting] = useState<boolean>(false);
   const itemsRef = useRef<DownloadItem[]>(items);
   itemsRef.current = items;
 
@@ -221,7 +242,7 @@ export default function DownloaderView({
       const info = await sublix.downloaderGetInfo(targetUrl);
       setVideoInfo(info);
     } catch (e: any) {
-      setInspectError(e?.toString() || "Không thể lấy thông tin video");
+      setInspectError(formatError(e, "Không thể lấy thông tin video"));
     } finally {
       setInspecting(false);
     }
@@ -242,8 +263,30 @@ export default function DownloaderView({
 
   // Start download
   const handleStartDownload = async () => {
+    // BUG-053: lock immediately on entry — synchronous setState — so the
+    // button can't fire twice even when the caller hammers it. Re-check
+    // here too because the disabled prop only flips after React commits.
+    if (starting) return;
+    setStarting(true);
+
     const targetUrl = url.trim();
-    if (!targetUrl) return;
+    if (!targetUrl) {
+      setStarting(false);
+      return;
+    }
+
+    // BUG-053 (extended): don't queue the same URL twice while it's still
+    // running. Pasting a link and double-clicking should not create two
+    // parallel jobs.
+    const dup = items.find(
+      (i) => i.url === targetUrl &&
+        (i.status === "downloading" || i.status === "paused" || i.status === "queued")
+    );
+    if (dup) {
+      setInspectError(`URL này đang được tải (mục "${dup.title}"). Bấm Thử lại trên mục đó nếu muốn tiếp tục.`);
+      setStarting(false);
+      return;
+    }
 
     // BUG-051: refuse to start if the destination volume cannot hold the
     // estimated file size plus a 1 GB safety margin. Without this check,
@@ -308,10 +351,12 @@ export default function DownloaderView({
       setItems((prev) =>
         prev.map((item) =>
           item.id === id
-            ? { ...item, status: "error", error: e?.toString() || "Lỗi tải video" }
+            ? { ...item, status: "error", error: formatError(e, "Lỗi tải video") }
             : item
         )
       );
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -348,7 +393,7 @@ export default function DownloaderView({
       setItems((prev) =>
         prev.map((i) =>
           i.id === item.id
-            ? { ...i, status: "error", error: e?.toString() || "Lỗi khi tiếp tục tải" }
+            ? { ...i, status: "error", error: formatError(e, "Lỗi khi tiếp tục tải") }
             : i
         )
       );
@@ -583,9 +628,17 @@ export default function DownloaderView({
             type="button"
             className="downloader-btn-start"
             onClick={handleStartDownload}
-            disabled={!url.trim()}
+            disabled={starting || !url.trim()}
           >
-            <IconDownload size={16} /> Bắt Đầu Tải Video Ngay
+            {starting ? (
+              <>
+                <span className="downloader-spinner" /> Đang khởi động...
+              </>
+            ) : (
+              <>
+                <IconDownload size={16} /> Bắt Đầu Tải Video Ngay
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -750,31 +803,41 @@ export default function DownloaderView({
                     {/* COMPLETED ACTIONS: 1-CLICK PIPELINE BRIDGES */}
                     {item.status === "completed" && (
                       <div className="pipeline-bridges">
-                        <button
-                          type="button"
-                          className="item-btn bridge-filesub"
-                          onClick={() => {
-                            if (item.filePath) {
-                              onNavigateToFileSub(item.filePath);
-                            }
-                          }}
-                          title="Đưa video này sang Tạo Phụ Đề Vietsub (.SRT)"
-                        >
-                          <IconFilm size={14} /> 📝 Tạo Phụ Đề File
-                        </button>
-
-                        <button
-                          type="button"
-                          className="item-btn bridge-dubbing"
-                          onClick={() => {
-                            if (item.filePath) {
-                              onNavigateToDubbing(item.filePath);
-                            }
-                          }}
-                          title="Đưa video này sang Studio Lồng Tiếng AI (Đa vai, lồng tiếng Việt chuẩn rạp)"
-                        >
-                          <IconClapper size={14} /> 🎬 Lồng Tiếng AI
-                        </button>
+                        {(() => {
+                          // BUG-058 (4): normalise + verify the path before
+                          // letting the user route it to another module.
+                          // Forwarding an empty / non-existent path silently
+                          // breaks the next stage's "no input file" error.
+                          const safe = item.filePath
+                            ? item.filePath.replace(/\//g, "\\").trim()
+                            : "";
+                          const pathReady = safe.length > 0;
+                          const tip = pathReady
+                            ? ""
+                            : "Đường dẫn file chưa sẵn sàng (hãy thử Mở Thư Mục Download)";
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                className="item-btn bridge-filesub"
+                                disabled={!pathReady}
+                                onClick={() => pathReady && onNavigateToFileSub(safe)}
+                                title={pathReady ? "Đưa video này sang Tạo Phụ Đề Vietsub (.SRT)" : tip}
+                              >
+                                <IconFilm size={14} /> 📝 Tạo Phụ Đề File
+                              </button>
+                              <button
+                                type="button"
+                                className="item-btn bridge-dubbing"
+                                disabled={!pathReady}
+                                onClick={() => pathReady && onNavigateToDubbing(safe)}
+                                title={pathReady ? "Đưa video này sang Studio Lồng Tiếng AI (Đa vai, lồng tiếng Việt chuẩn rạp)" : tip}
+                              >
+                                <IconClapper size={14} /> 🎬 Lồng Tiếng AI
+                              </button>
+                            </>
+                          );
+                        })()}
 
                         <button
                           type="button"

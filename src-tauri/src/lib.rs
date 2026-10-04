@@ -994,9 +994,12 @@ async fn dubbing_export(
 }
 
 #[tauri::command]
-async fn downloader_get_info(url: String) -> Result<downloader::VideoInfo, String> {
+async fn downloader_get_info(
+    app: tauri::AppHandle,
+    url: String,
+) -> Result<downloader::VideoInfo, String> {
     tokio::task::spawn_blocking(move || {
-        downloader::fetch_video_info(&url)
+        downloader::fetch_video_info(&app, &url)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1013,14 +1016,27 @@ async fn downloader_start(app: tauri::AppHandle, req: downloader::DownloadReques
     .map_err(|e| format!("{e:#}"))
 }
 
+// BUG-057 (async): pause/cancel used to run on the main thread; on
+// large downloads the taskkill + filesystem scan could lock the UI for
+// hundreds of ms. Move to spawn_blocking.
 #[tauri::command]
-fn downloader_pause(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    downloader::pause_download(&app, &id).map_err(|e| format!("{e:#}"))
+async fn downloader_pause(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        downloader::pause_download(&app, &id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]
-fn downloader_cancel(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    downloader::cancel_download(&app, &id).map_err(|e| format!("{e:#}"))
+async fn downloader_cancel(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        downloader::cancel_download(&app, &id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]

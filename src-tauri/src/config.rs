@@ -61,6 +61,12 @@ pub struct AppConfig {
     #[serde(default = "default_true")]
     pub vad_enabled: bool,
 
+    /// Optional override path to the `yt-dlp` binary (BUG-054). Empty string
+    /// means "search PATH and the bundle dir". When set we use this exact
+    /// path instead of falling back through the search order.
+    #[serde(default)]
+    pub ytdlp_path: String,
+
     /// Overlay translated text font size in px (16..=36).
     #[serde(default = "default_font_size")]
     pub overlay_font_size: u32,
@@ -190,6 +196,7 @@ impl Default for AppConfig {
             output_mode: default_output_mode(),
             chunk_seconds: default_chunk_seconds(),
             vad_enabled: default_true(),
+            ytdlp_path: String::new(),
             overlay_font_size: default_font_size(),
             overlay_show_original: default_true(),
             overlay_click_through: default_false(),
