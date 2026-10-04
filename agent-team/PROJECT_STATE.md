@@ -41,6 +41,7 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
+| `TSK-022` | Xây dựng Tab Downloader Đa Nền Tảng & Pipeline Trọn Gói A-Z | Antigravity / Claude Code | 🔴 HIGH | Tải video YouTube/Douyin/TikTok/Bilibili, nối sang Sub & Lồng tiếng (Chi tiết: KE_HOACH_ALL_IN_ONE_PIPELINE.md) |
 | `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | Claude Code / Antigravity | 🔴 HIGH | Windows Job Object kill-on-close, async spawn_blocking |
 | `TSK-012` | Tích hợp Sherpa-ONNX 3D-Speaker Diarization nâng cao | Antigravity | 🔴 HIGH | Nhận diện giọng nói đa vai bằng vector embedding |
 | `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật |

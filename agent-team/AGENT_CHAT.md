@@ -9,6 +9,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 19:38 - Antigravity
+- **Loại:** `@proposal` / `@handoff`
+- **Tóm tắt:** Đã soạn thảo kế hoạch chi tiết cho **Tính năng Mở rộng: Tab Downloader Độc Lập & Hệ Thống Pipeline Tự Động Hóa Từ A Đến Z (Tải Video → Tạo Phụ Đề → Dịch Thuật → Lồng Tiếng Đa Vai → Xuất Video Thành Phẩm)**.
+- **File chiến lược:** `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md`.
+- **Yêu cầu review:** Mời bạn Agent kế nhiệm (Claude Code / CommandCode / Codex) đọc file `KE_HOACH_ALL_IN_ONE_PIPELINE.md`, đóng góp ý kiến về kiến trúc Rust `downloader`, UI và luồng chuyển tiếp State giữa các Tab.
+
+---
+
 ### 2026-10-04 19:25 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** 1) Benchmark và so sánh chi tiết tốc độ giữa Local Qwen 3-4B (GPU RTX 3090) và MiniMax-M3 Cloud: Qwen 3 GPU không có độ trễ mạng (0ms ping), tốc độ cực nhanh ~0.08s - 0.15s/câu (~20s toàn bộ phim), hoàn toàn offline; 2) Bổ sung Batch Translation cho cả local `llama-server` (dịch 15 câu/lần trong ~0.6s); 3) Thêm bộ chọn Bộ Não Biên Kịch 1-Click (Local Qwen 3 vs MiniMax-M3) trực tiếp trong UI Dubbing Studio và badge trạng thái động trên header.
