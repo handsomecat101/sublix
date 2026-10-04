@@ -99,10 +99,12 @@ flowchart TD
 ### Module 3: Biên Tập Kịch Bản Điện Ảnh (Cinematic LLM Scripting)
 Đây là khâu quyết định độ hay của tác phẩm. Chúng tôi tích hợp 2 bộ não LLM mạnh nhất:
 
-#### A. MiniMax Unlimited Cloud API
-- **Endpoint:** `https://api.minimax.chat/v1/chat/completions`
-- **Model:** `MiniMax-Text-01` / `abab6.5s-chat`
-- **Ưu điểm:** Khả năng dịch văn học/phim ảnh tiếng Việt số 1 hiện nay, thời gian phản hồi siêu tốc (< 500ms), tiêu thụ **0 MB VRAM** giúp GPU dành toàn lực cho STT và TTS.
+#### A. MiniMax Cloud API (MiniMax-M3)
+- **Endpoint:** `https://api.minimax.io/v1/chat/completions` (chuẩn OpenAI-compatible)
+- **Model:** `MiniMax-M3` — mặc định trong code (`default_minimax_model()` trong `config.rs`), có thể đổi tên model trong Settings (trường `minimax_model`).
+- **Lý luận (reasoning):** Gửi cờ `reasoning_split: true` để tách phần "nghĩ" khỏi nội dung; `post_process` (trong `translate/server.rs`) cũng chủ động gỡ thẻ `<think>...` nếu model có trả về.
+- **Thông số gọi:** `temperature: 0.2`, timeout 30s/câu.
+- **Ưu điểm:** Dịch văn học/phim ảnh tiếng Việt chất lượng cao, phản hồi nhanh, tiêu thụ **0 MB VRAM** giúp GPU dành toàn lực cho STT và TTS.
 
 #### B. Local Ollama `smtek/qwen3.8-27b:q4_k_m`
 - **Endpoint:** `http://localhost:11434/v1/chat/completions` (chuẩn OpenAI)
