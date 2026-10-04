@@ -151,11 +151,11 @@ pub fn lang_name(code: &str) -> &'static str {
 }
 
 fn binaries_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BINARIES_DIR)
+    crate::config::app_base_dir().join(BINARIES_DIR)
 }
 
 fn models_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODELS_DIR)
+    crate::config::app_base_dir().join(MODELS_DIR)
 }
 
 pub fn has_binary() -> bool {

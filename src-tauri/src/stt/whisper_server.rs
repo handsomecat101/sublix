@@ -270,7 +270,7 @@ struct InferenceResponse {
 }
 
 fn find_server_binary(engine: SttEngine) -> Result<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = crate::config::app_base_dir();
     let candidates: Vec<PathBuf> = match engine {
         SttEngine::Cuda => vec![
             manifest_dir

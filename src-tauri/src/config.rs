@@ -203,9 +203,11 @@ impl AppConfig {
                 }
                 Err(e) => {
                     tracing::warn!(
-                        "⚠️  Config file corrupt ({e}), using defaults. Path: {}",
+                        "⚠️  Config file corrupt ({e}), backing up to .bak and using defaults. Path: {}",
                         path.display()
                     );
+                    let backup_path = path.with_extension("json.bak");
+                    let _ = std::fs::copy(&path, &backup_path);
                     Self::default()
                 }
             },
@@ -216,7 +218,7 @@ impl AppConfig {
         }
     }
 
-    /// Save config to disk. Creates parent dir if needed.
+    /// Save config to disk atomically. Creates parent dir if needed.
     pub fn save(&self, app: &tauri::AppHandle) -> Result<()> {
         let path = config_path(app);
         if let Some(parent) = path.parent() {
@@ -224,11 +226,28 @@ impl AppConfig {
                 .with_context(|| format!("create config dir: {}", parent.display()))?;
         }
         let json = serde_json::to_string_pretty(self).context("serialize config")?;
-        std::fs::write(&path, json)
-            .with_context(|| format!("write config: {}", path.display()))?;
-        tracing::info!("💾 Config saved: {}", path.display());
+        let tmp_path = path.with_extension("json.tmp");
+        std::fs::write(&tmp_path, json)
+            .with_context(|| format!("write tmp config: {}", tmp_path.display()))?;
+        std::fs::rename(&tmp_path, &path)
+            .with_context(|| format!("atomic rename config: {}", path.display()))?;
+        tracing::info!("💾 Config saved atomically: {}", path.display());
         Ok(())
     }
+}
+
+/// Helper to resolve runtime resource base directory (binaries, models).
+/// On release / portable: uses folder containing sublix.exe if `binaries` or `models` exists there.
+/// Falls back to CARGO_MANIFEST_DIR for dev / cargo test.
+pub fn app_base_dir() -> PathBuf {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            if parent.join("binaries").exists() || parent.join("models").exists() {
+                return parent.to_path_buf();
+            }
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 /// Get the config file path. Uses Tauri's app_config_dir() if available.

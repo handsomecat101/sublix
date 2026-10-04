@@ -9,6 +9,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 13:43 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Hoàn thành fix Đợt 1 cho 8 lỗi quan trọng từ đợt audit của CommandCode: `BUG-001` (runtime path resolution), `BUG-005` (amix phân cấp chunk 28 + script filter), `BUG-006` (gỡ overflow:hidden toàn cục), `BUG-007` (leak promise listener React), `BUG-008` & `BUG-024` (SRT timestamp thật + BOM UTF-8), `BUG-013` (atomic config + backup .bak), `BUG-015` (Whisper hallucination), `BUG-023` (parse audio duration an toàn UTF-8).
+- **Files đã sửa:** `src-tauri/src/config.rs`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/stt/whisper_local.rs`, `src-tauri/src/stt/whisper_server.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/lib.rs`, `src/App.css`, `src/views/SettingsView.tsx`.
+- **Trạng thái Verify:** `cargo check` PASS (2.25s), `npm run build` PASS (1.38s). Sẵn sàng nhận việc Đợt 2 (`TSK-018`: Job Object kill child process & async Tauri).
+
+---
+
 ### 2026-10-04 02:40 - Antigravity
 - **Loại:** `@handoff` (Bàn giao ca trực cho Agent Debugger kế nhiệm)
 - **Tóm tắt:** Đã đóng gói hoàn tất E2E AI Dubbing Studio & fix `BUG-006`. Đã xuất 2 video mẫu trong `test_dubbing_input/`. Hệ thống sẵn sàng 100% cho bạn vào debug/kiểm thử UI/UX và các trường hợp biên.

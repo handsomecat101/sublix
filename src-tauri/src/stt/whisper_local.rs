@@ -220,38 +220,18 @@ pub fn is_hallucination(text: &str) -> bool {
     let lower = s.to_lowercase();
     let char_count = s.chars().count();
 
-    const HALLUCINATIONS: &[&str] = &[
-        // Japanese silence / outro hallucinations (Oyasuminasai -> Chúc ngủ ngon)
-        "おやすみなさい",
-        "おやすみ",
-        "それでは、おやすみなさい",
-        "それではおやすみなさい",
-        "では、おやすみなさい",
-        "じゃあ、おやすみなさい",
+    // 1. Outro & metadata markers: NEVER part of real movie dialogue, safe to match with contains
+    const OUTRO_HALLUCINATIONS: &[&str] = &[
+        // Japanese
         "ご視聴ありがとうございました",
         "ご視聴ありがとうございます",
-        "ご視聴",
-        "視聴ありがとう",
         "チャンネル登録",
         "高評価",
-        "またね",
-        "また次回",
-        "ではまた",
-        "それではまた",
-        "じゃあね",
-        "バイバイ",
-        "さようなら",
-        "さよなら",
-        "ありがとうございました",
-        "ありがとうございます",
         "字幕:",
         "字幕：",
         "翻訳:",
         "サブタイトル",
-
-        // English silence / outro hallucinations
-        "good night",
-        "goodnight",
+        // English
         "thank you for watching",
         "thanks for watching",
         "thank you so much for watching",
@@ -262,6 +242,46 @@ pub fn is_hallucination(text: &str) -> bool {
         "subtitles:",
         "closed captions by",
         "amara.org",
+        "blank_audio",
+        // Vietnamese
+        "cảm ơn các bạn đã theo dõi",
+        "cảm ơn đã xem",
+        "cảm ơn bạn đã xem",
+        "cảm ơn vì đã xem",
+        "hãy đăng ký kênh",
+        "đăng ký kênh",
+    ];
+
+    for h in OUTRO_HALLUCINATIONS {
+        if lower.contains(h) && char_count <= 60 {
+            return true;
+        }
+    }
+
+    // 2. Standalone greetings/closings: Typical Whisper silence artifacts when alone,
+    // BUT common in dialogue when accompanied by other words ("Tạm biệt em yêu!", "Good night darling").
+    // ONLY filter out if the entire line consists purely of this greeting/closing!
+    const STANDALONE_HALLUCINATIONS: &[&str] = &[
+        // Japanese
+        "おやすみなさい",
+        "おやすみ",
+        "それでは、おやすみなさい",
+        "それではおやすみなさい",
+        "では、おやすみなさい",
+        "じゃあ、おやすみなさい",
+        "またね",
+        "また次回",
+        "ではまた",
+        "それではまた",
+        "じゃあね",
+        "バイバイ",
+        "さようなら",
+        "さよなら",
+        "ありがとうございました",
+        "ありがとうございます",
+        // English
+        "good night",
+        "goodnight",
         "see you next time",
         "see you tomorrow",
         "see you in the next",
@@ -271,25 +291,20 @@ pub fn is_hallucination(text: &str) -> bool {
         "goodbye",
         "good bye",
         "the end",
-        "blank_audio",
-
-        // Vietnamese translations of silence hallucinations
+        // Vietnamese
         "chúc ngủ ngon",
         "chúc bạn ngủ ngon",
         "chúc các bạn ngủ ngon",
-        "cảm ơn các bạn đã theo dõi",
-        "cảm ơn đã xem",
-        "cảm ơn bạn đã xem",
-        "cảm ơn vì đã xem",
-        "hãy đăng ký kênh",
-        "đăng ký kênh",
         "hẹn gặp lại các bạn",
         "hẹn gặp lại",
         "tạm biệt",
     ];
 
-    for h in HALLUCINATIONS {
-        if lower.contains(h) && char_count <= 45 {
+    let stripped_lower = lower
+        .trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace() || matches!(c, '。' | '、' | '！' | '？' | '…' | '「' | '」' | '〜'));
+
+    for h in STANDALONE_HALLUCINATIONS {
+        if stripped_lower == *h {
             return true;
         }
     }
@@ -463,11 +478,11 @@ fn read_wav_duration(wav_path: &str) -> Result<f32> {
 
 fn candidate_paths(relative_dir: &str, filename: &str) -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    paths.push(manifest_dir.join(relative_dir).join("whisper-cuda").join(filename));
-    paths.push(manifest_dir.join(relative_dir).join("Release").join(filename));
-    paths.push(manifest_dir.join(relative_dir).join("release").join(filename));
-    paths.push(manifest_dir.join(relative_dir).join(filename));
+    let base_dir = crate::config::app_base_dir();
+    paths.push(base_dir.join(relative_dir).join("whisper-cuda").join(filename));
+    paths.push(base_dir.join(relative_dir).join("Release").join(filename));
+    paths.push(base_dir.join(relative_dir).join("release").join(filename));
+    paths.push(base_dir.join(relative_dir).join(filename));
     let dirs = [relative_dir, "src-tauri"];
     for d in dirs {
         let p = Path::new(d);
@@ -478,17 +493,17 @@ fn candidate_paths(relative_dir: &str, filename: &str) -> Vec<PathBuf> {
 }
 
 fn find_cuda_whisper_cli() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let base_dir = crate::config::app_base_dir();
     let candidates = [
-        manifest_dir.join(BINARIES_DIR).join("whisper-cuda").join("whisper-cli.exe"),
-        manifest_dir.join(BINARIES_DIR).join("cuda").join("whisper-cli.exe"),
+        base_dir.join(BINARIES_DIR).join("whisper-cuda").join("whisper-cli.exe"),
+        base_dir.join(BINARIES_DIR).join("cuda").join("whisper-cli.exe"),
     ];
     candidates.into_iter().find(|p| p.exists())
 }
 
 fn find_cpu_whisper_cli() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let p = manifest_dir.join(BINARIES_DIR).join("Release").join("whisper-cli.exe");
+    let base_dir = crate::config::app_base_dir();
+    let p = base_dir.join(BINARIES_DIR).join("Release").join("whisper-cli.exe");
     if p.exists() {
         return Some(p);
     }
@@ -514,7 +529,7 @@ pub fn ensure_binary_with_engine() -> Result<(PathBuf, SttEngine)> {
     }
 
     warn!("⏬ whisper-cli not found, downloading {}...", WHISPER_CPP_ZIP_URL);
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BINARIES_DIR);
+    let dir = crate::config::app_base_dir().join(BINARIES_DIR);
     std::fs::create_dir_all(&dir).context("Failed to create binaries directory")?;
 
     let zip_path = dir.join("whisper-bin-x64.zip");
@@ -571,7 +586,7 @@ where
         return Ok(existing);
     }
 
-    let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MODELS_DIR);
+    let target_dir = crate::config::app_base_dir().join(MODELS_DIR);
     std::fs::create_dir_all(&target_dir).context("Failed to create models directory")?;
     let model_path = target_dir.join(variant.filename());
     let temp_path = target_dir.join(format!("{}.downloading", variant.filename()));

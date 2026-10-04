@@ -309,7 +309,7 @@ impl Drop for TranslationServer {
 }
 
 fn find_server_binary(engine: Engine) -> Result<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = crate::config::app_base_dir();
     let binaries_dir = manifest_dir.join("binaries");
     let candidate = match engine {
         Engine::Cuda => binaries_dir.join("cuda").join("llama-server.exe"),

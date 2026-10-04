@@ -611,12 +611,42 @@ pub fn export_dubbed_video(
     };
 
     if num_speech > 0 {
-        mix_filter.push_str(&format!(
-            "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
-            labels = mix_inputs_labels,
-            n = num_speech,
-            vol = project.voice_volume
-        ));
+        if num_speech <= 28 {
+            mix_filter.push_str(&format!(
+                "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
+                labels = mix_inputs_labels,
+                n = num_speech,
+                vol = project.voice_volume
+            ));
+        } else {
+            // Group speech inputs into chunks of at most 28 to obey FFmpeg amix limit (max 32)
+            let chunk_size = 28;
+            let mut group_labels = String::new();
+            let mut group_count = 0;
+
+            for (grp_idx, chunk) in (1..=num_speech).collect::<Vec<_>>().chunks(chunk_size).enumerate() {
+                let mut chunk_labels = String::new();
+                for &idx in chunk {
+                    chunk_labels.push_str(&format!("[a{}]", idx));
+                }
+                mix_filter.push_str(&format!(
+                    "{labels}amix=inputs={n}:dropout_transition=0[grp{grp}];",
+                    labels = chunk_labels,
+                    n = chunk.len(),
+                    grp = grp_idx
+                ));
+                group_labels.push_str(&format!("[grp{}]", grp_idx));
+                group_count += 1;
+            }
+
+            mix_filter.push_str(&format!(
+                "{labels}amix=inputs={n}:dropout_transition=0,volume={vol}[speech];",
+                labels = group_labels,
+                n = group_count,
+                vol = project.voice_volume
+            ));
+        }
+
         // Mix background track (either isolated BGM or ducked original) with speech
         mix_filter.push_str(&format!(
             "{bgm_src}volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:dropout_transition=0[final_audio]",
@@ -637,7 +667,11 @@ pub fn export_dubbed_video(
         parent.join(format!("{}_dubbed.mp4", stem))
     };
 
-    // 3. Run master FFmpeg command
+    // 3. Run master FFmpeg command using -filter_complex_script to avoid Windows command length limits
+    let filter_script_path = temp_dir.join("filter_complex.txt");
+    fs::write(&filter_script_path, &mix_filter)
+        .context("Failed to write filter_complex_script")?;
+
     let mut remux = Command::new(&ffmpeg_bin);
     remux.arg("-y");
     remux.arg("-i").arg(&project.input_path); // Input 0
@@ -653,8 +687,8 @@ pub fn export_dubbed_video(
     }
 
     remux
-        .arg("-filter_complex")
-        .arg(&mix_filter)
+        .arg("-filter_complex_script")
+        .arg(&filter_script_path)
         .arg("-map")
         .arg("0:v?") // Map original video if present
         .arg("-map")
@@ -695,12 +729,23 @@ fn get_audio_duration(file: &Path) -> Result<f64> {
     let output = cmd.output()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // Look for "Duration: 00:00:03.45"
+    // Look for "Duration: 00:00:03.45" safely without raw byte slicing
     if let Some(pos) = stderr.find("Duration: ") {
-        let dur_str = &stderr[pos + 10..pos + 21];
-        return Ok(parse_srt_time_to_seconds(dur_str));
+        let after = &stderr[pos + 10..];
+        let token = after
+            .split([',', ' ', '\r', '\n'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        let secs = parse_srt_time_to_seconds(token);
+        if secs > 0.0 {
+            return Ok(secs);
+        }
     }
-    Ok(2.0)
+    Err(anyhow::anyhow!(
+        "Không thể trích xuất thời lượng audio từ FFmpeg cho: {}",
+        file.display()
+    ))
 }
 
 /// Parse "00:01:23.456" or "00:01:23,456" into seconds f64

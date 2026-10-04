@@ -793,9 +793,10 @@ async fn download_translation_model_cmd(
 
 #[tauri::command]
 fn open_models_folder() -> Result<(), String> {
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("models");
+    let models_dir = config::app_base_dir().join("models");
+    let _ = std::fs::create_dir_all(&models_dir);
     let _ = std::process::Command::new("explorer.exe")
-        .arg(manifest_dir.as_os_str())
+        .arg(models_dir.as_os_str())
         .spawn()
         .map_err(|e| format!("Failed to open Explorer: {e}"))?;
     Ok(())

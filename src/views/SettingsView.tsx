@@ -32,6 +32,8 @@ interface LiveSubPreview {
   id: number;
   text: string;
   original?: string;
+  timestamp?: number;
+  audio_duration?: number;
   stt_duration?: number;
   translate_duration?: number;
 }
@@ -155,11 +157,7 @@ export default function SettingsView() {
       setConfigLoaded(true);
     });
 
-    let unlistenStatus: (() => void) | undefined;
-    let unlistenSub: (() => void) | undefined;
-    let unlistenProgress: (() => void) | undefined;
-
-    listen<{ kind: string; message?: string }>("status:change", (e) => {
+    const pStatus = listen<{ kind: string; message?: string }>("status:change", (e) => {
       const k = e.payload.kind;
       const msg = e.payload.message;
       if (k === "capturing") {
@@ -174,15 +172,15 @@ export default function SettingsView() {
         setStatus({ kind: "error", message: `Live error: ${msg}` });
         setIsLive(false);
       }
-    }).then((u) => { unlistenStatus = u; });
+    });
 
-    listen<LiveSubPreview>("subtitle:new", (e) => {
+    const pSub = listen<LiveSubPreview>("subtitle:new", (e) => {
       setRecentSubs((prev) => [e.payload, ...prev.slice(0, 199)]);
       sublix.getSttServerEngine().then(setSttServerEngine).catch(() => {});
       sublix.getTranslationEngine().then(setEngine).catch(() => {});
-    }).then((u) => { unlistenSub = u; });
+    });
 
-    listen<ModelDownloadProgress>("model:download_progress", (e) => {
+    const pProgress = listen<ModelDownloadProgress>("model:download_progress", (e) => {
       const p = e.payload;
       setDownloadProgress((prev) => ({
         ...prev,
@@ -196,12 +194,12 @@ export default function SettingsView() {
       if (p.percent === 100 || p.phase === "done") {
         refreshSetup();
       }
-    }).then((u) => { unlistenProgress = u; });
+    });
 
     return () => {
-      if (unlistenStatus) unlistenStatus();
-      if (unlistenSub) unlistenSub();
-      if (unlistenProgress) unlistenProgress();
+      pStatus.then((u) => u()).catch(() => {});
+      pSub.then((u) => u()).catch(() => {});
+      pProgress.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -528,16 +526,28 @@ export default function SettingsView() {
     if (recentSubs.length === 0) return;
     let srt = "";
     const items = recentSubs.slice().reverse();
+    const firstTs = items[0].timestamp ?? 0;
+
+    const formatTime = (ms: number) => {
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const sec = Math.floor((ms % 60000) / 1000);
+      const millis = ms % 1000;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(millis).padStart(3, "0")}`;
+    };
+
     items.forEach((s, idx) => {
-      const startMs = idx * 3000;
-      const endMs = startMs + 2800;
-      const formatTime = (ms: number) => {
-        const h = Math.floor(ms / 3600000);
-        const m = Math.floor((ms % 3600000) / 60000);
-        const sec = Math.floor((ms % 60000) / 1000);
-        const millis = ms % 1000;
-        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(millis).padStart(3, "0")}`;
-      };
+      let startMs = 0;
+      let endMs = 0;
+      if (firstTs > 0 && s.timestamp) {
+        startMs = Math.max(0, s.timestamp - firstTs);
+        const durMs = Math.round((s.audio_duration ?? 2.5) * 1000);
+        endMs = startMs + Math.max(1000, durMs);
+      } else {
+        startMs = idx * 3000;
+        endMs = startMs + 2800;
+      }
+
       srt += `${idx + 1}\n`;
       srt += `${formatTime(startMs)} --> ${formatTime(endMs)}\n`;
       if (s.original) {
@@ -545,7 +555,8 @@ export default function SettingsView() {
       }
       srt += `${s.text}\n\n`;
     });
-    const blob = new Blob([srt], { type: "text/plain;charset=utf-8" });
+    // Add UTF-8 BOM so legacy media players / Notepad render Vietnamese properly
+    const blob = new Blob(["\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
