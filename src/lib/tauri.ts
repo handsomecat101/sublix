@@ -352,6 +352,12 @@ export const sublix = {
   async downloaderRevealFile(path: string): Promise<void> {
     return await invoke("downloader_reveal_file", { path });
   },
+
+  // BUG-051: how many bytes are free on the volume that would hold
+  // a download at `path` (defaults to the internal downloads dir).
+  async downloaderCheckDisk(path?: string): Promise<number> {
+    return await invoke<number>("downloader_check_disk", { path });
+  },
 };
 
 export interface VoicePreset {
@@ -409,6 +415,8 @@ export interface VideoInfo {
   platform: string;
   url: string;
   description?: string | null;
+  /** Approximate total size in bytes (BUG-051). */
+  filesize_approx?: number | null;
 }
 
 export interface DownloadRequest {

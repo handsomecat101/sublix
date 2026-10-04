@@ -151,7 +151,8 @@ pub fn run() {
             downloader_pause,
             downloader_cancel,
             downloader_open_folder,
-            downloader_reveal_file
+            downloader_reveal_file,
+            downloader_check_disk
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -1030,6 +1031,18 @@ fn downloader_open_folder(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn downloader_reveal_file(path: String) -> Result<(), String> {
     downloader::reveal_downloaded_file(&path).map_err(|e| format!("{e:#}"))
+}
+
+/// BUG-051: returns the number of free bytes on the volume that would
+/// receive a file at `path`. The UI uses this to reject huge downloads
+/// before we even spawn yt-dlp.
+#[tauri::command]
+fn downloader_check_disk(app: tauri::AppHandle, path: Option<String>) -> Result<u64, String> {
+    let target = match path {
+        Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p),
+        _ => downloader::get_downloads_dir(&app),
+    };
+    downloader::disk_free_bytes(&target).map_err(|e| format!("{e:#}"))
 }
 
 

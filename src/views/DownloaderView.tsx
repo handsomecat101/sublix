@@ -127,11 +127,32 @@ export default function DownloaderView({
   const [inspectError, setInspectError] = useState<string | null>(null);
 
   // Downloads state
+  // BUG-050: any item that was mid-flight when the app died is now a
+  // zombie. Flip "downloading" / "queued" to "error" with a retry button
+  // rather than leaving a stuck "Đang tải" card forever.
   const [items, setItems] = useState<DownloadItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed: DownloadItem[] = JSON.parse(saved);
+        return parsed.map((item) => {
+          if (item.status === "downloading" || item.status === "queued") {
+            return {
+              ...item,
+              status: "error",
+              percent: Number.isFinite(item.percent) ? item.percent : 0,
+              error: "Bị gián đoạn do tắt ứng dụng. Bấm Thử lại để tiếp tục.",
+            };
+          }
+          // BUG-049: scrub NaN/null out of persisted state — toFixed(NaN)
+          // and friends have crashed the tab before.
+          return {
+            ...item,
+            percent: Number.isFinite(item.percent)
+              ? Math.min(100, Math.max(0, item.percent))
+              : 0,
+          };
+        });
       }
     } catch (e) {
       console.warn("Failed to load downloads history:", e);
@@ -159,10 +180,17 @@ export default function DownloaderView({
       setItems((prev) =>
         prev.map((item) => {
           if (item.id !== p.id) return item;
+          // BUG-049: clamp percent to [0, 100] and fall back to previous
+          // value on NaN — prevents the downloader tab from crashing when
+          // yt-dlp doesn't know the total size yet (it sends percent = NaN
+          // for live/dash with unknown duration).
+          const safePct = Number.isFinite(p.percent)
+            ? Math.min(100, Math.max(0, p.percent))
+            : item.percent;
           return {
             ...item,
             status: p.status as any,
-            percent: p.percent,
+            percent: safePct,
             speed: p.speed || item.speed,
             eta: p.eta || item.eta,
             sizeText: p.size_text || item.sizeText,
@@ -216,6 +244,30 @@ export default function DownloaderView({
   const handleStartDownload = async () => {
     const targetUrl = url.trim();
     if (!targetUrl) return;
+
+    // BUG-051: refuse to start if the destination volume cannot hold the
+    // estimated file size plus a 1 GB safety margin. Without this check,
+    // a 4K download on an almost-full disk dies partway through with a
+    // cryptic ffmpeg/io error.
+    if (videoInfo?.filesize_approx) {
+      try {
+        const free = await sublix.downloaderCheckDisk();
+        const required = videoInfo.filesize_approx;
+        const SAFETY_MARGIN = 1024 * 1024 * 1024; // 1 GB
+        if (free < required + SAFETY_MARGIN) {
+          const freeGB = (free / 1024 / 1024 / 1024).toFixed(1);
+          const needGB = (required / 1024 / 1024 / 1024).toFixed(1);
+          setInspectError(
+            `Ổ đĩa không đủ dung lượng trống (cần ${needGB} GB + 1 GB dự phòng, còn ${freeGB} GB).`
+          );
+          return;
+        }
+      } catch (e) {
+        // If we can't check disk, don't block — let the user try and surface
+        // the failure naturally if it really is too small.
+        console.warn("disk check failed:", e);
+      }
+    }
 
     const id = "dl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
     const title = videoInfo?.title || "Video " + (currentPlatformMeta.label || "Download");
@@ -314,7 +366,18 @@ export default function DownloaderView({
     }
   };
 
-  const handleRemove = (id: string) => {
+  const handleRemove = async (id: string) => {
+    // BUG-052: deleting an item that's still running leaves yt-dlp alive
+    // in the background. Cancel first, swallow the (possibly already-dead)
+    // error, then drop the row from the UI.
+    const target = items.find((i) => i.id === id);
+    if (target && (target.status === "downloading" || target.status === "paused" || target.status === "queued")) {
+      try {
+        await sublix.downloaderCancel(id);
+      } catch (e) {
+        // ignore — job may already be dead
+      }
+    }
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 

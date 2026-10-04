@@ -29,6 +29,10 @@ pub struct VideoInfo {
     pub platform: String,
     pub url: String,
     pub description: Option<String>,
+    /// Approximate total size in bytes (from yt-dlp `filesize_approx` /
+    /// `filesize`). `None` when yt-dlp cannot estimate (live streams etc.).
+    /// Used by the UI to warn about disk space (BUG-051).
+    pub filesize_approx: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,6 +279,9 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
     let thumbnail = json["thumbnail"].as_str().map(|s| s.to_string());
     let id = json["id"].as_str().unwrap_or("").to_string();
     let description = json["description"].as_str().map(|s| s.to_string());
+    let filesize_approx = json["filesize_approx"]
+        .as_u64()
+        .or_else(|| json["filesize"].as_u64());
 
     Ok(VideoInfo {
         id,
@@ -285,6 +292,7 @@ pub fn fetch_video_info(url: &str) -> Result<VideoInfo> {
         platform: platform.to_string(),
         url: url.to_string(),
         description,
+        filesize_approx,
     })
 }
 
@@ -708,4 +716,38 @@ pub fn reveal_downloaded_file(path_str: &str) -> Result<()> {
         cmd.spawn()?;
     }
     Ok(())
+}
+
+/// BUG-051: how many bytes are free on the volume that would hold `path`.
+/// Returns `None` on non-Windows platforms.
+#[cfg(windows)]
+pub fn disk_free_bytes(path: &Path) -> Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut free_bytes: u64 = 0;
+    let result = unsafe {
+        GetDiskFreeSpaceExW(
+            windows::core::PCWSTR(wide.as_ptr()),
+            Some(&mut free_bytes),
+            None,
+            None,
+        )
+    };
+    if result.is_err() {
+        return Err(anyhow::anyhow!(
+            "Không lấy được dung lượng trống ổ đĩa cho {}",
+            path.display()
+        ));
+    }
+    Ok(free_bytes)
+}
+
+#[cfg(not(windows))]
+pub fn disk_free_bytes(_path: &Path) -> Result<u64> {
+    Err(anyhow::anyhow!("disk_free_bytes chỉ hỗ trợ Windows"))
 }
