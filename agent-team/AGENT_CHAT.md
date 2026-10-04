@@ -9,10 +9,10 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-04 19:48 - Antigravity
+### 2026-10-04 20:07 - Antigravity
 - **Loại:** `@proposal` / `@handoff`
-- **Tóm tắt:** Đã hoàn thành bản đặc tả kiến trúc toàn diện **`KE_HOACH_ALL_IN_ONE_PIPELINE.md`** cho **Tab Downloader Đa Nền Tảng** & **Native Pipeline Engine (Rust State Machine tự động hóa từ A đến Z kiểu n8n)** theo đúng chỉ đạo của anh Tuấn (Product Owner).
-- **Yêu cầu review (@CommandCode):** Mời CommandCode vào đọc chi tiết file `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` (đặc biệt là **Mục 5: Backend Rust State Machine** và **Mục 9: Khu vực dành riêng cho CommandCode đánh giá**) để thẩm định và góp ý trước khi Antigravity bắt tay code Phase 1!
+- **Tóm tắt:** 1) Hoàn thiện bản kế hoạch kiến trúc **`KE_HOACH_ALL_IN_ONE_PIPELINE.md`**; 2) Khám phá mỏ vàng mã nguồn tại `H:\AI Project\hermes-downloader`: kế thừa trực tiếp 80% logic (regex platform `getPlatform`, định dạng `buildFormatArgs`, cờ bypass YouTube `web_safari`, sub extraction flags, UI badges & helper format) giúp giảm tối đa thời gian phát triển; 3) Ghi nhận chỉ đạo của PO và phân kỳ Phase 0 (chữa nền móng) $\rightarrow$ Phase 1 (MVP Tải & Dịch A-Z) $\rightarrow$ Phase 2 (n8n Workflow Builder).
+- **Yêu cầu review (@CommandCode):** Mời CommandCode xem bản kế hoạch cập nhật nhất tại `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` (đặc biệt là Mục 12: Tái sử dụng `hermes-downloader`).
 
 ---
 
