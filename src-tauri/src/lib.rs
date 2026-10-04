@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 pub mod audio;
 pub mod config;
+pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
 pub mod overlay;
@@ -144,7 +145,13 @@ pub fn run() {
             dubbing_analyze,
             dubbing_preview_tts,
             dubbing_export,
-            dubbing_cancel
+            dubbing_cancel,
+            downloader_get_info,
+            downloader_start,
+            downloader_pause,
+            downloader_cancel,
+            downloader_open_folder,
+            downloader_reveal_file
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -984,4 +991,45 @@ async fn dubbing_export(
     .map_err(|e| e.to_string())?
     .map_err(|e| format!("{e:#}"))
 }
+
+#[tauri::command]
+async fn downloader_get_info(url: String) -> Result<downloader::VideoInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        downloader::fetch_video_info(&url)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn downloader_start(app: tauri::AppHandle, req: downloader::DownloadRequest) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        downloader::start_download(app, req)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn downloader_pause(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    downloader::pause_download(&app, &id).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn downloader_cancel(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    downloader::cancel_download(&app, &id).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn downloader_open_folder(app: tauri::AppHandle) -> Result<(), String> {
+    downloader::open_downloads_folder(&app).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn downloader_reveal_file(path: String) -> Result<(), String> {
+    downloader::reveal_downloaded_file(&path).map_err(|e| format!("{e:#}"))
+}
+
 

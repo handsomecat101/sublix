@@ -15,6 +15,7 @@ import "./DubbingStudioView.css";
 
 interface DubbingStudioViewProps {
   defaultSourceLang?: string;
+  initialFilePath?: string;
 }
 
 const SOURCE_LANG_OPTIONS: SelectOption[] = [
@@ -44,8 +45,9 @@ const SAMPLE_PHRASES: Record<string, string> = {
 
 export default function DubbingStudioView({
   defaultSourceLang = "ja",
+  initialFilePath = "",
 }: DubbingStudioViewProps) {
-  const [filePath, setFilePath] = useState<string>("");
+  const [filePath, setFilePath] = useState<string>(initialFilePath);
   const [sourceLang, setSourceLang] = useState<string>(defaultSourceLang);
   const [targetLang, setTargetLang] = useState<string>("vi");
   const [selectedDubMode, setSelectedDubMode] = useState<"ducking" | "vocal_isolation">("ducking");
@@ -92,6 +94,12 @@ export default function DubbingStudioView({
       pProgress.then((u) => u()).catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    if (initialFilePath) {
+      setFilePath(initialFilePath);
+    }
+  }, [initialFilePath]);
 
   // Handle Drag & Drop via Tauri API
   useEffect(() => {

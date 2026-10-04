@@ -328,6 +328,30 @@ export const sublix = {
   async dubbingExport(project: DubbingProject, outputPath?: string): Promise<string> {
     return await invoke<string>("dubbing_export", { project, outputPath });
   },
+
+  async downloaderGetInfo(url: string): Promise<VideoInfo> {
+    return await invoke<VideoInfo>("downloader_get_info", { url });
+  },
+
+  async downloaderStart(req: DownloadRequest): Promise<void> {
+    return await invoke("downloader_start", { req });
+  },
+
+  async downloaderPause(id: string): Promise<void> {
+    return await invoke("downloader_pause", { id });
+  },
+
+  async downloaderCancel(id: string): Promise<void> {
+    return await invoke("downloader_cancel", { id });
+  },
+
+  async downloaderOpenFolder(): Promise<void> {
+    return await invoke("downloader_open_folder");
+  },
+
+  async downloaderRevealFile(path: string): Promise<void> {
+    return await invoke("downloader_reveal_file", { path });
+  },
 };
 
 export interface VoicePreset {
@@ -375,4 +399,61 @@ export interface DubbingProgress {
   current_item: number;
   total_items: number;
 }
+
+export interface VideoInfo {
+  id: string;
+  title: string;
+  uploader?: string | null;
+  duration?: number | null;
+  thumbnail?: string | null;
+  platform: string;
+  url: string;
+  description?: string | null;
+}
+
+export interface DownloadRequest {
+  id: string;
+  url: string;
+  format: string; // "1080p" | "720p" | "480p" | "360p" | "audio-mp3" | "audio-m4a" | "max"
+  browser_cookies?: string | null; // "edge" | "chrome" | "firefox" | "none"
+  extract_subtitles: boolean;
+  subtitle_langs?: string[] | null;
+}
+
+export interface DownloadProgressPayload {
+  id: string;
+  status: "downloading" | "paused" | "completed" | "error" | "cancelled";
+  percent: number;
+  speed: string;
+  eta: string;
+  size_text: string;
+  filename: string;
+  file_path?: string | null;
+  error?: string | null;
+}
+
+export async function downloaderGetInfo(url: string): Promise<VideoInfo> {
+  return invoke<VideoInfo>("downloader_get_info", { url });
+}
+
+export async function downloaderStart(req: DownloadRequest): Promise<void> {
+  return invoke("downloader_start", { req });
+}
+
+export async function downloaderPause(id: string): Promise<void> {
+  return invoke("downloader_pause", { id });
+}
+
+export async function downloaderCancel(id: string): Promise<void> {
+  return invoke("downloader_cancel", { id });
+}
+
+export async function downloaderOpenFolder(): Promise<void> {
+  return invoke("downloader_open_folder");
+}
+
+export async function downloaderRevealFile(path: string): Promise<void> {
+  return invoke("downloader_reveal_file", { path });
+}
+
 

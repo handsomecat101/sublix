@@ -9,6 +9,26 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 21:15 - Antigravity
+- **Loại:** `@done` (Hoàn tất 100% Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng theo kế hoạch)
+- **Tóm tắt:** Kế thừa trọn vẹn sức mạnh từ `hermes-downloader`:
+  1. Backend Rust (`src-tauri/src/downloader/mod.rs`): Tích hợp `yt-dlp` tìm tự động, nhận diện nền tảng Regex (YouTube, TikTok, Douyin, Bilibili, Facebook, X, Instagram, v.v.), format selectors (MAX, 4K, 2K, 1080p, 720p, 480p, 360p, MP3, M4A), cookies trình duyệt (Edge, Chrome, Firefox), bóc tách phụ đề gốc & auto-subs (.srt), stream stdout tiến độ thời gian thực, tạm dừng giữ `.part`, hủy diệt sạch tiến trình con bằng `taskkill /PID <pid> /T /F`.
+  2. Frontend React (`DownloaderView.tsx` & `.css`): Giao diện hiện đại đồng bộ theme Sublix, auto-detect platform badge, kiểm tra metadata video trước khi tải, hiển thị thanh tiến độ, tốc độ (MB/s), ETA và dung lượng.
+  3. Cầu nối 1-Click (Pipeline Bridges): Nút 📝 **"Tạo Vietsub (.SRT)"** và 🎬 **"Lồng Tiếng AI"** cho phép chuyển ngay video vừa tải sang File Sub hoặc Dubbing Studio kèm đường dẫn file được điền sẵn.
+  4. Quản lý lịch sử tải về lưu trong localStorage + nút Mở thư mục / Reveal file trong Explorer + Banner cảnh báo bản quyền.
+- **Files đã tạo/sửa:** `src-tauri/src/downloader/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DownloaderView.tsx`, `src/views/DownloaderView.css`, `src/views/SettingsView.tsx`, `src/views/FileSubView.tsx`, `src/views/DubbingStudioView.tsx`, `src/icons.tsx`.
+- **Trạng thái Verify:** `cargo test` PASS 2/2 tests, `npm run build` PASS (2.27s), đóng gói release binary hoàn tất.
+
+---
+
+### 2026-10-04 21:30 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
+- **Loại:** `@assign → Antigravity`
+- **Tóm tắt:** Anh Tuấn giao Antigravity làm **Tab Tải Video (Phase 1)** trong `KE_HOACH_ALL_IN_ONE_PIPELINE.md`, **tận dụng code sẵn của `hermes-downloader`** theo Mục 12 (không viết lại từ đầu).
+- **Yêu cầu:** làm đúng Mục 11 thứ tự (Phase 0 nền móng trước nếu chưa xong), nghiệm thu theo bảng tiêu chí Phase 1; giao diện theo kiểu "Công thức + tích ô" (Phase 2 mục 0) — **KHÔNG** làm bảng nối dây.
+- **Files cần đọc:** `KE_HOACH_ALL_IN_ONE_PIPELINE.md` (bản mới), `ISSUE_LOG.md`, `H:\AI Project\hermes-downloader\main.js` (nguồn kế thừa).
+
+---
+
 ### 2026-10-04 20:45 - Antigravity
 - **Loại:** `@done` (Hoàn tất 100% Phase 0: Chữa Nền Móng theo chỉ đạo của PO Anh Tuấn)
 - **Tóm tắt:** Đã xử lý triệt để 8 lỗi nền tảng được CommandCode chỉ ra:

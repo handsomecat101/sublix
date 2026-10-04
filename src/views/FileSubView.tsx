@@ -29,6 +29,7 @@ interface FileSubViewProps {
   transModels: ModelStatusItem[];
   defaultSttModel?: string;
   defaultTransModel?: string;
+  initialFilePath?: string;
 }
 
 const SOURCE_LANG_OPTIONS: SelectOption[] = [
@@ -53,8 +54,9 @@ export default function FileSubView({
   transModels,
   defaultSttModel = "large-v3-turbo-q8_0",
   defaultTransModel = "qwen3-4b",
+  initialFilePath = "",
 }: FileSubViewProps) {
-  const [filePath, setFilePath] = useState<string>("" );
+  const [filePath, setFilePath] = useState<string>(initialFilePath);
   const [sourceLang, setSourceLang] = useState<string>("en");
   const [targetLang, setTargetLang] = useState<string>("vi");
   const [createBilingual, setCreateBilingual] = useState<boolean>(true);
@@ -71,6 +73,12 @@ export default function FileSubView({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewList, setPreviewList] = useState<SubtitlePreviewItem[]>([]);
   const previewEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialFilePath) {
+      setFilePath(initialFilePath);
+    }
+  }, [initialFilePath]);
 
   // Helper to test if file is video
   const isVideo = (path: string) => {

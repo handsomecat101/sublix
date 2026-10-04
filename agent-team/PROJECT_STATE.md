@@ -33,9 +33,7 @@
 
 ## 🟡 Task Đang Làm (In Progress - Lock)
 
-| ID | Task | Agent | Priority | Status | Files đang sửa |
-|----|------|-------|----------|--------|----------------|
-| `TSK-022.1` | Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin) kế thừa hermes-downloader | **Antigravity** | 🔴 HIGH | 🟡 Ready to start | `src-tauri/src/downloader/mod.rs`, `src/views/DownloaderView.tsx` |
+*Không có task nào bị khóa. Sẵn sàng nhận Phase 2 (n8n Workflow Automation).*
 
 ---
 
@@ -43,7 +41,7 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
-| `TSK-022` | Xây dựng Tab Downloader Đa Nền Tảng & Pipeline Trọn Gói A-Z | Antigravity / Claude Code | 🔴 HIGH | Tải video YouTube/Douyin/TikTok/Bilibili, nối sang Sub & Lồng tiếng (Chi tiết: KE_HOACH_ALL_IN_ONE_PIPELINE.md) |
+| `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | Claude Code / Antigravity | 🔴 HIGH | Windows Job Object kill-on-close, async spawn_blocking |
 | `TSK-012` | Tích hợp Sherpa-ONNX 3D-Speaker Diarization nâng cao | Antigravity | 🔴 HIGH | Nhận diện giọng nói đa vai bằng vector embedding |
 | `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật |
@@ -54,6 +52,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-022.1` | Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin, Bilibili) & Cầu nối 1-Click | Antigravity | 2026-10-04 | Kế thừa trọn vẹn hermes-downloader: đa nền tảng, cookies Edge/Chrome/Firefox, sub extract, pause/resume/cancel, 1-click bridge sang File Sub & Studio Dubbing |
 | `TSK-023` | Fix Triệt Để 8 Lỗi Nền Móng Phase 0 (BUG-026, 027, 028, 029, 030, 031, 032, 041) | Antigravity | 2026-10-04 | Cây amix ≤28 inputs, normalize=0, generation hủy AtomicU64 + diệt PID tree, không nuốt lỗi dịch, chống rò rỉ listener + race drop file, pass unit test & build release |
 | `TSK-021` | Benchmark LLM & Bộ chọn Biên kịch 1-Click (Local Qwen 3 GPU vs MiniMax-M3) | Antigravity | 2026-10-04 | Đã tích hợp Batch cho Qwen 3 GPU (~0.1s/câu, 20s/phim), bộ chọn 1-click trực tiếp trong Studio |
 | `TSK-020` | Tối ưu hiệu năng Lồng Tiếng AI: Ghép nối câu, Dịch theo cụm (Batching), Chọn phạm vi & Nút Dừng | Antigravity | 2026-10-04 | Đã giảm 90% câu rác, tăng tốc dịch 30x, hỗ trợ test 3 phút trong 20s và nút Dừng lại tức thì |

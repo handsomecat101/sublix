@@ -18,11 +18,12 @@ import {
 } from "../lib/tauri";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
+import DownloaderView from "./DownloaderView";
 import { ChangelogModal } from "./ChangelogModal";
 import {
   IconFilm, IconClapper, IconMic, IconBox, IconClock, IconPanel,
   IconSparkles, IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
-  IconPlay, IconStop,
+  IconPlay, IconStop, IconGlobe,
 } from "../icons";
 import logoUrl from "../assets/logo.png";
 import spotHistoryUrl from "../assets/spot-history.jpg";
@@ -111,7 +112,19 @@ export default function SettingsView() {
   const [transEnginePref, setTransEnginePref] = useState<"auto" | "cpu" | "cuda">("auto");
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
   const [fullConfig, setFullConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<"file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("file_sub");
+  const [activeTab, setActiveTab] = useState<"downloader" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("downloader");
+  const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
+  const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
+
+  const handleRouteToFileSub = (path: string) => {
+    setPendingFileSubPath(path);
+    setActiveTab("file_sub");
+  };
+
+  const handleRouteToDubbing = (path: string) => {
+    setPendingDubbingPath(path);
+    setActiveTab("dubbing");
+  };
   const [historySearch, setHistorySearch] = useState<string>("");
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
   const [theme, setTheme] = useState<string>("cinema");
@@ -750,6 +763,16 @@ export default function SettingsView() {
           <nav className="sidebar-nav">
             <button
               type="button"
+              className={`sidebar-nav-item ${activeTab === "downloader" ? "active" : ""}`}
+              onClick={() => setActiveTab("downloader")}
+            >
+              <IconGlobe className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Tải Video Đa Nền Tảng</span>
+              <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>HOT</span>
+            </button>
+
+            <button
+              type="button"
               className={`sidebar-nav-item ${activeTab === "file_sub" ? "active" : ""}`}
               onClick={() => setActiveTab("file_sub")}
             >
@@ -863,6 +886,7 @@ export default function SettingsView() {
         {/* Topbar */}
         <div className="main-topbar">
           <div className="main-topbar-title">
+            {activeTab === "downloader" && <><IconGlobe size={15} /> Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin, Bilibili, Facebook...)</>}
             {activeTab === "file_sub" && <><IconFilm size={15} /> Tạo Phụ Đề Cho File Media (Video / Audio)</>}
             {activeTab === "dubbing" && <><IconClapper size={15} /> Studio Lồng Tiếng AI Đa Vai (Diarization + Neural TTS)</>}
             {activeTab === "live" && <><IconMic size={15} /> Dịch Phụ Đề Trực Tiếp Thời Gian Thực (Live Stream)</>}
@@ -892,17 +916,28 @@ export default function SettingsView() {
         {/* Scrollable Body */}
         <div className="main-body">
 
+      {activeTab === "downloader" && (
+        <DownloaderView
+          onNavigateToFileSub={handleRouteToFileSub}
+          onNavigateToDubbing={handleRouteToDubbing}
+        />
+      )}
+
       {activeTab === "file_sub" && (
         <FileSubView
           sttModels={sttModels}
           transModels={transModels}
           defaultSttModel={model}
           defaultTransModel={translationModel}
+          initialFilePath={pendingFileSubPath}
         />
       )}
 
       {activeTab === "dubbing" && (
-        <DubbingStudioView defaultSourceLang={language} />
+        <DubbingStudioView
+          defaultSourceLang={language}
+          initialFilePath={pendingDubbingPath}
+        />
       )}
 
       {activeTab === "live" && (
