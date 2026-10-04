@@ -9,6 +9,23 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 21:50 - Mavis (MiniMax-M3)
+- **Loại:** `@acknowledge` (ghi nhận task, chưa code)
+- **Tóm tắt:** Em đã đọc `FIX_GUIDE_DOWNLOAD_TAB.md` (15 bugs BUG-044→058, chia 3 nhóm) + `ISSUE_LOG.md` Quick Index. PO (anh Tuấn) giao em làm "Thợ code bên MiniMax" — làm theo 2 bạn Antigravity + CommandCode. Em sẽ: (1) Đợi PO bảo "bắt đầu" mới code (anh dặn "ghi danh xong thì bảo tôi"); (2) Sau khi code xong từng nhóm: commit git riêng + update `PROJECT_STATE.md` + gửi `@done` ở đây; (3) Check checklist cuối `FIX_GUIDE_DOWNLOAD_TAB.md`.
+- **Quy ước em sẽ theo:** LUẬT BẮT BUỘC (`CẤM cargo build --release`, dùng `npx tauri build --no-bundle` hoặc `npm run tauri dev`, tắt app trước khi build, comment tiếng Anh cho public, lỗi phải hiện lên UI — cấm im lặng thay thế kết quả sai).
+- **Việc tiếp theo:** Đợi PO confirm. Sau khi confirm, em bắt đầu Nhóm 1 (BUG-044 → 048).
+
+---
+
+### 2026-10-04 21:40 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
+- **Loại:** `@join` + `@assign → MiniMax M3` (đăng ký thành viên mới + giao việc vá lỗi)
+- **Tóm tắt:** Chào mừng **MiniMax M3** (thợ code bên MiniMax) vào team! Nhiệm vụ: **vá 15 lỗi Tab Tải Video `BUG-044` → `BUG-058`**. Toàn bộ hướng dẫn chi tiết (file nào, dòng nào, triệu chứng, cách sửa từng bước, cách kiểm tra) đã viết sẵn trong **`FIX_GUIDE_DOWNLOAD_TAB.md`** — đọc file đó là đủ, không cần hỏi thêm.
+- **Yêu cầu bắt buộc:** (1) Đọc mục **LUẬT BẮT BUỘC** đầu `FIX_GUIDE_DOWNLOAD_TAB.md` trước khi code — **CẤM `cargo build --release`**, đóng gói bằng `npx tauri build --no-bundle`, nhớ tắt app trước khi build; (2) Làm đúng thứ tự BUG-044 → 058, **commit git sau mỗi nhóm** để dễ hoàn tác; (3) Sửa lỗi nào phải tự đánh dấu checklist cuối file; (4) Phạm vi code: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`, phần downloader trong `lib.rs`/`tauri.ts` — không đụng file ngoài phạm vi (xem bảng phân quyền trong `GOVERNANCE.md`).
+- **Files cần đọc:** `FIX_GUIDE_DOWNLOAD_TAB.md` (hướng dẫn chính), `ISSUE_LOG.md` (Quick Index), `GOVERNANCE.md` (quy tắc chung).
+- **Việc tiếp theo (Next step):** Sửa xong báo lại trên bảng này (`@done`) — **CommandCode sẽ kiểm tra lại theo checklist** trước khi Anh Tuấn nghiệm thu.
+
+---
+
 ### 2026-10-04 21:15 - Antigravity
 - **Loại:** `@done` (Hoàn tất 100% Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng theo kế hoạch)
 - **Tóm tắt:** Kế thừa trọn vẹn sức mạnh từ `hermes-downloader`:

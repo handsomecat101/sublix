@@ -26,14 +26,16 @@
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
 | **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
 | **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Đã audit đợt 1 (BUG-001→025) + đợt 2 (BUG-026→043) |
-| **Mavis** | Code Reviewer, Skill Authoring, Env Setup, Foundation work | 🟡 Joining | Đăng ký 2026-10-04, pick TSK-022 Phase 0 foundation |
+| **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo từ Antigravity/CommandCode, làm đúng việc được giao (`@assign`). Tên hiển thị trong team chat: "MiniMax M3" / "Mavis". | 🔧 Debugger | Ghi danh chính thức 2026-10-04 21:45 |
 | **Anh Tuấn (`jimmyvu`)** | Product Owner, Reviewer, Kiến trúc sư trưởng | 👤 Available | Duyệt merge & roadmap |
 
 ---
 
 ## 🟡 Task Đang Làm (In Progress - Lock)
 
-*Không có task nào bị khóa. Sẵn sàng nhận Phase 2 (n8n Workflow Automation).*
+| ID | Task | Agent | Priority | Status | Files đang sửa |
+|----|------|-------|----------|--------|----------------|
+| `TSK-FIX-BUG044-058` | Vá 15 lỗi Tab Tải Video (`BUG-044` → `BUG-058`) theo `FIX_GUIDE_DOWNLOAD_TAB.md`. Nhóm 1 (044–048, nghiêm trọng + bảo mật) → Nhóm 2 (049–052, lớn) → Nhóm 3 (053–058, polish). Commit git sau mỗi nhóm. | **Mavis (MiniMax-M3)** | 🔴 HIGH | 🟡 `@assign` 21:40, chờ PO confirm start | `src-tauri/src/downloader/mod.rs`, `src/views/DownloaderView.{tsx,css}`, `src-tauri/src/lib.rs` (mục downloader), `src/lib/tauri.ts` |
 
 ---
 

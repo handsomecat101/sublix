@@ -75,6 +75,27 @@
 | `BUG-042` | Nghe thử giọng phát chồng nhau (giọng về sau thắng); audio không dừng khi rời tab; hủy hiện như chữ đỏ "lỗi" | `DubbingStudioView.tsx:149-164,206,67` | Preview dùng request-sequence + cleanup unmount + phân biệt cancel/error | 🔴 Open |
 | `BUG-043` | Nhóm nhỏ: toggle mất focus-visible, range limit nói quá thời lượng clip ngắn, chữ trắng trên nền cam thiếu tương phản, theme bấm trước khi config load bị ghi đè | `FileSubView.css:378`, `dubbing/mod.rs:632`, `ChangelogModal.css:97`, `SettingsView.tsx` | Mọi control cần :focus-visible; duration = min(limit, thật); kiểm tương phản chữ/nền accent | 🔴 Open |
 
+---
+
+### 🧪 15 Lỗi Rà Tab Tải Video Phase 1 (CommandCode Review 2026-10-04 — code Antigravity + kế thừa hermes):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-044` | 🔴 LỖ HỔNG BẢO MẬT: dán chuỗi bắt đầu bằng `--` vào ô link → yt-dlp hiểu nhầm là cờ lệnh, có thể chạy lệnh tùy ý (`--exec`, nạp config từ xa) | `downloader/mod.rs:203,254` | Chỉ nhận URL `http(s)://` + truyền URL sau dấu `--` ngăn cách | 🔴 Open |
+| `BUG-045` | 🔴 Đổi tab khi đang tải → mất sự kiện: file tải xong kẹt "Đang tải" mãi, mất luôn nút Tạo Phụ Đề / Lồng Tiếng | `DownloaderView.tsx:156`, `SettingsView.tsx:919` | Nghe sự kiện việc đang chạy phải sống ở cấp cha, không sống trong tab có thể bị tháo | 🔴 Open |
+| `BUG-046` | 🔴 Tải hỏng vẫn báo "thành công" với **file của job khác** (im lặng thay kết quả sai — điều cấm) | `downloader/mod.rs:415-434` | Chỉ báo thành công khi xác nhận đúng file của chính job đó | 🔴 Open |
+| `BUG-047` | 🔴 Hủy 1 job lại xóa file tải dở của **mọi** job trong thư mục → phá luôn tính năng "tải tiếp khi mạng rớt" | `downloader/mod.rs:510-518` | Chỉ được xóa file tạm của chính job bị hủy | 🔴 Open |
+| `BUG-048` | 🔴 Trùng id tải → job cũ thành tiến trình ma không kill được, 2 pipeline chạy song song (BUG-028 tái diễn) | `downloader/mod.rs:314-324` | Id đã tồn tại phải từ chối hoặc đánh số thế hệ mới | 🔴 Open |
+| `BUG-049` | 🟠 Tiến trình "NaN%" → lưu lại thành null → mở app lên **crash trắng tab** Tải Video | `DownloaderView.tsx:165,620,624` | Mọi % nhận về phải lọc số hợp lệ trước khi dùng/lưu | 🔴 Open |
+| `BUG-050` | 🟠 Tắt app giữa lúc tải → mở lại hiện mục "ma" kẹt "Đang tải", không có nút Thử lại | `DownloaderView.tsx:130-153` | Khi mở lại, việc dở dang phải chuyển thành "bị gián đoạn" + nút Thử lại | 🔴 Open |
+| `BUG-051` | 🟠 Thiếu kiểm tra dung lượng ổ đĩa trước khi tải (kế hoạch bắt buộc — cả UI lẫn backend đều không có) | `DownloaderView.tsx`, `downloader/mod.rs:246` | Tải file nặng phải kiểm tra ổ cứng còn trống trước | 🔴 Open |
+| `BUG-052` | 🟠 Nút thùng rác xóa mục đang tải mà KHÔNG hủy job → tiến trình ma ăn băng thông + ổ cứng | `DownloaderView.tsx:317-319` | Xóa mục đang chạy phải hủy job trước đã | 🔴 Open |
+| `BUG-053` | 🟠 Bấm đúp nút Tải → tải 2 lần cùng 1 video (BUG-011 tái diễn, thiếu khóa chống bấm đúp) | `DownloaderView.tsx:216-264,519` | Nút async phải khóa ngay từ lúc bấm | 🔴 Open |
+| `BUG-054` | 🟠 Vẫn hardcode `C:\Program Files\AI Automation` và tìm TRƯỚC cả PATH (vi phạm luật 1 kế hoạch, lặp BUG-001/017) | `downloader/mod.rs:68-79` | Thứ tự: PATH → cạnh file exe → người dùng chỉ — cấm hardcode | 🔴 Open |
+| `BUG-055` | 🟠 Quên cờ `--no-playlist` → dán link playlist là tải nguyên cả playlist mà không hỏi | `downloader/mod.rs:253-259` | Mặc định tải 1 video; playlist phải là lựa chọn chủ động | 🔴 Open |
+| `BUG-056` | 🟡 Nhóm đọc tiến trình kiểu cũ: đoán % bằng đọc chữ tự do (vi phạm luật 2), bắn sự kiện quá nhiều làm giật UI, lỗi stderr chỉ hiện 1 dòng | `downloader/mod.rs:257,342-374,390,411` | Dùng `--progress-template` số thuần; bóp sự kiện ~4-10 lần/giây; đọc hết stderr | 🔴 Open |
+| `BUG-057` | 🟡 Nhóm vận hành: không Job Object (kill app là để ma yt-dlp/ffmpeg), lệnh hủy chạy chặn UI, xem trước video không có timeout (treo vô hạn), pause/hủy lỗi im lặng + bấm đúp, thiếu dự phòng `cookies.txt` | `downloader/mod.rs:267,505-579`, `lib.rs:1015` | Tiến trình con trong Job Object; lệnh lâu phải async + timeout; lỗi phải hiện màn hình | 🔴 Open |
+| `BUG-058` | 🟡 Nhóm vặt: chọn 4K nhưng thực chất không bao giờ được 4K (thiếu cờ ghép video+audio rời), thiếu ghi nhận MIT khi kế thừa, nhận diện nhầm tên miền (`fox.com` → twitter), đường dẫn truyền sang File Sub không kiểm tra, lỗi có khi hiện "[object Object]", trạng thái "đã hủy" mất nút Thử lại | `downloader/mod.rs:165,106,594`, `DownloaderView.tsx` | Mọi lựa chọn phải cho đúng kết quả đã hứa; đường dẫn phải chuẩn hóa trước khi truyền | 🔴 Open |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -174,4 +195,34 @@
 - **File:** `SettingsView.tsx` (hotkey `useEffect`, deps `[isLive, overlayVisible]`)
 - **Root Cause:** Listener chỉ tái tạo khi `isLive`/`overlayVisible` đổi → `handleStartLive` được gọi là bản cũ, đọc model/ngôn ngữ/chunk ở thời điểm re-bind trước đó; nút bấm thì dùng giá trị mới.
 - **Cách fix & Bài học:** Handler trong keydown phải đi qua `latestRef` (hoặc deps đầy đủ). Phím tắt + handler async = cặp đôi dễ dính stale closure nhất.
+
+### [BUG-044] LỖ HỔNG BẢO MẬT: dán chuỗi `--cờ` vào ô link → yt-dlp chạy lệnh tùy ý
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **File:** `downloader/mod.rs:203` (`cmd.arg(url)`), `:254`
+- **Root Cause:** URL dán vào được truyền thẳng làm đối số yt-dlp mà không kiểm tra phải bắt đầu bằng `http(s)://` và không có dấu ngăn cách `--`. Chuỗi như `--exec calc.exe` hay `--config-location=\\máy_khác\chia_sẻ\cfg` được yt-dlp hiểu là **cờ lệnh của chính nó** → có thể thực thi lệnh tùy ý từ xa.
+- **Cách fix & Bài học:** (1) Chỉ nhận URL khớp `^https?://`; (2) truyền URL **sau dấu `--`** ngăn cách; (3) luôn cho user string vào argv sau `--`. *Mọi tham số người dùng dán vào đều là "vũ khí" — phải chặn ở cửa.*
+
+### [BUG-045] Đổi tab khi đang tải → mất sự kiện, file tải xong kẹt "Đang tải" mãi
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **File:** `DownloaderView.tsx:156-180`, `SettingsView.tsx:919` (mount có điều kiện theo tab)
+- **Root Cause:** Listener `downloader:progress` chỉ sống khi tab Tải Video còn mở; chuyển tab là tháo listener, mọi sự kiện sau đó (kể cả sự kiện "hoàn thành" chứa đường dẫn file) mất vĩnh viễn → mục tải kẹt % cũ, nút "Tạo Phụ Đề / Lồng Tiếng" không bao giờ hiện (và trạng thái kẹt còn bị lưu vào localStorage).
+- **Cách fix & Bài học:** Giữ component luôn mounted (ẩn bằng CSS) hoặc đẩy listener về cấp cha/store sống xuyên tab. *Mọi luồng nền đang chạy thì "tai" nghe sự kiện của nó phải sống lâu hơn component.*
+
+### [BUG-046] Tải hỏng vẫn báo "thành công" với file của job khác
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **File:** `downloader/mod.rs:415-434` + `find_latest_file` `:482-502`
+- **Root Cause:** yt-dlp chết trước khi in tên file → code lấy **file media mới nhất trong thư mục chung** (có thể của job khác/job cũ) làm kết quả, rồi `is_success || file.exists()` báo "completed" cho một lần tải thất bại — đúng hành vi "im lặng thay kết quả sai" mà kế hoạch cấm.
+- **Cách fix & Bài học:** Chỉ báo thành công khi process exit 0 **và** có đúng file do chính yt-dlp báo tên; nếu không → báo lỗi rõ. *Không bao giờ "mượn" kết quả của công việc khác.*
+
+### [BUG-047] Hủy 1 job xóa file tải dở của mọi job khác — phá tính năng "tải tiếp"
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **File:** `downloader/mod.rs:510-518`
+- **Root Cause:** Khi hủy, code quét **toàn bộ** thư mục tải và xóa mọi file `.part`/`.ytdl` — kể cả file đang ghi của các job khác (job kia hỏng giữa chừng) và file dành cho việc "tải tiếp khi mạng rớt".
+- **Cách fix & Bài học:** Chỉ xóa file tạm thuộc chính job bị hủy (theo dõi đích ghi của từng job). *Thao tác dọn dẹp phải theo phạm vi "của ai nấy xóa".*
+
+### [BUG-048] Trùng id tải → job cũ thành tiến trình ma không kill được
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **File:** `downloader/mod.rs:314-324` (`ACTIVE_JOBS.insert` ghi đè không kiểm)
+- **Root Cause:** Ghi đè id cũ trong bảng quản lý làm mất PID của job cũ → nút Tạm dừng/Hủy giờ giết nhầm hoặc không giết gì, yt-dlp cũ vẫn chạy song song với bản mới — cùng họ với BUG-028 ("job hồi sinh").
+- **Cách fix & Bài học:** Id đã tồn tại thì từ chối (hoặc hủy job cũ hẳn trước khi ghi), hoặc đánh số thế hệ mỗi lần chạy. *Bảng quản lý tiến trình không được ghi đè im lặng.*
 

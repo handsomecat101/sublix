@@ -30,6 +30,7 @@
 | **Antigravity** | Kiến trúc hệ thống, Rust Engine, AI Pipeline, Release Build | Toàn bộ codebase theo task | - |
 | **Claude Code** | Audio DSP, Logic Streaming, Bug fixes | `src-tauri/src/`, `src/lib/` | Cấu hình window Tauri, Release script |
 | **Cursor / Codex** | Frontend React, UI/UX, CSS styling, Testing | `src/views/`, `src/components/`, `src/*.css` | Rust backend core files |
+| **MiniMax M3** | Vá lỗi theo hướng dẫn chi tiết (thợ code — nhận task qua `AGENT_CHAT.md`) | Theo phạm vi ghi trong từng task (vd: `src-tauri/src/downloader/`, `src/views/DownloaderView.*` theo `FIX_GUIDE_DOWNLOAD_TAB.md`) | Sửa file ngoài phạm vi được giao; tự ý đổi kiến trúc khi chưa xin phép |
 | **Anh Tuấn (`jimmyvu`)** | Product Owner, Kiến trúc sư trưởng | **Toàn quyền** | - |
 
 ---
