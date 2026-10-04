@@ -324,6 +324,60 @@ pub fn translate_text_with_config(
     }
 }
 
+/// Translate a batch of texts using active provider, chunking into sub-batches of 15 items.
+pub fn translate_batch_with_config(
+    items: &[String],
+    source: &str,
+    target: &str,
+    model: TranslationModelVariant,
+    pref: EnginePreference,
+    cfg: &crate::config::AppConfig,
+) -> Vec<String> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::with_capacity(items.len());
+    let chunk_size = 15;
+
+    for chunk in items.chunks(chunk_size) {
+        let chunk_res = match cfg.translation_provider.to_lowercase().as_str() {
+            "minimax" => {
+                match server::translate_batch_via_minimax(chunk, source, target, &cfg.minimax_api_key, &cfg.minimax_model) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        warn!("Batch translation via MiniMax failed: {e:#}, falling back to single items");
+                        chunk.iter().map(|item| {
+                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
+                        }).collect()
+                    }
+                }
+            }
+            "ollama" => {
+                match server::translate_batch_via_ollama(chunk, source, target, &cfg.ollama_url, &cfg.ollama_model) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        warn!("Batch translation via Ollama failed: {e:#}, falling back to single items");
+                        chunk.iter().map(|item| {
+                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
+                        }).collect()
+                    }
+                }
+            }
+            _ => {
+                // Local llama-server fallback item-by-item
+                chunk.iter().map(|item| {
+                    translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
+                }).collect()
+            }
+        };
+
+        results.extend(chunk_res);
+    }
+
+    results
+}
+
 /// Translate text using the long-running `llama-server` with the specified model and engine preference.
 pub fn translate_text_with_options(
     text: &str,

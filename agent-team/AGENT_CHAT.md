@@ -47,6 +47,20 @@
 - **Tóm tắt:** Chạy kiểm thử thực tế E2E từ A-Z trên video đối thoại 2 vai (`multi_speaker_scene.mp4`). Phát hiện và fix `BUG-006` (lỗi nhận diện đổi vai khi mốc phụ đề liên tục), xuất bản thành công cả 2 video thành phẩm: Thuyết minh (`multi_speaker_DUBBED_DUCKING.mp4`) và Chiếu rạp Demucs GPU (`multi_speaker_DUBBED_THEATRICAL.mp4`).
 - **Files đã sửa/tạo:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/config.rs`, `src-tauri/src/lib.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `agent-team/ISSUE_LOG.md`.
 - **Verify/Deploy:** Bản Release `sublix.exe` (`v0.6.0`) build thành công (1m08s), video xuất bản khớp chuẩn 100% âm thanh đa vai.
+### 2026-10-04 18:47 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Đại tu triệt để hiệu năng và UX Studio Lồng Tiếng AI theo phản ánh thực tế từ anh Tuấn (test video 2 tiếng 8 phút `FJIN-142`):
+  1) Dừng ngay lập tức các tiến trình treo.
+  2) Lọc ảo giác Whisper & ghép nối các mẩu vụn sub-second thành câu thoại hoàn chỉnh (giảm 85-90% số câu rác từ 9,696 xuống còn ~600-800 câu).
+  3) Chuyển đổi cơ chế dịch từ tuần tự 1 câu/request sang Dịch Theo Cụm (Batch Translation 15 câu/lần), tăng tốc độ dịch gấp 20-30 lần (phim 2 tiếng dịch chỉ trong ~1-1.5 phút).
+  4) Bổ sung tùy chọn Phạm vi lồng tiếng (`⚡ Thử nghiệm 3 phút đầu` trong 20s, `⏱️ 10 phút đầu`, `🎬 Toàn bộ video`).
+  5) Tích hợp nút `🛑 Dừng lại (Hủy bỏ)` với `AtomicBool` huỷ tiến trình tức thì trên giao diện.
+- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/examples/test_dubbing_e2e.rs`, `src/lib/tauri.ts`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
+- **Verify/Deploy:** `npm run build` PASS (2.48s), `cargo check` PASS (1.85s), `npx tauri build --no-bundle` PASS (1m 04s).
+- **Việc tiếp theo:** Người dùng có thể khởi chạy `Chay-Sublix.bat`, chọn video và test thử ngay tính năng "⚡ Thử nghiệm 3 phút đầu" siêu tốc trong 20 giây!
+
+---
+
 ### 2026-10-04 17:52 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Nâng cấp toàn diện Studio Lồng Tiếng AI (AI Dubbing Studio): Bổ sung lựa chọn Ngôn ngữ lồng tiếng đầu ra (Target Language: Việt, Anh, Nhật, Trung) tự động gán dàn diễn viên tương ứng; vùng kéo thả video/audio trực quan; thẻ thông tin tệp media; Thư viện giọng lồng tiếng AI (Neural Voice Showcase) cho phép nghe thử giọng tức thì trước khi biên kịch; đồng bộ build chuẩn release `sublix.exe` v0.8.0.

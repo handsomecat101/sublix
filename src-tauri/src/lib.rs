@@ -143,7 +143,8 @@ pub fn run() {
             dubbing_get_voices,
             dubbing_analyze,
             dubbing_preview_tts,
-            dubbing_export
+            dubbing_export,
+            dubbing_cancel
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -939,13 +940,20 @@ async fn dubbing_analyze(
     file_path: String,
     source_lang: Option<String>,
     target_lang: Option<String>,
+    time_limit_sec: Option<f64>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang, target_lang)
+        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang, target_lang, time_limit_sec)
     })
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn dubbing_cancel() -> Result<(), String> {
+    dubbing::cancel_dubbing();
+    Ok(())
 }
 
 #[tauri::command]

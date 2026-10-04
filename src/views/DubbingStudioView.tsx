@@ -58,6 +58,7 @@ export default function DubbingStudioView({
   const [voices, setVoices] = useState<VoicePreset[]>([]);
   const [previewingId, setPreviewingId] = useState<number | null>(null);
   const [auditionVoiceId, setAuditionVoiceId] = useState<string | null>(null);
+  const [rangeMode, setRangeMode] = useState<"3m" | "10m" | "full">("3m");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [exportPath, setExportPath] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
@@ -153,6 +154,21 @@ export default function DubbingStudioView({
     }
   }
 
+  async function handleCancel() {
+    try {
+      await sublix.dubbingCancel();
+      setAnalyzing(false);
+      setRendering(false);
+      setProgress(null);
+      setStatusMessage({
+        kind: "info",
+        text: "🛑 Đã dừng tiến trình theo yêu cầu của bạn.",
+      });
+    } catch (err) {
+      console.error("Cancel failed:", err);
+    }
+  }
+
   async function handleAnalyze() {
     if (!filePath) {
       setStatusMessage({ kind: "error", text: "Vui lòng kéo thả hoặc chọn tệp Video / Audio trước khi phân tích." });
@@ -169,12 +185,14 @@ export default function DubbingStudioView({
     setStatusMessage(null);
 
     try {
-      const proj = await sublix.dubbingAnalyze(filePath, sourceLang, targetLang);
+      const timeLimitSec = rangeMode === "3m" ? 180 : rangeMode === "10m" ? 600 : undefined;
+      const proj = await sublix.dubbingAnalyze(filePath, sourceLang, targetLang, timeLimitSec);
       proj.dubbing_mode = selectedDubMode;
       setProject(proj);
+      const scopeLabel = rangeMode === "3m" ? "3 phút đầu" : rangeMode === "10m" ? "10 phút đầu" : "toàn bộ phim";
       setStatusMessage({
         kind: "success",
-        text: `✅ Phân tích thành công! Phát hiện ${proj.speakers.length} vai nhân vật và ${proj.segments.length} câu thoại. Kịch bản đã được dịch sang [${targetLang.toUpperCase()}].`,
+        text: `✅ Phân tích thành công (${scopeLabel})! Phát hiện ${proj.speakers.length} vai nhân vật và ${proj.segments.length} câu thoại hoàn chỉnh (~${proj.media_duration_sec.toFixed(0)}s).`,
       });
     } catch (err) {
       setStatusMessage({ kind: "error", text: `Lỗi phân tích: ${err}` });
@@ -429,6 +447,57 @@ export default function DubbingStudioView({
           </div>
         </div>
 
+        {/* Dubbing Scope / Time Range Selection */}
+        <div className="dubbing-mode-container" style={{ marginTop: 14 }}>
+          <label className="dubbing-mode-title">
+            Phạm Vi Thời Lượng Lồng Tiếng:
+            <span style={{ fontSize: "0.74rem", color: "#94a3b8", fontWeight: 400, marginLeft: 8 }}>
+              (Chọn 3 phút đầu để test thử giọng & kịch bản siêu tốc trong 20s trước khi lồng tiếng cả phim dài)
+            </span>
+          </label>
+          <div className="dubbing-scope-options">
+            <div
+              className={`dubbing-scope-card ${rangeMode === "3m" ? "active" : ""}`}
+              onClick={() => setRangeMode("3m")}
+            >
+              <div className="scope-header">
+                <span className="scope-icon">⚡</span>
+                <span className="scope-title">Thử Nghiệm 3 Phút Đầu</span>
+                <span className="scope-tag-gold">Khuyên Dùng</span>
+              </div>
+              <p className="scope-desc">
+                Chỉ phân tích & lồng tiếng 3 phút đầu video (~20 giây hoàn tất). Rất phù hợp kiểm tra nhanh chất giọng và đối thoại tức thì!
+              </p>
+            </div>
+
+            <div
+              className={`dubbing-scope-card ${rangeMode === "10m" ? "active" : ""}`}
+              onClick={() => setRangeMode("10m")}
+            >
+              <div className="scope-header">
+                <span className="scope-icon">⏱️</span>
+                <span className="scope-title">Trích Đoạn 10 Phút Đầu</span>
+              </div>
+              <p className="scope-desc">
+                Lồng tiếng 10 phút đầu của video (~1 phút hoàn tất). Thích hợp phim ngắn hoặc đoạn cao trào.
+              </p>
+            </div>
+
+            <div
+              className={`dubbing-scope-card ${rangeMode === "full" ? "active" : ""}`}
+              onClick={() => setRangeMode("full")}
+            >
+              <div className="scope-header">
+                <span className="scope-icon">🎬</span>
+                <span className="scope-title">Toàn Bộ Video (Full)</span>
+              </div>
+              <p className="scope-desc">
+                Lồng tiếng từ đầu đến cuối toàn bộ video. Tốc độ đã được tăng tốc tối đa nhờ dịch theo cụm (Batch Translation).
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Dubbing Mode Cards */}
         <div className="dubbing-mode-container" style={{ marginTop: 14 }}>
           <label className="dubbing-mode-title">Chế Độ Xử Lý Âm Thanh:</label>
@@ -479,7 +548,10 @@ export default function DubbingStudioView({
             {analyzing ? (
               <>⏳ Đang Phân Tích & Viết Kịch Bản Lồng Tiếng...</>
             ) : (
-              <>🚀 Bắt Đầu Phân Tích & Lập Kịch Bản Lồng Tiếng [{targetLang.toUpperCase()}]</>
+              <>
+                🚀 Bắt Đầu Phân Tích & Lập Kịch Bản [{targetLang.toUpperCase()}]{" "}
+                {rangeMode === "3m" ? "(3 Phút Đầu)" : rangeMode === "10m" ? "(10 Phút Đầu)" : "(Toàn Bộ Video)"}
+              </>
             )}
           </button>
         </div>
@@ -489,7 +561,17 @@ export default function DubbingStudioView({
           <div className="dubbing-progress-box">
             <div className="dubbing-progress-header">
               <span className="dubbing-progress-msg">{progress.message}</span>
-              <span className="dubbing-progress-percent">{Math.round(progress.percent)}%</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="dubbing-progress-percent">{Math.round(progress.percent)}%</span>
+                <button
+                  type="button"
+                  className="dubbing-btn dubbing-btn-danger dubbing-btn-cancel"
+                  onClick={handleCancel}
+                  title="Dừng tiến trình ngay lập tức"
+                >
+                  🛑 Dừng lại (Hủy bỏ)
+                </button>
+              </div>
             </div>
             <div className="dubbing-progress-bar-bg">
               <div

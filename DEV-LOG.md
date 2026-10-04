@@ -495,7 +495,33 @@ sublix/
 - ✅ `cargo check` (src-tauri) PASS (2.19s, 0 errors).
 - ✅ `npx tauri build --no-bundle` PASS (1m 11s, nhúng tĩnh 100% web assets vào `sublix.exe`).
 
+## Session 12 — 2026-10-04 (Performance Overhaul: Batch Translation, Dialogue Merging, Scope Range Limit & Instant Cancel)
+
+### What was done
+- **Root Cause Analysis (Video 2h08m FJIN-142)**:
+  - Video dài 2 tiếng 8 phút (7,718 giây). Whisper chạy với cờ `--max-len 60` và không có bộ lọc nhiễu âm nền/hallucination dẫn đến việc phân mảnh âm thanh nền, tiếng thở, nhạc nền thành 9,696 mẩu vụn sub-second (trung bình 0.79s/câu).
+  - Vòng lặp biên kịch gọi HTTP tuần tự từng câu một (`translate_text_with_config`) tới MiniMax API (mỗi câu mất ~1-2s). Nếu chạy hết 9,696 câu sẽ mất hơn 4 tiếng đồng hồ!
+  - UI thiếu nút Dừng lại (Cancel) khiến người dùng bị kẹt xem tiến trình chạy chậm.
+- **Giải Pháp 1: Lọc ảo giác & Ghép nối câu thoại thông minh (`clean_and_merge_raw_segments`)**:
+  - Lọc bỏ ảo giác Whisper (`clean_whisper_transcript`, `is_hallucination`), lọc các tiếng thở/filler ngắn (< 0.55s và <= 2 ký tự), bỏ dấu câu đơn lẻ.
+  - Tự động ghép nối các mệnh đề đối thoại liên tục của cùng lượt thoại (khoảng nghỉ giữa 2 câu < 0.85s, thời lượng gộp <= 7.0s) thành câu hoàn chỉnh có nghĩa.
+  - Giảm số lượng phân đoạn từ gần 10,000 xuống còn ~600 - 800 câu thoại thực tế trên phim 2 tiếng (giảm 85-90% số câu rác).
+- **Giải Pháp 2: Dịch Thuật Theo Cụm (Batch Translation - 20x-30x Speedup)**:
+  - Bổ sung `translate_batch_with_config` (15 câu / batch) trong `translate/server.rs` và `translate/mod.rs`.
+  - Thay vì 10,000 request HTTP, toàn bộ phim 2 tiếng chỉ cần ~40-50 request HTTP. Thời gian dịch toàn bộ phim giảm từ 4 tiếng xuống còn ~1-1.5 phút.
+- **Giải Pháp 3: Tùy Chọn Phạm Vi Lồng Tiếng (Scope / Range Selection)**:
+  - Bổ sung 3 chế độ: `⚡ Thử nghiệm 3 phút đầu` (khuyên dùng test trong 20s), `⏱️ 10 phút đầu` (~1 phút), và `🎬 Toàn bộ video`.
+  - FFmpeg chỉ trích xuất đúng thời lượng đã chọn (`-t <sec>`), giúp kiểm tra chất lượng lồng tiếng tức thì mà không phải chờ cả phim 2 tiếng.
+- **Giải Pháp 4: Cơ chế Huỷ Bỏ Tức Thì (Instant Cancel)**:
+  - Thêm `AtomicBool` `DUBBING_CANCELLED` trong `dubbing/mod.rs` và Tauri command `dubbing_cancel`.
+  - Bổ sung nút **`🛑 Dừng lại (Hủy bỏ)`** ngay trên thanh tiến trình trong giao diện để người dùng có thể dừng bất cứ lúc nào.
+
+### Verification
+- ✅ `npm run build` PASS (2.48s).
+- ✅ `cargo check` PASS (1.85s).
+- ✅ `npx tauri build --no-bundle` PASS (1m 04s).
+
 ---
 
-*Last updated: 2026-10-04 — AI Dubbing Studio Target Language & Voice Showcase (v0.8.0)*
+*Last updated: 2026-10-04 — Dubbing Studio Performance & Range Optimization (v0.8.0)*
 

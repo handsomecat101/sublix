@@ -303,8 +303,22 @@ export const sublix = {
     return await invoke<VoicePreset[]>("dubbing_get_voices");
   },
 
-  async dubbingAnalyze(filePath: string, sourceLang?: string, targetLang?: string): Promise<DubbingProject> {
-    return await invoke<DubbingProject>("dubbing_analyze", { filePath, sourceLang, targetLang });
+  async dubbingAnalyze(
+    filePath: string,
+    sourceLang?: string,
+    targetLang?: string,
+    timeLimitSec?: number
+  ): Promise<DubbingProject> {
+    return await invoke<DubbingProject>("dubbing_analyze", {
+      filePath,
+      sourceLang,
+      targetLang,
+      timeLimitSec: timeLimitSec && timeLimitSec > 0 ? timeLimitSec : null,
+    });
+  },
+
+  async dubbingCancel(): Promise<void> {
+    return await invoke<void>("dubbing_cancel");
   },
 
   async dubbingPreviewTts(text: string, voice: string, rate?: string, pitch?: string): Promise<string> {
@@ -351,6 +365,7 @@ export interface DubbingProject {
   bgm_volume: number;
   voice_volume: number;
   dubbing_mode?: "ducking" | "vocal_isolation";
+  time_limit_sec?: number | null;
 }
 
 export interface DubbingProgress {

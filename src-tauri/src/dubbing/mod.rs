@@ -18,6 +18,21 @@ use std::process::Command;
 use std::time::SystemTime;
 use tauri::{AppHandle, Emitter};
 use tracing::info;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub static DUBBING_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+pub fn cancel_dubbing() {
+    DUBBING_CANCELLED.store(true, Ordering::SeqCst);
+}
+
+pub fn is_dubbing_cancelled() -> bool {
+    DUBBING_CANCELLED.load(Ordering::Relaxed)
+}
+
+pub fn reset_dubbing_cancel() {
+    DUBBING_CANCELLED.store(false, Ordering::SeqCst);
+}
 
 use crate::config::AppConfig;
 use crate::stt::whisper_local::ModelVariant;
@@ -69,6 +84,8 @@ pub struct DubbingProject {
     pub voice_volume: f32, // 1.25 (125% voice boost)
     #[serde(default = "default_dubbing_mode")]
     pub dubbing_mode: String, // "ducking" | "vocal_isolation"
+    #[serde(default)]
+    pub time_limit_sec: Option<f64>,
 }
 
 fn default_dubbing_mode() -> String {
@@ -254,13 +271,116 @@ pub fn preview_single_line(text: &str, voice: &str, rate: Option<&str>, pitch: O
     Ok(format!("data:audio/mp3;base64,{}", b64))
 }
 
+/// Clean Whisper hallucinations/non-speech and merge contiguous dialogue clauses
+pub fn clean_and_merge_raw_segments(
+    raw_segments: Vec<crate::file_sub::SubtitleSegment>,
+    src_lang: &str,
+) -> Vec<DubbingSegment> {
+    let is_cjk = matches!(src_lang.to_lowercase().as_str(), "ja" | "japanese" | "zh" | "chinese");
+
+    // 1. Initial pass: clean, filter silence / hallucinations / micro-noises
+    let mut filtered = Vec::new();
+    for seg in raw_segments {
+        let start_sec = parse_srt_time_to_seconds(&seg.start_time);
+        let end_sec = parse_srt_time_to_seconds(&seg.end_time);
+        let dur = end_sec - start_sec;
+
+        let cleaned = crate::stt::whisper_local::clean_whisper_transcript(&seg.original);
+        if cleaned.is_empty() || crate::stt::whisper_local::is_hallucination(&cleaned) {
+            continue;
+        }
+
+        // Filter out pure symbols / punctuation
+        if cleaned.chars().all(|c| c.is_ascii_punctuation() || "―…、。！？".contains(c)) {
+            continue;
+        }
+
+        // Filter short isolated filler sounds (< 0.55s and <= 2 chars in CJK or <= 3 in Latin)
+        let char_count = cleaned.chars().count();
+        if dur < 0.55 && (char_count <= 2 || (char_count <= 3 && !is_cjk)) {
+            continue;
+        }
+
+        filtered.push((start_sec, end_sec, cleaned));
+    }
+
+    if filtered.is_empty() {
+        return Vec::new();
+    }
+
+    // 2. Smart merge consecutive dialogue clauses belonging to the same speech flow
+    let mut merged: Vec<(f64, f64, String)> = Vec::new();
+
+    for (start_sec, end_sec, text) in filtered {
+        if let Some(prev) = merged.last_mut() {
+            let pause = start_sec - prev.1;
+            let total_dur = end_sec - prev.0;
+
+            let prev_text = prev.2.trim();
+            let prev_ends_terminal = prev_text.ends_with('?')
+                || prev_text.ends_with('！')
+                || prev_text.ends_with('？')
+                || prev_text.ends_with('!')
+                || (prev_text.ends_with('.') && pause >= 0.4)
+                || (prev_text.ends_with('。') && pause >= 0.4);
+
+            // Merge if pause is small (< 0.85s), total duration stays within 7.0s, and not a hard stop
+            if pause <= 0.85 && total_dur <= 7.0 && !prev_ends_terminal {
+                prev.1 = end_sec;
+                if is_cjk {
+                    prev.2 = format!("{}{}", prev.2, text);
+                } else {
+                    prev.2 = format!("{} {}", prev.2, text);
+                }
+                continue;
+            }
+        }
+        merged.push((start_sec, end_sec, text));
+    }
+
+    // 3. Speaker clustering on merged sentences
+    let mut current_speaker_idx = 0;
+    let mut last_end = 0.0;
+    let mut segments = Vec::with_capacity(merged.len());
+
+    for (idx, (start_sec, end_sec, text)) in merged.into_iter().enumerate() {
+        let pause = start_sec - last_end;
+        let prev_text = segments.last().map(|s: &DubbingSegment| s.original_text.as_str()).unwrap_or("");
+        let is_speaker_change = idx > 0
+            && (pause >= 0.45 || prev_text.ends_with('?') || prev_text.ends_with('？'));
+
+        if is_speaker_change {
+            current_speaker_idx = (current_speaker_idx + 1) % 2;
+        }
+
+        let speaker_id = format!("speaker_{}", current_speaker_idx);
+        last_end = end_sec;
+
+        segments.push(DubbingSegment {
+            id: idx + 1,
+            speaker_id,
+            start_sec,
+            end_sec,
+            original_text: text,
+            dubbed_text: String::new(),
+            audio_duration_sec: None,
+            status: "ready".to_string(),
+        });
+    }
+
+    segments
+}
+
 /// Analyze media, extract transcript, cluster speakers, and generate translated dubbing script
 pub fn analyze_and_create_project(
     app: Option<&AppHandle>,
     input_path: &str,
     source_lang: Option<String>,
     target_lang: Option<String>,
+    time_limit_sec: Option<f64>,
 ) -> Result<DubbingProject> {
+    reset_dubbing_cancel();
+
     let input = Path::new(input_path);
     if !input.exists() {
         return Err(anyhow::anyhow!("File không tồn tại: {}", input_path));
@@ -285,15 +405,48 @@ pub fn analyze_and_create_project(
 
     emit("extracting", 5.0, "Đang trích xuất audio 16kHz từ video...", 0, 100);
 
-    // 1. Extract 16kHz mono wav
+    // 1. Extract 16kHz mono wav (honoring time_limit_sec if specified for lightning-fast testing)
     let temp_dir = std::env::temp_dir().join("sublix_dubbing");
     fs::create_dir_all(&temp_dir)?;
     let temp_wav = temp_dir.join(format!("audio_{}.wav", gen_unique_id()));
     let temp_srt_stem = temp_dir.join(format!("srt_{}", gen_unique_id()));
     let temp_srt_file = temp_dir.join(format!("{}.srt", temp_srt_stem.display()));
 
-    crate::file_sub::extract_audio_16k_mono(input, &temp_wav)
-        .context("FFmpeg trích xuất âm thanh thất bại")?;
+    let ffmpeg_bin = find_ffmpeg();
+    let mut extract_cmd = Command::new(&ffmpeg_bin);
+    extract_cmd.arg("-y");
+
+    if let Some(limit) = time_limit_sec {
+        if limit > 0.0 {
+            info!("⏱️ Applying time limit: {:.1}s for dubbing test", limit);
+            extract_cmd.arg("-t").arg(format!("{:.1}", limit));
+        }
+    }
+
+    extract_cmd
+        .arg("-i")
+        .arg(input)
+        .arg("-vn")
+        .arg("-ar")
+        .arg("16000")
+        .arg("-ac")
+        .arg("1")
+        .arg("-c:a")
+        .arg("pcm_s16le")
+        .arg(&temp_wav);
+
+    #[cfg(windows)]
+    extract_cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let extract_status = extract_cmd.status().context("FFmpeg trích xuất âm thanh thất bại")?;
+    if !extract_status.success() {
+        return Err(anyhow::anyhow!("FFmpeg trích xuất âm thanh thất bại."));
+    }
+
+    if is_dubbing_cancelled() {
+        let _ = fs::remove_file(&temp_wav);
+        return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+    }
 
     emit("transcribing", 15.0, "Đang nhận diện giọng nói & gán mốc thời gian...", 0, 100);
 
@@ -324,14 +477,20 @@ pub fn analyze_and_create_project(
         .arg("-osrt")
         .arg("-of")
         .arg(&temp_srt_stem)
-        .arg("--max-len")
-        .arg("60");
+        .arg("-sns")
+        .arg("-nth")
+        .arg("0.65");
 
     #[cfg(windows)]
     whisper_cmd.creation_flags(CREATE_NO_WINDOW);
 
     let whisper_res = whisper_cmd.status().context("Lỗi thực thi whisper-cli")?;
     let _ = fs::remove_file(&temp_wav);
+
+    if is_dubbing_cancelled() {
+        let _ = fs::remove_file(&temp_srt_file);
+        return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+    }
 
     if !whisper_res.success() || !temp_srt_file.exists() {
         return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
@@ -345,54 +504,16 @@ pub fn analyze_and_create_project(
         return Err(anyhow::anyhow!("Không nhận diện được giọng nói trong tệp này."));
     }
 
-    let total = raw_segments.len();
-    emit("diarizing", 35.0, "Đang phân tích ngữ điệu & phân vai nhân vật...", 0, total);
+    // 3. Clean, filter hallucinations, and merge contiguous dialogue clauses
+    emit("diarizing", 35.0, "Đang lọc ảo giác & ghép nối câu thoại hoàn chỉnh...", 0, raw_segments.len());
+    let mut parsed_segments = clean_and_merge_raw_segments(raw_segments, &src_lang);
 
-    // 3. Speaker Diarization Heuristic (Alternating conversation clustering & silence gap analysis)
-    let mut current_speaker_idx = 0;
-    let mut last_end = 0.0;
-    let mut parsed_segments = Vec::new();
-
-    for (idx, seg) in raw_segments.into_iter().enumerate() {
-        let start_sec = parse_srt_time_to_seconds(&seg.start_time);
-        let end_sec = parse_srt_time_to_seconds(&seg.end_time);
-
-        // Smart Speaker Diarization:
-        // 1. If gap between sentences is >= 0.35s (conversational pause)
-        // 2. Or if previous sentence ended with terminal punctuation ('.', '!', '?') and there is any gap >= 0.15s
-        // 3. Or if previous sentence ended with question mark '?'
-        let prev_text = parsed_segments
-            .last()
-            .map(|s: &DubbingSegment| s.original_text.trim())
-            .unwrap_or("");
-
-        let prev_ends_terminal = prev_text.ends_with('.')
-            || prev_text.ends_with('!')
-            || prev_text.ends_with('?')
-            || prev_text.ends_with('"');
-
-        let pause = start_sec - last_end;
-        let is_speaker_change = idx > 0
-            && (prev_ends_terminal || pause >= 0.25 || prev_text.ends_with('?'));
-
-        if is_speaker_change {
-            current_speaker_idx = (current_speaker_idx + 1) % 2; // Alternate between primary speakers
-        }
-
-        let speaker_id = format!("speaker_{}", current_speaker_idx);
-        last_end = end_sec;
-
-        parsed_segments.push(DubbingSegment {
-            id: idx + 1,
-            speaker_id,
-            start_sec,
-            end_sec,
-            original_text: seg.original,
-            dubbed_text: String::new(),
-            audio_duration_sec: None,
-            status: "ready".to_string(),
-        });
+    if parsed_segments.is_empty() {
+        return Err(anyhow::anyhow!("Không phát hiện được câu thoại hợp lệ trong tệp này."));
     }
+
+    let total = parsed_segments.len();
+    info!("🎬 Parsed & merged into {} natural dialogue lines", total);
 
     let tgt_lang = target_lang.unwrap_or_else(|| "vi".to_string());
 
@@ -464,39 +585,55 @@ pub fn analyze_and_create_project(
         ],
     };
 
-    // 4. Translate dialogue lines to target language via MiniMax-M3 / Ollama
-    emit("scripting", 50.0, &format!("Đang viết kịch bản thoại ({tgt_lang})..."), 0, total);
+    // 4. Batch translation to target language via MiniMax-M3 / Ollama (15-20x faster)
+    emit("scripting", 50.0, &format!("Đang biên kịch {} câu thoại sang {}...", total, tgt_lang.to_uppercase()), 0, total);
     let trans_variant = TranslationModelVariant::resolve_or_best(Some(&cfg.translation_model));
     let engine_pref = EnginePreference::from_str(&cfg.translation_engine_preference);
 
-    for (idx, seg) in parsed_segments.iter_mut().enumerate() {
-        let percent = 50.0 + (idx as f32 / total as f32) * 45.0;
+    let batch_size = 15;
+    for chunk_start in (0..total).step_by(batch_size) {
+        if is_dubbing_cancelled() {
+            return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+        }
+
+        let chunk_end = (chunk_start + batch_size).min(total);
+        let percent = 50.0 + (chunk_start as f32 / total as f32) * 45.0;
+
         emit(
             "scripting",
             percent,
-            &format!("Biên kịch câu {}/{}: {}", idx + 1, total, seg.original_text),
-            idx + 1,
+            &format!("Biên kịch câu {}-{}/{} ({})...", chunk_start + 1, chunk_end, total, tgt_lang.to_uppercase()),
+            chunk_start + 1,
             total,
         );
 
-        match crate::translate::translate_text_with_config(
-            &seg.original_text,
+        let texts_to_translate: Vec<String> = parsed_segments[chunk_start..chunk_end]
+            .iter()
+            .map(|s| s.original_text.clone())
+            .collect();
+
+        let translated_batch = crate::translate::translate_batch_with_config(
+            &texts_to_translate,
             &src_lang,
             &tgt_lang,
             trans_variant,
             engine_pref,
             &cfg,
-        ) {
-            Ok(translated) if !translated.trim().is_empty() => {
-                seg.dubbed_text = translated;
-            }
-            _ => {
-                seg.dubbed_text = seg.original_text.clone();
+        );
+
+        for (offset, trans) in translated_batch.into_iter().enumerate() {
+            let target_idx = chunk_start + offset;
+            if target_idx < parsed_segments.len() {
+                parsed_segments[target_idx].dubbed_text = trans;
             }
         }
     }
 
-    let media_duration = parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0);
+    let media_duration = if let Some(limit) = time_limit_sec {
+        if limit > 0.0 { limit } else { parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0) }
+    } else {
+        parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0)
+    };
 
     emit("done", 100.0, "Phân vai & Kịch bản lồng tiếng hoàn tất!", total, total);
 
@@ -508,6 +645,7 @@ pub fn analyze_and_create_project(
         bgm_volume: 0.25,
         voice_volume: 1.30,
         dubbing_mode: "ducking".to_string(),
+        time_limit_sec,
     })
 }
 
@@ -517,6 +655,8 @@ pub fn export_dubbed_video(
     project: DubbingProject,
     output_path: Option<String>,
 ) -> Result<String> {
+    reset_dubbing_cancel();
+
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
         if let Some(a) = app {
             let _ = a.emit(
@@ -545,6 +685,11 @@ pub fn export_dubbed_video(
 
     // 1. Synthesize each segment and check duration
     for (i, seg) in project.segments.iter().enumerate() {
+        if is_dubbing_cancelled() {
+            let _ = fs::remove_dir_all(&temp_dir);
+            return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
+        }
+
         let percent = 5.0 + (i as f32 / total_segs as f32) * 55.0;
         emit(
             "synthesizing",
@@ -751,8 +896,16 @@ pub fn export_dubbed_video(
         .arg("-c:a")
         .arg("aac")
         .arg("-b:a")
-        .arg("192k")
-        .arg(&out_file);
+        .arg("192k");
+
+    if let Some(limit) = project.time_limit_sec {
+        if limit > 0.0 {
+            info!("⏱️ Remuxing sample video limited to {:.1}s", limit);
+            remux.arg("-t").arg(format!("{:.1}", limit));
+        }
+    }
+
+    remux.arg(&out_file);
 
     #[cfg(windows)]
     remux.creation_flags(CREATE_NO_WINDOW);
