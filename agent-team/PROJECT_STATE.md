@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.7.0` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
-| **Git Commit** | `v0.7.0` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Đã hoàn thiện UI Theme System 4 giao diện & In-App Changelog v0.7.0) |
+| **Bản Build Hiện Tại** | `v0.8.0` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
+| **Git Commit** | `v0.8.0` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Active (Đã hoàn thiện Drag & Drop Studio + Custom Glass Select + AI Visual Identity) |
 
 ---
 

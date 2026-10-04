@@ -403,4 +403,48 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-04 — v0.7.0 Release (UI Theme System + In-App Changelog)*
+## Session 8 — 2026-10-04 (AI-Generated Visual Identity & Illustrations)
+
+### What was done
+- Generated all brand/illustration assets with MiniMax image AI (skill `minimax-image-gen`, 10 generations): 4 logo concepts → chose **film-strip "S" monogram**; onboarding hero (home theater + projector beam + blank caption bars); 3 spot illustrations (file drop, empty history, model hub); film-grain texture for the sidebar.
+- Self-review loop: every image opened and graded (no garbled text, palette match, small-size readability, flat style consistency). `spot_models` failed style check (isometric vs flat) and was re-generated once.
+- Integrated: app icon set regenerated via `tauri icon` (ICO/PNG/iOS/Android), sidebar logo (was emoji), hero banner in Onboarding, spot illustrations in File Studio / Model Hub / empty History, grain texture on sidebar (cinema & studio themes only).
+- Asset diet: converted to JPEG + downsized (hero 2.2MB→51KB, logo 1.4MB→85KB); total image payload ~184KB.
+
+### Verification
+- ✅ `npm run build` (tsc + vite) pass after integration and after asset compression
+- ✅ `cargo check` pass (icon set swapped)
+- ✅ All 10 generated images visually inspected and graded
+- ⏳ Visual check on running app pending (taskbar icon, sidebar logo, hero, spot illustrations)
+
+### Lessons learned
+- Image models garble text — always prompt "no text" and let CSS do typography
+- Requiring "strictly flat 2D, no isometric" in the prompt fixed style drift between spot illustrations
+- Generated PNGs are often JPEG payloads; convert + downscale before shipping or the bundle bloats 20x
+
+---
+
+## Session 9 — 2026-10-04 (Version Bump v0.8.0 + Drag & Drop Media Studio + Custom Glass Select)
+
+### What was done
+- **Drag & Drop Media Zone (`FileSubView.tsx` & `FileSubView.css`)**:
+  - Tích hợp Tauri Native `getCurrentWebview().onDragDropEvent` kết hợp HTML5 drag-over/drop.
+  - Khu vực thả tệp (Dropzone) viền nét đứt chuyển màu phát sáng khi rê tệp vào, hiển thị đầy đủ định dạng hỗ trợ (`MP4`, `MKV`, `MOV`, `AVI`, `MP3`, `WAV`, `FLAC`).
+  - Thay thế nút chọn đơn điệu bằng **Thẻ Media Thông Minh (Active Media Card)**: biểu tượng loại tệp (🎬 / 🎵), tên tệp nổi bật, đường dẫn monospace, nút đổi tệp và nút xoá tức thì.
+- **Trình Chọn Dropdown Kính Mờ Studio (`CustomSelect.tsx` & `CustomSelect.css`)**:
+  - Thay thế hoàn toàn thẻ `<select>` Windows xám đần cũ bằng component Dropdown kính mờ cao cấp, bo góc tròn, hiệu ứng xoay mũi tên mượt mà, checkmark `✓` đánh dấu lựa chọn.
+  - Bổ sung thanh phím tắt chọn nhanh cặp ngôn ngữ phổ biến (Anh - Việt, Nhật - Việt, Trung - Việt, Hàn - Việt) chỉ với 1 click.
+  - Công tắc gạt (Toggle Switch) mượt mà cho tùy chọn xuất phụ đề Song ngữ (`*.bilingual.srt`).
+- **Bộ Nhận Diện Thị Giác AI (MiniMax Image AI)**:
+  - Logo mới dải phim chữ S, bộ icon đa kích thước, minh họa Onboarding hero và các spot illustration.
+- **Đóng Gói Xuất Xưởng Chuẩn**:
+  - Tuân thủ quy chuẩn `npx tauri build --no-bundle` nhúng tĩnh 100% web assets vào `sublix.exe`, miễn dịch hoàn toàn với lỗi `localhost:1420`.
+
+### Verification
+- ✅ `npm run build` (tsc + vite) PASS (2.21s, 0 errors).
+- ✅ `npx tauri build --no-bundle` PASS.
+- ✅ Cập nhật `ChangelogModal.tsx` hiển thị đầy đủ tính năng v0.8.0.
+
+---
+
+*Last updated: 2026-10-04 — v0.8.0 Release (Drag & Drop + Custom Glass Select + AI Visual Identity)*

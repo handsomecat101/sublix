@@ -23,10 +23,39 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.8.0",
+    date: "04/10/2026",
+    title: "Nhận Diện Thị Giác AI & Bộ Minh Hoạ Điện Ảnh",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Bộ Nhận Diện Thị Giác Mới (AI Visual Identity)",
+        icon: "🖼️",
+        items: [
+          "Logo mới: chữ S kết từ dải phim điện ảnh, kèm bộ icon ứng dụng trọn bộ cho taskbar & cửa sổ.",
+          "Ảnh hero rạp chiếu phim ấm áp cho màn cài đặt đầu tiên (Onboarding).",
+          "Bộ minh hoạ phẳng phong cách điện ảnh: khung chọn file, Trung tâm Models, lịch sử trống.",
+          "Vân phim mờ tinh tế phủ trên sidebar ở theme Cinema & Studio.",
+          "Tối ưu dung lượng ảnh từ 4.4MB xuống còn 184KB, app nhẹ và khởi động nhanh hơn.",
+        ],
+      },
+      {
+        category: "Kéo Thả Media & Trình Chọn Dropdown Hiện Đại",
+        icon: "✨",
+        items: [
+          "Hỗ trợ Kéo & Thả (Drag & Drop) tệp Video / Audio trực tiếp từ máy tính vào ứng dụng qua Tauri Native Webview API.",
+          "Thẻ Media thông minh hiển thị chi tiết tên file, định dạng, nút đổi file và xoá tức thì.",
+          "Thay thế toàn bộ hộp chọn native Windows cũ bằng Custom Glass Select sang trọng, bo góc tròn, hiệu ứng mờ kính và checkmark chuẩn Studio.",
+          "Phím tắt chọn nhanh cặp ngôn ngữ phổ biến (Anh - Việt, Nhật - Việt, Trung - Việt, Hàn - Việt) chỉ với 1 click.",
+          "Công tắc gạt (Toggle Switch) mượt mà cho tùy chọn xuất phụ đề Song ngữ (*.bilingual.srt).",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.7.0",
     date: "04/10/2026",
     title: "Đại Tu Giao Diện Cinema Studio & AI Dubbing Đa Vai",
-    isCurrent: true,
     highlights: [
       {
         category: "Giao Diện & Hệ Thống 4 Theme (UI/UX Pro Max)",

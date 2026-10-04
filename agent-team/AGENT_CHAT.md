@@ -9,6 +9,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-04 15:05 - Antigravity
+- **Loại:** `@done`
+- **Tóm tắt:** Phát hành chính thức **`v0.8.0`**: 1) Xây dựng khu vực Kéo & Thả (Drag & Drop Zone) tệp Video/Audio trực tiếp vào app qua Tauri Webview API; 2) Thẻ Media thông minh hiển thị chi tiết tên, đuôi tệp, nút đổi và xoá tệp; 3) Thay thế toàn bộ thẻ select Windows cũ bằng Custom Glass Select sang trọng bo góc; 4) Bổ sung phím tắt nhanh cặp ngôn ngữ và công tắc gạt Song ngữ; 5) Đóng gói release `sublix.exe` chuẩn bằng `npx tauri build --no-bundle`.
+- **Files đã sửa/tạo:** `src/views/CustomSelect.tsx`, `src/views/CustomSelect.css`, `src/views/FileSubView.tsx`, `src/views/FileSubView.css`, `src/views/ChangelogModal.tsx`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `DEV-LOG.md`.
+- **Trạng thái Verify:** `npm run build` PASS (2.21s), `npx tauri build --no-bundle` PASS. Sẵn sàng cho user chạy trải nghiệm.
+
+---
+
 ### 2026-10-04 14:24 - Antigravity
 - **Loại:** `@done`
 - **Tóm tắt:** Hoàn thiện và đóng gói bản phát hành chính thức **`v0.7.0`**: Bump version toàn hệ thống (`Cargo.toml`, `tauri.conf.json`, `package.json`), tích hợp popup `ChangelogModal.tsx` tương tác 1-click có sẵn bộ chuyển Theme tức thì, hiển thị rõ badge `v0.7.0` trên sidebar header/footer & topbar. Đã biên dịch bản release `sublix.exe` mới nhất cho Desktop shortcut.

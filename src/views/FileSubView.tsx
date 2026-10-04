@@ -8,12 +8,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   sublix,
   type FileSubProgress,
   type FileSubResult,
   type ModelStatusItem,
 } from "../lib/tauri";
+import { CustomSelect, type SelectOption } from "./CustomSelect";
 import "./FileSubView.css";
 
 interface SubtitlePreviewItem {
@@ -29,18 +31,36 @@ interface FileSubViewProps {
   defaultTransModel?: string;
 }
 
+const SOURCE_LANG_OPTIONS: SelectOption[] = [
+  { value: "en", label: "Tiếng Anh (English)", icon: "🇺🇸" },
+  { value: "ja", label: "Tiếng Nhật (Japanese)", icon: "🇯🇵" },
+  { value: "zh", label: "Tiếng Trung (Chinese)", icon: "🇨🇳" },
+  { value: "ko", label: "Tiếng Hàn (Korean)", icon: "🇰🇷" },
+  { value: "fr", label: "Tiếng Pháp (French)", icon: "🇫🇷" },
+  { value: "de", label: "Tiếng Đức (German)", icon: "🇩🇪" },
+  { value: "ru", label: "Tiếng Nga (Russian)", icon: "🇷🇺" },
+  { value: "es", label: "Tiếng Tây Ban Nha (Spanish)", icon: "🇪🇸" },
+  { value: "auto", label: "Tự động nhận diện (Auto-detect)", icon: "🌐", badge: "Auto" },
+];
+
+const TARGET_LANG_OPTIONS: SelectOption[] = [
+  { value: "vi", label: "Tiếng Việt (Vietnamese)", icon: "🇻🇳" },
+  { value: "en", label: "Tiếng Anh (English)", icon: "🇺🇸" },
+];
+
 export default function FileSubView({
   sttModels,
   transModels,
   defaultSttModel = "large-v3-turbo-q8_0",
   defaultTransModel = "qwen3-4b",
 }: FileSubViewProps) {
-  const [filePath, setFilePath] = useState<string>("");
+  const [filePath, setFilePath] = useState<string>("" );
   const [sourceLang, setSourceLang] = useState<string>("en");
   const [targetLang, setTargetLang] = useState<string>("vi");
   const [createBilingual, setCreateBilingual] = useState<boolean>(true);
   const [selectedStt, setSelectedStt] = useState<string>(defaultSttModel);
   const [selectedTrans, setSelectedTrans] = useState<string>(defaultTransModel);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const [processing, setProcessing] = useState<boolean>(false);
   const [progress, setProgress] = useState<FileSubProgress | null>(null);
@@ -48,6 +68,58 @@ export default function FileSubView({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewList, setPreviewList] = useState<SubtitlePreviewItem[]>([]);
   const previewEndRef = useRef<HTMLDivElement>(null);
+
+  // Helper to test if file is video
+  const isVideo = (path: string) => {
+    const ext = path.split(".").pop()?.toLowerCase() || "";
+    return ["mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "ts"].includes(ext);
+  };
+
+  const handleSetSelectedFile = (path: string) => {
+    const ext = path.split(".").pop()?.toLowerCase() || "";
+    const validExts = [
+      "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "ts",
+      "mp3", "m4a", "wav", "flac", "ogg", "aac", "wma"
+    ];
+    if (ext && validExts.includes(ext)) {
+      setFilePath(path);
+      setResult(null);
+      setErrorMsg(null);
+      setProgress(null);
+      setPreviewList([]);
+    } else {
+      setErrorMsg(`Định dạng .${ext} không được hỗ trợ. Vui lòng chọn tệp Video hoặc Audio.`);
+    }
+  };
+
+  // Drag & Drop Listener via Tauri API
+  useEffect(() => {
+    let unlistenDragDrop: (() => void) | undefined;
+    (async () => {
+      try {
+        const webview = getCurrentWebview();
+        unlistenDragDrop = await webview.onDragDropEvent((event) => {
+          if (event.payload.type === "enter" || event.payload.type === "over") {
+            setIsDragging(true);
+          } else if (event.payload.type === "drop") {
+            setIsDragging(false);
+            const droppedPaths = event.payload.paths;
+            if (droppedPaths && droppedPaths.length > 0) {
+              handleSetSelectedFile(droppedPaths[0]);
+            }
+          } else {
+            setIsDragging(false);
+          }
+        });
+      } catch (err) {
+        console.warn("Tauri onDragDropEvent listener failed:", err);
+      }
+    })();
+
+    return () => {
+      if (unlistenDragDrop) unlistenDragDrop();
+    };
+  }, []);
 
   // Listen to live progress events from Rust
   useEffect(() => {
@@ -69,7 +141,7 @@ export default function FileSubView({
                 translated: p.current_translated!,
               },
             ];
-            // keep latest 30 for performance
+            // keep latest 50 for performance
             return next.length > 50 ? next.slice(next.length - 50) : next;
           });
         }
@@ -96,11 +168,7 @@ export default function FileSubView({
     try {
       const selected = await sublix.selectMediaFile();
       if (selected) {
-        setFilePath(selected);
-        setResult(null);
-        setErrorMsg(null);
-        setProgress(null);
-        setPreviewList([]);
+        handleSetSelectedFile(selected);
       }
     } catch (e) {
       setErrorMsg(`Không thể chọn file: ${e}`);
@@ -109,7 +177,7 @@ export default function FileSubView({
 
   const handleStartGeneration = async () => {
     if (!filePath) {
-      setErrorMsg("Vui lòng chọn file Video hoặc Audio trước khi bắt đầu.");
+      setErrorMsg("Vui lòng kéo thả hoặc chọn file Video / Audio trước khi bắt đầu.");
       return;
     }
 
@@ -144,7 +212,26 @@ export default function FileSubView({
     }
   };
 
-  const fileName = filePath ? filePath.split(/[/\\]/).pop() : "";
+  const fileName = filePath ? filePath.split(/[/\\]/).pop() || "" : "";
+  const fileExt = filePath ? filePath.split(".").pop()?.toUpperCase() || "" : "";
+
+  // Prepare STT model options
+  const sttOptions: SelectOption[] = sttModels.map((m) => ({
+    value: m.name,
+    label: m.label,
+    icon: "🎙️",
+    badge: m.downloaded ? "✓ Sẵn sàng" : "Chưa tải",
+    sublabel: `${m.size_mb} MB`,
+  }));
+
+  // Prepare Translation model options
+  const transOptions: SelectOption[] = transModels.map((m) => ({
+    value: m.name,
+    label: m.label,
+    icon: "🤖",
+    badge: m.downloaded ? "✓ Sẵn sàng" : "Chưa tải",
+    sublabel: `${m.size_mb} MB`,
+  }));
 
   return (
     <div className="file-sub-container">
@@ -157,122 +244,203 @@ export default function FileSubView({
         </p>
       </div>
 
-      {/* Step 1: File Selection */}
+      {/* Step 1: File Selection & Drag-and-Drop Area */}
       <div className="file-sub-card">
         <div className="file-sub-card-title">
           <span className="step-badge">1</span>
-          <span>Chọn Video hoặc Audio cần tạo phụ đề</span>
+          <span>Chọn hoặc Kéo Thả File Video / Audio</span>
         </div>
 
-        <div className="file-picker-row">
-          <button
-            type="button"
-            className="settings-btn-primary file-browse-btn"
+        {!filePath ? (
+          <div
+            className={`file-dropzone ${isDragging ? "is-drag-over" : ""}`}
             onClick={handlePickFile}
-            disabled={processing}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+              if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                const f = e.dataTransfer.files[0];
+                const p = (f as any).path || f.name;
+                if (p) handleSetSelectedFile(p);
+              }
+            }}
           >
-            📂 Chọn File Media...
-          </button>
-          <div className="file-selected-path" title={filePath || "Chưa chọn file nào"}>
-            {filePath ? (
-              <span className="file-has-path">
-                🎬 <strong>{fileName}</strong>
-                <span className="file-full-path">{filePath}</span>
-              </span>
-            ) : (
-              <span className="file-placeholder">
-                Hỗ trợ MP4, MKV, AVI, MOV, WEBM, MP3, M4A, WAV, FLAC...
-              </span>
-            )}
+            <div className="dropzone-icon-box">
+              <span className="dropzone-main-icon">{isDragging ? "📥" : "🎞️"}</span>
+            </div>
+            <div className="dropzone-content">
+              <div className="dropzone-headline">
+                {isDragging ? "Thả file vào đây ngay!" : "Kéo thả file Video hoặc Audio vào đây"}
+              </div>
+              <div className="dropzone-subline">
+                hoặc <span className="dropzone-browse-link">Bấm vào đây để duyệt file từ máy tính</span>
+              </div>
+            </div>
+            <div className="dropzone-format-tags">
+              {["MP4", "MKV", "MOV", "AVI", "WEBM", "MP3", "WAV", "FLAC"].map((ext) => (
+                <span key={ext} className="dropzone-tag">
+                  {ext}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="file-active-card">
+            <div className="file-active-icon-wrapper">
+              <span className="file-active-icon">{isVideo(filePath) ? "🎬" : "🎵"}</span>
+            </div>
+            <div className="file-active-info">
+              <div className="file-active-title-row">
+                <span className="file-active-name" title={fileName}>
+                  {fileName}
+                </span>
+                <span className="file-active-ext-badge">{fileExt}</span>
+              </div>
+              <div className="file-active-path" title={filePath}>
+                {filePath}
+              </div>
+            </div>
+            <div className="file-active-actions">
+              <button
+                type="button"
+                className="file-active-btn btn-change"
+                onClick={handlePickFile}
+                disabled={processing}
+                title="Chọn tệp khác"
+              >
+                🔄 Đổi file
+              </button>
+              <button
+                type="button"
+                className="file-active-btn btn-remove"
+                onClick={() => {
+                  if (!processing) {
+                    setFilePath("");
+                    setResult(null);
+                    setProgress(null);
+                    setPreviewList([]);
+                  }
+                }}
+                disabled={processing}
+                title="Bỏ chọn tệp này"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Step 2: Configuration */}
       <div className="file-sub-card">
         <div className="file-sub-card-title">
           <span className="step-badge">2</span>
-          <span>Cấu hình ngôn ngữ & AI</span>
+          <span>Cấu hình ngôn ngữ & Bộ mô hình AI</span>
+        </div>
+
+        {/* Quick Language Preset Pills */}
+        <div className="file-lang-presets">
+          <span className="preset-label">⚡ Cặp dịch nhanh:</span>
+          {[
+            { s: "en", t: "vi", label: "🇺🇸 ➔ 🇻🇳 Anh - Việt" },
+            { s: "ja", t: "vi", label: "🇯🇵 ➔ 🇻🇳 Nhật - Việt" },
+            { s: "zh", t: "vi", label: "🇨🇳 ➔ 🇻🇳 Trung - Việt" },
+            { s: "ko", t: "vi", label: "🇰🇷 ➔ 🇻🇳 Hàn - Việt" },
+            { s: "auto", t: "vi", label: "🌐 ➔ 🇻🇳 Tự nhận diện" },
+          ].map((pair) => (
+            <button
+              key={`${pair.s}-${pair.t}`}
+              type="button"
+              className={`preset-chip ${sourceLang === pair.s && targetLang === pair.t ? "is-active" : ""}`}
+              onClick={() => {
+                setSourceLang(pair.s);
+                setTargetLang(pair.t);
+              }}
+              disabled={processing}
+            >
+              {pair.label}
+            </button>
+          ))}
         </div>
 
         <div className="file-config-grid">
           <div className="file-config-item">
-            <label>Ngôn ngữ gốc trong file:</label>
-            <select
+            <CustomSelect
+              label="Ngôn ngữ gốc trong file:"
               value={sourceLang}
-              onChange={(e) => setSourceLang(e.target.value)}
-              className="settings-select"
+              options={SOURCE_LANG_OPTIONS}
+              onChange={setSourceLang}
               disabled={processing}
-            >
-              <option value="en">🇺🇸 Tiếng Anh (English)</option>
-              <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
-              <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
-              <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
-              <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
-              <option value="de">🇩🇪 Tiếng Đức (German)</option>
-              <option value="ru">🇷🇺 Tiếng Nga (Russian)</option>
-              <option value="es">🇪🇸 Tiếng Tây Ban Nha (Spanish)</option>
-              <option value="auto">🌐 Tự động nhận diện (Auto-detect)</option>
-            </select>
+            />
           </div>
 
           <div className="file-config-item">
-            <label>Dịch sang ngôn ngữ:</label>
-            <select
+            <CustomSelect
+              label="Dịch sang ngôn ngữ:"
               value={targetLang}
-              onChange={(e) => setTargetLang(e.target.value)}
-              className="settings-select"
+              options={TARGET_LANG_OPTIONS}
+              onChange={setTargetLang}
               disabled={processing}
-            >
-              <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
-              <option value="en">🇺🇸 Tiếng Anh (English)</option>
-            </select>
+            />
           </div>
 
           <div className="file-config-item">
-            <label>Model Nhận diện giọng nói (STT):</label>
-            <select
+            <CustomSelect
+              label="Model Nhận diện giọng nói (STT):"
               value={selectedStt}
-              onChange={(e) => setSelectedStt(e.target.value)}
-              className="settings-select"
+              options={sttOptions}
+              onChange={setSelectedStt}
               disabled={processing}
-            >
-              {sttModels.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.label} ({m.size_mb} MB) {m.downloaded ? "✓ Có sẵn" : ""}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="file-config-item">
-            <label>Model Dịch thuật (Local LLM):</label>
-            <select
+            <CustomSelect
+              label="Model Dịch thuật (Local LLM):"
               value={selectedTrans}
-              onChange={(e) => setSelectedTrans(e.target.value)}
-              className="settings-select"
+              options={transOptions}
+              onChange={setSelectedTrans}
               disabled={processing}
-            >
-              {transModels.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.label} ({m.size_mb} MB) {m.downloaded ? "✓ Có sẵn" : ""}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
 
-        <div className="file-sub-checkbox-row">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={createBilingual}
-              onChange={(e) => setCreateBilingual(e.target.checked)}
-              disabled={processing}
-            />
-            <span>
-              <strong>Tạo thêm file phụ đề Song ngữ (*.bilingual.srt)</strong> — Dòng trên tiếng gốc, dòng dưới tiếng Việt (Rất tốt cho việc học ngoại ngữ).
-            </span>
+        {/* Modern Toggle Switch for Bilingual Subtitles */}
+        <div className="file-sub-bilingual-row">
+          <label className="toggle-switch-wrapper">
+            <div className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={createBilingual}
+                onChange={(e) => setCreateBilingual(e.target.checked)}
+                disabled={processing}
+              />
+              <span className="toggle-slider" />
+            </div>
+            <div className="toggle-label-content">
+              <span className="toggle-title">
+                Tạo thêm file phụ đề Song ngữ (<code>*.bilingual.srt</code>)
+              </span>
+              <span className="toggle-desc">
+                Dòng trên hiển thị tiếng gốc, dòng dưới tiếng Việt (rất tốt khi học ngoại ngữ hoặc xem phim rạp).
+              </span>
+            </div>
           </label>
         </div>
       </div>
@@ -296,7 +464,10 @@ export default function FileSubView({
       {/* Error display */}
       {errorMsg && (
         <div className="file-sub-error">
-          <strong>Lỗi:</strong> {errorMsg}
+          <span className="error-icon">⚠️</span>
+          <div className="error-body">
+            <strong>Thông báo:</strong> {errorMsg}
+          </div>
         </div>
       )}
 

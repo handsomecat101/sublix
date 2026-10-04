@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { sublix, type SetupStatus } from "../lib/tauri";
+import heroUrl from "../assets/hero-cinema.jpg";
 import "./OnboardingView.css";
 
 type StepState = "pending" | "downloading" | "done" | "error" | "skipped";
@@ -165,6 +166,8 @@ export default function OnboardingView({ onComplete }: { onComplete: () => void 
           Real-time GPU subtitle overlay (Whisper Large-v3-Turbo + Qwen3 / Gemma 3).
         </p>
       </header>
+
+      <img className="onb-hero" src={heroUrl} alt="Rạp chiếu phim tại nhà với phụ đề" />
 
       <StepCard
         icon="📦"

@@ -16,7 +16,10 @@
   width: 250px;
   min-width: 250px;
   max-width: 250px;
-  background: var(--bg-side);
+  background-color: var(--bg-side);
+  background-image: url("../assets/grain.jpg");
+  background-size: 320px;
+  background-blend-mode: soft-light;
   border-right: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
@@ -43,12 +46,8 @@
 .sidebar-brand-icon {
   width: 32px;
   height: 32px;
-  background: var(--grad-ac);
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
+  object-fit: cover;
   box-shadow: var(--shadow-btn);
   flex-shrink: 0;
 }
@@ -1002,4 +1001,18 @@
   text-align: center;
   color: var(--t3);
   font-size: 13px;
+}
+
+.spot-ill {
+  display: block;
+  width: 96px;
+  height: auto;
+  margin: 4px auto 12px;
+  opacity: 0.95;
+}
+
+[data-theme="light"] .app-sidebar,
+[data-theme="vibrant"] .app-sidebar {
+  background-image: none;
+  background-blend-mode: normal;
 }

@@ -19,6 +19,9 @@ import {
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import { ChangelogModal } from "./ChangelogModal";
+import logoUrl from "../assets/logo.png";
+import spotHistoryUrl from "../assets/spot-history.jpg";
+import spotModelsUrl from "../assets/spot-models.jpg";
 import "./SettingsView.css";
 
 type Status =
@@ -638,7 +641,7 @@ export default function SettingsView() {
         <div className="sidebar-top">
           {/* Brand */}
           <div className="sidebar-brand">
-            <div className="sidebar-brand-icon">⚡</div>
+            <img className="sidebar-brand-icon" src={logoUrl} alt="Sublix" />
             <div className="sidebar-brand-text">
               <span className="sidebar-brand-title">
                 Sublix{" "}
@@ -648,7 +651,7 @@ export default function SettingsView() {
                   onClick={() => setShowChangelog(true)}
                   title="Bấm để xem chi tiết cập nhật & tính năng mới (Changelog)"
                 >
-                  v{appInfo?.version ?? "0.7.0"}
+                  v{appInfo?.version ?? "0.8.0"}
                 </button>
               </span>
               <span className="sidebar-brand-slogan">Local AI Subtitle Studio</span>
@@ -758,7 +761,7 @@ export default function SettingsView() {
             className="sidebar-quick-btn changelog-btn"
             onClick={() => setShowChangelog(true)}
           >
-            📜 Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.7.0"})
+            📜 Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
           </button>
         </div>
       </aside>
@@ -781,9 +784,9 @@ export default function SettingsView() {
               type="button"
               className="topbar-changelog-btn"
               onClick={() => setShowChangelog(true)}
-              title="Bấm để xem các tính năng mới trong v0.7.0"
+              title="Bấm để xem các tính năng mới trong v0.8.0"
             >
-              ✨ v{appInfo?.version ?? "0.7.0"} Changelog
+              ✨ v{appInfo?.version ?? "0.8.0"} Changelog
             </button>
             <div className={`main-topbar-status status-${status.kind}`}>
               {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch..." : "✓ Sẵn sàng")}
@@ -1688,6 +1691,7 @@ export default function SettingsView() {
         <p className="settings-help">
           Tải trực tiếp bất kỳ model nào bên dưới với 1 click. Thanh tiến trình % hiển thị trực tiếp theo thời gian thực:
         </p>
+        <img className="spot-ill" src={spotModelsUrl} alt="" />
 
         {/* STT Models Table */}
         <h3 style={{ fontSize: 13, color: "#93c5fd", margin: "14px 0 6px" }}>🎤 Whisper STT Models (Nhận diện giọng nói)</h3>
@@ -1930,6 +1934,7 @@ export default function SettingsView() {
         </div>
       ) : (
         <div className="history-empty">
+          <img className="spot-ill" src={spotHistoryUrl} alt="" />
           {recentSubs.length === 0
             ? "Chưa có lời thoại nào được ghi nhận. Bắt đầu phát video và bật 'Dịch Trực Tiếp Live' để ghi nhận!"
             : "Không tìm thấy câu thoại nào khớp với từ khoá tìm kiếm."}
@@ -2083,7 +2088,7 @@ export default function SettingsView() {
       <ChangelogModal
         isOpen={showChangelog}
         onClose={() => setShowChangelog(false)}
-        currentVersion={`v${appInfo?.version ?? "0.7.0"}`}
+        currentVersion={`v${appInfo?.version ?? "0.8.0"}`}
         currentTheme={theme}
         onThemeChange={handleThemeChange}
       />
