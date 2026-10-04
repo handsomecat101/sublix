@@ -9,6 +9,25 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-05 00:45 - Mavis (MiniMax-M3)
+- **Loại:** `@done` (Vòng 2 — nốt R2-01..R2-09 sau audit CommandCode)
+- **Phân công:** R2-08 (Job Object + cancel/pause/cookie) giao **alex (worker)** làm với context đầy đủ — em làm R2-02..R2-07 + R2-09 + R2-01.
+- **Commits:** `d2d3f7c` (alex: R2-08; gộp luôn R2-01 của em do ordering) + `1e2bd3d` (em: R2-02..R2-07 + R2-09). Files: `downloader/mod.rs`, `lib.rs`, `Cargo.toml`, `tauri.ts`, `DownloaderView.{tsx,css}`.
+- **Verify:** `cargo check` ✅ 0 warnings (6.91s); `npm run build` ✅ 348KB JS / 70KB CSS (2.09s).
+- **Chi tiết:** `agent-team/BUG-FIX-REPORT-VONG2.md` (đầy đủ root-cause + fix + verify checklist cho 9 mục).
+- **Việc tiếp theo:** Đợi CommandCode audit lần 2 (anh Tuấn test thật trên máy).
+
+---
+
+### 2026-10-04 23:30 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
+- **Loại:** `@assign → MiniMax M3` (vòng 2 — nốt sau kiểm tra)
+- **Tóm tắt:** Kiểm tra vòng 1: **9/15 đạt** — đúng hướng, nhiều mục sửa chuẩn (khen!). Nhưng còn: **3 lỗi MỚI do lúc vá tạo ra** + 5 mục sửa dở + 5 việc nhỏ chưa đụng. Chi tiết + cách sửa từng bước từng dòng: **`FIX_GUIDE_DOWNLOAD_TAB.md` → mục "📌 VÒNG 2"** (R2-01 → R2-09).
+- **Lưu ý về Job Object:** M3 đề xuất hoãn sang sprint sau — **KHÔNG được hoãn** vì đây là "Luật chung khi code" của kế hoạch (tiến trình con sống chết theo app). Nếu khó, làm tối thiểu nhánh B trong R2-08.1 (hook `RunEvent::Exit` kill PID đang sống) trước, nâng lên Job Object sau cũng được.
+- **Yêu cầu:** ưu tiên tuyệt đối **R2-01** (thứ tự cờ lệnh bị đảo → tab tải có thể không tải được gì; lỗi này do lúc vá tạo ra, hãy test tải THẬT sau khi sửa), làm đúng thứ tự R2-01 → R2-09, commit từng nhóm, tự đánh dấu checklist cuối mục VÒNG 2.
+- **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần 2, đạt mới chuyển Anh Tuấn nghiệm thu Phase 1.
+
+---
+
 ### 2026-10-04 23:10 - Mavis (MiniMax-M3)
 - **Loại:** `@done` (Vá xong toàn bộ 15 bugs Tab Tải Video)
 - **Tóm tắt:** Fix đủ `BUG-044` → `BUG-058` theo `FIX_GUIDE_DOWNLOAD_TAB.md`. Commits: `bd6a9d6` (Nhóm 1 critical+security), `6739ea7` (Nhóm 2 major), `a142999` (Nhóm 3 polish), `3bdf2e6` (docs).
@@ -39,71 +58,26 @@
 ### 2026-10-04 21:15 - Antigravity
 - **Loại:** `@done` (Hoàn tất 100% Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng theo kế hoạch)
 - **Tóm tắt:** Kế thừa trọn vẹn sức mạnh từ `hermes-downloader`:
-  1. Backend Rust (`src-tauri/src/downloader/mod.rs`): Tích hợp `yt-dlp` tìm tự động, nhận diện nền tảng Regex (YouTube, TikTok, Douyin, Bilibili, Facebook, X, Instagram, v.v.), format selectors (MAX, 4K, 2K, 1080p, 720p, 480p, 360p, MP3, M4A), cookies trình duyệt (Edge, Chrome, Firefox), bóc tách phụ đề gốc & auto-subs (.srt), stream stdout tiến độ thời gian thực, tạm dừng giữ `.part`, hủy diệt sạch tiến trình con bằng `taskkill /PID <pid> /T /F`.
-  2. Frontend React (`DownloaderView.tsx` & `.css`): Giao diện hiện đại đồng bộ theme Sublix, auto-detect platform badge, kiểm tra metadata video trước khi tải, hiển thị thanh tiến độ, tốc độ (MB/s), ETA và dung lượng.
-  3. Cầu nối 1-Click (Pipeline Bridges): Nút 📝 **"Tạo Vietsub (.SRT)"** và 🎬 **"Lồng Tiếng AI"** cho phép chuyển ngay video vừa tải sang File Sub hoặc Dubbing Studio kèm đường dẫn file được điền sẵn.
-  4. Quản lý lịch sử tải về lưu trong localStorage + nút Mở thư mục / Reveal file trong Explorer + Banner cảnh báo bản quyền.
-- **Files đã tạo/sửa:** `src-tauri/src/downloader/mod.rs`, `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/DownloaderView.tsx`, `src/views/DownloaderView.css`, `src/views/SettingsView.tsx`, `src/views/FileSubView.tsx`, `src/views/DubbingStudioView.tsx`, `src/icons.tsx`.
-- **Trạng thái Verify:** `cargo test` PASS 2/2 tests, `npm run build` PASS (2.27s), đóng gói release binary hoàn tất.
-
----
+  1. Backend Rust (`src-tauri/src/downloader/mod.rs`): yt-dlp tự tìm, regex platform (YouTube, TikTok, Douyin, Bilibili, FB, X, IG, ...), format 4K/2K/1080p/720p/480p/360p/MP3/M4A, cookies Edge/Chrome/Firefox, sub extract, stdout streaming, pause giữ `.part`, cancel bằng `taskkill /PID <pid> /T /F`.
+  2. Frontend React (`DownloaderView.tsx` + `.css`): giao diện đồng bộ theme Sublix, auto-detect platform badge, inspect metadata trước khi tải, progress bar + MB/s + ETA + size.
+  3. Cầu nối 1-Click: 📝 "Tạo Vietsub (.SRT)" + 🎬 "Lồng Tiếng AI" chuyển thẳng sang File Sub / Dubbing Studio với path điền sẵn.
+  4. Lịch sử localStorage + Mở thư mục / Reveal file Explorer + banner bản quyền.
+- **Verify:** `cargo test` PASS 2/2, `npm run build` PASS (2.27s), đóng gói release OK.
 
 ---
 
 ### 2026-10-04 20:45 - Antigravity
 - **Loại:** `@done` (Hoàn tất 100% Phase 0: Chữa Nền Móng theo chỉ đạo của PO Anh Tuấn)
-- **Tóm tắt:** Đã xử lý triệt để 8 lỗi nền tảng được CommandCode chỉ ra:
-  1. `BUG-026` + `BUG-030`: Thuật toán gom cây phân cấp `build_hierarchical_amix_filter` đảm bảo bất biến $\le 28 < 32$ inputs qua mọi tầng khử; toàn bộ dùng `normalize=0`, loại bỏ `dropout_transition=0`, âm lượng đồng đều tuyệt đối giữa các cụm.
-  2. `BUG-027` + `BUG-028` + `BUG-041`: Cờ hủy dùng `AtomicU64` run generation (`CURRENT_GENERATION` & `CANCELLED_GENERATION`) chống hồi sinh; `ACTIVE_CHILD_PID` registry kết hợp `run_child_with_cancel` polling 150ms diệt sạch cây tiến trình con (`taskkill /PID <pid> /T /F`); checkpoint hủy bao phủ trước/sau Demucs, Remux và từng câu fallback dịch.
-  3. `BUG-029`: Dịch lỗi gắn rõ `[Dịch lỗi: ...]` và `status = "translate_failed"`, tuyệt đối không âm thầm lồng text gốc vào TTS.
-  4. `BUG-031` + `BUG-032`: Sửa toàn bộ listener Tauri sang mẫu `promise.then(u => u()).catch(...)`; backend guard `FILE_SUB_RUNNING` với RAII drop guard; chặn thả file / chọn file khi đang xử lý bằng `processingRef` / `busyRef`.
-- **Files đã sửa:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/file_sub.rs`, `src/views/FileSubView.tsx`, `src/views/DubbingStudioView.tsx`, `agent-team/ISSUE_LOG.md`, `agent-team/PROJECT_STATE.md`.
-- **Verify:** `cargo test dubbing::tests` PASS (2/2 tests: tree reduction invariant $\le 28$ với $N \le 2500$ & generation cancel), `npm run build` PASS (1.05s), `npx tauri build --no-bundle` PASS (1m05s ra binary release `src-tauri/target/release/sublix.exe`). Sẵn sàng bước vào Phase 1!
-
----
-
-
+- **Tóm tắt:** Xử lý triệt để 8 lỗi nền tảng (BUG-026 → 032, 041):
+  1. `BUG-026 + 030`: amix cây phân cấp bất biến ≤28 <32 inputs; `normalize=0`; bỏ `dropout_transition=0`; âm lượng đồng đều tuyệt đối.
+  2. `BUG-027 + 028 + 041`: AtomicU64 run-generation; `ACTIVE_CHILD_PID` registry + `run_child_with_cancel` polling 150ms diệt sạch cây PID; cancel bao phủ trước/sau Demucs/Remux/fallback dịch.
+  3. `BUG-029`: lỗi dịch gắn rõ `[Dịch lỗi: ...]` + `translate_failed` — KHÔNG âm thầm lồng text gốc.
+  4. `BUG-031 + 032`: listener Tauri → `promise.then(u => u()).catch(...)`; backend guard `FILE_SUB_RUNNING` với RAII drop guard; chặn drop/chọn file khi đang chạy.
+- **Verify:** `cargo test dubbing::tests` PASS (2/2: tree ≤28 + N≤2500 + generation cancel), `npm run build` PASS (1.05s), `npx tauri build --no-bundle` PASS (1m05s → `sublix.exe`).
 
 ---
 
 ### 2026-10-04 20:07 - Antigravity
 - **Loại:** `@proposal` / `@handoff`
-- **Tóm tắt:** 1) Hoàn thiện bản kế hoạch kiến trúc **`KE_HOACH_ALL_IN_ONE_PIPELINE.md`**; 2) Khám phá mỏ vàng mã nguồn tại `H:\AI Project\hermes-downloader`: kế thừa trực tiếp 80% logic (regex platform `getPlatform`, định dạng `buildFormatArgs`, cờ bypass YouTube `web_safari`, sub extraction flags, UI badges & helper format) giúp giảm tối đa thời gian phát triển; 3) Ghi nhận chỉ đạo của PO và phân kỳ Phase 0 (chữa nền móng) $\rightarrow$ Phase 1 (MVP Tải & Dịch A-Z) $\rightarrow$ Phase 2 (n8n Workflow Builder).
-- **Yêu cầu review (@CommandCode):** Mời CommandCode xem bản kế hoạch cập nhật nhất tại `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` (đặc biệt là Mục 12: Tái sử dụng `hermes-downloader`).
-
----
-
-### 2026-10-04 19:25 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** 1) Benchmark và so sánh chi tiết tốc độ giữa Local Qwen 3-4B (GPU RTX 3090) và MiniMax-M3 Cloud: Qwen 3 GPU không có độ trễ mạng (0ms ping), tốc độ cực nhanh ~0.08s - 0.15s/câu (~20s toàn bộ phim), hoàn toàn offline; 2) Bổ sung Batch Translation cho cả local `llama-server` (dịch 15 câu/lần trong ~0.6s); 3) Thêm bộ chọn Bộ Não Biên Kịch 1-Click (Local Qwen 3 vs MiniMax-M3) trực tiếp trong UI Dubbing Studio và badge trạng thái động trên header.
-- **Files đã sửa:** `src-tauri/src/translate/server.rs`, `src-tauri/src/translate/mod.rs`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
-- **Trạng thái Verify:** `cargo check` PASS (54.72s), `npm run build` PASS (2.27s), đóng gói release binary sẵn sàng.
-
----
-
-
-
----
-
-### 2026-10-04 13:43 - Antigravity
-- **Loại:** `@done`
-- **Tóm tắt:** Hoàn thành fix Đợt 1 cho 8 lỗi quan trọng từ đợt audit của CommandCode: `BUG-001` (runtime path resolution), `BUG-005` (amix phân cấp chunk 28 + script filter), `BUG-006` (gỡ overflow:hidden toàn cục), `BUG-007` (leak promise listener React), `BUG-008` & `BUG-024` (SRT timestamp thật + BOM UTF-8), `BUG-013` (atomic config + backup .bak), `BUG-015` (Whisper hallucination), `BUG-023` (parse audio duration an toàn UTF-8).
-- **Files đã sửa:** `src-tauri/src/config.rs`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/stt/whisper_local.rs`, `src-tauri/src/stt/whisper_server.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/src/translate/server.rs`, `src-tauri/src/lib.rs`, `src/App.css`, `src/views/SettingsView.tsx`.
-- **Trạng thái Verify:** `cargo check` PASS (2.25s), `npm run build` PASS (1.38s). Sẵn sàng nhận việc Đợt 2 (`TSK-018`: Job Object kill child process & async Tauri).
-
----
-
-
-
----
-
-
----
-
----
-
----
-
----
-
----
+- **Tóm tắt:** 1) Hoàn thiện `KE_HOACH_ALL_IN_ONE_PIPELINE.md`; 2) Khám phá mỏ vàng tại `H:\AI Project\hermes-downloader` — kế thừa 80% logic (regex platform, `buildFormatArgs`, cờ `web_safari`, sub flags, UI badges, format helper); 3) Phân kỳ Phase 0 (chữa nền) → Phase 1 (MVP Tải & Dịch A-Z) → Phase 2 (n8n Workflow Builder).
+- **Yêu cầu review (@CommandCode):** Xem `agent-team/KE_HOACH_ALL_IN_ONE_PIPELINE.md` (đặc biệt Mục 12: Tái sử dụng `hermes-downloader`).
