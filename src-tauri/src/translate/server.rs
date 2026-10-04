@@ -286,6 +286,99 @@ impl TranslationServer {
         Ok(translated)
     }
 
+    pub fn translate_batch(
+        &self,
+        items: &[String],
+        source: &str,
+        target: &str,
+    ) -> Result<Vec<String>> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        if items.len() == 1 {
+            let single = self.translate(&items[0], source, target)?;
+            return Ok(vec![single]);
+        }
+
+        let no_think_prefix = match self.model {
+            TranslationModelVariant::Qwen3_8B | TranslationModelVariant::Qwen3_4B => "/no_think\n",
+            _ => "",
+        };
+
+        let mut user_prompt = format!(
+            "{no_think}Translate the following {src} dialogue lines into natural, spoken {tgt} for a movie dubbing script.\n\
+             IMPORTANT: Output ONLY the translated lines with their index tags [1], [2], etc. No introductory remarks, no explanations.\n\n\
+             Lines to translate:\n",
+            no_think = no_think_prefix,
+            src = lang_name(source),
+            tgt = lang_name(target)
+        );
+
+        for (idx, line) in items.iter().enumerate() {
+            user_prompt.push_str(&format!("[{}] {}\n", idx + 1, line));
+        }
+
+        let req = ChatRequest {
+            model: self.model.filename(),
+            messages: vec![
+                ChatMessage {
+                    role: "system",
+                    content: build_system_prompt_for_http(target),
+                },
+                ChatMessage {
+                    role: "user",
+                    content: user_prompt,
+                },
+            ],
+            max_tokens: 1200,
+            temperature: 0.2,
+            seed: Some(42),
+        };
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(45))
+            .build()?;
+        let t0 = Instant::now();
+        let resp = client
+            .post(format!("{}/v1/chat/completions", SERVER_URL))
+            .json(&req)
+            .send()
+            .with_context(|| "HTTP POST to llama-server batch failed")?;
+        let elapsed = t0.elapsed();
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            return Err(anyhow!("llama-server batch returned {}: {}", status, body));
+        }
+
+        let body: ChatResponse = resp
+            .json()
+            .with_context(|| "Failed to parse llama-server batch response")?;
+
+        let raw = body
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default();
+
+        let parsed = parse_batch_response(&raw, items.len(), target);
+        info!("⚡ llama-server Batch ({} lines, {:.2}s)", items.len(), elapsed.as_secs_f32());
+
+        let mut final_res = Vec::with_capacity(items.len());
+        for (idx, item) in items.iter().enumerate() {
+            if let Some(ref trans) = parsed[idx] {
+                final_res.push(trans.clone());
+            } else {
+                let single = self.translate(item, source, target).unwrap_or_else(|_| item.clone());
+                final_res.push(single);
+            }
+        }
+
+        Ok(final_res)
+    }
+
     pub fn engine(&self) -> Engine {
         self.engine
     }
@@ -509,6 +602,33 @@ pub fn translate_via_server(
 
     let server = guard.as_ref().expect("translation server just initialized");
     server.translate(text, source, target)
+}
+
+pub fn translate_batch_via_server(
+    items: &[String],
+    source: &str,
+    target: &str,
+    model: TranslationModelVariant,
+    pref: EnginePreference,
+) -> Result<Vec<String>> {
+    let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
+    let mut guard = TRANSLATION_SERVER
+        .lock()
+        .map_err(|e| anyhow!("Translation server mutex poisoned: {e}"))?;
+
+    let needs_restart = match *guard {
+        Some(ref s) => s.model() != resolved_model || !matches_pref(s.engine(), pref),
+        None => true,
+    };
+
+    if needs_restart {
+        *guard = None;
+        let server = TranslationServer::start(resolved_model, pref)?;
+        *guard = Some(server);
+    }
+
+    let server = guard.as_ref().expect("translation server just initialized");
+    server.translate_batch(items, source, target)
 }
 
 pub fn current_engine() -> Option<Engine> {

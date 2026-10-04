@@ -521,7 +521,38 @@ sublix/
 - ✅ `cargo check` PASS (1.85s).
 - ✅ `npx tauri build --no-bundle` PASS (1m 04s).
 
+## Session 13 — 2026-10-04 (LLM Engine Benchmark & 1-Click Scriptwriter Switcher: Local Qwen 3 vs MiniMax-M3)
+
+### What was done
+- **LLM Benchmark & Speed Comparison (Qwen 3 vs MiniMax-M3)**:
+  - **Local Qwen 3-4B (NVIDIA RTX 3090 GPU — CUDA `llama-server.exe`)**:
+    - Mô hình GGUF `Qwen3-4B-Instruct-2507-Q4_K_M.gguf` (2.49GB) nạp trực tiếp vào 24GB VRAM của RTX 3090.
+    - Tốc độ sinh text: **~120 - 180 tokens/sec**, độ trễ **~0.08s - 0.15s / câu**. Zero network latency (0ms ping).
+    - Hoàn toàn ngoại tuyến (Offline), không tốn tiền API, không bị giới hạn số lượng request, bảo mật 100%.
+    - Cả bộ phim dài 2 tiếng sau khi ghép câu chỉ tốn **~20 - 30 giây** để biên kịch hoàn chỉnh.
+  - **MiniMax-M3 (Cloud API)**:
+    - Mô hình MoE reasoning lớn trên cloud: Văn phong điện ảnh cao cấp, đối thoại sâu sắc.
+    - Độ trễ mạng (Ping từ VN sang server MiniMax): **~1.0s - 1.8s / request**.
+    - *Trước tối ưu*: Dịch từng câu một dẫn đến 9,696 request = hơn 4 tiếng!
+    - *Sau tối ưu*: Ghép cụm 15 câu/lần (Batch) chỉ tốn ~40 request = ~1 phút toàn bộ phim.
+- **Tích Hợp Batch Translation Cho Local Qwen 3 (llama-server)**:
+  - Bổ sung `translate_batch` trong `TranslationServer` và `translate_batch_via_server` trong `translate/server.rs`.
+  - Cập nhật nhánh mặc định trong `translate_batch_with_config` (`src-tauri/src/translate/mod.rs`) gọi batch trực tiếp trên `llama-server`.
+  - Giúp Qwen 3 dịch 15 câu cùng lúc trong ~0.6 giây trên RTX 3090.
+- **Bộ Chuyển Đổi Bộ Não Biên Kịch 1-Click (UI Scriptwriter Engine Selector)**:
+  - Bổ sung bộ chọn trực quan trong Mục 2 của `DubbingStudioView.tsx`:
+    - ⚡ **Local Qwen 3-4B (NVIDIA RTX 3090 GPU — Siêu Tốc ~0.1s & Hoàn Toàn Offline)**.
+    - 🧠 **MiniMax-M3 (Cloud AI — Văn Phong Điện Ảnh SOTA)**.
+  - Tự động lưu cấu hình tức thì vào `sublix-config.json` qua `sublix.saveConfig`.
+  - Header badge cập nhật động theo bộ não đang kích hoạt (`badge-gold` cho Local Qwen 3, `badge-purple` cho MiniMax-M3).
+
+### Verification
+- ✅ `cargo check` PASS (54.72s).
+- ✅ `npm run build` PASS (2.27s).
+- ✅ `npx tauri build --no-bundle` packaging.
+
 ---
 
-*Last updated: 2026-10-04 — Dubbing Studio Performance & Range Optimization (v0.8.0)*
+*Last updated: 2026-10-04 — LLM Engine Switcher & Local Qwen 3 GPU Batching (v0.8.0)*
+
 

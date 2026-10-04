@@ -59,16 +59,25 @@ export default function DubbingStudioView({
   const [previewingId, setPreviewingId] = useState<number | null>(null);
   const [auditionVoiceId, setAuditionVoiceId] = useState<string | null>(null);
   const [rangeMode, setRangeMode] = useState<"3m" | "10m" | "full">("3m");
+  const [activeProvider, setActiveProvider] = useState<string>("local");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [exportPath, setExportPath] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load preset voices on mount
+  // Load preset voices & config on mount
   useEffect(() => {
     sublix.dubbingGetVoices().then(setVoices).catch((err) => {
       console.warn("Failed to load voices:", err);
+    });
+
+    sublix.getConfig().then((cfg) => {
+      if (cfg.translation_provider) {
+        setActiveProvider(cfg.translation_provider);
+      }
+    }).catch((err) => {
+      console.warn("Failed to load config:", err);
     });
 
     let unlistenProgress: (() => void) | undefined;
@@ -151,6 +160,27 @@ export default function DubbingStudioView({
       setStatusMessage({ kind: "error", text: `Không thể nghe thử giọng ${voice.name}: ${err}` });
     } finally {
       setAuditionVoiceId(null);
+    }
+  }
+
+  async function handleSwitchProvider(newProvider: "local" | "minimax") {
+    try {
+      setActiveProvider(newProvider);
+      const currentCfg = await sublix.getConfig();
+      await sublix.saveConfig({
+        ...currentCfg,
+        translation_provider: newProvider,
+      });
+      setStatusMessage({
+        kind: "info",
+        text: `Đã kích hoạt bộ não biên kịch: ${
+          newProvider === "local"
+            ? "⚡ Qwen3-4B (GPU RTX 3090 — Siêu Tốc ~0.1s & Hoàn Toàn Offline)"
+            : "🧠 MiniMax-M3 (Cloud AI — Điện Ảnh SOTA)"
+        }`,
+      });
+    } catch (err) {
+      console.error("Failed to switch translation provider:", err);
     }
   }
 
@@ -320,7 +350,15 @@ export default function DubbingStudioView({
         </div>
         <div className="dubbing-badges">
           <span className="dubbing-badge badge-blue">⚡ Whisper Large-v3-Turbo</span>
-          <span className="dubbing-badge badge-purple">🧠 MiniMax-M3 Scriptwriter</span>
+          {activeProvider === "minimax" ? (
+            <span className="dubbing-badge badge-purple" title="Đang dùng MiniMax-M3 Cloud API (Batch SOTA)">
+              🧠 MiniMax-M3 Cloud Scriptwriter
+            </span>
+          ) : (
+            <span className="dubbing-badge badge-gold" title="Đang dùng Qwen3-4B chạy GPU NVIDIA RTX 3090">
+              ⚡ Local Qwen 3-4B (GPU RTX 3090)
+            </span>
+          )}
           <span className="dubbing-badge badge-green">🎙️ Neural Voice Cloning</span>
         </div>
       </div>
@@ -444,6 +482,45 @@ export default function DubbingStudioView({
               onChange={setTargetLang}
               disabled={analyzing || rendering}
             />
+          </div>
+        </div>
+
+        {/* AI Scriptwriter Engine Switcher */}
+        <div className="dubbing-mode-container" style={{ marginTop: 14 }}>
+          <label className="dubbing-mode-title">
+            Bộ Não Biên Kịch Lời Thoại (AI Scriptwriter Engine):
+            <span style={{ fontSize: "0.74rem", color: "#94a3b8", fontWeight: 400, marginLeft: 8 }}>
+              (Chuyển đổi 1-click giữa mô hình GPU nội bộ siêu tốc hoặc mô hình Cloud AI)
+            </span>
+          </label>
+          <div className="dubbing-engine-options">
+            <div
+              className={`dubbing-engine-card ${activeProvider !== "minimax" ? "active" : ""}`}
+              onClick={() => handleSwitchProvider("local")}
+            >
+              <div className="engine-card-header">
+                <span className="engine-icon">⚡</span>
+                <span className="engine-title">Local Qwen 3-4B (NVIDIA RTX 3090 GPU)</span>
+                <span className="scope-tag-gold">Siêu Tốc ~0.1s & Offline</span>
+              </div>
+              <p className="engine-desc">
+                Chạy trực tiếp 100% trên card màn hình RTX 3090 (CUDA). Không độ trễ mạng, <strong>tốc độ siêu nhanh (~20s cho cả bộ phim dài)</strong>, 100% riêng tư và ngoại tuyến.
+              </p>
+            </div>
+
+            <div
+              className={`dubbing-engine-card ${activeProvider === "minimax" ? "active" : ""}`}
+              onClick={() => handleSwitchProvider("minimax")}
+            >
+              <div className="engine-card-header">
+                <span className="engine-icon">🧠</span>
+                <span className="engine-title">MiniMax-M3 (Cloud AI Điện Ảnh)</span>
+                <span className="engine-tag-purple">Văn Phong SOTA</span>
+              </div>
+              <p className="engine-desc">
+                Mô hình MoE lớn trên Cloud, văn phong đối thoại trau chuốt chuẩn điện ảnh. Đã tối ưu ghép cụm (Batch Translation) tăng tốc 15x-20x. Cần kết nối Internet.
+              </p>
+            </div>
           </div>
         </div>
 

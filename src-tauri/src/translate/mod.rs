@@ -365,10 +365,15 @@ pub fn translate_batch_with_config(
                 }
             }
             _ => {
-                // Local llama-server fallback item-by-item
-                chunk.iter().map(|item| {
-                    translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
-                }).collect()
+                match server::translate_batch_via_server(chunk, source, target, model, pref) {
+                    Ok(res) => res,
+                    Err(e) => {
+                        warn!("Batch translation via local llama-server failed: {e:#}, falling back to single items");
+                        chunk.iter().map(|item| {
+                            translate_text_with_config(item, source, target, model, pref, cfg).unwrap_or_else(|_| item.clone())
+                        }).collect()
+                    }
+                }
             }
         };
 

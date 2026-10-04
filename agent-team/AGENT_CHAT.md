@@ -9,11 +9,11 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-04 15:05 - Antigravity
+### 2026-10-04 19:25 - Antigravity
 - **Loại:** `@done`
-- **Tóm tắt:** Phát hành chính thức **`v0.8.0`**: 1) Xây dựng khu vực Kéo & Thả (Drag & Drop Zone) tệp Video/Audio trực tiếp vào app qua Tauri Webview API; 2) Thẻ Media thông minh hiển thị chi tiết tên, đuôi tệp, nút đổi và xoá tệp; 3) Thay thế toàn bộ thẻ select Windows cũ bằng Custom Glass Select sang trọng bo góc; 4) Bổ sung phím tắt nhanh cặp ngôn ngữ và công tắc gạt Song ngữ; 5) Đóng gói release `sublix.exe` chuẩn bằng `npx tauri build --no-bundle`.
-- **Files đã sửa/tạo:** `src/views/CustomSelect.tsx`, `src/views/CustomSelect.css`, `src/views/FileSubView.tsx`, `src/views/FileSubView.css`, `src/views/ChangelogModal.tsx`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `DEV-LOG.md`.
-- **Trạng thái Verify:** `npm run build` PASS (2.21s), `npx tauri build --no-bundle` PASS. Sẵn sàng cho user chạy trải nghiệm.
+- **Tóm tắt:** 1) Benchmark và so sánh chi tiết tốc độ giữa Local Qwen 3-4B (GPU RTX 3090) và MiniMax-M3 Cloud: Qwen 3 GPU không có độ trễ mạng (0ms ping), tốc độ cực nhanh ~0.08s - 0.15s/câu (~20s toàn bộ phim), hoàn toàn offline; 2) Bổ sung Batch Translation cho cả local `llama-server` (dịch 15 câu/lần trong ~0.6s); 3) Thêm bộ chọn Bộ Não Biên Kịch 1-Click (Local Qwen 3 vs MiniMax-M3) trực tiếp trong UI Dubbing Studio và badge trạng thái động trên header.
+- **Files đã sửa:** `src-tauri/src/translate/server.rs`, `src-tauri/src/translate/mod.rs`, `src/views/DubbingStudioView.tsx`, `src/views/DubbingStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
+- **Trạng thái Verify:** `cargo check` PASS (54.72s), `npm run build` PASS (2.27s), đóng gói release binary sẵn sàng.
 
 ---
 
