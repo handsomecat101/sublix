@@ -19,6 +19,22 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+// R2-08.1: Windows Job Object types + functions for KILL_ON_JOB_CLOSE so any
+// spawned yt-dlp / ffmpeg subprocess is guaranteed to die when our process
+// (or its last Job handle) goes away. Non-Windows builds get a stub.
+#[cfg(windows)]
+use windows::Win32::Foundation::CloseHandle;
+#[cfg(windows)]
+use windows::Win32::System::JobObjects::{
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+};
+#[cfg(windows)]
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoInfo {
     pub id: String,
@@ -72,6 +88,14 @@ struct ActiveJob {
     /// `cancel_download` only ever touches this single path (plus its `.part`
     /// and `.ytdl` siblings) — never scans the whole save_dir. (BUG-047)
     pub dest_path: Option<PathBuf>,
+    /// R2-08.1: raw Win32 HANDLE to the Job Object that owns this child
+    /// process. Stored as `isize` so the struct stays platform-neutral
+    /// (non-Windows builds always carry `None`). `KILL_ON_JOB_CLOSE` is set on
+    /// the job, so closing this handle on app exit drags the whole tree down.
+    #[cfg(windows)]
+    pub job_handle: Option<isize>,
+    #[cfg(not(windows))]
+    pub job_handle: Option<isize>,
 }
 
 static ACTIVE_JOBS: LazyLock<Mutex<HashMap<String, ActiveJob>>> =
@@ -304,6 +328,13 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
     let url_owned = url.to_string();
 
     let (tx, rx) = std::sync::mpsc::channel::<Result<std::process::Output>>();
+    // R2-08.3: shared PID slot. The worker writes the child's PID as soon as
+    // it spawns; the main thread reads it on `recv_timeout` failure so we can
+    // actually kill the orphan. If the worker hadn't even spawned yet, the
+    // slot is empty and we accept the (extremely small) leak — documented.
+    let pid_slot: std::sync::Arc<std::sync::Mutex<Option<u32>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let pid_slot_w = pid_slot.clone();
     std::thread::spawn(move || {
         let mut cmd = Command::new(&ytdlp_bin);
         cmd.arg("--dump-json")
@@ -321,17 +352,59 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
         cmd.creation_flags(CREATE_NO_WINDOW);
 
         info!("🔍 Inspecting video metadata via yt-dlp: {}", url_owned);
-        let result = cmd.output().context("Thực thi yt-dlp metadata thất bại");
-        let _ = tx.send(result);
+
+        // R2-08.3: spawn explicitly so we can stash the PID before waiting on
+        // output. Without this the only way to get a `process::Output` was
+        // `cmd.output()`, which has no way to surface it back to the caller
+        // for orphan-killing on timeout.
+        let child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(Err(
+                    anyhow::Error::from(e).context("Không thể spawn yt-dlp")
+                ));
+                return;
+            }
+        };
+        // R2-08.3: stash PID for the main thread's orphan-kill on timeout.
+        // `Child::id()` returns `u32` on Windows and `Option<u32>` on Unix;
+        // branch on platform to keep the project cross-platform-compilable.
+        #[cfg(windows)]
+        let pid: u32 = child.id();
+        #[cfg(not(windows))]
+        let pid: u32 = child.id().unwrap_or(0);
+        if pid != 0 {
+            *pid_slot_w.lock().expect("pid_slot lock") = Some(pid);
+        }
+        // If the main thread times out and kills the PID, this returns an
+        // error which we simply discard via the channel — the caller is going to
+        // bail out anyway with its own timeout error.
+        let output_res = child
+            .wait_with_output()
+            .context("Thực thi yt-dlp metadata thất bại");
+        let _ = tx.send(output_res);
     });
 
-    let output = rx
-        .recv_timeout(std::time::Duration::from_secs(60))
-        .map_err(|_| {
-            anyhow::anyhow!(
+    let output = match rx.recv_timeout(std::time::Duration::from_secs(60)) {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => return Err(e),
+        Err(_) => {
+            // R2-08.3: 60s watchdog fired. The worker thread is still alive
+            // (or stuck on wait_with_output). If we have the PID, kill the
+            // orphan; otherwise the spawn call hadn't returned yet and we
+            // accept the (transient, sub-millisecond) leak.
+            if let Some(pid) = pid_slot.lock().expect("pid_slot lock").take() {
+                warn!(
+                    "fetch_video_info: 60s timeout → killing orphan yt-dlp pid={}",
+                    pid
+                );
+                kill_pid(pid);
+            }
+            return Err(anyhow::anyhow!(
                 "Không lấy được thông tin video trong 60 giây (link chết, video riêng tư, hoặc bị chặn khu vực)"
-            )
-        })??;
+            ));
+        }
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -399,10 +472,13 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
 
     let mut cmd = Command::new(&ytdlp_bin);
-    // `--` ensures the URL is treated as a positional even if it starts with `-`.
-    cmd.arg("--")
-        .arg(&req.url)
-        .arg("-o")
+    // R2-01: every option must come BEFORE `--`. yt-dlp treats everything
+    // after `--` as a positional arg, so a flag placed after `--` is silently
+    // ignored. The previous code put `cmd.arg("--").arg(url)` first and
+    // chained every other flag after it — which meant yt-dlp saw just a URL
+    // and used its defaults (no output template, no progress template,
+    // pulled whole playlists, etc.). Put the URL LAST.
+    cmd.arg("-o")
         .arg(&out_template)
         .arg("--newline")
         .arg("--no-ansi")  // BUG-056: kill ANSI colour codes so our parser
@@ -422,24 +498,39 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             .arg("youtube:player_client=web_safari,android_vr,ios");
     }
 
-    // Cookie integration: Edge / Chrome / Firefox
-    if let Some(ref browser) = req.browser_cookies {
-        let b = browser.trim().to_lowercase();
-        // BUG-057: only allow known browsers — App-Bound Encryption on
-        // Edge/Chrome can silently fail, and we don't want users passing
-        // arbitrary names that yt-dlp might interpret differently.
-        if !b.is_empty() && b != "none" {
-            if matches!(b.as_str(), "edge" | "chrome" | "firefox" | "opera" | "safari" | "brave") {
-                cmd.arg("--cookies-from-browser").arg(&b);
+    // R2-08.5: Cookie integration. Whitelist is strictly the three browsers
+    // yt-dlp actually supports via `--cookies-from-browser` on Windows without
+    // extra plugins — edge / chrome / firefox. Opera/Safari/Brave were removed:
+    //   - Safari: macOS-only.
+    //   - Opera / Brave: yt-dlp accepts the names but App-Bound Encryption has
+    //     been progressively breaking them since 2024; surfacing a silent
+    //     failure is worse than a hard reject.
+    // yt-dlp's own extractor doc agrees: only chromium-derivatives + firefox
+    // are reliable on Windows today.
+    //
+    // Priority: if a whitelisted browser is set, use it. Otherwise fall back
+    // to a Netscape `cookies.txt` the user explicitly picked. Never pass both
+    // flags — yt-dlp's behaviour when both are set is undocumented and has
+    // been observed to ignore the file in practice (BUG-057).
+    let browser_cookie_enabled = req
+        .browser_cookies
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && s.to_lowercase() != "none")
+        .map(|s| s.to_lowercase())
+        .and_then(|b| {
+            if matches!(b.as_str(), "edge" | "chrome" | "firefox") {
+                Some(b)
             } else {
                 warn!("Bỏ qua browser_cookies={} (không nằm trong whitelist)", b);
+                None
             }
-        }
-    }
+        });
 
-    // BUG-057: fallback to a Netscape cookies.txt the user selected.
-    // Used when `--cookies-from-browser` fails (App-Bound Encryption, etc.)
-    if let Some(ref cookies_file) = req.cookies_file {
+    if let Some(b) = browser_cookie_enabled {
+        cmd.arg("--cookies-from-browser").arg(&b);
+    } else if let Some(ref cookies_file) = req.cookies_file {
+        // BUG-057 fallback: only when we are NOT using browser cookies.
         let cf = cookies_file.trim();
         if !cf.is_empty() {
             let p = std::path::Path::new(cf);
@@ -477,6 +568,12 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         cmd.arg(arg);
     }
 
+    // R2-01: the URL must be the LAST argument, after `--` (the positional
+    // separator). Putting it last — after every option above — lets yt-dlp
+    // actually parse all our flags instead of treating them as part of the
+    // URL.
+    cmd.arg("--").arg(&req.url);
+
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
@@ -487,6 +584,15 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     let pid = child.id();
     let stdout = child.stdout.take().context("Không thể pipe stdout")?;
     let stderr = child.stderr.take().context("Không thể pipe stderr")?;
+
+    // R2-08.1: wrap the freshly-spawned yt-dlp in a Windows Job Object with
+    // KILL_ON_JOB_CLOSE so the entire grandchild tree (yt-dlp → ffmpeg/ffprobe)
+    // dies when our process terminates or when we close the job handle. On
+    // non-Windows this is a no-op (job_handle stays None).
+    #[cfg(windows)]
+    let job_handle_raw: Option<isize> = unsafe { create_kill_on_close_job(pid) };
+    #[cfg(not(windows))]
+    let job_handle_raw: Option<isize> = None;
 
     let download_id = req.id.clone();
 
@@ -500,6 +606,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 save_dir: save_dir.clone(),
                 last_file_path: None,
                 dest_path: None,
+                job_handle: job_handle_raw,
             },
         );
     }
@@ -738,27 +845,53 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
 /// Instant cancel of download: kills PID tree and purges ONLY the residual
 /// `.part` / `.ytdl` files that belong to this job — never scans the whole
 /// save directory. (BUG-047)
+///
+/// R2-08.2: pop the job out of the map FIRST and drop the mutex before
+/// doing anything that could block (kill, file IO). Old code held the
+/// lock across `kill_pid` (taskkill /T) and `fs::remove_file` which
+/// deadlocked against the worker thread's own `ACTIVE_JOBS.lock()` in its
+/// stdout reader loop.
+///
+/// R2-08.4: unknown id returns an explicit `Err` instead of silently
+/// emitting a fake "cancelled" event for a job that never existed.
 pub fn cancel_download(app: &AppHandle, id: &str) -> Result<()> {
-    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-        if let Some(job) = jobs.remove(id) {
-            kill_pid(job.pid);
-            // BUG-047: only delete the residual partial files for *this* job.
-            // If we never saw a "Destination:" line, fall back to the save_dir
-            // — but still only match paths that look like yt-dlp outputs.
-            let candidates: Vec<PathBuf> = if let Some(dest) = job.dest_path.as_ref() {
-                vec![
-                    dest.clone(),
-                    with_extension(dest, "part"),
-                    with_extension(dest, "ytdl"),
-                ]
-            } else {
-                vec![]
-            };
-            for p in &candidates {
-                let _ = fs::remove_file(p);
-            }
+    // 1. Remove from map and drop the lock immediately.
+    let job = ACTIVE_JOBS
+        .lock()
+        .ok()
+        .and_then(|mut jobs| jobs.remove(id));
+    let job = match job {
+        Some(j) => j,
+        None => {
+            return Err(anyhow::anyhow!("Không tìm thấy việc này (id: {})", id));
+        }
+    };
+
+    // 2. Mutex is released here. Kill + IO happen without blocking the
+    //    worker thread's progress reader.
+    kill_pid(job.pid);
+    #[cfg(windows)]
+    if let Some(h_raw) = job.job_handle {
+        let h = windows::Win32::Foundation::HANDLE(h_raw as _);
+        unsafe {
+            let _ = CloseHandle(h);
         }
     }
+
+    // BUG-047: only delete the residual partial files for *this* job.
+    let candidates: Vec<PathBuf> = if let Some(dest) = job.dest_path.as_ref() {
+        vec![
+            dest.clone(),
+            with_extension(dest, "part"),
+            with_extension(dest, "ytdl"),
+        ]
+    } else {
+        vec![]
+    };
+    for p in &candidates {
+        let _ = fs::remove_file(p);
+    }
+
     let _ = app.emit(
         "downloader:progress",
         DownloadProgressPayload {
@@ -785,12 +918,30 @@ fn with_extension(path: &Path, ext: &str) -> PathBuf {
 }
 
 /// Pause download: gracefully stops the process while keeping .part file intact for resume
+///
+/// R2-08.2: same fix as `cancel_download` — pop from map, drop lock, then
+/// kill. R2-08.4: unknown id returns `Err` so the UI can show the failure.
 pub fn pause_download(app: &AppHandle, id: &str) -> Result<()> {
-    if let Ok(mut jobs) = ACTIVE_JOBS.lock() {
-        if let Some(job) = jobs.remove(id) {
-            kill_pid(job.pid);
+    let job = ACTIVE_JOBS
+        .lock()
+        .ok()
+        .and_then(|mut jobs| jobs.remove(id));
+    let job = match job {
+        Some(j) => j,
+        None => {
+            return Err(anyhow::anyhow!("Không tìm thấy việc này (id: {})", id));
+        }
+    };
+
+    kill_pid(job.pid);
+    #[cfg(windows)]
+    if let Some(h_raw) = job.job_handle {
+        let h = windows::Win32::Foundation::HANDLE(h_raw as _);
+        unsafe {
+            let _ = CloseHandle(h);
         }
     }
+
     let _ = app.emit(
         "downloader:progress",
         DownloadProgressPayload {
@@ -825,6 +976,77 @@ fn kill_pid(pid: u32) {
                 .status();
         }
     }
+}
+
+/// R2-08.1: create a Windows Job Object, set KILL_ON_JOB_CLOSE on it, and
+/// assign the given PID to it. Returns the raw HANDLE as `isize` so callers
+/// can stash it on `ActiveJob` and close it later. Returns `None` on any
+/// failure (logged but non-fatal — `kill_pid` via taskkill still works as a
+/// belt-and-braces backup).
+#[cfg(windows)]
+unsafe fn create_kill_on_close_job(pid: u32) -> Option<isize> {
+    use windows::Win32::System::Threading::PROCESS_ACCESS_RIGHTS;
+
+    // PROCESS_SET_QUOTA + PROCESS_TERMINATE — the rights Microsoft documents
+    // as required for AssignProcessToJobObject().
+    let desired = PROCESS_ACCESS_RIGHTS(PROCESS_SET_QUOTA.0 | PROCESS_TERMINATE.0);
+    let proc_handle = match OpenProcess(desired, false, pid) {
+        Ok(h) => h,
+        Err(e) => {
+            warn!(
+                "JobObject: OpenProcess(pid={}) thất bại ({}); KILL_ON_JOB_CLOSE sẽ không hoạt động cho job này",
+                pid, e
+            );
+            return None;
+        }
+    };
+
+    let result = (|| -> Option<isize> {
+        let job = CreateJobObjectW(None, None).ok()?;
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+        .ok()?;
+        AssignProcessToJobObject(job, proc_handle).ok()?;
+        Some(job.0 as isize)
+    })();
+
+    // We don't need the process handle any more — closing it does NOT remove
+    // the process from the job (Windows semantics).
+    let _ = CloseHandle(proc_handle);
+
+    if result.is_none() {
+        warn!("JobObject: tạo/gán job cho pid={} thất bại; kill-on-exit dùng taskkill fallback", pid);
+    }
+    result
+}
+
+/// R2-08.1: gọi từ `RunEvent::Exit` hook trong `lib.rs`. Đóng tất cả Job
+/// Object handle đang mở — `KILL_ON_JOB_CLOSE` đảm bảo mọi tiến trình con
+/// cháu (yt-dlp, ffmpeg, ffprobe) đều bị kill khi handle cuối cùng đóng.
+#[cfg(windows)]
+pub fn shutdown_all_jobs() {
+    if let Ok(jobs) = ACTIVE_JOBS.lock() {
+        for (_id, job) in jobs.iter() {
+            if let Some(h_raw) = job.job_handle {
+                let h = windows::Win32::Foundation::HANDLE(h_raw as _);
+                unsafe {
+                    let _ = CloseHandle(h);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn shutdown_all_jobs() {
+    // No-op on non-Windows: child processes are tracked by pid only and
+    // `kill_pid` already ran on cancel/pause.
 }
 
 /// Open downloads folder in Windows Explorer

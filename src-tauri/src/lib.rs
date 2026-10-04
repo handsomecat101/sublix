@@ -106,7 +106,7 @@ pub fn run() {
         .with_target(false)
         .init();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             list_audio_devices,
@@ -186,8 +186,19 @@ pub fn run() {
             tracing::info!("🚀 Sublix v{} started", env!("CARGO_PKG_VERSION"));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    // R2-08.1: hook the app's exit event so we can close every Job Object handle
+    // we created for child processes. The handles carry KILL_ON_JOB_CLOSE, so
+    // closing the last handle (or the process terminating) drags the entire
+    // yt-dlp/ffmpeg grandchild tree down with us — no zombie processes left
+    // behind when the user closes the window or the app crashes.
+    app.run(|_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            downloader::shutdown_all_jobs();
+        }
+    });
 }
 
 #[tauri::command]

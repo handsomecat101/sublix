@@ -48,6 +48,11 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
     "Win32_Storage_FileSystem", # BUG-051: GetDiskFreeSpaceExW for disk-space check
+    # R2-08.1: Windows Job Object with KILL_ON_JOB_CLOSE so killing/ crashing
+    # the app drags every yt-dlp/ffmpeg grandchild down with it (no zombies).
+    "Win32_Security",           # required for SECURITY_ATTRIBUTES on CreateJobObjectW
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
 ] }
 
 # === M2.5: Live capture → STT → overlay (real-time) ===

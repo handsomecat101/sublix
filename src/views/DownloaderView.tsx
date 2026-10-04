@@ -367,7 +367,15 @@ export default function DownloaderView({
         prev.map((item) => (item.id === id ? { ...item, status: "paused" } : item))
       );
     } catch (e) {
-      console.error(e);
+      // R2-08.4: surface the backend error to the user instead of swallowing.
+      // Backend returns Err("Không tìm thấy việc này...") for unknown id.
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, error: formatError(e, "Tạm dừng tải thất bại") }
+            : item
+        )
+      );
     }
   };
 
@@ -407,7 +415,15 @@ export default function DownloaderView({
         prev.map((item) => (item.id === id ? { ...item, status: "cancelled" } : item))
       );
     } catch (e) {
-      console.error(e);
+      // R2-08.4: surface the backend error to the user instead of swallowing.
+      // Backend returns Err("Không tìm thấy việc này...") for unknown id.
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, error: formatError(e, "Hủy tải thất bại") }
+            : item
+        )
+      );
     }
   };
 
