@@ -30,7 +30,11 @@
 ├─────────────────────────────────────────────────────────────────┤
 │  BƯỚC 3: THỰC HIỆN        ⏱️ Tùy thuộc task                    │
 │  ─────────────────────────────────────────────                 │
-│  □ Code → cargo check → npm run build → Test release           │
+│  □ Khi Dev/Test UI: Chạy `npm run tauri dev` (Hot Reload 0.1s) │
+│    -> KHÔNG tốn thời gian build release khi đang làm việc dở!  │
+│  □ Kiểm tra mã: `cargo check` -> `npm run build`               │
+│  □ Khi Đóng Gói Release: Bắt buộc dùng `npx tauri build --no-bundle` │
+│    -> CẤM dùng `cargo build --release` (tránh lỗi localhost 1420)   │
 ├─────────────────────────────────────────────────────────────────┤
 │  BƯỚC 4: CẬP NHẬT GỌN     ⏱️ 2 phút (KHÔNG GHI TRÙNG LẶP!)     │
 │  ─────────────────────────────────────────────                 │

@@ -18,6 +18,7 @@
 | `BUG-H04` | Model suy luận `MiniMax-M3` làm lộ khối `<think>...</think>` vào phụ đề | `src-tauri/src/translate/server.rs` | Bắt buộc gửi `"reasoning_split": true` trong body và lọc regex `<think>` ở post-process | ✅ Fixed |
 | `BUG-H05` | Whisper CUDA báo thiếu `cublas64_12.dll` trên máy chưa cài CUDA Toolkit | `src-tauri/Cargo.toml` / runtime | Luôn sao chép các DLL cu12 runtime (`cublas64_12.dll`, `cudart64_12.dll`) đi kèm thư mục release | ✅ Fixed |
 | `BUG-H06` | Phân vai Diarization bị gán 1 người nói do mốc SRT Whisper liên tục (`pause = 0`) | `src-tauri/src/dubbing/mod.rs` | Kích hoạt đổi vai khi câu trước kết thúc bằng dấu chấm/chấm than/hỏi (`prev_ends_terminal`) | ✅ Fixed |
+| `BUG-H07` | Lỗi WebView2 `ERR_CONNECTION_REFUSED` do build bằng `cargo build` thô | Tauri Build / Config | CẤM dùng `cargo build --release` để build app; bắt buộc dùng `npx tauri build --no-bundle` (hoặc chạy dev mode `npm run tauri dev`) | ✅ Fixed |
 
 ---
 
@@ -91,3 +92,14 @@
 - **File:** `src/App.css`, `views/OverlayView.css`
 - **Nguyên nhân gốc (Root Cause):** `html, body, #root { overflow: hidden !important; }` khóa cuộn toàn bộ webview.
 - **Cách fix & Bài học:** Bỏ `overflow: hidden !important` toàn cục, chỉ đặt khóa cuộn trên cửa sổ Overlay.
+
+---
+
+### [BUG-H07] Lỗi WebView2 `ERR_CONNECTION_REFUSED` do build bằng `cargo build` thô
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** Anh Tuấn (User) | **Fix bởi:** Antigravity | **Status:** ✅ Fixed
+- **File:** `src-tauri/tauri.conf.json`, Build Pipeline
+- **Nguyên nhân gốc (Root Cause):** Chạy `cargo build --release` thô của Rust mà không thông qua Tauri CLI. Binary `.exe` được tạo ra không kích hoạt cờ nhúng tĩnh thư mục `dist/`, mà vẫn đọc cấu hình `devUrl: http://localhost:1420`. Khi user mở app mà máy không chạy Vite dev server, WebView2 hiển thị màn hình lỗi `ERR_CONNECTION_REFUSED`.
+- **Cách fix & Bài học BẮT BUỘC:**
+  1. Khi đang phát triển / test UI: **KHÔNG CẦN BUILD RELEASE!** Chạy ngay chế độ Dev bằng lệnh `npm run tauri dev` hoặc file [`C:\Users\TTC\Desktop\Chay-Sublix-Dev.bat`](file:///C:/Users/TTC/Desktop/Chay-Sublix-Dev.bat). Thay đổi code đến đâu, màn hình hot-reload ngay tức thì trong 0.1s.
+  2. Khi đóng gói Release hoàn chỉnh: **CẤM DÙNG `cargo build`**. Bắt buộc dùng lệnh chuẩn của Tauri: `npx tauri build --no-bundle`. Lệnh này nhúng 100% assets tĩnh offline vào `.exe` và tắt bỏ hoàn toàn `devUrl`.
+
