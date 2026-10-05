@@ -23,10 +23,37 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.0",
+    date: "06/10/2026",
+    title: "Sửa Lỗi YouTube Download & Competitive Analysis",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng: YouTube Download Hoạt Động Trở Lại",
+        icon: "🔧",
+        items: [
+          "Phát hiện root cause: yt-dlp 2024.10+ yêu cầu JS runtime (Node.js/Deno) + remote challenge solver để bypass YouTube anti-bot. Sublix chưa pass 2 flag này nên mọi URL YouTube fail im lặng.",
+          "Helper mới `find_js_runtime()` tự động phát hiện `node` hoặc `deno` trên PATH (qua `where node.exe` trên Windows, `which node` trên Unix).",
+          "Auto pass `--js-runtimes <runtime>:<path>` + `--remote-components ejs:github` khi tải video YouTube — script solver được tải về từ GitHub ở lần đầu, cache lại cho lần sau.",
+          "Áp dụng cho cả `start_download` (lẫn nhánh retry cookie fallback) và `fetch_video_info` (inspect metadata), nên 'Kiểm Tra Link' cũng work trên YouTube.",
+          "Verified thủ công bằng CLI: 11.28 MB Rick Astley tải về trong ~1 giây.",
+        ],
+      },
+      {
+        category: "Competitive Analysis với 4 Repo Voice/Dubbing",
+        icon: "📊",
+        items: [
+          "Nghiên cứu sâu 4 đối thủ: VoiceStudio (53k⭐, Python+Electron, AGPL), dub-studio (Tauri giống Sublix), YouDub-webui (FastAPI+Next.js, production 1M+ subs), ZastTranslate (Python Gradio, 33 ngôn ngữ).",
+          "Phát hiện Sublix có 3 điểm UNIQUE: đa engine song song (Qwen 3 GPU + MiniMax-M3 Cloud), 1-click pipeline bridges (Downloader → Sub → Dubbing), Downloader đa nền tảng (9 site).",
+          "Gợi ý roadmap P0: Voice DESIGN (text→voice), MCP server cho AI agents, multi-TTS engine swap. Xem `agent-team/COMPETITIVE_ANALYSIS.md`.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.8.0",
     date: "04/10/2026",
     title: "Nhận Diện Thị Giác AI & Bộ Minh Hoạ Điện Ảnh",
-    isCurrent: true,
     highlights: [
       {
         category: "Bộ Nhận Diện Thị Giác Mới (AI Visual Identity)",
