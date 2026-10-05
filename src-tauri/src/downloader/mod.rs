@@ -265,6 +265,80 @@ pub fn find_ytdlp(user_path: Option<&str>) -> Result<PathBuf> {
     Ok(PathBuf::from(if cfg!(windows) { "yt-dlp.exe" } else { "yt-dlp" }))
 }
 
+/// Locate a JavaScript runtime for yt-dlp to bypass YouTube's anti-bot
+/// challenges. As of yt-dlp 2024.10+ every YouTube extraction needs a JS
+/// runtime + a challenge solver script; if neither is present YouTube
+/// downloads return `Requested format is not available` or
+/// `n challenge solving failed` and silently produce zero bytes.
+///
+/// We look, in order:
+///   1. `node` (most common — bundled with most dev machines, Node 18+ LTS)
+///   2. `deno` (the runtime yt-dlp's docs recommend; small ~15 MB download)
+///
+/// Returns `(runtime_name, full_path)` suitable for yt-dlp's
+/// `--js-runtimes <name>:<path>` argument, or `Ok(None)` if neither
+/// is on the PATH. The user then needs to install Node.js / Deno.
+pub fn find_js_runtime() -> Result<Option<(String, PathBuf)>> {
+    #[cfg(windows)]
+    fn lookup(name: &str, exe: &str) -> Option<PathBuf> {
+        // `where` lists every match on PATH. We take the first one; that
+        // matches yt-dlp's own behaviour (PATH order = precedence).
+        let out = Command::new("where")
+            .arg(name)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let first = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+        if first.is_empty() {
+            return None;
+        }
+        let p = PathBuf::from(first.clone());
+        // sanity: verify it actually exists (PATH can dangle)
+        if p.exists() {
+            Some(p)
+        } else {
+            // try the .exe variant on Windows in case PATH lookup returned bare name
+            let p_exe = PathBuf::from(format!("{}{}", first, exe));
+            if p_exe.exists() {
+                Some(p_exe)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn lookup(name: &str, _exe: &str) -> Option<PathBuf> {
+        let out = Command::new("which").arg(name).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let first = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+        let p = PathBuf::from(first);
+        p.exists().then_some(p)
+    }
+
+    let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
+    if let Some(p) = lookup("node", exe_suffix) {
+        return Ok(Some(("node".to_string(), p)));
+    }
+    if let Some(p) = lookup("deno", exe_suffix) {
+        return Ok(Some(("deno".to_string(), p)));
+    }
+    Ok(None)
+}
+
 /// Platform detector matching regex patterns from hermes-downloader.
 /// BUG-058: match against the *host* of the parsed URL, not raw substring
 /// search — otherwise `u.contains("x.com")` happily matches
@@ -385,6 +459,13 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
     let platform = get_platform(url);
     let url_owned = url.to_string();
 
+    // Find a JS runtime for yt-dlp. YouTube 2024+ requires it for
+    // dump-json extraction too.
+    let js_runtime_token: Option<String> = match find_js_runtime() {
+        Ok(Some((runtime, path))) => Some(format!("{}:{}", runtime, path.display())),
+        Ok(None) | Err(_) => None,
+    };
+
     let (tx, rx) = std::sync::mpsc::channel::<Result<std::process::Output>>();
     // R2-08.3: shared PID slot. The worker writes the child's PID as soon as
     // it spawns; the main thread reads it on `recv_timeout` failure so we can
@@ -399,7 +480,12 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
             .arg("--no-playlist")
             .arg("--no-warnings");
 
+        // YouTube 2024+ anti-bot: JS runtime + remote challenge solver.
+        if let Some(token) = &js_runtime_token {
+            cmd.arg("--js-runtimes").arg(token);
+        }
         if platform == "youtube" {
+            cmd.arg("--remote-components").arg("ejs:github");
             cmd.arg("--extractor-args")
                 .arg("youtube:player_client=android,web_safari,ios");
         }
@@ -504,16 +590,36 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
 
 /// Helper to construct the yt-dlp Command with proper argument ordering (R2-01).
 /// All options precede `--`, and `--` is followed solely by the target URL.
+///
+/// `js_runtime`, if set, is the formatted `--js-runtimes` token, e.g.
+/// `node:C:\Program Files\nodejs\node.exe` or `deno:/usr/local/bin/deno`.
+/// yt-dlp 2024.10+ requires a JS runtime for every YouTube extraction; we
+/// detect one in `start_download` and pass it here.
+///
+/// `youtube_remote_solver` controls `--remote-components` (the challenge-solver
+/// script download). YouTube 2026 requires `ejs:github` even with a JS runtime;
+/// we always set this for YouTube URLs.
 fn build_download_command(
     ytdlp_bin: &Path,
     save_dir: &Path,
     req: &DownloadRequest,
     use_browser_cookie: Option<&str>,
     use_cookies_file: Option<&str>,
+    js_runtime: Option<&str>,
 ) -> Command {
     let mut cmd = Command::new(ytdlp_bin);
     let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
     let platform = get_platform(&req.url);
+
+    // YouTube 2024+ anti-bot: JS runtime + remote challenge solver.
+    // Without both, downloads silently fail with
+    // "Requested format is not available" or "n challenge solving failed".
+    if let Some(token) = js_runtime {
+        cmd.arg("--js-runtimes").arg(token);
+    }
+    if platform == "youtube" {
+        cmd.arg("--remote-components").arg("ejs:github");
+    }
 
     cmd.arg("-o")
         .arg(&out_template)
@@ -781,6 +887,14 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
     let save_dir = get_downloads_dir(&app);
 
+    // Find a JS runtime for yt-dlp. YouTube 2024+ requires it; without one
+    // every YouTube URL returns "Requested format is not available".
+    let js_runtime_token: Option<String> = match find_js_runtime() {
+        Ok(Some((runtime, path))) => Some(format!("{}:{}", runtime, path.display())),
+        Ok(None) => None,
+        Err(_) => None,
+    };
+
     // R3-02: Allocate monotonic run ID
     let my_run_id = NEXT_RUN_ID.fetch_add(1, Ordering::SeqCst);
 
@@ -866,6 +980,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         &req,
         primary_browser,
         primary_file,
+        js_runtime_token.as_deref(),
     );
 
     let child = cmd.spawn().context("Không thể khởi động yt-dlp")?;
@@ -946,6 +1061,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     &req_clone,
                     None,
                     Some(backup_file.as_str()),
+                    js_runtime_token.as_deref(),
                 );
 
                 match retry_cmd.spawn() {
