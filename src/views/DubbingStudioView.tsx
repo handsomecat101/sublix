@@ -6,6 +6,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   sublix,
   type DubbingProject,
+  type DubbingSpeaker,
   type DubbingSegment,
   type DubbingProgress,
   type VoicePreset,
@@ -313,6 +314,41 @@ export default function DubbingStudioView({
       speakers: project.speakers.map((spk) =>
         spk.id === speakerId ? { ...spk, label } : spk
       ),
+    });
+  }
+
+  function handleAddSpeaker() {
+    if (!project) return;
+    const nextIdx = project.speakers.length + 1;
+    const isMale = nextIdx % 2 !== 0;
+    const newSpeaker: DubbingSpeaker = {
+      id: `speaker_custom_${Date.now()}`,
+      label: `Nhân vật ${nextIdx} (${isMale ? "Nam" : "Nữ"})`,
+      voice: isMale ? "vi-VN-NamMinhNeural" : "vi-VN-HoaiMyNeural",
+      pitch: "+0Hz",
+      rate: "+0%",
+    };
+    setProject({
+      ...project,
+      speakers: [...project.speakers, newSpeaker],
+    });
+    setStatusMessage({
+      kind: "info",
+      text: `Đã thêm vai diễn mới: ${newSpeaker.label}`,
+    });
+  }
+
+  function handleRemoveSpeaker(speakerId: string) {
+    if (!project || project.speakers.length <= 1) return;
+    const remaining = project.speakers.filter((s) => s.id !== speakerId);
+    const fallbackSpeakerId = remaining[0].id;
+    const updatedSegments = project.segments.map((seg) =>
+      seg.speaker_id === speakerId ? { ...seg, speaker_id: fallbackSpeakerId } : seg
+    );
+    setProject({
+      ...project,
+      speakers: remaining,
+      segments: updatedSegments,
     });
   }
 
@@ -723,46 +759,79 @@ export default function DubbingStudioView({
       {/* SECTION 4: SPEAKER CASTING (HIỂN THỊ KHI ĐÃ PHÂN TÍCH XONG) */}
       {project && (
         <div className="dubbing-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
             <div>
               <h2 className="dubbing-card-title" style={{ margin: 0 }}>
                 4. Phân Vai Diễn Viên Đa Nhân Vật (Speaker Casting)
               </h2>
               <p className="dubbing-card-desc">
-                Gán giọng đọc tương ứng cho từng vai diễn phát hiện trong video.
+                Gán giọng đọc tương ứng cho từng vai diễn phát hiện trong video. Bạn có thể thêm/bớt hoặc đổi vai tùy ý.
               </p>
             </div>
-            <span style={{ fontSize: 13, color: "var(--ac-txt)", fontWeight: 600 }}>
-              Thời lượng: ~{Math.round(project.media_duration_sec)}s • {project.segments.length} câu thoại
-            </span>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                type="button"
+                className="dubbing-btn dubbing-btn-secondary"
+                onClick={handleAddSpeaker}
+                style={{ fontSize: 12, padding: "5px 12px" }}
+              >
+                ➕ Thêm Nhân Vật Mới
+              </button>
+              <span style={{ fontSize: 13, color: "var(--ac-txt)", fontWeight: 600 }}>
+                Thời lượng: ~{Math.round(project.media_duration_sec)}s • {project.segments.length} câu thoại • {project.speakers.length} nhân vật
+              </span>
+            </div>
           </div>
 
           {/* Speakers List */}
           <div className="dubbing-speakers-grid">
-            {project.speakers.map((spk, idx) => (
-              <div key={spk.id} className="dubbing-speaker-card">
-                <div className="dubbing-speaker-header">
-                  <span className={`dubbing-speaker-avatar speaker-avatar-${idx % 4}`}>
-                    {idx === 0 ? "👨" : idx === 1 ? "👩" : "👤"}
-                  </span>
-                  <input
-                    type="text"
-                    value={spk.label}
-                    onChange={(e) => handleUpdateSpeakerLabel(spk.id, e.target.value)}
-                    className="dubbing-speaker-label-input"
-                  />
-                </div>
+            {project.speakers.map((spk, idx) => {
+              const matchedVoice = voices.find((v) => v.id === spk.voice);
+              const isFemale = matchedVoice?.gender === "female";
+              return (
+                <div key={spk.id} className="dubbing-speaker-card">
+                  <div className="dubbing-speaker-header">
+                    <span className={`dubbing-speaker-avatar speaker-avatar-${idx % 4}`}>
+                      {isFemale ? "👩" : "👨"}
+                    </span>
+                    <input
+                      type="text"
+                      value={spk.label}
+                      onChange={(e) => handleUpdateSpeakerLabel(spk.id, e.target.value)}
+                      className="dubbing-speaker-label-input"
+                      title="Đổi tên/vai nhân vật"
+                    />
+                    {project.speakers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSpeaker(spk.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          padding: "2px 6px",
+                          marginLeft: 4,
+                        }}
+                        title="Xóa nhân vật này"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
 
-                <div style={{ marginTop: 12 }}>
-                  <CustomSelect
-                    label="Giọng Đọc AI:"
-                    value={spk.voice}
-                    options={voiceSelectOptions}
-                    onChange={(newVoice) => handleUpdateSpeakerVoice(spk.id, newVoice)}
-                  />
+                  <div style={{ marginTop: 12 }}>
+                    <CustomSelect
+                      label="Giọng Đọc AI:"
+                      value={spk.voice}
+                      options={voiceSelectOptions}
+                      onChange={(newVoice) => handleUpdateSpeakerVoice(spk.id, newVoice)}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Audio Mixing Balance */}

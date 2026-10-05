@@ -187,6 +187,21 @@ fn is_valid_http_url(url: &str) -> bool {
 /// are forbidden — they break every other machine and conflict with
 /// `BUG-001`/`BUG-017`.
 pub fn find_ytdlp(user_path: Option<&str>) -> Result<PathBuf> {
+    // 0. Python user scripts directory (where pip install -U installs updated releases)
+    #[cfg(windows)]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        for py_dir in &["Python313", "Python312", "Python311", "Python310"] {
+            let p = PathBuf::from(&appdata)
+                .join("Python")
+                .join(py_dir)
+                .join("Scripts")
+                .join("yt-dlp.exe");
+            if p.exists() {
+                return Ok(p);
+            }
+        }
+    }
+
     // 1. System PATH via `where` (Windows) or `which` fallback
     #[cfg(windows)]
     {
@@ -386,7 +401,7 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
 
         if platform == "youtube" {
             cmd.arg("--extractor-args")
-                .arg("youtube:player_client=web_safari,android_vr,ios");
+                .arg("youtube:player_client=android,web_safari,ios");
         }
 
         cmd.arg("--").arg(&url_owned);
@@ -512,7 +527,7 @@ fn build_download_command(
 
     if platform == "youtube" {
         cmd.arg("--extractor-args")
-            .arg("youtube:player_client=web_safari,android_vr,ios");
+            .arg("youtube:player_client=android,web_safari,ios");
     }
 
     if let Some(b) = use_browser_cookie {

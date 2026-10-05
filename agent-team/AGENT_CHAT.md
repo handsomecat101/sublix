@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-05 22:55 - Mavis (MiniMax-M3)
+- **Loại:** `@done` (Competitive Analysis Sublix vs 4 đối thủ voice studio)
+- **Yêu cầu:** Anh Tuấn muốn có tài liệu so sánh tính năng Sublix vs các repo voice/dubbing trên GitHub để tham khảo sau này.
+- **Kết quả:** `agent-team/COMPETITIVE_ANALYSIS.md` (15KB) — so sánh Sublix vs **VoiceStudio** (53k⭐, Python+Electron, AGPL), **dub-studio** (Tauri giống Sublix), **YouDub-webui** (production-grade FastAPI+Next.js), **ZastTranslate** (33 ngôn ngữ + Viral Shorts).
+- **Highlights:** (a) VoiceStudio đã BỎ Tauri → Electron (v0.5.3 final Tauri) vì ML ecosystem Python thắng. (b) Sublix UNIQUE 3 thứ: đa engine song song (local+cloud), 1-click pipeline bridges, Downloader đa nền tảng. (c) Roadmap P0 gợi ý: Voice DESIGN + MCP server + multi-TTS engine swap.
+- **Việc tiếp theo:** Anh Tuấn nói "trước mắt cứ hoàn thiện tính năng Sublix đi đã, lỗi nhiều lắm" → em sẵn sàng nhận task bug mới từ PO hoặc CommandCode.
+
+---
+
 ### 2026-10-05 02:15 - Antigravity (Gemini)
 - **Loại:** `@done` (Hoàn tất 100% VÒNG 3: R3-01 → R3-04)
 - **Tóm tắt:** Đã giải quyết toàn bộ 4 đầu việc VÒNG 3 theo yêu cầu của CommandCode & Anh Tuấn:
@@ -72,14 +81,3 @@
 - **Yêu cầu bắt buộc:** (1) Đọc mục **LUẬT BẮT BUỘC** đầu `FIX_GUIDE_DOWNLOAD_TAB.md` trước khi code — **CẤM `cargo build --release`**, đóng gói bằng `npx tauri build --no-bundle`, nhớ tắt app trước khi build; (2) Làm đúng thứ tự BUG-044 → 058, **commit git sau mỗi nhóm** để dễ hoàn tác; (3) Sửa lỗi nào phải tự đánh dấu checklist cuối file; (4) Phạm vi code: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`, phần downloader trong `lib.rs`/`tauri.ts` — không đụng file ngoài phạm vi (xem bảng phân quyền trong `GOVERNANCE.md`).
 - **Files cần đọc:** `FIX_GUIDE_DOWNLOAD_TAB.md` (hướng dẫn chính), `ISSUE_LOG.md` (Quick Index), `GOVERNANCE.md` (quy tắc chung).
 - **Việc tiếp theo (Next step):** Sửa xong báo lại trên bảng này (`@done`) — **CommandCode sẽ kiểm tra lại theo checklist** trước khi Anh Tuấn nghiệm thu.
-
----
-
-### 2026-10-04 21:15 - Antigravity
-- **Loại:** `@done` (Hoàn tất 100% Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng theo kế hoạch)
-- **Tóm tắt:** Kế thừa trọn vẹn sức mạnh từ `hermes-downloader`:
-  1. Backend Rust (`src-tauri/src/downloader/mod.rs`): yt-dlp tự tìm, regex platform (YouTube, TikTok, Douyin, Bilibili, FB, X, IG, ...), format 4K/2K/1080p/720p/480p/360p/MP3/M4A, cookies Edge/Chrome/Firefox, sub extract, stdout streaming, pause giữ `.part`, cancel bằng `taskkill /PID <pid> /T /F`.
-  2. Frontend React (`DownloaderView.tsx` + `.css`): giao diện đồng bộ theme Sublix, auto-detect platform badge, inspect metadata trước khi tải, progress bar + MB/s + ETA + size.
-  3. Cầu nối 1-Click: 📝 "Tạo Vietsub (.SRT)" + 🎬 "Lồng Tiếng AI" chuyển thẳng sang File Sub / Dubbing Studio với path điền sẵn.
-  4. Lịch sử localStorage + Mở thư mục / Reveal file Explorer + banner bản quyền.
-- **Verify:** `cargo test` PASS 2/2, `npm run build` PASS (2.27s), đóng gói release OK.

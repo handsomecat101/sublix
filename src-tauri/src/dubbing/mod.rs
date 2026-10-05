@@ -295,10 +295,10 @@ pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_p
         .arg(out_path);
 
     if !rate.is_empty() && rate != "+0%" {
-        cmd.arg("--rate").arg(rate);
+        cmd.arg(format!("--rate={}", rate));
     }
     if !pitch.is_empty() && pitch != "+0Hz" {
-        cmd.arg("--pitch").arg(pitch);
+        cmd.arg(format!("--pitch={}", pitch));
     }
 
     #[cfg(windows)]
@@ -320,10 +320,10 @@ pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_p
                 .arg(out_path);
 
             if !rate.is_empty() && rate != "+0%" {
-                py_cmd.arg("--rate").arg(rate);
+                py_cmd.arg(format!("--rate={}", rate));
             }
             if !pitch.is_empty() && pitch != "+0Hz" {
-                py_cmd.arg("--pitch").arg(pitch);
+                py_cmd.arg(format!("--pitch={}", pitch));
             }
 
             #[cfg(windows)]
@@ -359,6 +359,71 @@ pub fn preview_single_line(text: &str, voice: &str, rate: Option<&str>, pitch: O
     Ok(format!("data:audio/mp3;base64,{}", b64))
 }
 
+/// Check if the transition between two clauses represents a conversational turn / speaker boundary
+pub fn is_turn_boundary(prev_text: &str, next_text: &str, pause: f64) -> bool {
+    let p_trim = prev_text.trim();
+    let n_trim = next_text.trim();
+
+    // 1. Explicit terminal punctuation
+    if p_trim.ends_with('?') || p_trim.ends_with('！') || p_trim.ends_with('？') || p_trim.ends_with('!') {
+        return true;
+    }
+
+    // 2. Period with non-negligible pause (>= 250ms)
+    if (p_trim.ends_with('.') || p_trim.ends_with('。')) && pause >= 0.25 {
+        return true;
+    }
+
+    // 3. Significant pause between distinct utterances (>= 600ms)
+    if pause >= 0.60 {
+        return true;
+    }
+
+    // 4. Greeting or conversational turn cues at the start of next_text
+    let n_lower = n_trim.to_lowercase();
+    let cues = [
+        "hi", "hello", "hey", "welcome", "glad to meet", "nice to meet",
+        "i am", "i'm ", "my name is", "this is", "and this is", "that's", "and that's",
+        "good morning", "good afternoon", "good evening", "bye", "goodbye",
+        "xin chào", "chào bạn", "tôi là", "đây là",
+        "こんにちは", "初めまして", "よろしく",
+        "你好", "很高兴", "这是"
+    ];
+    for cue in cues {
+        if n_lower.starts_with(cue) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Split single Whisper clauses that contain two distinct speakers back-to-back
+pub fn split_mixed_turn_clause(start_sec: f64, end_sec: f64, text: &str) -> Vec<(f64, f64, String)> {
+    let internal_split_patterns = [
+        ". Hi, ", ". Hello, ", ". Hey, ", ". I'm ", ". Glad to meet ", ". Nice to meet ",
+        "! Hi, ", "! Hello, ", "? Hi, ", "? Hello, ",
+    ];
+
+    for pat in internal_split_patterns {
+        if let Some(idx) = text.find(pat) {
+            let split_pos = idx + 1; // split right after the punctuation
+            let part1 = text[..split_pos].trim().to_string();
+            let part2 = text[split_pos..].trim().to_string();
+            if !part1.is_empty() && !part2.is_empty() {
+                let total_chars = (part1.chars().count() + part2.chars().count()) as f64;
+                let dur = end_sec - start_sec;
+                let mid = start_sec + dur * (part1.chars().count() as f64 / total_chars);
+                return vec![
+                    (start_sec, mid, part1),
+                    (mid, end_sec, part2),
+                ];
+            }
+        }
+    }
+    vec![(start_sec, end_sec, text.to_string())]
+}
+
 /// Clean Whisper hallucinations/non-speech and merge contiguous dialogue clauses
 pub fn clean_and_merge_raw_segments(
     raw_segments: Vec<crate::file_sub::SubtitleSegment>,
@@ -366,7 +431,7 @@ pub fn clean_and_merge_raw_segments(
 ) -> Vec<DubbingSegment> {
     let is_cjk = matches!(src_lang.to_lowercase().as_str(), "ja" | "japanese" | "zh" | "chinese");
 
-    // 1. Initial pass: clean, filter silence / hallucinations / micro-noises
+    // 1. Initial pass: clean, filter silence / hallucinations / micro-noises and split mixed clauses
     let mut filtered = Vec::new();
     for seg in raw_segments {
         let start_sec = parse_srt_time_to_seconds(&seg.start_time);
@@ -389,7 +454,10 @@ pub fn clean_and_merge_raw_segments(
             continue;
         }
 
-        filtered.push((start_sec, end_sec, cleaned));
+        let split_parts = split_mixed_turn_clause(start_sec, end_sec, &cleaned);
+        for part in split_parts {
+            filtered.push(part);
+        }
     }
 
     if filtered.is_empty() {
@@ -405,15 +473,10 @@ pub fn clean_and_merge_raw_segments(
             let total_dur = end_sec - prev.0;
 
             let prev_text = prev.2.trim();
-            let prev_ends_terminal = prev_text.ends_with('?')
-                || prev_text.ends_with('！')
-                || prev_text.ends_with('？')
-                || prev_text.ends_with('!')
-                || (prev_text.ends_with('.') && pause >= 0.4)
-                || (prev_text.ends_with('。') && pause >= 0.4);
+            let is_boundary = is_turn_boundary(prev_text, &text, pause);
 
-            // Merge if pause is small (< 0.85s), total duration stays within 7.0s, and not a hard stop
-            if pause <= 0.85 && total_dur <= 7.0 && !prev_ends_terminal {
+            // Merge if pause is small (< 0.85s), total duration stays within 7.0s, and not a turn boundary
+            if pause <= 0.85 && total_dur <= 7.0 && !is_boundary {
                 prev.1 = end_sec;
                 if is_cjk {
                     prev.2 = format!("{}{}", prev.2, text);
@@ -426,7 +489,7 @@ pub fn clean_and_merge_raw_segments(
         merged.push((start_sec, end_sec, text));
     }
 
-    // 3. Speaker clustering on merged sentences
+    // 3. Dynamic multi-speaker assignment (up to N distinct speakers)
     let mut current_speaker_idx = 0;
     let mut last_end = 0.0;
     let mut segments = Vec::with_capacity(merged.len());
@@ -434,11 +497,10 @@ pub fn clean_and_merge_raw_segments(
     for (idx, (start_sec, end_sec, text)) in merged.into_iter().enumerate() {
         let pause = start_sec - last_end;
         let prev_text = segments.last().map(|s: &DubbingSegment| s.original_text.as_str()).unwrap_or("");
-        let is_speaker_change = idx > 0
-            && (pause >= 0.45 || prev_text.ends_with('?') || prev_text.ends_with('？'));
+        let is_speaker_change = idx > 0 && is_turn_boundary(prev_text, &text, pause);
 
         if is_speaker_change {
-            current_speaker_idx = (current_speaker_idx + 1) % 2;
+            current_speaker_idx = (current_speaker_idx + 1) % 6;
         }
 
         let speaker_id = format!("speaker_{}", current_speaker_idx);
@@ -457,6 +519,304 @@ pub fn clean_and_merge_raw_segments(
     }
 
     segments
+}
+
+/// Extract clean JSON array from model output, stripping `<think>` tags and markdown code blocks
+pub fn extract_json_array_from_response(raw: &str) -> Option<serde_json::Value> {
+    let after_think = if let Some(idx) = raw.find("</think>") {
+        &raw[idx + "</think>".len()..]
+    } else {
+        raw
+    };
+
+    let trimmed = after_think.trim();
+    let content = if let Some(stripped) = trimmed.strip_prefix("```json") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else if let Some(stripped) = trimmed.strip_prefix("```") {
+        stripped.strip_suffix("```").unwrap_or(stripped).trim()
+    } else {
+        trimmed
+    };
+
+    if let (Some(start), Some(end)) = (content.find('['), content.rfind(']')) {
+        if start < end {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content[start..=end]) {
+                return Some(v);
+            }
+        }
+    }
+
+    serde_json::from_str::<serde_json::Value>(content).ok()
+}
+
+/// Helper to sanitize speaker names into a valid identifier
+pub fn slugify_speaker(name: &str) -> String {
+    let mut s = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            s.push(c.to_ascii_lowercase());
+        } else if !s.ends_with('_') {
+            s.push('_');
+        }
+    }
+    let trimmed = s.trim_matches('_');
+    if trimmed.is_empty() {
+        "speaker_0".to_string()
+    } else {
+        format!("speaker_{}", trimmed)
+    }
+}
+
+/// Generate default rich personas for detected speakers across languages
+pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) -> Vec<DubbingSpeaker> {
+    let mut unique_ids: Vec<String> = active_speaker_ids.to_vec();
+    unique_ids.sort();
+    unique_ids.dedup();
+
+    if unique_ids.is_empty() {
+        unique_ids = vec!["speaker_0".to_string(), "speaker_1".to_string()];
+    } else if unique_ids.len() == 1 {
+        unique_ids.push("speaker_1".to_string());
+    }
+
+    let mut speakers = Vec::new();
+    let male_pitches = ["+0Hz", "-20Hz", "+15Hz", "-35Hz", "+30Hz", "-15Hz"];
+    let female_pitches = ["+0Hz", "+25Hz", "-15Hz", "+40Hz", "-25Hz", "+10Hz"];
+    let rates = ["+0%", "+0%", "-5%", "+5%"];
+
+    for (idx, spk_id) in unique_ids.into_iter().enumerate() {
+        let is_male = idx % 2 == 0;
+        let p_idx = (idx / 2) % male_pitches.len();
+        let r_idx = idx % rates.len();
+
+        let (label, voice, pitch, rate) = match tgt_lang {
+            "en" => {
+                if is_male {
+                    (format!("Speaker {} (Male)", idx + 1), "en-US-GuyNeural".to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                } else {
+                    (format!("Speaker {} (Female)", idx + 1), "en-US-JennyNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                }
+            }
+            "ja" => {
+                if is_male {
+                    (format!("話者 {} (男性)", idx + 1), "ja-JP-KeitaNeural".to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                } else {
+                    (format!("話者 {} (女性)", idx + 1), "ja-JP-NanamiNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                }
+            }
+            "zh" => {
+                if is_male {
+                    (format!("讲述人 {} (男)", idx + 1), "zh-CN-YunxiNeural".to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                } else {
+                    (format!("讲述人 {} (女)", idx + 1), "zh-CN-XiaoxiaoNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                }
+            }
+            _ => { // vi
+                if is_male {
+                    (format!("Nhân vật {} (Nam)", idx + 1), "vi-VN-NamMinhNeural".to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                } else {
+                    (format!("Nhân vật {} (Nữ)", idx + 1), "vi-VN-HoaiMyNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                }
+            }
+        };
+
+        speakers.push(DubbingSpeaker {
+            id: spk_id,
+            label,
+            voice,
+            pitch,
+            rate,
+        });
+    }
+
+    speakers
+}
+
+/// Cinematic Diarization and Scripting via MiniMax Cloud API
+pub fn diarize_and_script_via_minimax(
+    segments: &mut [DubbingSegment],
+    source_lang: &str,
+    target_lang: &str,
+    api_key: &str,
+    model: &str,
+) -> Result<Vec<DubbingSpeaker>> {
+    if segments.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let model_name = if model.trim().is_empty() {
+        "MiniMax-M3"
+    } else {
+        model.trim()
+    };
+
+    let mut transcript_text = String::new();
+    for s in segments.iter() {
+        transcript_text.push_str(&format!(
+            "{} [{:.1}s - {:.1}s]: {}\n",
+            s.id, s.start_sec, s.end_sec, s.original_text
+        ));
+    }
+
+    let system_prompt = format!(
+        "Bạn là đạo diễn lồng tiếng phim và chuyên gia phân vai (Speaker Diarization) chuyên nghiệp.\n\
+         Dưới đây là danh sách các câu thoại trong video (ngôn ngữ gốc: {}).\n\
+         Nhiệm vụ:\n\
+         1. Phân vai chính xác cho từng câu thoại: chỉ ra tên nhân vật (speaker) và giới tính (gender: \"male\" hoặc \"female\").\n\
+         2. Dịch lời thoại sang tiếng {} điện ảnh tự nhiên, phù hợp khẩu hình và cảm xúc nhân vật.\n\
+         QUY TẮC BẮT BUỘC: Trả về DUY NHẤT một JSON array thuần túy (không kèm giải thích, không markdown):\n\
+         [\n  {{\"id\": 1, \"speaker\": \"Tên Nhân Vật\", \"gender\": \"male\", \"text\": \"Lời dịch...\"}}\n]",
+        source_lang.to_uppercase(),
+        target_lang.to_uppercase()
+    );
+
+    let body = serde_json::json!({
+        "model": model_name,
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": transcript_text }
+        ],
+        "temperature": 0.2
+    });
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()?;
+
+    let resp = client
+        .post("https://api.minimax.io/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key.trim()))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .context("Gửi yêu cầu tới MiniMax API thất bại")?;
+
+    if !resp.status().is_success() {
+        let err_text = resp.text().unwrap_or_default();
+        return Err(anyhow::anyhow!("MiniMax API báo lỗi: {}", err_text));
+    }
+
+    let chat_resp: serde_json::Value = resp.json().context("Không đọc được JSON từ MiniMax")?;
+    let raw_content = chat_resp["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    let json_val = extract_json_array_from_response(&raw_content)
+        .ok_or_else(|| anyhow::anyhow!("Không thể bóc tách JSON phân vai từ MiniMax"))?;
+
+    let items: Vec<serde_json::Value> = match json_val {
+        serde_json::Value::Array(arr) => arr,
+        _ => return Err(anyhow::anyhow!("Dữ liệu trả về không phải mảng")),
+    };
+
+    let mut speaker_order: Vec<(String, String, String)> = Vec::new(); // (id, label, gender)
+
+    for item in items {
+        let id = item["id"].as_u64().unwrap_or(0) as usize;
+        let speaker_name = item["speaker"].as_str().unwrap_or("Speaker").trim();
+        let gender = item["gender"].as_str().unwrap_or("male").to_lowercase();
+        let text = item["text"]
+            .as_str()
+            .or_else(|| item["text_vi"].as_str())
+            .or_else(|| item["dubbed_text"].as_str())
+            .unwrap_or("")
+            .trim();
+
+        let spk_slug = slugify_speaker(speaker_name);
+
+        if !speaker_order.iter().any(|(s, _, _)| s == &spk_slug) {
+            let label = format!(
+                "{} ({})",
+                speaker_name,
+                if gender == "female" { "Nữ" } else { "Nam" }
+            );
+            speaker_order.push((spk_slug.clone(), label, gender));
+        }
+
+        if let Some(seg) = segments.iter_mut().find(|s| s.id == id) {
+            seg.speaker_id = spk_slug;
+            if !text.is_empty() {
+                seg.dubbed_text = text.to_string();
+            }
+        }
+    }
+
+    let mut speakers = Vec::new();
+    let mut male_count = 0;
+    let mut female_count = 0;
+
+    let male_pitches = ["+0Hz", "-20Hz", "+15Hz", "-35Hz", "+30Hz", "-15Hz"];
+    let female_pitches = ["+0Hz", "+25Hz", "-15Hz", "+40Hz", "-25Hz", "+10Hz"];
+    let rates = ["+0%", "+0%", "-5%", "+5%"];
+
+    for (spk_id, label, gender) in speaker_order {
+        let is_female = gender.contains("female") || gender.contains("nữ");
+        let (voice, pitch, rate) = match target_lang {
+            "en" => {
+                if is_female {
+                    let p = female_pitches[female_count % female_pitches.len()];
+                    let r = rates[female_count % rates.len()];
+                    female_count += 1;
+                    ("en-US-JennyNeural".to_string(), p.to_string(), r.to_string())
+                } else {
+                    let p = male_pitches[male_count % male_pitches.len()];
+                    let r = rates[male_count % rates.len()];
+                    male_count += 1;
+                    ("en-US-GuyNeural".to_string(), p.to_string(), r.to_string())
+                }
+            }
+            "ja" => {
+                if is_female {
+                    let p = female_pitches[female_count % female_pitches.len()];
+                    let r = rates[female_count % rates.len()];
+                    female_count += 1;
+                    ("ja-JP-NanamiNeural".to_string(), p.to_string(), r.to_string())
+                } else {
+                    let p = male_pitches[male_count % male_pitches.len()];
+                    let r = rates[male_count % rates.len()];
+                    male_count += 1;
+                    ("ja-JP-KeitaNeural".to_string(), p.to_string(), r.to_string())
+                }
+            }
+            "zh" => {
+                if is_female {
+                    let p = female_pitches[female_count % female_pitches.len()];
+                    let r = rates[female_count % rates.len()];
+                    female_count += 1;
+                    ("zh-CN-XiaoxiaoNeural".to_string(), p.to_string(), r.to_string())
+                } else {
+                    let p = male_pitches[male_count % male_pitches.len()];
+                    let r = rates[male_count % rates.len()];
+                    male_count += 1;
+                    ("zh-CN-YunxiNeural".to_string(), p.to_string(), r.to_string())
+                }
+            }
+            _ => { // vi
+                if is_female {
+                    let p = female_pitches[female_count % female_pitches.len()];
+                    let r = rates[female_count % rates.len()];
+                    female_count += 1;
+                    ("vi-VN-HoaiMyNeural".to_string(), p.to_string(), r.to_string())
+                } else {
+                    let p = male_pitches[male_count % male_pitches.len()];
+                    let r = rates[male_count % rates.len()];
+                    male_count += 1;
+                    ("vi-VN-NamMinhNeural".to_string(), p.to_string(), r.to_string())
+                }
+            }
+        };
+
+        speakers.push(DubbingSpeaker {
+            id: spk_id,
+            label,
+            voice,
+            pitch,
+            rate,
+        });
+    }
+
+    Ok(speakers)
 }
 
 /// Analyze media, extract transcript, cluster speakers, and generate translated dubbing script
@@ -607,117 +967,82 @@ pub fn analyze_and_create_project(
 
     let tgt_lang = target_lang.unwrap_or_else(|| "vi".to_string());
 
-    // Default speakers setup based on target language
-    let speakers = match tgt_lang.as_str() {
-        "en" => vec![
-            DubbingSpeaker {
-                id: "speaker_0".to_string(),
-                label: "Speaker 1 (Male Lead)".to_string(),
-                voice: "en-US-GuyNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-            DubbingSpeaker {
-                id: "speaker_1".to_string(),
-                label: "Speaker 2 (Female Co-star)".to_string(),
-                voice: "en-US-JennyNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-        ],
-        "ja" => vec![
-            DubbingSpeaker {
-                id: "speaker_0".to_string(),
-                label: "話者 1 (男性・主役)".to_string(),
-                voice: "ja-JP-KeitaNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-            DubbingSpeaker {
-                id: "speaker_1".to_string(),
-                label: "話者 2 (女性・対話)".to_string(),
-                voice: "ja-JP-NanamiNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-        ],
-        "zh" => vec![
-            DubbingSpeaker {
-                id: "speaker_0".to_string(),
-                label: "讲述人 1 (男主)".to_string(),
-                voice: "zh-CN-YunxiNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-            DubbingSpeaker {
-                id: "speaker_1".to_string(),
-                label: "讲述人 2 (女主)".to_string(),
-                voice: "zh-CN-XiaoxiaoNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-        ],
-        _ => vec![
-            DubbingSpeaker {
-                id: "speaker_0".to_string(),
-                label: "Người nói 1 (Nam Chính)".to_string(),
-                voice: "vi-VN-NamMinhNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-            DubbingSpeaker {
-                id: "speaker_1".to_string(),
-                label: "Người nói 2 (Nữ / Đối thoại)".to_string(),
-                voice: "vi-VN-HoaiMyNeural".to_string(),
-                pitch: "+0Hz".to_string(),
-                rate: "+0%".to_string(),
-            },
-        ],
-    };
+    // 4. Multi-Speaker Diarization & Cinematic Scripting
+    let mut speakers = Vec::new();
+    let mut minimax_succeeded = false;
 
-    // 4. Batch translation to target language via MiniMax-M3 / Ollama (15-20x faster)
-    emit("scripting", 50.0, &format!("Đang biên kịch {} câu thoại sang {}...", total, tgt_lang.to_uppercase()), 0, total);
-    let trans_variant = TranslationModelVariant::resolve_or_best(Some(&cfg.translation_model));
-    let engine_pref = EnginePreference::from_str(&cfg.translation_engine_preference);
-
-    let batch_size = 15;
-    for chunk_start in (0..total).step_by(batch_size) {
-        if is_generation_cancelled(my_gen) {
-            return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
-        }
-
-        let chunk_end = (chunk_start + batch_size).min(total);
-        let percent = 50.0 + (chunk_start as f32 / total as f32) * 45.0;
-
-        emit(
-            "scripting",
-            percent,
-            &format!("Biên kịch câu {}-{}/{} ({})...", chunk_start + 1, chunk_end, total, tgt_lang.to_uppercase()),
-            chunk_start + 1,
-            total,
-        );
-
-        let texts_to_translate: Vec<String> = parsed_segments[chunk_start..chunk_end]
-            .iter()
-            .map(|s| s.original_text.clone())
-            .collect();
-
-        let translated_batch = crate::translate::translate_batch_with_config(
-            &texts_to_translate,
+    if cfg.translation_provider == "minimax" && !cfg.minimax_api_key.trim().is_empty() {
+        emit("diarizing", 45.0, &format!("MiniMax ({}) đang phân vai & dịch kịch bản điện ảnh...", cfg.minimax_model), 0, total);
+        match diarize_and_script_via_minimax(
+            &mut parsed_segments,
             &src_lang,
             &tgt_lang,
-            trans_variant,
-            engine_pref,
-            &cfg,
-        );
+            &cfg.minimax_api_key,
+            &cfg.minimax_model,
+        ) {
+            Ok(spks) if !spks.is_empty() => {
+                info!("🎬 MiniMax Diarization & Scripting succeeded with {} characters!", spks.len());
+                speakers = spks;
+                minimax_succeeded = true;
+            }
+            Ok(_) => {
+                warn!("⚠️ MiniMax returned 0 characters, falling back to local heuristic");
+            }
+            Err(e) => {
+                warn!("⚠️ MiniMax Diarization failed: {:#}, falling back to local multi-speaker heuristic", e);
+            }
+        }
+    }
 
-        for (offset, trans) in translated_batch.into_iter().enumerate() {
-            let target_idx = chunk_start + offset;
-            if target_idx < parsed_segments.len() {
-                if trans.starts_with("[Dịch lỗi:") {
-                    parsed_segments[target_idx].status = "translate_failed".to_string();
+    if !minimax_succeeded {
+        // Fallback: Generate dynamic speakers based on detected speaker IDs
+        let active_ids: Vec<String> = parsed_segments.iter().map(|s| s.speaker_id.clone()).collect();
+        speakers = generate_default_speakers(&tgt_lang, &active_ids);
+
+        // Batch translation to target language via local engine / fallback
+        emit("scripting", 50.0, &format!("Đang biên kịch {} câu thoại sang {}...", total, tgt_lang.to_uppercase()), 0, total);
+        let trans_variant = TranslationModelVariant::resolve_or_best(Some(&cfg.translation_model));
+        let engine_pref = EnginePreference::from_str(&cfg.translation_engine_preference);
+
+        let batch_size = 15;
+        for chunk_start in (0..total).step_by(batch_size) {
+            if is_generation_cancelled(my_gen) {
+                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+            }
+
+            let chunk_end = (chunk_start + batch_size).min(total);
+            let percent = 50.0 + (chunk_start as f32 / total as f32) * 45.0;
+
+            emit(
+                "scripting",
+                percent,
+                &format!("Biên kịch câu {}-{}/{} ({})...", chunk_start + 1, chunk_end, total, tgt_lang.to_uppercase()),
+                chunk_start + 1,
+                total,
+            );
+
+            let texts_to_translate: Vec<String> = parsed_segments[chunk_start..chunk_end]
+                .iter()
+                .map(|s| s.original_text.clone())
+                .collect();
+
+            let translated_batch = crate::translate::translate_batch_with_config(
+                &texts_to_translate,
+                &src_lang,
+                &tgt_lang,
+                trans_variant,
+                engine_pref,
+                &cfg,
+            );
+
+            for (offset, trans) in translated_batch.into_iter().enumerate() {
+                let target_idx = chunk_start + offset;
+                if target_idx < parsed_segments.len() {
+                    if trans.starts_with("[Dịch lỗi:") {
+                        parsed_segments[target_idx].status = "translate_failed".to_string();
+                    }
+                    parsed_segments[target_idx].dubbed_text = trans;
                 }
-                parsed_segments[target_idx].dubbed_text = trans;
             }
         }
     }
@@ -1164,5 +1489,56 @@ mod tests {
         let gen2 = start_new_generation();
         assert!(is_generation_cancelled(gen1), "Old generation must stay cancelled!");
         assert!(!is_generation_cancelled(gen2), "New generation must not be cancelled!");
+    }
+
+    #[test]
+    fn test_real_dubbing_analysis() {
+        let video_path = "H:\\AI Project\\sublix\\test_media\\Greetings and introductions. A1 [2TxVyxrOp0s].mp4";
+        if !Path::new(video_path).exists() {
+            println!("Video file not found, skipping real dubbing test");
+            return;
+        }
+
+        println!("--- STARTING REAL DUBBING ANALYSIS ON TEST VIDEO ---");
+        let project_res = analyze_and_create_project(
+            None,
+            video_path,
+            Some("en".to_string()),
+            Some("vi".to_string()),
+            Some(30.0), // limit to first 30s for fast diagnostics
+        );
+
+        match project_res {
+            Ok(proj) => {
+                println!("✅ Analysis succeeded!");
+                println!("Media duration: {:.1}s", proj.media_duration_sec);
+                println!("Speakers found/configured: {}", proj.speakers.len());
+                for spk in &proj.speakers {
+                    println!("  Speaker: id={}, label={}, voice={}", spk.id, spk.label, spk.voice);
+                }
+                println!("Total segments: {}", proj.segments.len());
+                for seg in &proj.segments {
+                    println!("  [#{} | {} ({:.1}s - {:.1}s)]", seg.id, seg.speaker_id, seg.start_sec, seg.end_sec);
+                    println!("    Original: {}", seg.original_text);
+                    println!("    Dubbed:   {}", seg.dubbed_text);
+                }
+
+                println!("--- EXPORTING DUBBED VIDEO SAMPLE ---");
+                let out_sample = "H:\\AI Project\\sublix\\test_media\\output_dubbed_test.mp4";
+                let export_res = export_dubbed_video(None, proj, Some(out_sample.to_string()));
+                match export_res {
+                    Ok(path) => {
+                        println!("✅ Export succeeded to: {}", path);
+                        assert!(Path::new(&path).exists(), "Exported video file must exist!");
+                    }
+                    Err(e) => {
+                        println!("❌ Export failed: {:#}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("❌ Analysis failed: {:#}", e);
+            }
+        }
     }
 }

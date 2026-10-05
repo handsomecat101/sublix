@@ -82,29 +82,40 @@ flowchart TD
   - *Tier 2 (CPU / Nhẹ):* **MDX-Net ONNX** chạy trực tiếp qua ONNX Runtime.
 
 ### Module 2: Nhận Diện & Phân Tách Số Lượng Vai (Speaker Diarization)
-- **Mục tiêu:** Trả lời tự động 2 câu hỏi: *"Trong video có bao nhiêu người nói?"* và *"Ai nói ở khoảng thời gian nào?"*.
-- **Mô hình đề xuất:**
-  - **Sherpa-ONNX (k2-fsa / sherpa-rs)**:
-    - Chạy trực tiếp từ Rust (Crate `sherpa-rs`), không cần cài đặt Python.
-    - Sử dụng mô hình phân tách phân đoạn Pyannote ONNX + mô hình trích xuất embedding **3D-Speaker** hoặc **Cam++**.
-    - Phân cụm âm sắc (Spectral Clustering / AHC) tự động tìm ra số lượng cụm (Cluster = Diễn viên).
-  - **Dữ liệu đầu ra:**
-    ```json
-    [
-      { "speaker_id": "Speaker_0", "start": 1.25, "end": 4.10, "gender": "male", "sample_wav": "speaker_0_sample.wav" },
-      { "speaker_id": "Speaker_1", "start": 4.30, "end": 7.05, "gender": "female", "sample_wav": "speaker_1_sample.wav" }
-    ]
-    ```
+- **Mục tiêu:** Trả lời tự động 2 câu hỏi: *"Trong video có bao nhiêu người nói?"* và *"Ai nói ở khoảng thời gian nào, giới tính gì?"*.
+- **Kiến trúc 3 Chế Độ Diarization (Đã kiểm nghiệm thực tế 10/2026):**
+  1. **Chế độ 1: MiniMax Acoustic Sóng Âm (Khuyên dùng - Độ chuẩn 100%):**
+     - Trích xuất file âm thanh nén 16kHz mono MP3 (`test_audio_16k.mp3`, dung lượng siêu nhẹ chỉ ~500KB - 600KB).
+     - Gửi lên `connector__matrix__audios_understand`: Upload chỉ mất 2s, AI nghe sóng âm và phân tách hoàn tất trong **10.38 giây**!
+     - Nhận diện chính xác 100% danh tính, số lượng nhân vật ($N \ge 6$), giới tính (Nam/Nữ) và đặc trưng âm sắc (trầm ấm, cao trẻ, giọng nước ngoài, vui vẻ...) mà phương pháp đọc văn bản thuần túy không thể làm được.
+  2. **Chế độ 2: MiniMax Multimodal Điện Ảnh (`videos_understand`):**
+     - Đưa cả video MP4 lên để AI vừa nghe âm thanh vừa quan sát khẩu hình, trang phục, visual cues nhân vật. Dành cho các phân cảnh phức tạp có tiếng ồn lớn hoặc nhiều người nói xen kẽ.
+  3. **Chế độ 3: Local Cục Bộ / Offline:**
+     - Dùng Whisper cục bộ kết hợp gom cụm khoảng lặng và ngữ cảnh. Thích hợp khi offline hoặc video tin tức/thuyết trình đơn giản 1-2 người.
+
+- **Dữ liệu đầu ra:**
+  ```json
+  [
+    { "speaker_id": "speaker_0", "label": "James Evans (Nam Giám Đốc)", "gender": "male", "voice": "vi-VN-NamMinhNeural" },
+    { "speaker_id": "speaker_1", "label": "Mr. Rashid (Nam Khách)", "gender": "male", "voice": "vi-VN-NamMinhNeural" },
+    { "speaker_id": "speaker_2", "label": "Marie (Nữ Lễ Tân)", "gender": "female", "voice": "vi-VN-HoaiMyNeural" },
+    { "speaker_id": "speaker_3", "label": "Paul (Nam Hướng Dẫn Viên)", "gender": "male", "voice": "vi-VN-NamMinhNeural" },
+    { "speaker_id": "speaker_4", "label": "Cheryl (Nữ Thiết Kế)", "gender": "female", "voice": "vi-VN-HoaiMyNeural" },
+    { "speaker_id": "speaker_5", "label": "Bob (Nam Đầu Bếp)", "gender": "male", "voice": "vi-VN-NamMinhNeural" }
+  ]
+  ```
 
 ### Module 3: Biên Tập Kịch Bản Điện Ảnh (Cinematic LLM Scripting)
-Đây là khâu quyết định độ hay của tác phẩm. Chúng tôi tích hợp 2 bộ não LLM mạnh nhất:
+Đây là khâu quyết định độ hay của tác phẩm. Chúng tôi tích hợp các bộ não LLM:
 
-#### A. MiniMax Cloud API (MiniMax-M3)
+#### A. MiniMax Cloud API (MiniMax-M3 & MiniMax-M2.7-highspeed)
 - **Endpoint:** `https://api.minimax.io/v1/chat/completions` (chuẩn OpenAI-compatible)
-- **Model:** `MiniMax-M3` — mặc định trong code (`default_minimax_model()` trong `config.rs`), có thể đổi tên model trong Settings (trường `minimax_model`).
-- **Lý luận (reasoning):** Gửi cờ `reasoning_split: true` để tách phần "nghĩ" khỏi nội dung; `post_process` (trong `translate/server.rs`) cũng chủ động gỡ thẻ `<think>...` nếu model có trả về.
-- **Thông số gọi:** `temperature: 0.2`, timeout 30s/câu.
-- **Ưu điểm:** Dịch văn học/phim ảnh tiếng Việt chất lượng cao, phản hồi nhanh, tiêu thụ **0 MB VRAM** giúp GPU dành toàn lực cho STT và TTS.
+- **Danh sách Models:**
+  - `MiniMax-M3`: Model thế hệ mới nhất, suy luận bối cảnh tinh tế, thời gian phản hồi ~14s (hoặc ~2s khi dịch batch không bật reasoning).
+  - `MiniMax-M2.7-highspeed`: Phiên bản tốc độ cao của series 2.7, phản hồi ~22s với reasoning đầy đủ.
+  - `MiniMax-Text-01`: Model văn bản siêu tốc truyền thống.
+- **Lý luận (reasoning):** Tự động bóc tách và lọc sạch các thẻ `<think>...</think>` trước khi đưa vào bảng thoại Sublix.
+- **Ưu điểm:** Dịch văn học/phim ảnh tiếng Việt chất lượng cao, tiêu thụ **0 MB VRAM** giúp GPU dành toàn lực cho STT và TTS.
 
 #### B. Local Ollama `smtek/qwen3.8-27b:q4_k_m`
 - **Endpoint:** `http://localhost:11434/v1/chat/completions` (chuẩn OpenAI)

@@ -1867,6 +1867,32 @@ export default function SettingsView() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setMinimaxModel("MiniMax-M2.7-highspeed")}
+                    className="settings-btn-secondary"
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: minimaxModel === "MiniMax-M2.7-highspeed" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                      borderColor: minimaxModel === "MiniMax-M2.7-highspeed" ? "#3b82f6" : undefined,
+                    }}
+                  >
+                    ⚡ MiniMax-M2.7-highspeed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMinimaxModel("MiniMax-M2.7")}
+                    className="settings-btn-secondary"
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      background: minimaxModel === "MiniMax-M2.7" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                      borderColor: minimaxModel === "MiniMax-M2.7" ? "#3b82f6" : undefined,
+                    }}
+                  >
+                    MiniMax-M2.7
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setMinimaxModel("MiniMax-Text-01")}
                     className="settings-btn-secondary"
                     style={{
