@@ -1336,3 +1336,97 @@ pub fn disk_free_bytes(path: &Path) -> Result<u64> {
 pub fn disk_free_bytes(_path: &Path) -> Result<u64> {
     Err(anyhow::anyhow!("disk_free_bytes chỉ hỗ trợ Windows"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_platform_detection() {
+        assert_eq!(get_platform("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), "youtube");
+        assert_eq!(get_platform("https://youtu.be/dQw4w9WgXcQ"), "youtube");
+        assert_eq!(get_platform("https://www.tiktok.com/@creator/video/12345"), "tiktok");
+        assert_eq!(get_platform("https://www.douyin.com/video/12345"), "douyin");
+        assert_eq!(get_platform("https://www.bilibili.com/video/BV1xx411c7mD"), "bilibili");
+        assert_eq!(get_platform("https://www.facebook.com/watch/?v=123"), "facebook");
+        assert_eq!(get_platform("https://fb.watch/123"), "facebook");
+        assert_eq!(get_platform("https://x.com/user/status/123"), "twitter");
+        assert_eq!(get_platform("https://twitter.com/user/status/123"), "twitter");
+        assert_eq!(get_platform("https://www.instagram.com/reel/123"), "instagram");
+        assert_eq!(get_platform("https://vimeo.com/123"), "vimeo");
+        assert_eq!(get_platform("https://soundcloud.com/artist/song"), "soundcloud");
+        assert_eq!(get_platform("https://www.reddit.com/r/videos/comments/123"), "reddit");
+        assert_eq!(get_platform("https://www.twitch.tv/streamer"), "twitch");
+
+        // False positive prevention tests
+        assert_eq!(get_platform("https://www.fox.com/news"), "generic_video");
+        assert_eq!(get_platform("https://evil-facebook.com.scam.io/clip"), "generic_video");
+        assert_eq!(get_platform("https://myyoutube.org.attacker.com/v"), "generic_video");
+    }
+
+    #[test]
+    fn test_url_validation_and_security() {
+        // Valid URLs
+        assert!(is_valid_http_url("https://www.youtube.com/watch?v=123"));
+        assert!(is_valid_http_url("http://example.com/video.mp4"));
+        assert!(is_valid_http_url("https://sub.domain.co.uk/path?a=1&b=2"));
+
+        // Shell-injection attack vectors & malformed inputs
+        assert!(!is_valid_http_url("--dump-json"));
+        assert!(!is_valid_http_url("-x"));
+        assert!(!is_valid_http_url("javascript:alert(1)"));
+        assert!(!is_valid_http_url("file:///C:/Windows/System32"));
+        assert!(!is_valid_http_url("ftp://example.com/file"));
+        assert!(!is_valid_http_url("https://localhost")); // no dot in host
+        assert!(!is_valid_http_url("https://foo\0bar.com")); // null byte
+        assert!(!is_valid_http_url(""));
+        assert!(!is_valid_http_url("   "));
+    }
+
+    #[test]
+    fn test_format_argument_builders() {
+        let mp3_args = build_format_args("audio-mp3");
+        assert!(mp3_args.contains(&"-x".to_string()));
+        assert!(mp3_args.contains(&"mp3".to_string()));
+
+        let m4a_args = build_format_args("audio-m4a");
+        assert!(m4a_args.contains(&"-x".to_string()));
+        assert!(m4a_args.contains(&"m4a".to_string()));
+
+        let f1080 = build_format_args("1080p");
+        assert_eq!(f1080, vec!["-f", "best[height<=1080]/best"]);
+
+        let f4k = build_format_args("4k");
+        assert_eq!(f4k, vec!["-f", "bestvideo[height>=2160]+bestaudio/bestvideo[height>=1440]+bestaudio/best"]);
+
+        let max_args = build_format_args("max");
+        assert_eq!(max_args, vec!["-S", "res:1080,ext:mp4:m4a,size:br"]);
+    }
+
+    #[test]
+    fn test_file_extension_helpers() {
+        let original = Path::new("C:\\Users\\TTC\\Downloads\\my_video.mp4");
+        let part = with_extension(original, "part");
+        assert_eq!(part, PathBuf::from("C:\\Users\\TTC\\Downloads\\my_video.mp4.part"));
+
+        let ytdl = with_extension(original, "ytdl");
+        assert_eq!(ytdl, PathBuf::from("C:\\Users\\TTC\\Downloads\\my_video.mp4.ytdl"));
+    }
+
+    #[test]
+    fn test_find_ytdlp_binary() {
+        let bin_res = find_ytdlp(None);
+        assert!(bin_res.is_ok(), "yt-dlp should be discoverable on dev machine: {:?}", bin_res.err());
+        let bin_path = bin_res.unwrap();
+        assert!(bin_path.exists(), "Resolved yt-dlp path must exist on disk: {}", bin_path.display());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_disk_space_checker() {
+        let current_dir = std::env::current_dir().unwrap();
+        let free = disk_free_bytes(&current_dir);
+        assert!(free.is_ok(), "disk_free_bytes failed: {:?}", free.err());
+        assert!(free.unwrap() > 1024 * 1024, "Free disk space should be > 1MB");
+    }
+}
