@@ -397,40 +397,82 @@ pub fn generate_file_subtitles(
 
     crate::translate::server::clear_context();
 
-    for i in 0..total {
-        let original_text = segments[i].original.clone();
+    // AUDIT-SUB R3 (v0.9.7): Translate bằng batch function thay vì loop từng segment.
+    // `translate_batch_with_config` đã có sẵn ở `translate/mod.rs:328`, chunk 15 segments/batch
+    // qua MiniMax-M3 batch endpoint → giảm Stage 3 từ ~40 phút xuống ~5-10 phút cho video 21:43
+    // (416 segments). Fallback về single-item khi batch fail. Hallucination filter + cancel check
+    // vẫn được áp dụng tương đương loop cũ.
+    let originals: Vec<String> = segments.iter().map(|s| s.original.clone()).collect();
 
-        let trans_res = crate::translate::translate_text_with_config(
-            &original_text,
-            &src_lang,
-            &tgt_lang,
-            trans_variant,
-            EnginePreference::Auto,
-            &cfg,
-        );
+    let _ = app.emit(
+        "file_sub:progress",
+        FileSubProgress {
+            stage: "translating".to_string(),
+            message: format!(
+                "Đang dịch {} câu sang tiếng Việt (lô 15/batch qua {})...",
+                total, cfg.translation_provider
+            ),
+            percent: 30.0,
+            current_segment: 0,
+            total_segments: total,
+            current_original: None,
+            current_translated: None,
+        },
+    );
 
-        let translated_text = match trans_res {
-            Ok(t) if !t.trim().is_empty() && !crate::stt::whisper_local::is_hallucination(&t) => {
-                t.trim().to_string()
-            }
-            _ => original_text.clone(),
+    let translated_all = crate::translate::translate_batch_with_config(
+        &originals,
+        &src_lang,
+        &tgt_lang,
+        trans_variant,
+        EnginePreference::Auto,
+        &cfg,
+    );
+
+    // Map kết quả về segments, áp dụng hallucination filter (giống loop cũ) + fallback original_text
+    let mut done = 0usize;
+    for (i, translated_raw) in translated_all.into_iter().enumerate() {
+        let original_text = originals[i].clone();
+        let translated_clean = translated_raw.trim().to_string();
+        let final_translated = if translated_clean.is_empty()
+            || crate::stt::whisper_local::is_hallucination(&translated_clean)
+        {
+            original_text.clone()
+        } else {
+            translated_clean
         };
 
-        segments[i].translated = Some(translated_text.clone());
+        segments[i].translated = Some(final_translated.clone());
+        done = i + 1;
 
-        let percent = 30.0 + ((i + 1) as f32 / total as f32) * 65.0;
+        // Emit progress theo từng segment (giữ UX granularity giống loop cũ) để UI smooth
+        let percent = 30.0 + (done as f32 / total as f32) * 65.0;
         let _ = app.emit(
             "file_sub:progress",
             FileSubProgress {
                 stage: "translating".to_string(),
-                message: format!("Đang dịch dòng {}/{} sang tiếng Việt...", i + 1, total),
+                message: format!("Đang dịch dòng {}/{} sang tiếng Việt...", done, total),
                 percent,
-                current_segment: i + 1,
+                current_segment: done,
                 total_segments: total,
                 current_original: Some(original_text),
-                current_translated: Some(translated_text),
+                current_translated: Some(final_translated),
             },
         );
+    }
+
+    // Nếu batch trả về ít hơn total (rất hiếm, chỉ khi cancel giữa chừng), gán fallback
+    // cho các segment còn lại.
+    if done < total {
+        warn!(
+            "translate_batch_with_config only returned {}/{} segments (likely cancelled)",
+            done, total
+        );
+        for i in done..total {
+            if segments[i].translated.is_none() {
+                segments[i].translated = Some(segments[i].original.clone());
+            }
+        }
     }
 
     // 5. Stage: Write final SRT files next to video

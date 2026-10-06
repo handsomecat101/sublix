@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.7",
+    date: "06/10/2026",
+    title: "Tối Ưu Tốc Độ Dịch Phụ Đề (Batch API)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tối Ưu Hiệu Năng",
+        icon: "⚡",
+        items: [
+          "Phát hiện qua AUDIT-SUB: pipeline 'Tạo phụ đề' với video 21:43 mất ~64 phút do Stage 3 (Translate API) chiếm ~40 phút (62% tổng).",
+          "Fix: thay vòng lặp sequential bằng `translate_batch_with_config()` đã có sẵn (chunk 15 segments/batch qua MiniMax-M3 batch endpoint).",
+          "Tiết kiệm ~30 phút cho mỗi video 21:43 — Stage 3 từ ~40 phút xuống ~5-10 phút.",
+          "Progress emit, hallucination filter, fallback original_text, cancel check đều giữ nguyên UX so với phiên bản cũ.",
+          "Báo cáo đầy đủ +10 file bằng chứng: `agent-team/AUDIT_SUB_REPORT.md` + `test-output-audit-sub/`.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.6",
     date: "06/10/2026",
     title: "Chi Tiết Tải Video: Đường Dẫn, Dung Lượng, Chất Lượng & Tiến Trình",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Nâng Cấp Danh Sách Tải",

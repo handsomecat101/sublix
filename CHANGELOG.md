@@ -10,6 +10,19 @@
 
 ---
 
+## v0.9.7 — 2026-10-06
+### Tối Ưu Stage Dịch Phụ Đề: Dùng Batch Translate (Tiết Kiệm ~30 Phút/Video)
+- Phát hiện qua AUDIT-SUB (xem `agent-team/AUDIT_SUB_REPORT.md`): pipeline "Tạo phụ đề" với video 21:43 mất **~64 phút** do Stage 3 (Translate MiniMax-M3 API) chiếm **~40 phút** (62% tổng). Code `file_sub.rs:400` loop từng segment → 416 segments × 5.7s ≈ 40 phút.
+- Fix: thay vòng lặp sequential bằng `translate_batch_with_config()` đã có sẵn ở `translate/mod.rs:328` (chunk 15 segments/batch qua MiniMax-M3 batch endpoint). Estimate Stage 3 từ ~40 phút → **~5-10 phút** cho video 21:43 (tiết kiệm ~30 phút).
+- **Trade-off đã báo cáo (No silent trade-offs):**
+  - Progress emit vẫn theo từng segment (em chia nhỏ từ batch result) → UI UX tương đương loop cũ.
+  - Hallucination filter + fallback `original_text` vẫn áp dụng đầy đủ.
+  - Cancel check: batch check `is_dubbing_cancelled()` mỗi chunk (an toàn hơn loop cũ).
+  - Error fallback: batch inner dùng `"[Dịch lỗi: ...]"`, em wrap ngoài bằng `original_text.clone()` cho UX thân thiện giống cũ.
+- Chưa fix F1 (HF URL 401) + F2 (model corrupt check) + F3 (CUDA build) + F4 (progress trong whisper stage) → xem AUDIT_SUB_REPORT để biết khuyến nghị R1, R2, R4, R5.
+
+---
+
 ## v0.9.6 — 2026-10-06
 ### Hiển Thị Rõ Đường Dẫn, Dung Lượng, Chất Lượng & Tiến Trình Tải
 - **Video đã tải xong** giờ hiện đủ trong danh sách: **🎞 chất lượng** (vd *1920×1080 (Full HD)*), **💾 dung lượng thật** của file (đo trực tiếp từ ổ đĩa, vd *309.7 MB*) và **📁 đường dẫn đầy đủ** của file.
