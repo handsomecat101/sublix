@@ -161,6 +161,76 @@ fn is_subtitle_only_failure(extract_subtitles: bool, stderr: &str, has_own_outpu
         || (lower.contains("429") && lower.contains("subtitle"))
 }
 
+/// Extract a YouTube video id from a watch / short / embed URL.
+/// Used only by `recover_output_file` — non-YouTube URLs return `None`.
+fn extract_video_id(url: &str) -> Option<String> {
+    let u = url.trim();
+    let candidate = if let Some(rest) = u.split_once("v=").map(|(_, r)| r) {
+        Some(rest)
+    } else if let Some(rest) = u.split_once("youtu.be/").map(|(_, r)| r) {
+        Some(rest)
+    } else if let Some(rest) = u.split_once("/shorts/").map(|(_, r)| r) {
+        Some(rest)
+    } else {
+        u.split_once("/embed/").map(|(_, r)| r)
+    }?;
+    let id: String = candidate
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .take(11)
+        .collect();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+/// v0.9.3: ground-truth recovery when yt-dlp exits successfully but the
+/// destination path printed to stdout cannot be found on disk — e.g. the
+/// console code page corrupted the printed path (`C:` -> `C#`, dropped
+/// fullwidth chars, seen intermittently on Windows). Scan this job's own
+/// save dir for a media file whose name carries the video id (`[<id>]`).
+/// An id match guarantees the right video — a leftover complete file for
+/// the same id is exactly what yt-dlp itself would report as "already
+/// downloaded" — so a neighbouring job's file can never be picked up
+/// (BUG-046 rule). The newest match wins when several exist.
+fn recover_output_file(save_dir: &Path, url: &str) -> Option<PathBuf> {
+    let id = extract_video_id(url)?;
+    let tag = format!("[{}]", id);
+    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
+    for entry in fs::read_dir(save_dir).ok()?.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.contains(&tag) {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !matches!(
+            ext.as_str(),
+            "mp4" | "mkv" | "webm" | "mp3" | "m4a" | "opus" | "ogg" | "flac" | "wav" | "mov" | "avi"
+        ) {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        if best.as_ref().map(|(t, _)| *t < modified).unwrap_or(true) {
+            best = Some((modified, path));
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
 /// Validate URL is a safe http(s) URL. yt-dlp accepts anything starting with `-`
 /// as a flag, so passing user input directly is a shell-injection vector.
 /// Reject anything that isn't a syntactically valid http(s) URL.
@@ -546,6 +616,10 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
         // pipes were never re-added, so stdout/stderr always came back empty
         // — every successful fetch died on serde's "EOF while parsing a
         // value" and every failure lost its stderr message.
+        // v0.9.3: deterministic UTF-8 output (see build_download_command).
+        cmd.env("PYTHONIOENCODING", "utf-8");
+        cmd.env("PYTHONUTF8", "1");
+
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
@@ -753,6 +827,14 @@ fn build_download_command(
     }
 
     cmd.arg("--").arg(&req.url);
+
+    // v0.9.3: force UTF-8 output from yt-dlp's Python runtime. Without this,
+    // Windows may use a locale code page for the output pipe and drop or
+    // replace non-representable characters in printed paths (observed
+    // `C:` -> `C#` plus vanishing fullwidth title chars), which broke the
+    // "Destination:" line parsing in drain_child_process.
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.env("PYTHONUTF8", "1");
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -1211,7 +1293,37 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             .map(|p| p.exists())
             .unwrap_or(false);
 
-        if final_res.is_success && has_own_output {
+        // v0.9.3: if yt-dlp succeeded but the path it printed is unusable
+        // (console-encoding corruption of the log line), recover the real
+        // output file from the filesystem before reporting an error.
+        let recovered_path: Option<PathBuf> = if final_res.is_success && !has_own_output {
+            let found = recover_output_file(&save_dir_clone, &req_clone.url);
+            if let Some(ref p) = found {
+                info!(
+                    "🔎 Recovered output file despite unreadable path in log: {}",
+                    p.display()
+                );
+            }
+            found
+        } else {
+            None
+        };
+        let effective_output: Option<PathBuf> = if has_own_output {
+            final_res.detected_filepath.clone()
+        } else {
+            recovered_path.clone()
+        };
+        let effective_name: String = if effective_output.is_some() && !has_own_output {
+            effective_output
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
+        } else {
+            final_res.detected_filename.clone()
+        };
+
+        if final_res.is_success && effective_output.is_some() {
             info!("✅ Downloader job {} finished successfully", job_id);
             let _ = app_clone.emit(
                 "downloader:progress",
@@ -1222,8 +1334,8 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     speed: "0 B/s".to_string(),
                     eta: "00:00".to_string(),
                     size_text: final_res.current_size,
-                    filename: final_res.detected_filename,
-                    file_path: final_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
+                    filename: effective_name,
+                    file_path: effective_output.as_ref().map(|p| p.to_string_lossy().to_string()),
                     error: None,
                     run_id: Some(my_run_id),
                 },
@@ -1686,6 +1798,39 @@ mod tests {
         assert!(!is_subtitle_only_failure(true, sub_429, false)); // no media output on disk
         assert!(!is_subtitle_only_failure(true, "ERROR: Video unavailable", true));
         assert!(!is_subtitle_only_failure(true, "", true));
+    }
+
+    #[test]
+    fn test_extract_video_id() {
+        assert_eq!(
+            extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ").as_deref(),
+            Some("dQw4w9WgXcQ")
+        );
+        assert_eq!(
+            extract_video_id("https://youtu.be/dQw4w9WgXcQ?t=5").as_deref(),
+            Some("dQw4w9WgXcQ")
+        );
+        assert_eq!(
+            extract_video_id("https://www.youtube.com/shorts/abcdefghijk").as_deref(),
+            Some("abcdefghijk")
+        );
+        assert_eq!(extract_video_id("https://www.tiktok.com/@a/video/123"), None);
+        assert_eq!(extract_video_id("not a url"), None);
+    }
+
+    #[test]
+    fn test_recover_output_file_finds_media_by_video_id() {
+        let dir = std::env::temp_dir().join(format!("sublix_recover_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let target = dir.join("My Video [dQw4w9WgXcQ].mp4");
+        fs::write(&target, b"x").expect("write target");
+        fs::write(dir.join("Other [AAAAAAAAAAA].mp4"), b"x").expect("write decoy");
+        fs::write(dir.join("My Video [dQw4w9WgXcQ].mp4.part"), b"x").expect("write part");
+        let found = recover_output_file(&dir, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert_eq!(found, Some(target));
+        // Non-YouTube URLs must not recover anything.
+        assert_eq!(recover_output_file(&dir, "https://vimeo.com/12345"), None);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

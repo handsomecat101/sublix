@@ -269,7 +269,7 @@ export default function DownloaderView({
             sizeText: p.size_text || item.sizeText,
             filename: p.filename || item.filename,
             filePath: p.file_path || item.filePath,
-            error: p.error || item.error,
+            error: p.error !== undefined ? p.error : item.error,
           };
         })
       );
