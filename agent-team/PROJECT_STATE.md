@@ -12,8 +12,8 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.8.0` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
-| **Git Commit** | `v0.8.0` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Bản Build Hiện Tại** | `v0.9.2` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
+| **Git Commit** | `v0.9.2` on `master` (`https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Active (Đã hoàn thiện Drag & Drop Studio + Custom Glass Select + AI Visual Identity) |
 
 ---
@@ -55,6 +55,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-V092-EOF-429` | Fix v0.9.2: EOF "Kiểm Tra Link" + HTTP 429 phụ đề (2 bug từ handoff Mavis) | **CommandCode** | 2026-10-06 | Root cause EOF = thiếu pipe stdio từ R2-08.3; fix pipe + parse JSON an toàn + báo lỗi thân thiện; `--sleep-subtitles 5` + giữ ✅ video khi sub 429. Build v0.9.2 xanh, 8/8 test. Commits `54f5ae2`+`6d7bc1b` |
 | `TSK-022.1` | Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin, Bilibili) & Cầu nối 1-Click | Antigravity | 2026-10-04 | Kế thừa trọn vẹn hermes-downloader: đa nền tảng, cookies Edge/Chrome/Firefox, sub extract, pause/resume/cancel, 1-click bridge sang File Sub & Studio Dubbing |
 | `TSK-023` | Fix Triệt Để 8 Lỗi Nền Móng Phase 0 (BUG-026, 027, 028, 029, 030, 031, 032, 041) | Antigravity | 2026-10-04 | Cây amix ≤28 inputs, normalize=0, generation hủy AtomicU64 + diệt PID tree, không nuốt lỗi dịch, chống rò rỉ listener + race drop file, pass unit test & build release |
 | `TSK-FIX-BUG044-058` | Vá 15 lỗi Tab Tải Video (044–058) — shell injection, tab leak, NaN%, disk check, Job Object, etc. | **Mavis (MiniMax-M3)** | 2026-10-04 | Đã fix đủ 15 bugs trong 3 commits (Nhóm 1+2+3); chỉ defer Job Object KILL_ON_JOB_CLOSE — chi tiết tại `BUG-FIX-REPORT-BUG044-058.md` |

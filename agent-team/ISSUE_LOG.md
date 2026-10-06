@@ -96,6 +96,12 @@
 | `BUG-057` | 🟡 Nhóm vận hành: không Job Object (kill app là để ma yt-dlp/ffmpeg), lệnh hủy chạy chặn UI, xem trước video không có timeout (treo vô hạn), pause/hủy lỗi im lặng + bấm đúp, thiếu dự phòng `cookies.txt` | `downloader/mod.rs:267,505-579`, `lib.rs:1015` | Tiến trình con trong Job Object; lệnh lâu phải async + timeout; lỗi phải hiện màn hình | 🔴 Open |
 | `BUG-058` | 🟡 Nhóm vặt: chọn 4K nhưng thực chất không bao giờ được 4K (thiếu cờ ghép video+audio rời), thiếu ghi nhận MIT khi kế thừa, nhận diện nhầm tên miền (`fox.com` → twitter), đường dẫn truyền sang File Sub không kiểm tra, lỗi có khi hiện "[object Object]", trạng thái "đã hủy" mất nút Thử lại | `downloader/mod.rs:165,106,594`, `DownloaderView.tsx` | Mọi lựa chọn phải cho đúng kết quả đã hứa; đường dẫn phải chuẩn hóa trước khi truyền | 🔴 Open |
 
+### 🧾 2 Lỗi Fix Tại v0.9.2 (CommandCode — 2026-10-06):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-V092-01` | Kiểm Tra Link: lỗi serde thô `EOF while parsing a value at line 1 column 0` / mất hẳn stderr khi yt-dlp lỗi | `downloader/mod.rs` (`fetch_video_info`) | `spawn()` + `wait_with_output()` BẮT BUỘC phải kèm `Stdio::piped()` cho stdout+stderr — `output()` tự pipe, `spawn()` thì không | ✅ Fixed |
+| `BUG-V092-02` | Tải phụ đề 4 ngôn ngữ bị HTTP 429 khi chạy dồn; job báo ❌ Lỗi oan dù video đã tải xong | `downloader/mod.rs` (`build_download_command` + worker) | Sub giãn cách `--sleep-subtitles 5`; lỗi CHỈ ở sub + media đã có ⇒ báo `completed` + cảnh báo UI (không nuốt lỗi) | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -225,4 +231,16 @@
 - **File:** `downloader/mod.rs:314-324` (`ACTIVE_JOBS.insert` ghi đè không kiểm)
 - **Root Cause:** Ghi đè id cũ trong bảng quản lý làm mất PID của job cũ → nút Tạm dừng/Hủy giờ giết nhầm hoặc không giết gì, yt-dlp cũ vẫn chạy song song với bản mới — cùng họ với BUG-028 ("job hồi sinh").
 - **Cách fix & Bài học:** Id đã tồn tại thì từ chối (hoặc hủy job cũ hẳn trước khi ghi), hoặc đánh số thế hệ mỗi lần chạy. *Bảng quản lý tiến trình không được ghi đè im lặng.*
+
+### [BUG-V092-01] fetch_video_info nhận output RỖNG — ngộ nhận "EOF while parsing" khi Kiểm Tra Link
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** Anh Tuấn (screenshot) | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`fetch_video_info`)
+- **Root Cause:** Bản vá R2-08.3 đổi `Command::output()` → `spawn()` + `wait_with_output()` (để có PID kill orphan khi timeout) nhưng quên `cmd.stdout(Stdio::piped())`/`stderr`. `wait_with_output()` chỉ đọc được output từ pipe — không pipe thì trả rỗng 100%: yt-dlp exit 0 (kiểm tra OK) ⇒ serde báo "EOF while parsing a value at line 1 column 0"; exit 1 (video chết) ⇒ mất luôn stderr.
+- **Cách fix & Bài học:** Thêm pipe cho stdout+stderr; parse JSON an toàn giữa `{` đầu ↔ `}` cuối; fallback thông báo thân thiện. *`Command::output()` tự pipe còn `spawn()` thì KHÔNG — chuyển đổi API phải kiểm tra lại stdio.*
+
+### [BUG-V092-02] Phụ đề bị YouTube chặn 429 — job "Lỗi" oan dù video đã tải xong
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** Anh Tuấn | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`build_download_command`, worker thread)
+- **Root Cause:** 4 ngôn ngữ × (manual + auto) = burst request phụ đề liên tiếp → YouTube trả 429; rate-limit phía server, kể cả delay 5s chạy dồn vẫn có thể dính. yt-dlp exit 1 ⇒ app phủ định cả job dù file video đã nằm trên ổ cứng.
+- **Cách fix & Bài học:** `--sleep-subtitles 5` giãn cách request + khi lỗi CHỈ ở subtitle mà media đã có ⇒ emit `completed` kèm cảnh báo UI. *Rate-limit server không xóa được 100% bằng client — thiết kế phải "degrade gracefully", giữ kết quả đã có.*
 

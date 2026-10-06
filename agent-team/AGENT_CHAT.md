@@ -9,6 +9,24 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 08:40 - CommandCode
+- **Loại:** `@done` (Fix v0.9.2 theo `agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md` — 2 bug: EOF "Kiểm Tra Link" + 429 phụ đề)
+- **Bug#1 (EOF):** Root cause thật: R2-08.3 đổi sang `spawn()+wait_with_output()` nhưng **thiếu pipe stdout/stderr** → output luôn rỗng (exit 0 ⇒ serde EOF; exit 1 ⇒ mất stderr). Fix: `Stdio::piped()` + parse JSON giữa `{` đầu ↔ `}` cuối + fallback thông báo thân thiện, hết lộ lỗi serde thô.
+- **Bug#2 (429):** Thêm `--sleep-subtitles 5` (2s vẫn dính khi chạy dồn — xác nhận rate-limit phía YouTube server). Bổ sung: lỗi CHỈ ở sub mà video đã tải xong ⇒ báo ✅ Hoàn thành + cảnh báo ⚠️ trên UI, không đánh rớt video oan.
+- **Verify:** `cargo check` ✅ 0/0; `cargo test --lib downloader` ✅ 8/8 (2 test mới); `npm run build` ✅; `npx tauri build --no-bundle` ✅ (exe ~14.4MB). CLI thật: URL chết → exit 1 "Video unavailable" (hiện thân thiện); URL sống → 1.17MB JSON; 3 sub vi/en/ja tải sạch 1 lượt ra đủ `.srt`.
+- **Commits:** `54f5ae2` (code) + `6d7bc1b` (version 0.9.1→0.9.2). Files: `src-tauri/src/downloader/mod.rs` + 5 file version.
+- **Việc tiếp theo:** Mời Anh Tuấn nghiệm thu GUI (dán URL chết + tải video 4 sub). Nếu chạy dồn vẫn 429 liên tục → cân nhắc option B (2 pha) theo handoff.
+
+---
+
+### 2026-10-06 08:05 - Mavis (MiniMax-M3)
+- **Loại:** `@handoff` (Anh Tuấn tự giao agent khác xử lý 2 bug — em không gọi worker)
+- **Tóm tắt:** Anh Tuấn dặn "ghi tài liệu thôi, anh gọi agent ở ngoài". Em viết **`agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md`** (17KB) để anh copy/paste pass cho agent khác. KHÔNG gọi worker, KHÔNG tự code.
+- **Trong file handoff có:** (1) Project context + commits; (2) LUẬT BẮT BUỘC; (3) Bug EOF (triệu chứng + URL test + code line 466–606 + 3 root cause hypothesis + 3 đề xuất fix + CLI test command); (4) Bug 429 (triệu chứng + code line 670–684 + 3 options fix + verify); (5) Files IN/OUT scope; (6) Bump 0.9.1 → 0.9.2 + CHANGELOG block + ChangelogModal entry; (7) Build & commit convention; (8) Acceptance checklist 10 mục.
+- **Việc tiếp theo:** Anh Tuấn copy file handoff → pass cho agent khác → agent đó làm → báo cáo. Em rảnh, đợi task mới.
+
+---
+
 ### 2026-10-05 22:55 - Mavis (MiniMax-M3)
 - **Loại:** `@done` (Competitive Analysis Sublix vs 4 đối thủ voice studio)
 - **Yêu cầu:** Anh Tuấn muốn có tài liệu so sánh tính năng Sublix vs các repo voice/dubbing trên GitHub để tham khảo sau này.
@@ -65,19 +83,3 @@
 - **Verify:** `cargo check` ✅ (0 warnings), `npm run build` ✅ (347KB JS, 70KB CSS). Đợi CommandCode audit lại checklist trước khi anh Tuấn nghiệm thu.
 - **Việc tiếp theo:** Đợi review hoặc task mới. Đã chuyển `TSK-FIX-BUG044-058` sang ✅ Done trong `PROJECT_STATE.md`.
 
----
-
-### 2026-10-04 21:50 - Mavis (MiniMax-M3)
-- **Loại:** `@acknowledge` (ghi nhận task, chưa code)
-- **Tóm tắt:** Em đã đọc `FIX_GUIDE_DOWNLOAD_TAB.md` (15 bugs BUG-044→058, chia 3 nhóm) + `ISSUE_LOG.md` Quick Index. PO (anh Tuấn) giao em làm "Thợ code bên MiniMax" — làm theo 2 bạn Antigravity + CommandCode.
-- **Quy ước em sẽ theo:** LUẬT BẮT BUỘC (`CẤM cargo build --release`, dùng `npx tauri build --no-bundle`, tắt app trước khi build).
-- **Việc tiếp theo:** Đợi PO confirm.
-
----
-
-### 2026-10-04 21:40 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
-- **Loại:** `@join` + `@assign → MiniMax M3` (đăng ký thành viên mới + giao việc vá lỗi)
-- **Tóm tắt:** Chào mừng **MiniMax M3** (thợ code bên MiniMax) vào team! Nhiệm vụ: **vá 15 lỗi Tab Tải Video `BUG-044` → `BUG-058`**. Toàn bộ hướng dẫn chi tiết (file nào, dòng nào, triệu chứng, cách sửa từng bước, cách kiểm tra) đã viết sẵn trong **`FIX_GUIDE_DOWNLOAD_TAB.md`** — đọc file đó là đủ, không cần hỏi thêm.
-- **Yêu cầu bắt buộc:** (1) Đọc mục **LUẬT BẮT BUỘC** đầu `FIX_GUIDE_DOWNLOAD_TAB.md` trước khi code — **CẤM `cargo build --release`**, đóng gói bằng `npx tauri build --no-bundle`, nhớ tắt app trước khi build; (2) Làm đúng thứ tự BUG-044 → 058, **commit git sau mỗi nhóm** để dễ hoàn tác; (3) Sửa lỗi nào phải tự đánh dấu checklist cuối file; (4) Phạm vi code: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`, phần downloader trong `lib.rs`/`tauri.ts` — không đụng file ngoài phạm vi (xem bảng phân quyền trong `GOVERNANCE.md`).
-- **Files cần đọc:** `FIX_GUIDE_DOWNLOAD_TAB.md` (hướng dẫn chính), `ISSUE_LOG.md` (Quick Index), `GOVERNANCE.md` (quy tắc chung).
-- **Việc tiếp theo (Next step):** Sửa xong báo lại trên bảng này (`@done`) — **CommandCode sẽ kiểm tra lại theo checklist** trước khi Anh Tuấn nghiệm thu.
