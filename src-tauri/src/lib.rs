@@ -151,6 +151,9 @@ pub fn run() {
             dubbing_export,
             dubbing_cancel,
             dubbing_open_output_folder,
+            voice_sample_list,
+            voice_sample_generate,
+            voice_sample_data,
             downloader_get_info,
             downloader_start,
             downloader_pause,
@@ -1074,6 +1077,30 @@ async fn dubbing_export(
 #[tauri::command]
 fn dubbing_open_output_folder(path: String) -> Result<(), String> {
     dubbing::open_output_folder(&path).map_err(|e| format!("{e:#}"))
+}
+
+/// v0.9.9: voice ids with a cached audition sample (instant playback, no live TTS).
+#[tauri::command]
+fn voice_sample_list(model_id: String) -> Vec<String> {
+    dubbing::list_voice_samples(&model_id)
+}
+
+/// v0.9.9: pre-generate audition samples for every voice of a model (one-time).
+#[tauri::command]
+async fn voice_sample_generate(app: tauri::AppHandle, model_id: String) -> Result<u32, String> {
+    if model_id != "kokoro-vi" {
+        return Err("Hiện chỉ hỗ trợ tạo mẫu nghe thử cho Kokoro-Vietnamese.".to_string());
+    }
+    tokio::task::spawn_blocking(move || dubbing::generate_kokoro_samples(&app))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// v0.9.9: cached audition sample as a data URI (None → caller synthesizes live).
+#[tauri::command]
+fn voice_sample_data(model_id: String, voice_id: String) -> Option<String> {
+    dubbing::voice_sample_data(&model_id, &voice_id)
 }
 
 #[tauri::command]

@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.9",
+    date: "07/10/2026",
+    title: "Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử + Khớp Voice Đa Vai",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tính Năng Mới",
+        icon: "🎛",
+        items: [
+          "Bấm ▸ cạnh mỗi model để xem danh sách giọng NAM/NỮ của model đó — hiện cả TRƯỚC khi tải model.",
+          "Kokoro-Vietnamese: 7 giọng Nam + 7 giọng Nữ; thêm card 'Edge Neural (có sẵn — cần mạng)' với 8 giọng đọc sẵn; model clone ghi rõ cần clip giọng mẫu 5–10 giây cho mỗi vai.",
+          "🎧 Tạo mẫu nghe thử 14 giọng Kokoro trong 1 lần (~1 phút, có tiến trình) → nghe lại TỨC THÌ từ cache, không tổng hợp lại.",
+          "Khớp voice đa vai: tự gán giọng KHÁC NHAU xen kẽ Nam/Nữ cho từng vai (pool 7 nam + 7 nữ); nhãn giọng ghi rõ '♂ Nam — Tuấn Ngọc (Kokoro offline)'; cảnh báo ⚠️ 'Trùng giọng' khi 2 vai dùng chung giọng.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.8",
     date: "06/10/2026",
     title: "Studio Lồng Tiếng: Nút Mở Thư Mục Lồng Tiếng",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

@@ -9,6 +9,52 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-07 01:05 - CommandCode
+- **Loại:** `@done` (PO giao 00:08 qua Telegram: "tab lồng tiếng còn gì thì hiện thực hoá" + chọn model→hiện voice nam/nữ + mẫu nghe thử + khớp voice nhiều role)
+- **Voice catalog theo model:** mỗi model bấm **▸ mở danh sách giọng Nam/Nữ NGAY CẢ TRƯỚC KHI TẢI** (Kokoro = 7 nam + 7 nữ; thêm card "Edge Neural (có sẵn — 8 giọng)"; model clone ghi rõ cơ chế cần clip giọng mẫu 5–10s/vai).
+- **Mẫu nghe thử (đúng nhận định PO — load model 1 lần rồi trích xuất trước):** nút 🎧 tạo 14 mẫu Kokoro 1 lần (~1 phút, event "Đang tạo mẫu X/14…") → cache `models/voice/kokoro-vi/samples/*.wav` → nghe lại **tức thì** (data URI WAV). E2E: 14/14 file thật; CDP click 🔊 → `paused:false, t:1.56/4.92s`.
+- **Khớp voice đa vai:** pool 7+7 cho cả 2 nhánh auto-cast; dropdown nhãn "♂/♀ + engine"; thêm nhân vật tự chọn giọng CHƯA dùng; chip **⚠️ Trùng giọng**. E2E `dialogue_2spk.wav` (5 câu nam/nữ xen kẽ) → 5 vai = 5 giọng khác nhau (Tuấn Ngọc/Mai Linh/Mạnh Dũng/Ngọc Huyền/Thành Đạt); ép trùng → 2 chip ⚠️.
+- **Bằng chứng:** `test-output-audit-giong/v099_voice-catalog-hub.png` + `v099_multi-role-casting.png`; cargo check ✅ tsc ✅. Version bump v0.9.9 (CHANGELOG + modal + 3 file version).
+- **⚠️ Bẫy mới (BUG-H08):** dev base dir = `src-tauri` → ghi samples/model làm **tauri dev watcher auto-restart giết tiến trình** → test tính năng ghi model phải chạy `npm run tauri dev -- --no-watch`.
+- **Còn tồn (ca trước, em không đụng):** `SettingsView.tsx/css` (dời hub khỏi Settings) + `src-tauri/examples/*` + audit docs chưa commit.
+
+---
+
+### 2026-10-06 17:20 - CommandCode
+- **Loại:** `@done` (Task PO: dời Model Giọng Nói vào tab Lồng Tiếng + engine **Kokoro-Vietnamese chạy OFFLINE**)
+- **TASK 1 (UI):** Gỡ mục "🧠 Giọng Nói & Lồng Tiếng" khỏi Settings (tab Models); dời vào tab **"Studio Lồng Tiếng AI"** thành panel gọn **"🎛 Chọn Giọng & Tải Model"** (mặc định THU GỌN, bấm mới mở). Mỗi model chỉ **TÊN + dung lượng + nút Tải/tiến trình/✅ Đã tải/🔒 Cần HF/☁️ Dùng API**; giữ 4 nhóm slim. GUI xác nhận: tab Models đã sạch mục này.
+- **TASK 2 (engine):** Tải đủ Kokoro-Vietnamese vào `src-tauri/models/voice/kokoro-vi/` (`kokoro_vi.onnx` 325.731.953 B + 14 voicepack ~7MB); viết sidecar `src-tauri/scripts/kokoro_vi_tts.py` (onnxruntime + **vig2p** G2P; pip cần `vig2p`). `synthesize_speech` thêm nhánh `kokoro:<id>`; giọng VI mặc định tự dùng Kokoro khi model có; **retry-rồi-skip** câu lỗi (hết cảnh invalid seg làm chết `amix` "two consecutive MPEG frames"); thêm 14 VoicePreset `kokoro:tuan_ngoc`… vào `dubbing_get_voices`.
+- **BẰNG CHỨNG CHẠY THẬT:** `cargo check --all-targets` ✅ · `npm run build` ✅ · unit test 14 giọng ✅ · e2e Kokoro offline → **`test_dubbing_input/kokoro_DUBBED_TEST.mp4`** (378.671 B, 26.03s, h264 1280×720 + AAC 24kHz) · 2 sample PO nghe: `kokoro_sample_tuan_ngoc.mp3` (110.924 B) + `kokoro_sample_mai_linh.mp3` (104.204 B) · GUI `agent-browser` CDP 9222 bấm thật (panel thu gọn→mở; 22 nút "Nghe thử" = 8 cũ + 14 Kokoro).
+- **Files:** `src-tauri/src/dubbing/mod.rs`, `src-tauri/scripts/kokoro_vi_tts.py` (mới), `src-tauri/examples/test_dubbing_kokoro.rs` (mới), `src/views/SettingsView.tsx`, `src/views/DubbingStudioView.{tsx,css}`. Ảnh: `test-output-audit-giong/kokoro-1-panel-collapsed.png`, `-2-panel-expanded.png`, `-3-settings-no-voice-hub.png`. **Next:** PO nghe 2 mp3 + nghiệm thu GUI.
+
+---
+
+### 2026-10-06 16:15 - CommandCode
+- **Loại:** `@done` (Model Hub Giọng Nói & Lồng Tiếng — danh mục nhiều danh sách + Tải về có tiến trình/dung lượng + research model tiếng Việt)
+- **Tóm tắt:** Đúng yêu cầu PO: mục **"🧠 Giọng Nói & Lồng Tiếng"** trong tab Models với **4 danh sách** (Giọng Clone / Giọng Đọc Sẵn / Phân Vai / Cloud), **13 model 2026** kèm dung lượng byte THẬT (HF Files API), VRAM, license, nhãn ✓Tiếng Việt. Nút **⬇️ Tải về (X GB)** → hiện **"Đang tải % — MB/GB"** → **"✅ Đã tải — Dùng được"**; model bị khóa HF hiện "🔒 Cần tài khoản HF"; cloud hiện "☁️ Dùng API".
+- **Research (model Việt mới):** MOSS-TTS v1.5 (31 ngôn ngữ **có Việt** — bản v1.0 thì KHÔNG), NeuTTS-Air-Vi, F5-TTS-Vi (phi thương mại), viXTTS, VietTTS, Kokoro-Vi (326MB, 14 giọng), Qwen3-TTS (**chưa có Việt** — đã gắn nhãn), sherpa diarization (34MB, CPU), pyannote 3.1 (gated).
+- **⚠️ BẰNG CHỨNG CHẠY THẬT (LUẬT CHẠY THẬT — GOVERNANCE mục 0):** test GUI bằng `agent-browser` (CDP 9222) trên app release thật: bấm Tải sherpa-diarization → hiện *"Đang tải 8% — 3 MB / 34 MB"* → *"✅ Đã tải — Dùng được"*; file trên đĩa `src-tauri/models/voice/sherpa-diarization/` đủ 2 file (6.958.444 + 26.530.550 bytes — khớp số liệu research). Ảnh: `test-output-audit-giong/voice-hub-1-truoc-tai.png`, `voice-hub-2-dang-tai-8pct.png`, `voice-hub-3-hoan-thanh.png`. Build `npm run build` + `cargo check` ✅.
+- **Files:** `src-tauri/src/voice_models.rs` (mới), `lib.rs`, `src/lib/tauri.ts`, `src/views/SettingsView.{tsx,css}`.
+- **Việc tiếp theo (Next step):** PO xem 3 ảnh bằng chứng + app đang mở sẵn để trải nghiệm; bước sau: tích hợp model đã tải vào pipeline lồng tiếng theo `KE_HOACH_GIONG_NOI_LONG_TIENG.md` (Phase V2/V3).
+
+---
+
+### 2026-10-06 15:38 - Anh Tuấn (PO) → @ALL (re-plan)
+- **Loại:** `@reassign` (chuyển giao AUDIT-VOICE + code lồng tiếng sang **CommandCode**)
+- **Tóm tắt:** PO đổi kế hoạch 15:38: phần AUDIT-VOICE 17 mục + viết code làm giọng tính năng THẬT (theo `AUDIT_TAO_GIONG.md` BƯỚC 2 + kế hoạch mới `KE_HOACH_GIONG_NOI_LONG_TIENG.md`) → chuyển sang **CommandCode** làm. Mavis tạm dừng, không làm gì thêm vụ này.
+- **Mavis đã làm (handoff cho CommandCode):** Bảng 17/17 mục `AUDIT_TAO_GIONG.md` đã điền code-level với evidence `path:line`; 3 mục 🟠 trên giấy (#11 F5-TTS / #12 Viterbox / #13 Kokoro) đã xác nhận không có trong source; 2 mục 🟡 (#14 "Multi-Speaker Voice Clone" thực chất là Edge-TTS / #15 "AI Diarization" thực chất là LLM API + heuristic) đã ghi rõ cơ chế.
+- **Việc tiếp theo:** CommandCode đọc `AUDIT_TAO_GIONG.md` (bảng kết quả) + `KE_HOACH_GIONG_NOI_LONG_TIENG.md` (model 2026: MOSS-TTS 1.7B / NeuTTS-Air-Vietnamese / Qwen3-TTS / VibeVoice-Pyannote 3.1) → làm GUI test + viết code Phase V1→V5. **Mavis rảnh, đợi task mới.**
+
+---
+
+### 2026-10-06 14:35 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
+- **Loại:** `@info` (Kế hoạch mới cho Giọng Nói & Lồng Tiếng — đọc khi bắt đầu Bước 2 của lệnh trước)
+- **Tóm tắt:** PO yêu cầu cập nhật model **mới nhất 2026** (không dùng model cũ). Kế hoạch mới: **`KE_HOACH_GIONG_NOI_LONG_TIENG.md`** — thay lựa chọn model cũ (F5/Viterbox/Kokoro) bằng: **MOSS-TTS 1.7B** (clone giọng từ clip 3–10s không cần bản gốc, Apache 2.0), **NeuTTS-Air-Vietnamese** (thanh điệu Việt chuẩn), **Qwen3-TTS** (voice design + điều khiển bằng lời), **VibeVoice/Pyannote 3.1** (phân vai THẬT). Chia Phase V1→V5, mỗi phase có bảng nghiệm thu.
+- **⚠️ Vẫn áp dụng:** LUẬT CHẠY THẬT + test câu tiếng Việt có dấu trước khi tích hợp model nào (nhiều model đa ngôn ngữ KHÔNG có tiếng Việt).
+- **Việc tiếp theo:** làm lệnh trước (audit 17 mục) → báo lô đầu → rồi code theo Phase V1 → V5 của kế hoạch mới.
+
+---
+
 ### 2026-10-06 14:30 - CommandCode → @ALL (nhất là @Mavis — đọc kỹ)
 - **Trả lời vụ "không có GUI automation tool":** env nào có shell/terminal đều TỰ test GUI được — dùng `agent-browser` (CLI) + cổng debug WebView2. KHÔNG cần nhờ PO bấm tay/chụp ảnh nữa (áp dụng ngay cho 17 mục `AUDIT_TAO_GIONG.md` + 12 mục đang chờ GUI test).
 - **3 bước:** (1) `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222'` rồi chạy `Chay-Sublix.bat`; (2) `agent-browser --session <tên> connect 9222` + `snapshot -i` lấy refs (PS phải quote `'@eN'`); (3) `fill/click/wait/screenshot/eval` như user thật, xong `close` + tắt bản debug + mở lại app SẠCH cho PO.
@@ -37,49 +83,6 @@
 
 ---
 
-### 2026-10-06 12:00 - CommandCode
-- **Loại:** `@done` (v0.9.4 — theo yêu cầu PO: nút Chạy Video + chỉ rõ thư mục tải)
-- **Tính năng:** ▶ Chạy Video (ShellExecuteW — mở bằng player mặc định của máy); header hiện "📁 File tải về được lưu tại: <path>" (command `downloader_downloads_dir`); checkbox phụ đề mặc định TẮT.
-- **Fix kèm:** nút "Mở Thư Mục" trước đây spawn `explorer.exe /select` từ app KHÔNG mở được cửa sổ (argv-quoting) — thay bằng `SHOpenFolderAndSelectItems` (+features `Win32_UI_Shell_Common`/`Win32_System_Com`).
-- **Verify GUI thật (agent-browser):** click Chạy Video → VLC mở đúng file; click Mở Thư Mục → Explorer mở đúng thư mục downloads; header hiện path; 10/10 test; exe v0.9.4 build OK.
-- **Việc tiếp theo:** PO nghiệm thu. Lưu ý giải thích cho PO: "video 20 phút tải vài giây" là do file đã có sẵn trên đĩa (yt-dlp báo đã tải rồi — đúng hành vi, file hoàn chỉnh).
-
----
-
-### 2026-10-06 09:45 - CommandCode
-- **Loại:** `@done` (v0.9.3 — sửa lỗi báo oan "không in ra đường dẫn file", anh Tuấn gặp 9:06 với video Arthas)
-- **Root cause:** output yt-dlp không phải UTF-8 ⇒ dòng Destination in ra **MẤT ký tự codepage không biểu diễn được** (`：｜`, CJK) trong khi file trên đĩa vẫn đủ ký tự ⇒ `exists()` trượt ⇒ báo Lỗi oan dù exit 0. (Ghi chú: `C:`→`C#` thấy trong log test là artifact PowerShell Start-Process của test harness — KHÔNG phải lỗi app; thư mục rác ` C#/` đã dọn.)
-- **Fix:** ép `PYTHONIOENCODING=utf-8`+`PYTHONUTF8=1`; fallback quét thư mục tải theo tag `[<video_id>]` (bằng chứng gốc, an toàn BUG-046); UI "Thử lại" thành công xoá cảnh báo cũ. Commits `e48712c`+`8162033`.
-- **Verify:** cargo check 0/0; 10/10 test (2 mới); **GUI E2E thật: bấm "Thử lại" mục Arthas → Hoàn Thành 3→4, hết ⚠️**; exe v0.9.3 build OK.
-- **Phụ:** Desktop PO có 6 cửa sổ `Chay-Sublix-Dev.bat` chạy chồng — đã dọn; file Dev cũ giờ redirect sang `Chay-Sublix.bat`. Rác test (` C#/`, `_agent_test/`) đã xoá.
-- **Việc tiếp theo:** PO xác nhận; câu hỏi mở: checkbox phụ đề mặc định đang BẬT — có đổi thành TẮT không?
-
----
-
-### 2026-10-06 08:55 - CommandCode
-- **Loại:** `@info` + `@handoff` (Tooling + GUI E2E tự động — tiếp nối tin `@done` v0.9.2 bên dưới)
-- **File chạy chuẩn:** `Chay-Sublix.bat` (repo root + Desktop) chạy **dev mode = luôn code mới nhất**; từ nay KHÔNG cần build release cho việc PO test (release chỉ để đóng gói). Chi tiết: `DEV-LOG.md` Session 14.
-- **GUI test được từ agent:** thêm env `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` khi chạy app + `agent-browser` (CDP, chọn tab main) → fill/click/snapshot như user thật. **Mọi thay đổi đụng UI nên test kiểu này.**
-- **Kết quả GUI v0.9.2:** URL chết → thông báo thân thiện (hết EOF); URL sống → metadata OK; tải 720p không sub → ✅ Hoàn thành, file 30MB trên đĩa.
-- **Việc tiếp theo:** PO nghiệm thu (app v0.9.2 đang mở sẵn, không cổng debug). Câu hỏi mở cho PO: checkbox phụ đề đang BẬT mặc định — có muốn đổi mặc định thành TẮT không?
-
----
-
-### 2026-10-06 08:40 - CommandCode
-- **Loại:** `@done` (Fix v0.9.2 theo `agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md` — 2 bug: EOF "Kiểm Tra Link" + 429 phụ đề)
-- **Bug#1 (EOF):** Root cause thật: R2-08.3 đổi sang `spawn()+wait_with_output()` nhưng **thiếu pipe stdout/stderr** → output luôn rỗng (exit 0 ⇒ serde EOF; exit 1 ⇒ mất stderr). Fix: `Stdio::piped()` + parse JSON giữa `{` đầu ↔ `}` cuối + fallback thông báo thân thiện, hết lộ lỗi serde thô.
-- **Bug#2 (429):** Thêm `--sleep-subtitles 5` (2s vẫn dính khi chạy dồn — xác nhận rate-limit phía YouTube server). Bổ sung: lỗi CHỈ ở sub mà video đã tải xong ⇒ báo ✅ Hoàn thành + cảnh báo ⚠️ trên UI, không đánh rớt video oan.
-- **Verify:** `cargo check` ✅ 0/0; `cargo test --lib downloader` ✅ 8/8 (2 test mới); `npm run build` ✅; `npx tauri build --no-bundle` ✅ (exe ~14.4MB). CLI thật: URL chết → exit 1 "Video unavailable" (hiện thân thiện); URL sống → 1.17MB JSON; 3 sub vi/en/ja tải sạch 1 lượt ra đủ `.srt`.
-- **Commits:** `54f5ae2` (code) + `6d7bc1b` (version 0.9.1→0.9.2). Files: `src-tauri/src/downloader/mod.rs` + 5 file version.
-- **Việc tiếp theo:** Mời Anh Tuấn nghiệm thu GUI (dán URL chết + tải video 4 sub). Nếu chạy dồn vẫn 429 liên tục → cân nhắc option B (2 pha) theo handoff.
-
----
-
-### 2026-10-06 08:05 - Mavis (MiniMax-M3)
-- **Loại:** `@handoff` (Anh Tuấn tự giao agent khác xử lý 2 bug — em không gọi worker)
-- **Tóm tắt:** Anh Tuấn dặn "ghi tài liệu thôi, anh gọi agent ở ngoài". Em viết **`agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md`** (17KB) để anh copy/paste pass cho agent khác. KHÔNG gọi worker, KHÔNG tự code.
-- **Trong file handoff có:** (1) Project context + commits; (2) LUẬT BẮT BUỘC; (3) Bug EOF (triệu chứng + URL test + code line 466–606 + 3 root cause hypothesis + 3 đề xuất fix + CLI test command); (4) Bug 429 (triệu chứng + code line 670–684 + 3 options fix + verify); (5) Files IN/OUT scope; (6) Bump 0.9.1 → 0.9.2 + CHANGELOG block + ChangelogModal entry; (7) Build & commit convention; (8) Acceptance checklist 10 mục.
-- **Việc tiếp theo:** Anh Tuấn copy file handoff → pass cho agent khác → agent đó làm → báo cáo. Em rảnh, đợi task mới.
 
 
 

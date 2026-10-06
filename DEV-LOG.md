@@ -643,6 +643,29 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-06 — v0.9.5 (fix 360p) + v0.9.6 (chi tiết tải, link gốc + copy, fix 403 bằng curl_cffi)*
+## Session 18 — 2026-10-07 00:08 → 01:15 (CommandCode) — v0.9.9 (Voice Catalog + Mẫu Nghe Thử + Khớp Voice Đa Vai)
+
+### User intent (Telegram 00:08)
+- "Tab lồng tiếng còn gì thì hiện thực hoá đi" — muốn: chọn model → hiện danh sách voice nam/nữ; xem được TRƯỚC khi load model; PO nhận định đúng: "load model 1 lần rồi trích xuất trước sample voice"; làm nốt "khớp voice nhiều role".
+
+### Đã làm (v0.9.9)
+- Hub "🎛 Chọn Giọng & Tải Model": mỗi model bấm ▸ mở danh sách giọng Nam/Nữ (hiện cả TRƯỚC khi tải); Kokoro 7 nam + 7 nữ; card mới "Edge Neural (có sẵn)"; model clone ghi chú cơ chế clip mẫu.
+- `voice_sample_generate` (Kokoro): tạo 1 lần 14 mẫu WAV ~1 phút (event `voice:sample_progress` X/14) → cache `models/voice/kokoro-vi/samples/`; `voice_sample_data` trả data URI → nghe tức thì; chưa có cache thì fallback synth trực tiếp như cũ.
+- Multi-role: pool 7 nam + 7 nữ cho cả 2 nhánh auto-cast; dropdown nhãn "♂/♀ + engine"; "Thêm nhân vật" tự chọn giọng CHƯA dùng (ưu tiên Kokoro); chip ⚠️ Trùng giọng khi 2 vai share giọng.
+
+### Verification (GUI thật, agent-browser CDP 9222 — no-watch)
+- Tạo mẫu thật: UI "Đang tạo mẫu 5/14…" → **14/14 file WAV** (~220-277KB, 24kHz) trong `src-tauri/models/voice/kokoro-vi/samples/`; UI "✅ Đã có sẵn mẫu 14/14".
+- Nghe thử: CDP click 🔊 Tuấn Ngọc → `paused:false, t:1.56s, dur:4.92s, src:data:audio/wav` (phát từ cache, không synth lại).
+- E2E multi-role: `test_dubbing_input/dialogue_2spk.wav` (20.6s, 5 câu Nam/Nữ xen kẽ do Kokoro tạo) → Whisper+diarize → **5 vai**; auto-cast 5 giọng KHÁC NHAU (Tuấn Ngọc/Mai Linh/Mạnh Dũng/Ngọc Huyền/Thành Đạt); ép Vai5=Tuấn Ngọc → **2 chip ⚠️ Trùng giọng**.
+- Ảnh bằng chứng: `test-output-audit-giong/v099_voice-catalog-hub.png`, `v099_multi-role-casting.png`. cargo check ✅ · tsc ✅.
+
+### Bẫy dev-mode mới (ISSUE_LOG BUG-H08)
+- App dev base dir = `src-tauri` (`CARGO_MANIFEST_DIR`) ⇒ ghi samples vào `src-tauri/models/...` ⇒ **tauri dev watcher tưởng đổi code → auto-restart → giết tiến trình tạo mẫu giữa chừng** (lần đầu: samples=0). Fix khi test: `npm run tauri dev -- --no-watch`. Release không dính (không có watcher).
+
+### Ghi chú ca
+- Chưa commit (của ca trước, không đụng): `SettingsView.tsx/css`, `src-tauri/examples/*`, audit docs Mavis.
+- Test assets: `test_dubbing_input/dialogue_2spk.wav` + script `make_dialogue.ps1` (gitignored).
+
+*Last updated: 2026-10-07 — v0.9.9 (voice catalog theo model + mẫu nghe thử cache + khớp voice đa vai)*
 
 

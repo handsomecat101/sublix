@@ -325,6 +325,102 @@ pub fn synthesize_kokoro(text: &str, voice_id: &str, out_path: &Path) -> Result<
     Ok(())
 }
 
+// ===========================================================================
+// v0.9.9 — Voice catalog & pre-generated audition samples.
+// Cho phép chọn model → xem danh sách giọng Nam/Nữ TRƯỚC khi đọc thật:
+// mẫu nghe thử được tạo 1 lần rồi cache trên đĩa, các lần sau phát tức thì.
+// ===========================================================================
+
+/// Folder that caches pre-generated audition samples for a model.
+pub fn voice_samples_dir(model_id: &str) -> PathBuf {
+    crate::config::app_base_dir()
+        .join("models")
+        .join("voice")
+        .join(model_id)
+        .join("samples")
+}
+
+/// Voice ids that already have a cached audition sample on disk.
+pub fn list_voice_samples(model_id: &str) -> Vec<String> {
+    let mut ids: Vec<String> = fs::read_dir(voice_samples_dir(model_id))
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| {
+                    let path = entry.path();
+                    let is_wav = path
+                        .extension()
+                        .map(|ext| ext.eq_ignore_ascii_case("wav"))
+                        .unwrap_or(false);
+                    let valid = is_wav
+                        && fs::metadata(&path).map(|m| m.len() > 2048).unwrap_or(false);
+                    if valid {
+                        path.file_stem().map(|s| s.to_string_lossy().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ids.sort();
+    ids
+}
+
+/// Pre-generate the audition sample for every Kokoro voice (one-time) and
+/// cache it under `models/voice/kokoro-vi/samples/`. Emits
+/// `voice:sample_progress` after each voice so the UI can show progress.
+pub fn generate_kokoro_samples(app: &AppHandle) -> Result<u32> {
+    if !kokoro_available() {
+        anyhow::bail!(
+            "Chưa tải model Kokoro-Vietnamese — vào panel 🎛 Chọn Giọng & Tải Model để tải trước."
+        );
+    }
+    let dir = voice_samples_dir("kokoro-vi");
+    fs::create_dir_all(&dir).with_context(|| format!("Tạo thư mục {}", dir.display()))?;
+    let voices = get_kokoro_voices();
+    let total = voices.len();
+    let phrase = "Xin chào! Tôi là giọng đọc tiếng Việt của Sublix, rất vui được gặp bạn.";
+    let mut generated = 0u32;
+    for (idx, preset) in voices.iter().enumerate() {
+        let voice_id = preset
+            .id
+            .strip_prefix(KOKORO_VOICE_PREFIX)
+            .unwrap_or(&preset.id)
+            .to_string();
+        let out = dir.join(format!("{voice_id}.wav"));
+        let mut error: Option<String> = None;
+        if !is_valid_audio(&out) {
+            match synthesize_kokoro(phrase, &voice_id, &out) {
+                Ok(()) => generated += 1,
+                Err(e) => error = Some(format!("{e:#}")),
+            }
+        }
+        let _ = app.emit(
+            "voice:sample_progress",
+            serde_json::json!({
+                "model_id": "kokoro-vi",
+                "voice_id": voice_id,
+                "index": idx + 1,
+                "total": total,
+                "done": error.is_none(),
+                "error": error,
+            }),
+        );
+    }
+    Ok(generated)
+}
+
+/// Cached audition sample as a data URI for instant playback (None when the
+/// sample has not been generated yet — callers fall back to live synthesis).
+pub fn voice_sample_data(model_id: &str, voice_id: &str) -> Option<String> {
+    let clean = voice_id.trim_start_matches(KOKORO_VOICE_PREFIX);
+    let path = voice_samples_dir(model_id).join(format!("{clean}.wav"));
+    let bytes = fs::read(path).ok()?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Some(format!("data:audio/wav;base64,{b64}"))
+}
+
 /// True when a produced audio file exists and FFmpeg can read a real duration.
 fn is_valid_audio(path: &Path) -> bool {
     match fs::metadata(path) {
@@ -765,16 +861,25 @@ pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) 
                 }
             }
             _ => { // vi — ưu tiên engine Kokoro chạy offline khi đã tải model
+                // v0.9.9: pool đủ 7 nam + 7 nữ để khớp voice đa vai hạn chế trùng giọng.
+                const KO_MALE: [&str; 7] = [
+                    "kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat", "kokoro:phat_tai",
+                    "kokoro:hung_thinh", "kokoro:duc_an", "kokoro:duc_duy",
+                ];
+                const KO_FEMALE: [&str; 7] = [
+                    "kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen", "kokoro:diem_trinh",
+                    "kokoro:mai_loan", "kokoro:thuc_trinh", "kokoro:storyvert",
+                ];
                 if is_male {
                     let voice = if kokoro_available() {
-                        ["kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat", "kokoro:phat_tai"][p_idx % 4]
+                        KO_MALE[p_idx % KO_MALE.len()]
                     } else {
                         "vi-VN-NamMinhNeural"
                     };
                     (format!("Nhân vật {} (Nam)", idx + 1), voice.to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
                 } else {
                     let voice = if kokoro_available() {
-                        ["kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen", "kokoro:diem_trinh"][p_idx % 4]
+                        KO_FEMALE[p_idx % KO_FEMALE.len()]
                     } else {
                         "vi-VN-HoaiMyNeural"
                     };
@@ -957,11 +1062,20 @@ pub fn diarize_and_script_via_minimax(
             }
             _ => { // vi — ưu tiên engine Kokoro chạy offline khi đã tải model
                 let use_kokoro = kokoro_available();
+                // v0.9.9: pool đủ 7 nam + 7 nữ — khớp voice đa vai hạn chế trùng giọng.
+                const KO_MALE: [&str; 7] = [
+                    "kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat", "kokoro:phat_tai",
+                    "kokoro:hung_thinh", "kokoro:duc_an", "kokoro:duc_duy",
+                ];
+                const KO_FEMALE: [&str; 7] = [
+                    "kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen", "kokoro:diem_trinh",
+                    "kokoro:mai_loan", "kokoro:thuc_trinh", "kokoro:storyvert",
+                ];
                 if is_female {
                     let p = female_pitches[female_count % female_pitches.len()];
                     let r = rates[female_count % rates.len()];
                     let voice = if use_kokoro {
-                        ["kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen"][female_count % 3]
+                        KO_FEMALE[female_count % KO_FEMALE.len()]
                     } else {
                         "vi-VN-HoaiMyNeural"
                     };
@@ -971,7 +1085,7 @@ pub fn diarize_and_script_via_minimax(
                     let p = male_pitches[male_count % male_pitches.len()];
                     let r = rates[male_count % rates.len()];
                     let voice = if use_kokoro {
-                        ["kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat"][male_count % 3]
+                        KO_MALE[male_count % KO_MALE.len()]
                     } else {
                         "vi-VN-NamMinhNeural"
                     };

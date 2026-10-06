@@ -12,6 +12,7 @@ import {
   type VoicePreset,
   type VoiceModelStatus,
   type ModelDownloadProgress,
+  type VoiceSampleProgress,
 } from "../lib/tauri";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import "./DubbingStudioView.css";
@@ -93,6 +94,12 @@ export default function DubbingStudioView({
     error?: string;
   }>>({});
 
+  // v0.9.9: voice catalog theo model + mẫu nghe thử được tạo sẵn (cache trên đĩa).
+  const [expandedModel, setExpandedModel] = useState<string | null>("kokoro-vi");
+  const [voiceSamples, setVoiceSamples] = useState<Record<string, string[]>>({});
+  const [generatingSamples, setGeneratingSamples] = useState<boolean>(false);
+  const [sampleGenProgress, setSampleGenProgress] = useState<{ done: number; total: number } | null>(null);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load preset voices & config on mount
@@ -135,9 +142,26 @@ export default function DubbingStudioView({
       }
     });
 
+    // v0.9.9: nạp sẵn danh sách giọng đã có mẫu nghe thử + theo dõi tiến trình tạo mẫu.
+    sublix.voiceSampleList("kokoro-vi")
+      .then((ids) => setVoiceSamples((prev) => ({ ...prev, "kokoro-vi": ids })))
+      .catch(() => {});
+    const pSample = listen<VoiceSampleProgress>("voice:sample_progress", (event) => {
+      const p = event.payload;
+      setSampleGenProgress({ done: p.index, total: p.total });
+      if (p.done) {
+        setVoiceSamples((prev) => {
+          const cur = new Set(prev[p.model_id] ?? []);
+          cur.add(p.voice_id);
+          return { ...prev, [p.model_id]: Array.from(cur) };
+        });
+      }
+    });
+
     return () => {
       pProgress.then((u) => u()).catch(() => {});
       pModel.then((u) => u()).catch(() => {});
+      pSample.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -237,12 +261,39 @@ export default function DubbingStudioView({
     }
   }
 
-  // Audition preview a voice sample
+  // v0.9.9: tạo 1 lần mẫu nghe thử cho toàn bộ giọng của model (cache trên đĩa, nghe lại tức thì).
+  async function handleGenerateSamples() {
+    if (generatingSamples) return;
+    setGeneratingSamples(true);
+    setSampleGenProgress({ done: 0, total: voices.filter((v) => v.id.startsWith("kokoro:")).length });
+    try {
+      const n = await sublix.voiceSampleGenerate("kokoro-vi");
+      const ids = await sublix.voiceSampleList("kokoro-vi");
+      setVoiceSamples((prev) => ({ ...prev, "kokoro-vi": ids }));
+      setStatusMessage({
+        kind: "success",
+        text: `🎧 Đã tạo ${n} mẫu nghe thử — bấm 🔊 cạnh từng giọng để nghe tức thì.`,
+      });
+    } catch (err) {
+      setStatusMessage({ kind: "error", text: `Tạo mẫu nghe thử thất bại: ${err}` });
+    } finally {
+      setGeneratingSamples(false);
+      setSampleGenProgress(null);
+    }
+  }
+
+  // Audition preview a voice sample (mẫu cache phát tức thì, fallback TTS trực tiếp)
   async function handleAuditionVoice(voice: VoicePreset) {
     setAuditionVoiceId(voice.id);
     const phrase = SAMPLE_PHRASES[voice.lang] || SAMPLE_PHRASES.vi;
     try {
-      const dataUri = await sublix.dubbingPreviewTts(phrase, voice.id, "+0%", "+0Hz");
+      let dataUri: string | null = null;
+      if (voice.id.startsWith("kokoro:")) {
+        dataUri = await sublix.voiceSampleData("kokoro-vi", voice.id).catch(() => null);
+      }
+      if (!dataUri) {
+        dataUri = await sublix.dubbingPreviewTts(phrase, voice.id, "+0%", "+0Hz");
+      }
       setAudioUrl(dataUri);
       if (audioRef.current) {
         audioRef.current.src = dataUri;
@@ -395,7 +446,7 @@ export default function DubbingStudioView({
     const newSpeaker: DubbingSpeaker = {
       id: `speaker_custom_${Date.now()}`,
       label: `Nhân vật ${nextIdx} (${isMale ? "Nam" : "Nữ"})`,
-      voice: isMale ? "vi-VN-NamMinhNeural" : "vi-VN-HoaiMyNeural",
+      voice: pickUnusedVoice(isMale),
       pitch: "+0Hz",
       rate: "+0%",
     };
@@ -453,14 +504,65 @@ export default function DubbingStudioView({
   const fileName = filePath ? filePath.split(/[/\\]/).pop() || "" : "";
   const fileExt = filePath ? filePath.split(".").pop()?.toUpperCase() || "" : "";
 
-  // Prepare voice options for CustomSelect inside casting table
-  const voiceSelectOptions: SelectOption[] = voices.map((v) => ({
-    value: v.id,
-    label: v.name,
-    icon: v.gender === "male" ? "👨" : "👩",
-    badge: v.lang.toUpperCase(),
-    sublabel: v.description.slice(0, 30) + "...",
-  }));
+  // v0.9.9 — Voice catalog theo model: hiện danh sách giọng Nam/Nữ của từng model
+  // (kể cả TRƯỚC khi tải) + mẫu nghe thử cache 1 lần + khớp voice đa vai.
+  const EDGE_MODEL: VoiceModelStatus = {
+    id: "edge-neural",
+    name: "Edge Neural (có sẵn — cần mạng)",
+    label: "Edge Neural",
+    desc: "8 giọng đọc sẵn (Việt/Anh/Nhật/Trung) của Microsoft Edge — dùng ngay, không cần tải, cần Internet khi đọc.",
+    category: "preset",
+    size_mb: 0,
+    size_note: "Có sẵn trong app",
+    vram_note: "0 VRAM",
+    license: "Microsoft Edge TTS",
+    vi_support: "yes",
+    is_cloud: false,
+    files: [],
+    downloaded: true,
+  };
+
+  const voicesForModel = (modelId: string): VoicePreset[] => {
+    if (modelId === "kokoro-vi") return voices.filter((v) => v.id.startsWith("kokoro:"));
+    if (modelId === "edge-neural") return voices.filter((v) => !v.id.startsWith("kokoro:"));
+    return [];
+  };
+
+  const cleanVoiceName = (name: string): string =>
+    name.replace(/^VN • /, "").replace(" (Kokoro — offline)", "").trim();
+
+  const kokoroVoiceCount = voices.filter((v) => v.id.startsWith("kokoro:")).length;
+  const kokoroSampleCount = (voiceSamples["kokoro-vi"] ?? []).filter((id) =>
+    voices.some((v) => v.id === `kokoro:${id}`)
+  ).length;
+
+  const duplicateVoiceIds = (() => {
+    const counts = new Map<string, number>();
+    (project?.speakers ?? []).forEach((s) => counts.set(s.voice, (counts.get(s.voice) ?? 0) + 1));
+    return new Set(Array.from(counts.entries()).filter(([, c]) => c > 1).map(([id]) => id));
+  })();
+
+  function pickUnusedVoice(isMale: boolean): string {
+    const genderPool = voices.filter((v) => (isMale ? v.gender === "male" : v.gender !== "male"));
+    const kokoroReady = voiceModels.some((m) => m.id === "kokoro-vi" && m.downloaded);
+    const kokoroFirst = genderPool.filter((v) => v.id.startsWith("kokoro:"));
+    const edgeLast = genderPool.filter((v) => !v.id.startsWith("kokoro:"));
+    const pool = kokoroReady ? [...kokoroFirst, ...edgeLast] : [...edgeLast, ...kokoroFirst];
+    const used = new Set((project?.speakers ?? []).map((s) => s.voice));
+    const pick = pool.find((v) => !used.has(v.id)) ?? pool[0];
+    return pick ? pick.id : isMale ? "vi-VN-NamMinhNeural" : "vi-VN-HoaiMyNeural";
+  }
+
+  // Prepare voice options for CustomSelect inside casting table (gender + engine rõ ràng)
+  const voiceSelectOptions: SelectOption[] = [...voices]
+    .sort((a, b) => Number(b.id.startsWith("kokoro:")) - Number(a.id.startsWith("kokoro:")))
+    .map((v) => ({
+      value: v.id,
+      label: `${v.gender === "male" ? "♂ Nam" : "♀ Nữ"} — ${cleanVoiceName(v.name)}${v.id.startsWith("kokoro:") ? " (Kokoro offline)" : " (Edge, cần mạng)"}`,
+      icon: v.gender === "male" ? "👨" : "👩",
+      badge: v.lang.toUpperCase(),
+      sublabel: v.description.slice(0, 30) + "...",
+    }));
 
   return (
     <div className="dubbing-studio-container">
@@ -512,7 +614,7 @@ export default function DubbingStudioView({
             {voiceModels.length > 0
               ? `${voiceModels.filter((m) => m.downloaded).length}/${voiceModels.length} model đã tải`
               : "Đang nạp danh sách…"}{" "}
-            • Kokoro offline dùng ngay
+            • Bấm ▸ xem giọng Nam/Nữ
           </span>
           <span className="dubbing-voice-hub-caret">{showVoiceHub ? "▲" : "▼"}</span>
         </button>
@@ -523,7 +625,8 @@ export default function DubbingStudioView({
               <p className="dubbing-card-desc" style={{ margin: "4px 0" }}>Đang nạp danh sách model…</p>
             )}
             {(["clone", "preset", "diarization", "cloud"] as const).map((cat) => {
-              const items = voiceModels.filter((m) => m.category === cat);
+              const baseItems = voiceModels.filter((m) => m.category === cat);
+              const items = cat === "preset" ? [EDGE_MODEL, ...baseItems] : baseItems;
               if (items.length === 0) return null;
               return (
                 <div key={cat}>
@@ -531,38 +634,134 @@ export default function DubbingStudioView({
                   {items.map((m) => {
                     const prog = voiceProgress[m.id];
                     const busy = !!prog && prog.phase !== "done" && prog.phase !== "error";
+                    const modelVoices = voicesForModel(m.id);
+                    const isOpen = expandedModel === m.id;
                     return (
-                      <div key={m.id} className="dubbing-voice-hub-row">
-                        <span className="dubbing-voice-hub-name">{m.name}</span>
-                        <span className="dubbing-voice-hub-size">{formatSizeMb(m.size_mb)}</span>
-                        <span className="dubbing-voice-hub-action">
-                          {m.is_cloud ? (
-                            <span className="dubbing-voice-hub-state cloud">☁️ Dùng API</span>
-                          ) : m.downloaded ? (
-                            <span className="dubbing-voice-hub-state">✅ Đã tải</span>
-                          ) : busy ? (
-                            <span className="dubbing-voice-hub-progress">
-                              <span className="dubbing-voice-hub-plabel">
-                                Đang tải {prog?.percent ?? 0}% — {formatBytes(prog?.downloaded_bytes)} /{" "}
-                                {prog?.total_bytes ? formatBytes(prog.total_bytes) : formatSizeMb(m.size_mb)}
+                      <div key={m.id} className={`dubbing-voice-hub-block ${isOpen ? "is-open" : ""}`}>
+                        <div className="dubbing-voice-hub-row">
+                          <button
+                            type="button"
+                            className="dubbing-voice-hub-expand"
+                            onClick={() => setExpandedModel(isOpen ? null : m.id)}
+                            title="Xem danh sách giọng Nam/Nữ của model này"
+                          >
+                            {isOpen ? "▾" : "▸"}
+                          </button>
+                          <span
+                            className="dubbing-voice-hub-name"
+                            onClick={() => setExpandedModel(isOpen ? null : m.id)}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {m.name}
+                          </span>
+                          <span className="dubbing-voice-hub-size">{m.size_mb > 0 ? formatSizeMb(m.size_mb) : "—"}</span>
+                          <span className="dubbing-voice-hub-action">
+                            {m.is_cloud ? (
+                              <span className="dubbing-voice-hub-state cloud">☁️ Dùng API</span>
+                            ) : m.downloaded ? (
+                              <span className="dubbing-voice-hub-state">✅ Đã tải</span>
+                            ) : busy ? (
+                              <span className="dubbing-voice-hub-progress">
+                                <span className="dubbing-voice-hub-plabel">
+                                  Đang tải {prog?.percent ?? 0}% — {formatBytes(prog?.downloaded_bytes)} /{" "}
+                                  {prog?.total_bytes ? formatBytes(prog.total_bytes) : formatSizeMb(m.size_mb)}
+                                </span>
+                                <span className="dubbing-voice-hub-bar">
+                                  <span style={{ width: `${prog?.percent ?? 0}%` }} />
+                                </span>
                               </span>
-                              <span className="dubbing-voice-hub-bar">
-                                <span style={{ width: `${prog?.percent ?? 0}%` }} />
-                              </span>
-                            </span>
-                          ) : m.files.length === 0 ? (
-                            <span className="dubbing-voice-hub-state locked">🔒 Cần HF</span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="dubbing-voice-hub-dl"
-                              disabled={voiceBusyId !== null}
-                              onClick={() => handleVoiceDownload(m.id)}
-                            >
-                              ⬇️ Tải về ({formatSizeMb(m.size_mb)})
-                            </button>
-                          )}
-                        </span>
+                            ) : m.files.length === 0 ? (
+                              <span className="dubbing-voice-hub-state locked">🔒 Cần HF</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="dubbing-voice-hub-dl"
+                                disabled={voiceBusyId !== null}
+                                onClick={() => handleVoiceDownload(m.id)}
+                              >
+                                ⬇️ Tải về ({formatSizeMb(m.size_mb)})
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                        {isOpen && (
+                          <div className="dubbing-voice-list">
+                            {modelVoices.length > 0 ? (
+                              <>
+                                {m.id === "kokoro-vi" && (
+                                  <div className="dubbing-voice-list-toolbar">
+                                    {m.downloaded ? (
+                                      kokoroSampleCount >= kokoroVoiceCount && kokoroVoiceCount > 0 ? (
+                                        <span className="dubbing-voice-sample-state">
+                                          ✅ Đã có sẵn mẫu nghe thử {kokoroSampleCount}/{kokoroVoiceCount} giọng — bấm 🔊 để nghe tức thì.
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="dubbing-voice-gen-btn"
+                                          onClick={handleGenerateSamples}
+                                          disabled={generatingSamples}
+                                        >
+                                          {generatingSamples
+                                            ? `⏳ Đang tạo mẫu ${sampleGenProgress?.done ?? 0}/${sampleGenProgress?.total ?? kokoroVoiceCount}…`
+                                            : `🎧 Tạo mẫu nghe thử ${kokoroVoiceCount} giọng (chỉ 1 lần, cache lại)`}
+                                        </button>
+                                      )
+                                    ) : (
+                                      <span className="dubbing-voice-sample-state">
+                                        ⬇️ Tải model Kokoro ở trên để bật nghe thử 14 giọng &amp; đọc offline (0đ, không mạng).
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {[
+                                  { title: "♂ Giọng Nam", list: modelVoices.filter((v) => v.gender === "male") },
+                                  { title: "♀ Giọng Nữ", list: modelVoices.filter((v) => v.gender !== "male") },
+                                ].map(({ title, list }) =>
+                                  list.length === 0 ? null : (
+                                    <div key={title} className="dubbing-voice-group">
+                                      <div className="dubbing-voice-group-title">
+                                        {title} ({list.length})
+                                      </div>
+                                      <div className="dubbing-voice-group-items">
+                                        {list.map((v) => {
+                                          const hasSample = (voiceSamples[m.id] ?? []).includes(
+                                            v.id.replace("kokoro:", "")
+                                          );
+                                          return (
+                                            <span key={v.id} className="dubbing-voice-chip" title={v.description}>
+                                              {cleanVoiceName(v.name)}
+                                              {hasSample && <em className="dubbing-voice-chip-cached">cache</em>}
+                                              <button
+                                                type="button"
+                                                className="dubbing-voice-play"
+                                                onClick={() => handleAuditionVoice(v)}
+                                                disabled={auditionVoiceId === v.id}
+                                                title="Nghe thử giọng này"
+                                              >
+                                                {auditionVoiceId === v.id ? "⏳" : "🔊"}
+                                              </button>
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )
+                                )}
+                              </>
+                            ) : (
+                              <div className="dubbing-voice-note">
+                                {m.category === "clone"
+                                  ? "🧬 Model clone — không có giọng cố định sẵn. Khi nối vào pipeline, bạn cấp 1 clip giọng mẫu 5–10 giây cho MỖI vai để nhân bản chất giọng (khớp voice đa vai)."
+                                  : m.id === "viet-tts"
+                                  ? "🗣️ VietTTS có 24 giọng Việt sẵn (sơn tùng, ngọc ngạn, doraemon…) — danh sách hiện đầy đủ khi engine được nối vào pipeline."
+                                  : m.is_cloud
+                                  ? "☁️ Giọng cloud được chọn tại nhà cung cấp — nhập API key trong tab Cài đặt để dùng."
+                                  : "ℹ️ Model này phục vụ phân vai / tách nhạc — không có danh sách giọng đọc sẵn."}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -947,6 +1146,14 @@ export default function DubbingStudioView({
                       className="dubbing-speaker-label-input"
                       title="Đổi tên/vai nhân vật"
                     />
+                    {duplicateVoiceIds.has(spk.voice) && (
+                      <span
+                        className="dubbing-dup-chip"
+                        title="Vai này đang trùng giọng với vai khác — đổi giọng để khán giả phân biệt được từng nhân vật."
+                      >
+                        ⚠️ Trùng giọng
+                      </span>
+                    )}
                     {project.speakers.length > 1 && (
                       <button
                         type="button"

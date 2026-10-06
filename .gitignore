@@ -83,9 +83,13 @@ src-tauri/models/*.bin
 src-tauri/models/*.gguf
 src-tauri/models/*.downloading
 src-tauri/models/.cache/
+src-tauri/models/voice/
 !models/.gitkeep
 !models/README.md
 !src-tauri/models/.gitkeep
+
+# Runtime cache (scratch)
+.cache/
 
 # === M4: UI mockup previews (AI-generated, not source) ===
 preview-*.png

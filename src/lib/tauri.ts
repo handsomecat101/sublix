@@ -67,6 +67,15 @@ export interface ModelDownloadProgress {
   error?: string;
 }
 
+export interface VoiceSampleProgress {
+  model_id: string;
+  voice_id: string;
+  index: number;
+  total: number;
+  done: boolean;
+  error?: string | null;
+}
+
 export interface SetupStatus {
   has_whisper_binary: boolean;
   stt_engine: string | null;
@@ -335,6 +344,18 @@ export const sublix = {
 
   async voiceModelDownload(id: string): Promise<void> {
     return await invoke<void>("voice_model_download", { id });
+  },
+
+  async voiceSampleList(modelId: string): Promise<string[]> {
+    return await invoke<string[]>("voice_sample_list", { modelId });
+  },
+
+  async voiceSampleGenerate(modelId: string): Promise<number> {
+    return await invoke<number>("voice_sample_generate", { modelId });
+  },
+
+  async voiceSampleData(modelId: string, voiceId: string): Promise<string | null> {
+    return await invoke<string | null>("voice_sample_data", { modelId, voiceId });
   },
 
   async dubbingAnalyze(

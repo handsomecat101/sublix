@@ -19,6 +19,7 @@
 | `BUG-H05` | Whisper CUDA báo thiếu `cublas64_12.dll` trên máy chưa cài CUDA Toolkit | `src-tauri/Cargo.toml` / runtime | Luôn sao chép các DLL cu12 runtime (`cublas64_12.dll`, `cudart64_12.dll`) đi kèm thư mục release | ✅ Fixed |
 | `BUG-H06` | Phân vai Diarization bị gán 1 người nói do mốc SRT Whisper liên tục (`pause = 0`) | `src-tauri/src/dubbing/mod.rs` | Kích hoạt đổi vai khi câu trước kết thúc bằng dấu chấm/chấm than/hỏi (`prev_ends_terminal`) | ✅ Fixed |
 | `BUG-H07` | Lỗi WebView2 `ERR_CONNECTION_REFUSED` do build bằng `cargo build` thô | Tauri Build / Config | CẤM dùng `cargo build --release` để build app; bắt buộc dùng `npx tauri build --no-bundle` (hoặc chạy dev mode `npm run tauri dev`) | ✅ Fixed |
+| `BUG-H08` | Dev mode: app ghi file runtime (samples/model) vào `src-tauri/models/...` → `tauri dev` watcher tưởng đổi code → **tự restart & giết tiến trình đang chạy** (tạo mẫu nghe thử tạo ra 0 file) | `config.rs` app_base_dir (dev = `CARGO_MANIFEST_DIR`) + tauri dev watcher | GUI-test tính năng ghi model: chạy `npm run tauri dev -- --no-watch`; release không dính | 🟡 Workaround |
 
 ---
 

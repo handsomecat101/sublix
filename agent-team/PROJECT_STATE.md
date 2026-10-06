@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.9.6` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
+| **Bản Build Hiện Tại** | `v0.9.9` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
 | **Git Commit** | `v0.9.6` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Downloader: hết kẹt 360p → 4K, chi tiết tải + link gốc/Copy, chống 403 bằng curl_cffi) |
+| **Trạng Thái** | 🟢 Active (Voice catalog theo model + mẫu nghe thử cache + khớp voice đa vai xong — v0.9.9; Downloader đầy đủ từ v0.9.6) |
 
 ---
 
@@ -37,6 +37,9 @@
 |----|------|-------|----------|--------|----------------|
 | `TSK-FIX-BUG044-058` | ~~Vá 15 lỗi Tab Tải Video~~ | **Mavis (MiniMax-M3)** | 🔴 DONE | ✅ All 15 done (3 commits: bd6a9d6/6739ea7/a142999), Job Object deferred | `agent-team/BUG-FIX-REPORT-BUG044-058.md` |
 | `TSK-FIX-R2-001-009` | ~~Vòng 2 nốt 9 lỗi R2-01..R2-09 (sau audit)~~ | **Mavis + alex** | 🔴 DONE | ✅ R2-01..R2-09 đã fix xong (commit `d2d3f7c` R2-08+`1e2bd3d` R2-02..R2-07+R2-09), build xanh | `agent-team/BUG-FIX-REPORT-VONG2.md` |
+| `TSK-AUDIT-VOICE-2026-10-06` | **Audit 17 mục tạo giọng** theo `AUDIT_TAO_GIONG.md` (BƯỚC 1: điền bảng) + **viết code cho thật** | **CommandCode** (chuyển giao 2026-10-06 15:38) | 🔴 HIGH | **PO chuyển giao cho CommandCode lúc 15:38.** Mavis đã điền bảng code-level (17/17 mục, evidence `path:line`); CommandCode tiếp tục: GUI test thật 12 mục cần UI + viết code cho 3 mục "trên giấy" (#11-13 F5-TTS/Viterbox/Kokoro) + sửa lời quảng cáo #14-15. Bằng chứng vào `test-output-audit-giong/`. | `agent-team/AUDIT_TAO_GIONG.md` (bảng đã điền) |
+| `TSK-AUDIT-SUB-2026-10-06` | ~~Audit pipeline tạo phụ đề (file_sub.rs + stt/ + translate/) — đo thời gian thực tế + tìm bottleneck~~ | **Mavis + sub-agent (worker)** | 🔴 DONE | ✅ Worker đo 3 stage end-to-end trên video 21:43. Tổng ~64 phút (large model CPU) / ~41 phút (tiny model). 5 findings (2 🔴 blocker + 3 🟡 UX). Bằng chứng file thật 10 file trong `test-output-audit-sub/`. | `agent-team/AUDIT_SUB_REPORT.md` (22KB, 12 sections) |
+| `TSK-VOICE-CATALOG-2026-10-07` | ~~Voice Catalog theo Model + mẫu nghe thử trước khi chọn + khớp voice đa vai~~ | **CommandCode** | 🔴 HIGH | ✅ DONE (v0.9.9) — model bấm ▸ hiện 7 nam/7 nữ (cả TRƯỚC khi tải); 🎧 tạo mẫu 14/14 cache → nghe tức thì (verified audio thật); multi-role 5 vai→5 giọng khác nhau + chip ⚠️ Trùng giọng. Bằng chứng `test-output-audit-giong/v099_*.png`. Dev-test cần `--no-watch` (BUG-H08) | `dubbing/mod.rs`, `lib.rs`, `DubbingStudioView.tsx/css`, `tauri.ts` |
 
 ---
 
@@ -55,6 +58,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FEAT-KOKORO-OFFLINE` | Feat: dời Model Giọng Nói vào tab "Studio Lồng Tiếng AI" (panel gọn "🎛 Chọn Giọng & Tải Model") + engine **Kokoro-Vietnamese OFFLINE** (sidecar onnxruntime+vig2p, retry-rồi-skip câu lỗi, 14 VoicePreset `kokoro:*`) | **CommandCode** | 2026-10-06 | E2E Kokoro offline → `test_dubbing_input/kokoro_DUBBED_TEST.mp4` (378.671B, 26s); 2 sample mp3; GUI agent-browser xác nhận panel + tab Models đã sạch mục cũ |
 | `TSK-FIX-V095-QUALITY` | Fix v0.9.5: chất lượng tải kẹt 360p (bỏ ép player_client android — SABR) | **CommandCode** | 2026-10-06 | PO tự verify: DeepSeek V4.1 → 1920×1080 (309.7MB); CLI 720p → 1280×720 |
 | `TSK-FEAT-V096-DETAILS` | Feat v0.9.6: hiển thị chất lượng/dung lượng/đường dẫn + "đã tải/tổng" + link gốc & Copy link + fix 403 (curl_cffi) | **CommandCode** | 2026-10-06 | GUI verify đủ chips+link+copy; backfill mục cũ OK; BBB retry 1280×720; exe v0.9.6 |
 | `TSK-FEAT-V094-PLAY-FOLDER` | Feat v0.9.4: nút "▶ Chạy Video" + hiển thị đường dẫn thư mục tải + fix nút "Mở Thư Mục" (SHOpenFolderAndSelectItems) + mặc định tắt sub | **CommandCode** | 2026-10-06 | GUI E2E: VLC mở đúng file + Explorer mở đúng thư mục; exe v0.9.4. Theo yêu cầu trực tiếp của PO |

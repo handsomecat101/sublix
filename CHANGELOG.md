@@ -10,6 +10,15 @@
 
 ---
 
+## v0.9.9 — 2026-10-07
+### Studio Lồng Tiếng: Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử Cache + Khớp Voice Đa Vai
+- **Chọn model → hiện danh sách giọng (kể cả TRƯỚC khi tải):** mỗi model trong panel "🎛 Chọn Giọng & Tải Model" giờ mở rộng được (bấm ▸) — Kokoro-Vietnamese hiện đủ **7 giọng Nam + 7 giọng Nữ**, thêm card **Edge Neural (có sẵn — 8 giọng)**; model clone ghi rõ sẽ cần 1 clip giọng mẫu 5–10 giây cho mỗi vai.
+- **🎧 Mẫu nghe thử tạo 1 lần — nghe lại tức thì:** nút tạo mẫu cho 14 giọng Kokoro (một lần ~1 phút, hiện tiến trình "Đang tạo mẫu X/14…"), lưu cache tại `models/voice/kokoro-vi/samples/*.wav`; lần sau bấm 🔊 trả audio tức thì từ cache (đã xác minh phát thật 4.92s).
+- **Khớp voice đa vai:** pool auto-cast mở rộng **7 nam + 7 nữ** (cả 2 nhánh heuristic + LLM), các vai được gán giọng **khác nhau, xen kẽ Nam/Nữ**; bộ chọn giọng hiện nhãn rõ "♂ Nam — Tuấn Ngọc (Kokoro offline)"; thêm nhân vật mới tự chọn giọng chưa dùng; **cảnh báo ⚠️ "Trùng giọng"** khi 2 vai dùng chung giọng (E2E: 5 vai → 5 giọng khác nhau).
+- Kỹ thuật: Tauri commands `voice_sample_list` / `voice_sample_generate` / `voice_sample_data`; event `voice:sample_progress`; mẫu lưu WAV 24kHz mono.
+
+---
+
 ## v0.9.8 — 2026-10-06
 ### Studio Lồng Tiếng: Nút "Mở Thư Mục Lồng Tiếng" & "Mở Thư Mục File Gốc"
 - **Vấn đề (anh Tuấn báo):** Tab Lồng Tiếng KHÔNG có nút để mở folder chứa file lồng tiếng đã xuất — user phải tự explorer đến folder.
