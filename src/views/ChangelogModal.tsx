@@ -23,10 +23,25 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.3",
+    date: "06/10/2026",
+    title: "Sửa Lỗi 'Không In Ra Đường Dẫn File' Oan",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🔧",
+        items: [
+          "Video tải xong thật nhưng app báo Lỗi oan ('không in ra đường dẫn file'). Nguyên nhân: chuỗi đường dẫn do yt-dlp in ra thỉnh thoảng bị hỏng mã hoá trên Windows (C: thành C#, mất ký tự fullwidth) nên app không tìm thấy file dù nó đã nằm trên ổ cứng.",
+          "Đã sửa: ép UTF-8 cho output yt-dlp + khi exit thành công mà chưa xác minh được file, app quét thư mục tải tìm đúng file theo mã video làm bằng chứng gốc. Bấm 'Thử lại' giờ cũng xoá cảnh báo lỗi cũ khi thành công.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.2",
     date: "06/10/2026",
     title: "Sửa Lỗi Kiểm Tra Link + Tải Phụ Đề",
-    isCurrent: true,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

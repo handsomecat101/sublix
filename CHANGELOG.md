@@ -10,6 +10,14 @@
 
 ---
 
+## v0.9.3 — 2026-10-06
+### Sửa Lỗi Hiển Thị Oan "Không In Ra Đường Dẫn File"
+- **Hiện tượng**: Video tải xong thật (file nằm trên ổ cứng) nhưng app báo ❌ Lỗi *"yt-dlp đã thoát thành công nhưng không in ra đường dẫn file"* — anh Tuấn gặp với video "Arthas: Betrayer of the Light | Warcraft Cinematic" (45MB đã tải xong nhưng UI báo lỗi).
+- **Root cause**: chuỗi đường dẫn do yt-dlp in ra stdout **thỉnh thoảng bị hỏng mã hoá trên Windows** (quan sát bằng byte: `C:` biến thành `C#`, ký tự fullwidth `：｜` bị xoá) → app so chuỗi hỏng với ổ đĩa → không thấy file → báo lỗi oan dù yt-dlp exit 0. Không tái hiện ổn định (phụ thuộc trạng thái môi trường console của máy).
+- **Fix**: (1) Ép UTF-8 output cho mọi tiến trình yt-dlp (`PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1`); (2) **Không tin chuỗi in ra nữa** — khi yt-dlp exit 0 mà chưa xác minh được file, app quét thư mục tải tìm file media đúng **mã video** (`[<id>]`) làm bằng chứng gốc (an toàn theo luật BUG-046: không bao giờ lấy file của video khác); (3) UI: "Thử lại" thành công sẽ xoá cảnh báo lỗi cũ.
+
+---
+
 ## v0.9.2 — 2026-10-06
 ### Sửa Lỗi Nhỏ: Kiểm Tra Link + Tải Phụ Đề
 - **Kiểm Tra Link (fetch_video_info)**: Root cause tìm được: từ bản vá R2-08.3, hàm chuyển sang `spawn()` + `wait_with_output()` để có PID kill orphan nhưng quên pipe stdout/stderr — output luôn rỗng, nên khi yt-dlp exit 0 (kiểm tra thành công) app throw lỗi serde thô `EOF while parsing a value at line 1 column 0`; khi exit 1 thì mất luôn thông báo stderr. Đã sửa: thêm `Stdio::piped()`, tự dò JSON object (`{` đầu → `}` cuối, chấp nhận banner nhiễu), fallback thông báo thân thiện "Video không khả dụng / bị xóa / bị chặn khu vực".
