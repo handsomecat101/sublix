@@ -9,6 +9,16 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 13:00 - CommandCode
+- **Loại:** `@done` (v0.9.5 + v0.9.6 — theo yêu cầu PO: fix chất lượng, chi tiết tải, link gốc + copy, tiến trình)
+- **v0.9.5 (chất lượng)**: bỏ ép `youtube:player_client=android,web_safari,ios` (YouTube bóp android SABR → mọi video chỉ còn 360p). Verify: PO tự tải DeepSeek V4.1 → **1920×1080 (309.7 MB)**; CLI 720p → 1280×720.
+- **v0.9.6 (hiển thị)**: danh sách tải hiện 🎞 chất lượng + 💾 dung lượng thật + 📁 đường dẫn; khi tải hiện "đã tải / tổng"; backfill mục cũ qua `downloader_file_meta`; event `downloader:meta`. Thêm 🔗 link gốc + nút "📋 Copy link" trên mọi mục (link die còn copy tải lại).
+- **Fix 403**: cài `curl_cffi` cho yt-dlp (impersonation) — BBB retry OK 1280×720 (77.8MB). **Máy mới nhớ `pip install curl_cffi`.**
+- **Verify GUI**: chips + link + copy hiện đủ trên danh sách; 10/10 test; exe v0.9.6 build OK.
+- **Việc tiếp theo:** PO nghiệm thu; file cũ 360p muốn nét phải xóa rồi tải lại.
+
+---
+
 ### 2026-10-06 12:00 - CommandCode
 - **Loại:** `@done` (v0.9.4 — theo yêu cầu PO: nút Chạy Video + chỉ rõ thư mục tải)
 - **Tính năng:** ▶ Chạy Video (ShellExecuteW — mở bằng player mặc định của máy); header hiện "📁 File tải về được lưu tại: <path>" (command `downloader_downloads_dir`); checkbox phụ đề mặc định TẮT.
@@ -74,13 +84,6 @@
 - **Verify:** `cargo check` ✅ 0 errors/warnings (7.27s), `npm run build` ✅ (1.81s), `npx tauri build --no-bundle` ✅ (1m08s → `sublix.exe`).
 - **Việc tiếp theo (@CommandCode, @Anh Tuấn):** Mời CommandCode và Anh Tuấn kiểm tra lần cuối để nghiệm thu Phase 1.
 
----
-
-### 2026-10-05 01:38 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
-- **Loại:** `@assign → Gemini` (nhận việc theo lời PO nhờ — làm cho nhanh)
-- **Tóm tắt:** Kiểm tra vòng 2: **9/10 đạt** (khen Mavis + alex — Job Object làm thật, rất tốt!). Còn đúng **4 việc nhỏ** `R3-01` → `R3-04`: 2 lỗi mới do vòng 2 tạo ra + nốt mục cookie dự phòng + nhóm vặt. Chi tiết + cách sửa từng dòng + cách test: **`FIX_GUIDE_DOWNLOAD_TAB.md` → mục "📌 VÒNG 3"**.
-- **Yêu cầu:** làm đúng thứ tự R3-01 → R3-04 (hai mục 🔴 trước), commit git từng mục, tự đánh dấu checklist cuối mục VÒNG 3; vẫn giữ **LUẬT BẮT BUỘC** đầu file hướng dẫn (`CẤM cargo build --release`, đóng gói `npx tauri build --no-bundle`, tắt app trước khi build). Phạm vi code như cũ: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`.
-- **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần cuối, đạt là Anh Tuấn **nghiệm thu Phase 1** (bấm tải thử video thật).
 
 
 

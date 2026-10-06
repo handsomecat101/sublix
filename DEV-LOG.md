@@ -615,6 +615,34 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-06 — v0.9.4: nút Chạy Video + thư mục tải rõ ràng + fix Mở Thư Mục (SHOpenFolderAndSelectItems)*
+## Session 17 — 2026-10-06 (v0.9.5: Fix chất lượng 360p + v0.9.6: Chi tiết tải, Link gốc, Copy, Fix 403)
+
+### v0.9.5 — Hết kẹt 360p (PO báo: MAX mà toàn 360p)
+- Đo thực tế: Arthas & AI Just Crossed = **640x360**; `-F` với cấu hình cũ chỉ còn đúng 1 format progressive 360p.
+- Root cause: cấu hình ép `youtube:player_client=android,web_safari,ios` — YouTube bóp client android về SABR-only ⇒ mọi format DASH (4K/1440p/1080p/720p) biến mất.
+- Fix: **bỏ ép player_client** (giữ js-runtime + ejs solver). `-F` với default: đủ 4K/1440p/1080p/720p. CLI 720p → **1280x720**. **PO tự verify: tải "DeepSeek V4.1" → 1920×1080 (309.7 MB).**
+
+### v0.9.6 — Chi tiết tải + Link gốc + Copy + Fix 403 (theo yêu cầu PO)
+- **Danh sách tải (completed)**: hiện 🎞 chất lượng (ffprobe) · 💾 dung lượng thật (fs metadata) · 📁 đường dẫn đầy đủ. **Khi đang tải**: hiện "đã tải / tổng" (📥 202.0 MB / 450.0 MB) kèm % + tốc độ + ETA.
+- **Backfill**: command `downloader_file_meta` + effect một-lần — mục cũ tự được đo lại size + resolution khi mở app.
+- **🔗 Link video gốc + nút "📋 Copy link"** trên MỌI mục (link die/tải lỗi còn copy dán lại) — clipboard API + fallback execCommand.
+- **Fix 403 "unable to download video data"** (gặp với Big Buck Bunny): `python -m pip install curl_cffi` vào Python313 → hết warning "no impersonate target"; retry OK.
+
+### Kỹ thuật (v0.9.6)
+- Event mới `downloader:meta {id, size_text, resolution}` phát khi hoàn tất (payload progress giữ nguyên); struct `DownloadMetaPayload`/`FileMeta`; helper `format_size_text` + `probe_media_meta`/`probe_video_resolution` (ffprobe cạnh ffmpeg).
+
+### Verification (GUI thật, agent-browser)
+- ✅ Backfill: DeepSeek "1920×1080 (Full HD) · 309.7 MB · 📁..."; Rick "1280×720 (HD) · 28.6 MB".
+- ✅ BBB sau khi cài curl_cffi: Thử lại → **1280x720 (77.8 MB)**; item hiện đủ chips + link + Copy.
+- ✅ 6 mục đều có 🔗 link + 📋 Copy link; cargo check 0/0; 10/10 test; exe v0.9.6 (~15.2MB).
+
+### Ghi chú vận hành (quan trọng)
+- **Máy cần `curl_cffi`** cho yt-dlp (đã cài); máy mới: `python -m pip install curl_cffi`.
+- File cũ đã tải 360p (Arthas, AI Just Crossed): muốn bản nét thì **xóa file cũ trong downloads rồi tải lại** (trùng tên ⇒ yt-dlp báo "đã tải rồi").
+- Sự cố nhỏ khi dọn test: bấm nhầm nút xoá 1 mục danh sách (Rick) do chọn ref cuối thay vì đối chiếu cặp heading↔nút — đã khôi phục bằng tải lại link. **Bài học: tự động hoá phải pair ref theo item, không lấy ref[-1] mù.**
+
+---
+
+*Last updated: 2026-10-06 — v0.9.5 (fix 360p) + v0.9.6 (chi tiết tải, link gốc + copy, fix 403 bằng curl_cffi)*
 
 

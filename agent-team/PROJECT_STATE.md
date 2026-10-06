@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.9.4` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
-| **Git Commit** | `v0.9.4` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Đã hoàn thiện Drag & Drop Studio + Custom Glass Select + AI Visual Identity) |
+| **Bản Build Hiện Tại** | `v0.9.6` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
+| **Git Commit** | `v0.9.6` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Active (Downloader: hết kẹt 360p → 4K, chi tiết tải + link gốc/Copy, chống 403 bằng curl_cffi) |
 
 ---
 
@@ -55,6 +55,8 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-V095-QUALITY` | Fix v0.9.5: chất lượng tải kẹt 360p (bỏ ép player_client android — SABR) | **CommandCode** | 2026-10-06 | PO tự verify: DeepSeek V4.1 → 1920×1080 (309.7MB); CLI 720p → 1280×720 |
+| `TSK-FEAT-V096-DETAILS` | Feat v0.9.6: hiển thị chất lượng/dung lượng/đường dẫn + "đã tải/tổng" + link gốc & Copy link + fix 403 (curl_cffi) | **CommandCode** | 2026-10-06 | GUI verify đủ chips+link+copy; backfill mục cũ OK; BBB retry 1280×720; exe v0.9.6 |
 | `TSK-FEAT-V094-PLAY-FOLDER` | Feat v0.9.4: nút "▶ Chạy Video" + hiển thị đường dẫn thư mục tải + fix nút "Mở Thư Mục" (SHOpenFolderAndSelectItems) + mặc định tắt sub | **CommandCode** | 2026-10-06 | GUI E2E: VLC mở đúng file + Explorer mở đúng thư mục; exe v0.9.4. Theo yêu cầu trực tiếp của PO |
 | `TSK-FIX-V093-FALSEERR` | Fix v0.9.3: lỗi báo oan "không in ra đường dẫn file" (path yt-dlp in ra mất ký tự codepage) | **CommandCode** | 2026-10-06 | Ép UTF-8 output + recovery quét ổ đĩa theo mã video (bằng chứng gốc) + UI xoá cảnh báo cũ khi Thử lại; GUI retry E2E xanh (Hoàn Thành 3→4); exe v0.9.3. Commits `e48712c`+`8162033` |
 | `TSK-FIX-V092-EOF-429` | Fix v0.9.2: EOF "Kiểm Tra Link" + HTTP 429 phụ đề (2 bug từ handoff Mavis) | **CommandCode** | 2026-10-06 | Root cause EOF = thiếu pipe stdio từ R2-08.3; fix pipe + parse JSON an toàn + báo lỗi thân thiện; `--sleep-subtitles 5` + giữ ✅ video khi sub 429. Build v0.9.2 xanh, 8/8 test. Commits `54f5ae2`+`6d7bc1b` |

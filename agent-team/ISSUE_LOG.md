@@ -112,6 +112,12 @@
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-V094-01` | Nút "Mở Thư Mục": spawn `explorer.exe /select,"file"` từ app thành công nhưng KHÔNG mở cửa sổ (gọi y hệt từ PowerShell thủ công thì mở được) | `downloader/mod.rs` (`reveal_downloaded_file`) | KHÔNG spawn `explorer.exe /select,"path"` từ Rust Command (argv-quoting bị explorer parse sai) — dùng shell API `SHOpenFolderAndSelectItems` | ✅ Fixed |
 
+### 🧾 2 Lỗi Fix Tại v0.9.5–v0.9.6 (CommandCode — 2026-10-06):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-V095-01` | Chọn "MAX" nhưng mọi video chỉ tải được 640x360 — ép `youtube:player_client=android,web_safari,ios` làm YouTube ẩn hết format DASH (SABR-only) | `downloader/mod.rs` (`build_download_command`, `fetch_video_info`) | KHÔNG ép player_client cũ cho YouTube — để yt-dlp tự chọn client (kèm js-runtime + ejs solver); kiểm tra bằng `-F` | ✅ Fixed |
+| `BUG-V095-02` | Tải video gặp `ERROR: unable to download video data: HTTP Error 403: Forbidden` (yt-dlp thiếu impersonation target) | Môi trường Python (không phải code) | Cài `curl_cffi` (`python -m pip install curl_cffi`) — máy mới BẮT BUỘC có | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -265,4 +271,16 @@
 - **File:** `src-tauri/src/downloader/mod.rs` (`reveal_downloaded_file`)
 - **Root Cause:** `Command::new("explorer.exe").arg("/select,\"file\"")` — Rust escape dấu nháy trong argv (`\"`), explorer.exe parse kiểu riêng nên hiểu sai tham số `/select` → tiến trình chạy xong nhưng không có cửa sổ nào mở (không lỗi, không cảnh báo). Gọi cùng chuỗi từ PowerShell thủ công thì mở bình thường — chỉ hỏng khi đi qua Rust Command.
 - **Cách fix & Bài học:** Dùng shell API chuẩn `SHParseDisplayName` + `SHOpenFolderAndSelectItems` (+ `ILFree`; cần features `Win32_UI_Shell_Common`, `Win32_System_Com`). *Mọi tương tác shell (mở file/thư mục) nên đi qua Shell API — đừng spawn explorer với argument phức tạp từ Rust.*
+
+### [BUG-V095-01] MAX nhưng video chỉ 640x360 — ép player_client cũ làm mất hết format DASH
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** Anh Tuấn (Telegram: "ghi là best mà toàn 360p") | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`build_download_command`, `fetch_video_info`)
+- **Root Cause:** Commit "YouTube 2026 fix" cũ ép `--extractor-args youtube:player_client=android,web_safari,ios`. YouTube đã bóp client android về SABR-only (format thiếu URL bị skip) ⇒ chỉ còn progressive 360p; `bestvideo+bestaudio` không còn gì để ghép ⇒ rơi về `/best` = format 18 (640x360).
+- **Cách fix & Bài học:** Bỏ ép player_client — để yt-dlp tự chọn (js-runtime + `ejs:github` là đủ với 2026.08+). Verify `-F`: 4K/1440p/1080p/720p đủ; tải thật 720p → 1280x720; PO verify 1080p (DeepSeek, 309.7MB). *Cấu hình "chống cháy" cho YouTube có hạn sử dụng — mỗi lần YouTube đổi là phải test lại bằng `-F` trước khi ép cờ.*
+
+### [BUG-V095-02] Tải video 403 Forbidden — yt-dlp thiếu impersonation target (curl_cffi)
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** CommandCode (GUI test Big Buck Bunny) | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** Môi trường Python313 của máy (không phải code dự án)
+- **Root Cause:** yt-dlp cần impersonation (giả danh trình duyệt) cho một số request media; máy chưa cài `curl_cffi` nên in warning "The extractor specified to use impersonation ... no impersonate target is available" ⇒ media URL trả 403.
+- **Cách fix & Bài học:** `python -m pip install curl_cffi` (đã cài, warning hết; BBB retry tải OK 1280x720). *Máy mới/agent mới setup môi trường PHẢI cài kèm `curl_cffi` — ghi vào checklist cài đặt.*
 
