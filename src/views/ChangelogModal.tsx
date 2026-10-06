@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.2",
+    date: "06/10/2026",
+    title: "Sửa Lỗi Kiểm Tra Link + Tải Phụ Đề",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🔧",
+        items: [
+          "Kiểm Tra Link: lỗi 'EOF while parsing a value at line 1 column 0' khi dán link không khả dụng. Root cause: fetch_video_info quên pipe stdout/stderr nên output luôn rỗng. Đã sửa: đọc JSON chuẩn + tự dò payload giữa banner nhiễu, fallback thông báo thân thiện 'Video không khả dụng (đã xóa / riêng tư / chặn khu vực)'.",
+          "Tải Phụ Đề: 8 request phụ đề liên tiếp (4 ngôn ngữ × 2 loại subs) gây HTTP 429 'Too Many Requests'. Đã thêm --sleep-subtitles 5 để yt-dlp tự delay 5 giây giữa mỗi request. Nếu YouTube vẫn giới hạn khi chạy dồn (rate-limit phía server): job không còn báo Lỗi oan — video đã tải xong vẫn giữ trạng thái Hoàn thành kèm cảnh báo rõ ràng 'phụ đề chưa tải được (429), thử lại sau vài phút'.",
+          "Window title: đồng bộ title bar 2 cửa sổ (main + overlay) về đúng phiên bản v0.9.2 hiển thị trên sidebar.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.1",
     date: "06/10/2026",
     title: "Sửa Window Title Version Mismatch",
-    isCurrent: true,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

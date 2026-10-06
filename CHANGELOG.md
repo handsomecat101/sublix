@@ -10,6 +10,14 @@
 
 ---
 
+## v0.9.2 — 2026-10-06
+### Sửa Lỗi Nhỏ: Kiểm Tra Link + Tải Phụ Đề
+- **Kiểm Tra Link (fetch_video_info)**: Root cause tìm được: từ bản vá R2-08.3, hàm chuyển sang `spawn()` + `wait_with_output()` để có PID kill orphan nhưng quên pipe stdout/stderr — output luôn rỗng, nên khi yt-dlp exit 0 (kiểm tra thành công) app throw lỗi serde thô `EOF while parsing a value at line 1 column 0`; khi exit 1 thì mất luôn thông báo stderr. Đã sửa: thêm `Stdio::piped()`, tự dò JSON object (`{` đầu → `}` cuối, chấp nhận banner nhiễu), fallback thông báo thân thiện "Video không khả dụng / bị xóa / bị chặn khu vực".
+- **Tải Phụ Đề (HTTP 429)**: Trước đây Sublix gửi 8 request HTTP liên tiếp đến YouTube để lấy 4 ngôn ngữ phụ đề (×2 loại subs), gây HTTP 429 "Too Many Requests". Giờ thêm `--sleep-subtitles 5` để yt-dlp tự delay 5s giữa mỗi request sub (verify CLI: mức 2s vẫn dính 429 khi chạy dồn, mức 5s qua sạch ở lượt chạy kế tiếp). Nếu YouTube vẫn giới hạn khi chạy dồn (rate-limit phía server, sleep không xóa 100%): job **không còn báo ❌ Lỗi oan** — video đã tải xong vẫn giữ ✅ Hoàn thành, kèm cảnh báo ⚠️ "phụ đề chưa tải được (429), thử lại sau vài phút" ngay trên UI (lỗi được hiện rõ, không im lặng).
+- **Window title**: đồng bộ title bar 2 cửa sổ (main + overlay) về `v0.9.2` — khớp sidebar/Changelog (bản v0.9.1 trước đó còn để sót `v0.9.0`).
+
+---
+
 ## v0.9.1 — 2026-10-06
 ### Sửa Lỗi Window Title Version Mismatch
 - Window title (title bar + taskbar) của 2 window (`main` + `overlay`) bị hardcode `v0.8.0` trong `src-tauri/tauri.conf.json` dù sidebar/Changelog đã hiển thị `v0.9.0`.
