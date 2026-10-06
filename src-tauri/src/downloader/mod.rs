@@ -329,6 +329,19 @@ pub fn find_js_runtime() -> Result<Option<(String, PathBuf)>> {
         p.exists().then_some(p)
     }
 
+    #[cfg(windows)]
+    {
+        for candidate in &[
+            r"C:\Program Files\nodejs\node.exe",
+            r"C:\Program Files (x86)\nodejs\node.exe",
+        ] {
+            let p = PathBuf::from(candidate);
+            if p.exists() {
+                return Ok(Some(("node".to_string(), p)));
+            }
+        }
+    }
+
     let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
     if let Some(p) = lookup("node", exe_suffix) {
         return Ok(Some(("node".to_string(), p)));
@@ -407,10 +420,10 @@ pub fn build_format_args(format: &str) -> Vec<String> {
             "--audio-quality".to_string(),
             "0".to_string(),
         ],
-        "360p" => vec!["-f".to_string(), "best[height<=360]/best".to_string()],
-        "480p" => vec!["-f".to_string(), "best[height<=480]/best".to_string()],
-        "720p" => vec!["-f".to_string(), "best[height<=720]/best".to_string()],
-        "1080p" => vec!["-f".to_string(), "best[height<=1080]/best".to_string()],
+        "360p" => vec!["-f".to_string(), "bestvideo[height<=360]+bestaudio/best[height<=360]/best".to_string()],
+        "480p" => vec!["-f".to_string(), "bestvideo[height<=480]+bestaudio/best[height<=480]/best".to_string()],
+        "720p" => vec!["-f".to_string(), "bestvideo[height<=720]+bestaudio/best[height<=720]/best".to_string()],
+        "1080p" => vec!["-f".to_string(), "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best".to_string()],
         "1440p" | "2k" => vec![
             "-f".to_string(),
             // BUG-058: separate video + audio streams so a 1440p result
@@ -424,6 +437,10 @@ pub fn build_format_args(format: &str) -> Vec<String> {
             // out of yt-dlp is to grab video+audio separately and let
             // `--merge-output-format mp4` mux them.
             "bestvideo[height>=2160]+bestaudio/bestvideo[height>=1440]+bestaudio/best".to_string(),
+        ],
+        "max" => vec![
+            "-f".to_string(),
+            "bestvideo+bestaudio/best".to_string(),
         ],
         _ => vec![
             "-S".to_string(),
@@ -621,10 +638,18 @@ fn build_download_command(
         cmd.arg("--remote-components").arg("ejs:github");
     }
 
+    // Ensure yt-dlp knows where ffmpeg is for muxing video+audio and audio conversion
+    let ffmpeg_bin = crate::dubbing::find_ffmpeg();
+    if ffmpeg_bin.exists() {
+        if let Some(ffmpeg_dir) = ffmpeg_bin.parent() {
+            cmd.arg("--ffmpeg-location").arg(ffmpeg_dir);
+        }
+    }
+
     cmd.arg("-o")
         .arg(&out_template)
         .arg("--newline")
-        .arg("--no-ansi")
+        .arg("--no-colors")
         .arg("--no-warnings")
         .arg("--no-playlist")
         .arg("--progress-template")
@@ -1525,13 +1550,16 @@ mod tests {
         assert!(m4a_args.contains(&"m4a".to_string()));
 
         let f1080 = build_format_args("1080p");
-        assert_eq!(f1080, vec!["-f", "best[height<=1080]/best"]);
+        assert_eq!(f1080, vec!["-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"]);
 
         let f4k = build_format_args("4k");
         assert_eq!(f4k, vec!["-f", "bestvideo[height>=2160]+bestaudio/bestvideo[height>=1440]+bestaudio/best"]);
 
         let max_args = build_format_args("max");
-        assert_eq!(max_args, vec!["-S", "res:1080,ext:mp4:m4a,size:br"]);
+        assert_eq!(max_args, vec!["-f", "bestvideo+bestaudio/best"]);
+
+        let default_args = build_format_args("other");
+        assert_eq!(default_args, vec!["-S", "res:1080,ext:mp4:m4a,size:br"]);
     }
 
     #[test]
