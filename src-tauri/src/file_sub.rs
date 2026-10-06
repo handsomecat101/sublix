@@ -324,7 +324,17 @@ pub fn generate_file_subtitles(
         .arg("-of")
         .arg(&temp_srt_stem)
         .arg("--max-len")
-        .arg("60");
+        .arg("60")
+        .arg("-bo")
+        .arg("1")
+        .arg("-bs")
+        .arg("1")
+        .arg("-t")
+        .arg("8");
+
+    if _engine == crate::stt::SttEngine::Cuda {
+        whisper_cmd.arg("-fa");
+    }
 
     #[cfg(windows)]
     whisper_cmd.creation_flags(CREATE_NO_WINDOW);

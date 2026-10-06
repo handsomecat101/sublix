@@ -928,7 +928,17 @@ pub fn analyze_and_create_project(
         .arg(&temp_srt_stem)
         .arg("-sns")
         .arg("-nth")
-        .arg("0.65");
+        .arg("0.65")
+        .arg("-bo")
+        .arg("1")
+        .arg("-bs")
+        .arg("1")
+        .arg("-t")
+        .arg("8");
+
+    if _engine == crate::stt::SttEngine::Cuda {
+        whisper_cmd.arg("-fa");
+    }
 
     #[cfg(windows)]
     whisper_cmd.creation_flags(CREATE_NO_WINDOW);
