@@ -22,6 +22,23 @@
 | VibeVoice | Là engine **TTS đa người nói**, không phải diarization thuần — bỏ khỏi V2 (giữ cho V3/V4 nếu cần). |
 | Pyannote 3.1 gốc | Repo **gated** (cần token HF như catalog đã ghi) — không 1-click được. |
 
+## 2b. Cơ chế "biết ai nói câu nào" — giải thích cho PO (không cần LLM đoán)
+
+1. **Whisper** trả về: nội dung từng câu + **MỐC THỜI GIAN** (start–end giây).
+2. **sherpa diarization** chỉ nghe SÓNG ÂM (không đọc chữ): đo "dấu vân tay giọng" (embedding: trầm/bổng, âm sắc, cách phát âm…) trên từng đoạn rồi **gom cụm** — giống nhau = cùng một người → xuất **bản đồ "ai nói lúc nào"**: `0.0–3.4s = Speaker 0; 4.1–7.5s = Speaker 1; …`
+3. **Ghép theo THỜI GIAN (overlap):** câu nào nằm trong đoạn thời gian của ai thì thuộc người đó (câu "Chào bạn!" ở 4.1–7.5s → Speaker 1). Đây là **so khớp mốc thời gian**, không phải đoán theo nội dung — nên đổi mọi thứ trong câu nói cũng không làm sai vai.
+4. **Giới tính (nam/nữ):** diarization không nói nam/nữ — mặc định gán xen kẽ; nâng cấp (tùy chọn) là đo **tần số cơ bản f0** của từng vai (nam ~85–180Hz, nữ ~165–255Hz) — vẫn là xử lý tín hiệu, không cần LLM.
+
+**Vậy còn cần LLM không?**
+- **Phân vai (ai nói câu nào): KHÔNG cần LLM** — thay bằng sóng âm + so khớp thời gian (chính xác hơn hẳn cách "đoán theo dấu câu" hiện tại đang cho 5 câu = 5 vai sai).
+- **LLM vẫn giữ vai trò quan trọng ở bước khác:**
+  - (a) **Dịch + biên kịch lời thoại** tiếng Việt tự nhiên (Local Qwen / MiniMax) — giữ nguyên;
+  - (b) **Tùy chọn hay:** đọc nội dung để **đặt tên vai** ("Tôi là Lan" → vai tên "Lan") + gợi ý nam/nữ theo ngữ cảnh;
+  - (c) Dự phòng khi máy thiếu model/python.
+- Nhánh hiện có `diarize_and_script_via_minimax()` = LLM **vừa đoán vai vừa viết kịch bản**. Sau V2: phần **đoán vai** bị thay bằng sherpa (sự thật từ audio), phần **viết kịch bản** vẫn do LLM.
+
+---
+
 ## 3. Phương án kỹ thuật (4 bước, làm tuần tự)
 
 ### S1 — Sidecar + test CLI (chưa đụng app)
