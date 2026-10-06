@@ -1,6 +1,6 @@
 [package]
 name = "sublix"
-version = "0.9.3"
+version = "0.9.4"
 description = "Sublix - Real-time subtitle overlay for any video"
 authors = ["Anh Tuấn"]
 edition = "2021"
@@ -46,6 +46,9 @@ tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",           # v0.9.4: ShellExecuteW / SHOpenFolderAndSelectItems
+    "Win32_UI_Shell_Common",    # v0.9.4: ITEMIDLIST used by the shell select API
+    "Win32_System_Com",         # v0.9.4: COM types referenced by the shell bindings
     "Win32_Graphics_Gdi",
     "Win32_Storage_FileSystem", # BUG-051: GetDiskFreeSpaceExW for disk-space check
     # R2-08.1: Windows Job Object with KILL_ON_JOB_CLOSE so killing/ crashing

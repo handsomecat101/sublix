@@ -153,6 +153,8 @@ pub fn run() {
             downloader_cancel,
             downloader_open_folder,
             downloader_reveal_file,
+            downloader_open_file,
+            downloader_downloads_dir,
             downloader_check_disk,
             downloader_file_exists
         ])
@@ -1065,6 +1067,20 @@ fn downloader_open_folder(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn downloader_reveal_file(path: String) -> Result<(), String> {
     downloader::reveal_downloaded_file(&path).map_err(|e| format!("{e:#}"))
+}
+
+/// v0.9.4: play the downloaded file with the OS default app (video player)
+/// so the user can watch it straight from the download list.
+#[tauri::command]
+fn downloader_open_file(path: String) -> Result<(), String> {
+    downloader::open_downloaded_file(&path).map_err(|e| format!("{e:#}"))
+}
+
+/// v0.9.4: full path of the folder where downloads are stored, so the UI
+/// can show the user exactly where files land.
+#[tauri::command]
+fn downloader_downloads_dir(app: tauri::AppHandle) -> String {
+    downloader::get_downloads_dir(&app).to_string_lossy().to_string()
 }
 
 /// BUG-051: returns the number of free bytes on the volume that would

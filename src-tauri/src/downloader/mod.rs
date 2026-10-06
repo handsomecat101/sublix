@@ -1638,18 +1638,97 @@ pub fn check_file_exists(path_str: &str) -> bool {
     Path::new(path_str).exists()
 }
 
-/// Reveal downloaded file in Windows Explorer
+/// Reveal downloaded file in Windows Explorer with the file selected.
+/// v0.9.4: use the shell API `SHOpenFolderAndSelectItems` instead of
+/// spawning `explorer.exe /select,...`. The spawned form silently failed
+/// (Rust argv quoting makes explorer mis-parse the `/select` argument —
+/// the window never opened; verified via GUI test) while the shell API
+/// handles exotic characters natively.
+#[cfg(windows)]
+pub fn reveal_downloaded_file(path_str: &str) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::UI::Shell::Common::ITEMIDLIST;
+    use windows::Win32::UI::Shell::{ILFree, SHOpenFolderAndSelectItems, SHParseDisplayName};
+
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
+    }
+    let wide: Vec<u16> = p
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+    unsafe {
+        SHParseDisplayName(
+            windows::core::PCWSTR(wide.as_ptr()),
+            None,
+            &mut pidl,
+            0,
+            None,
+        )
+        .map_err(|e| anyhow::anyhow!("Không phân giải được đường dẫn: {} ({e})", p.display()))?;
+        let result = SHOpenFolderAndSelectItems(pidl as *const ITEMIDLIST, None, 0);
+        ILFree(Some(pidl as *const ITEMIDLIST));
+        result.map_err(|e| anyhow::anyhow!("Không mở được thư mục chứa file ({e})"))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
 pub fn reveal_downloaded_file(path_str: &str) -> Result<()> {
     let p = Path::new(path_str);
     if !p.exists() {
         return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
     }
-    #[cfg(windows)]
-    {
-        let mut cmd = Command::new("explorer.exe");
-        cmd.arg(format!("/select,\"{}\"", p.display()));
-        cmd.spawn()?;
+    Ok(())
+}
+
+/// v0.9.4: open a downloaded file with its default application (media
+/// player for videos). Uses ShellExecuteW("open") on Windows so file
+/// associations and exotic characters in the path are handled by the shell
+/// itself instead of fragile command-line quoting.
+#[cfg(windows)]
+pub fn open_downloaded_file(path_str: &str) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
     }
+    let file_wide: Vec<u16> = p
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let verb_wide: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            windows::core::PCWSTR(verb_wide.as_ptr()),
+            windows::core::PCWSTR(file_wide.as_ptr()),
+            windows::core::PCWSTR::null(),
+            windows::core::PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Per Win32 docs a return value <= 32 indicates failure.
+    if result.0 as usize <= 32 {
+        return Err(anyhow::anyhow!("Không mở được file: {path_str}"));
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn open_downloaded_file(path_str: &str) -> Result<()> {
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
+    }
+    Command::new("xdg-open").arg(p).spawn()?;
     Ok(())
 }
 

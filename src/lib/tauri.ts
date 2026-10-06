@@ -357,6 +357,16 @@ export const sublix = {
     return await invoke("downloader_reveal_file", { path });
   },
 
+  // v0.9.4: play the downloaded file with the default OS player.
+  async downloaderOpenFile(path: string): Promise<void> {
+    return await invoke("downloader_open_file", { path });
+  },
+
+  // v0.9.4: where downloads are stored on disk (shown in the tab header).
+  async downloaderDownloadsDir(): Promise<string> {
+    return await invoke<string>("downloader_downloads_dir");
+  },
+
   // BUG-051: how many bytes are free on the volume that would hold
   // a download at `path` (defaults to the internal downloads dir).
   async downloaderCheckDisk(path?: string): Promise<number> {
@@ -475,6 +485,14 @@ export async function downloaderOpenFolder(): Promise<void> {
 
 export async function downloaderRevealFile(path: string): Promise<void> {
   return invoke("downloader_reveal_file", { path });
+}
+
+export async function downloaderOpenFile(path: string): Promise<void> {
+  return invoke("downloader_open_file", { path });
+}
+
+export async function downloaderDownloadsDir(): Promise<string> {
+  return invoke<string>("downloader_downloads_dir");
 }
 
 

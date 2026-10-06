@@ -149,7 +149,11 @@ export default function DownloaderView({
   const [url, setUrl] = useState<string>("");
   const [format, setFormat] = useState<string>("max");
   const [browserCookie, setBrowserCookie] = useState<string>("none");
-  const [extractSubtitles, setExtractSubtitles] = useState<boolean>(true);
+  // v0.9.4: default OFF — the owner only needs the video; subtitle fetching
+  // is optional and YouTube can rate-limit it (429).
+  const [extractSubtitles, setExtractSubtitles] = useState<boolean>(false);
+  // v0.9.4: where downloads are stored on disk (shown in the header).
+  const [dlDir, setDlDir] = useState<string>("");
 
   // Inspection state
   const [inspecting, setInspecting] = useState<boolean>(false);
@@ -229,6 +233,14 @@ export default function DownloaderView({
       }
     });
   }, [items]);
+
+  // v0.9.4: show where downloads are stored on disk.
+  useEffect(() => {
+    sublix
+      .downloaderDownloadsDir()
+      .then(setDlDir)
+      .catch((err) => console.warn("downloaderDownloadsDir IPC error:", err));
+  }, []);
 
   // Listen to progress events from backend
   useEffect(() => {
@@ -547,6 +559,19 @@ export default function DownloaderView({
     }
   };
 
+  // v0.9.4: play the downloaded file with the default media player. If the
+  // file is missing, fall back to revealing the folder instead of failing
+  // silently.
+  const handlePlay = async (path?: string | null) => {
+    if (!path) return;
+    try {
+      await sublix.downloaderOpenFile(path);
+    } catch (e) {
+      console.warn("downloaderOpenFile failed:", e);
+      await handleReveal(path);
+    }
+  };
+
   const filteredItems = items.filter((item) => {
     if (activeFilter === "active") {
       return item.status === "downloading" || item.status === "paused" || item.status === "queued";
@@ -573,6 +598,15 @@ export default function DownloaderView({
             <p className="downloader-subtitle">
               Tải chất lượng cao từ YouTube, TikTok, Douyin (抖音), Bilibili (哔哩哔哩), Facebook, X, Instagram... và đưa thẳng vào Studio lồng tiếng hoặc làm phụ đề chỉ với 1 cú click.
             </p>
+            {dlDir && (
+              <p
+                style={{ margin: "4px 0 0", fontSize: "0.75rem", opacity: 0.8, wordBreak: "break-word" }}
+                title={dlDir}
+              >
+                📁 File tải về được lưu tại:{" "}
+                <code style={{ fontFamily: "Consolas, monospace" }}>{dlDir}</code>
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -963,6 +997,15 @@ export default function DownloaderView({
                             </>
                           );
                         })()}
+
+                        <button
+                          type="button"
+                          className="item-btn play-video"
+                          onClick={() => handlePlay(item.filePath)}
+                          title="Mở video bằng trình phát mặc định của máy (Windows Media Player / Movies & TV...)"
+                        >
+                          <IconPlay size={14} /> Chạy Video
+                        </button>
 
                         <button
                           type="button"
