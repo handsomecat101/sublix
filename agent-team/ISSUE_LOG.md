@@ -107,6 +107,11 @@
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-V092-03` | Video tải xong thật nhưng app báo ❌ Lỗi "không in ra đường dẫn file" — dòng path yt-dlp in ra bị mất ký tự codepage không biểu diễn được (`：｜`, CJK) khi output không phải UTF-8 | `downloader/mod.rs` (`start_download`, `build_download_command`) | KHÔNG chỉ tin chuỗi in ra: xác minh "bằng chứng gốc" trên ổ đĩa theo mã video + ép `PYTHONIOENCODING=utf-8`/`PYTHONUTF8=1` cho mọi tiến trình yt-dlp | ✅ Fixed |
 
+### 🧾 1 Lỗi Fix Tại v0.9.4 (CommandCode — 2026-10-06):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-V094-01` | Nút "Mở Thư Mục": spawn `explorer.exe /select,"file"` từ app thành công nhưng KHÔNG mở cửa sổ (gọi y hệt từ PowerShell thủ công thì mở được) | `downloader/mod.rs` (`reveal_downloaded_file`) | KHÔNG spawn `explorer.exe /select,"path"` từ Rust Command (argv-quoting bị explorer parse sai) — dùng shell API `SHOpenFolderAndSelectItems` | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -254,4 +259,10 @@
 - **File:** `src-tauri/src/downloader/mod.rs` (`start_download`, `build_download_command`, `fetch_video_info`)
 - **Root Cause:** Khi output của yt-dlp không phải UTF-8, dòng `[download] Destination: <path>` bị mất/thay thế ký tự mà codepage không biểu diễn được (fullwidth `：｜`, CJK). File trên đĩa vẫn đủ ký tự ⇒ `Path::exists()` trượt ⇒ app báo "thoát thành công nhưng không in ra đường dẫn file" oan dù yt-dlp exit 0.
 - **Cách fix & Bài học:** (1) Ép `PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1` cho mọi tiến trình yt-dlp; (2) Recovery "bằng chứng gốc": exit 0 mà path không verify được ⇒ quét thư mục tải tìm media theo tag `[<video_id>]` (chỉ khớp id của chính request — luật BUG-046). *Không bao giờ chỉ tin chuỗi text do tool in ra để xác minh sự tồn tại của file — phải hỏi thẳng filesystem.*
+
+### [BUG-V094-01] explorer /select spawn từ Rust không mở cửa sổ — nút "Mở Thư Mục" chết lặng
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** CommandCode (GUI test bằng agent-browser) | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`reveal_downloaded_file`)
+- **Root Cause:** `Command::new("explorer.exe").arg("/select,\"file\"")` — Rust escape dấu nháy trong argv (`\"`), explorer.exe parse kiểu riêng nên hiểu sai tham số `/select` → tiến trình chạy xong nhưng không có cửa sổ nào mở (không lỗi, không cảnh báo). Gọi cùng chuỗi từ PowerShell thủ công thì mở bình thường — chỉ hỏng khi đi qua Rust Command.
+- **Cách fix & Bài học:** Dùng shell API chuẩn `SHParseDisplayName` + `SHOpenFolderAndSelectItems` (+ `ILFree`; cần features `Win32_UI_Shell_Common`, `Win32_System_Com`). *Mọi tương tác shell (mở file/thư mục) nên đi qua Shell API — đừng spawn explorer với argument phức tạp từ Rust.*
 

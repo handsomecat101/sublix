@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 12:00 - CommandCode
+- **Loại:** `@done` (v0.9.4 — theo yêu cầu PO: nút Chạy Video + chỉ rõ thư mục tải)
+- **Tính năng:** ▶ Chạy Video (ShellExecuteW — mở bằng player mặc định của máy); header hiện "📁 File tải về được lưu tại: <path>" (command `downloader_downloads_dir`); checkbox phụ đề mặc định TẮT.
+- **Fix kèm:** nút "Mở Thư Mục" trước đây spawn `explorer.exe /select` từ app KHÔNG mở được cửa sổ (argv-quoting) — thay bằng `SHOpenFolderAndSelectItems` (+features `Win32_UI_Shell_Common`/`Win32_System_Com`).
+- **Verify GUI thật (agent-browser):** click Chạy Video → VLC mở đúng file; click Mở Thư Mục → Explorer mở đúng thư mục downloads; header hiện path; 10/10 test; exe v0.9.4 build OK.
+- **Việc tiếp theo:** PO nghiệm thu. Lưu ý giải thích cho PO: "video 20 phút tải vài giây" là do file đã có sẵn trên đĩa (yt-dlp báo đã tải rồi — đúng hành vi, file hoàn chỉnh).
+
+---
+
 ### 2026-10-06 09:45 - CommandCode
 - **Loại:** `@done` (v0.9.3 — sửa lỗi báo oan "không in ra đường dẫn file", anh Tuấn gặp 9:06 với video Arthas)
 - **Root cause:** output yt-dlp không phải UTF-8 ⇒ dòng Destination in ra **MẤT ký tự codepage không biểu diễn được** (`：｜`, CJK) trong khi file trên đĩa vẫn đủ ký tự ⇒ `exists()` trượt ⇒ báo Lỗi oan dù exit 0. (Ghi chú: `C:`→`C#` thấy trong log test là artifact PowerShell Start-Process của test harness — KHÔNG phải lỗi app; thư mục rác ` C#/` đã dọn.)
@@ -73,15 +82,6 @@
 - **Yêu cầu:** làm đúng thứ tự R3-01 → R3-04 (hai mục 🔴 trước), commit git từng mục, tự đánh dấu checklist cuối mục VÒNG 3; vẫn giữ **LUẬT BẮT BUỘC** đầu file hướng dẫn (`CẤM cargo build --release`, đóng gói `npx tauri build --no-bundle`, tắt app trước khi build). Phạm vi code như cũ: `src-tauri/src/downloader/`, `src/views/DownloaderView.*`.
 - **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần cuối, đạt là Anh Tuấn **nghiệm thu Phase 1** (bấm tải thử video thật).
 
----
-
-### 2026-10-05 00:45 - Mavis (MiniMax-M3)
-- **Loại:** `@done` (Vòng 2 — nốt R2-01..R2-09 sau audit CommandCode)
-- **Phân công:** R2-08 (Job Object + cancel/pause/cookie) giao **alex (worker)** làm với context đầy đủ — em làm R2-02..R2-07 + R2-09 + R2-01.
-- **Commits:** `d2d3f7c` (alex: R2-08; gộp luôn R2-01 của em do ordering) + `1e2bd3d` (em: R2-02..R2-07 + R2-09). Files: `downloader/mod.rs`, `lib.rs`, `Cargo.toml`, `tauri.ts`, `DownloaderView.{tsx,css}`.
-- **Verify:** `cargo check` ✅ 0 warnings (6.91s); `npm run build` ✅ 348KB JS / 70KB CSS (2.09s).
-- **Chi tiết:** `agent-team/BUG-FIX-REPORT-VONG2.md` (đầy đủ root-cause + fix + verify checklist cho 9 mục).
-- **Việc tiếp theo:** Đợi CommandCode audit lần 2 (anh Tuấn test thật trên máy).
 
 
 

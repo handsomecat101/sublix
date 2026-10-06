@@ -12,8 +12,8 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.9.3` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
-| **Git Commit** | `v0.9.3` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Bản Build Hiện Tại** | `v0.9.4` (Release standalone binary tại `src-tauri/target/release/sublix.exe`) |
+| **Git Commit** | `v0.9.4` on `master` (`https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Active (Đã hoàn thiện Drag & Drop Studio + Custom Glass Select + AI Visual Identity) |
 
 ---
@@ -55,6 +55,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FEAT-V094-PLAY-FOLDER` | Feat v0.9.4: nút "▶ Chạy Video" + hiển thị đường dẫn thư mục tải + fix nút "Mở Thư Mục" (SHOpenFolderAndSelectItems) + mặc định tắt sub | **CommandCode** | 2026-10-06 | GUI E2E: VLC mở đúng file + Explorer mở đúng thư mục; exe v0.9.4. Theo yêu cầu trực tiếp của PO |
 | `TSK-FIX-V093-FALSEERR` | Fix v0.9.3: lỗi báo oan "không in ra đường dẫn file" (path yt-dlp in ra mất ký tự codepage) | **CommandCode** | 2026-10-06 | Ép UTF-8 output + recovery quét ổ đĩa theo mã video (bằng chứng gốc) + UI xoá cảnh báo cũ khi Thử lại; GUI retry E2E xanh (Hoàn Thành 3→4); exe v0.9.3. Commits `e48712c`+`8162033` |
 | `TSK-FIX-V092-EOF-429` | Fix v0.9.2: EOF "Kiểm Tra Link" + HTTP 429 phụ đề (2 bug từ handoff Mavis) | **CommandCode** | 2026-10-06 | Root cause EOF = thiếu pipe stdio từ R2-08.3; fix pipe + parse JSON an toàn + báo lỗi thân thiện; `--sleep-subtitles 5` + giữ ✅ video khi sub 429. Build v0.9.2 xanh, 8/8 test. Commits `54f5ae2`+`6d7bc1b` |
 | `TSK-022.1` | Phase 1: Xây dựng Tab Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin, Bilibili) & Cầu nối 1-Click | Antigravity | 2026-10-04 | Kế thừa trọn vẹn hermes-downloader: đa nền tảng, cookies Edge/Chrome/Firefox, sub extract, pause/resume/cancel, 1-click bridge sang File Sub & Studio Dubbing |

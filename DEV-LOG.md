@@ -595,6 +595,26 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-06 — v0.9.3: lỗi báo oan "không in ra đường dẫn file" đã fix + GUI E2E xanh*
+## Session 16 — 2026-10-06 (v0.9.4: Nút "Chạy Video" + Hiển thị thư mục tải + fix nút "Mở Thư Mục")
+
+### What was done (theo yêu cầu anh Tuấn)
+- **▶ Chạy Video**: nút mới trên mỗi item đã tải — mở file bằng trình phát mặc định (`ShellExecuteW("open")`, xử lý đúng tên file ký tự đặc biệt).
+- **Hiển thị thư mục tải**: header tab Tải Video hiện "📁 File tải về được lưu tại: <path>" (command mới `downloader_downloads_dir`) — PO biết chính xác file nằm đâu.
+- **Fix nút "Mở Thư Mục"**: trước đây spawn `explorer.exe /select,"file"` từ Rust — spawn thành công nhưng **KHÔNG mở cửa sổ** (Rust argv-quoting làm explorer parse sai `/select`; phát hiện qua GUI test: gọi trực tiếp từ PowerShell thì mở được, gọi từ app thì không). Thay bằng shell API chuẩn **`SHOpenFolderAndSelectItems`** (`SHParseDisplayName` + `ILFree`; thêm feature `Win32_UI_Shell_Common` + `Win32_System_Com`).
+- **Mặc định TẮT "Trích xuất phụ đề"** — ưu tiên video, tránh rate-limit 429.
+
+### Verification (GUI thật, agent-browser)
+- ✅ Click "▶ Chạy Video" (item Rick) → VLC mở đúng file (window title khớp tên file); kill VLC test sạch.
+- ✅ Click "Mở Thư Mục" → Explorer mở `...\com.sublix.desktop\downloads`; đóng sạch.
+- ✅ Header hiện đúng đường dẫn; checkbox phụ đề mặc định OFF.
+- ✅ `cargo test --lib downloader` 10/10; `npx tauri build --no-bundle` → exe v0.9.4 (~15.2MB).
+
+### Lessons
+- `explorer.exe /select` từ Rust Command = bẫy argv-quoting — dùng `SHOpenFolderAndSelectItems` thay thế.
+- "Video 20 phút tải vài giây" = file đã có sẵn trên đĩa (yt-dlp báo "has already been downloaded") — hành vi đúng, file hoàn chỉnh (ffprobe xác nhận 21.7 phút).
+
+---
+
+*Last updated: 2026-10-06 — v0.9.4: nút Chạy Video + thư mục tải rõ ràng + fix Mở Thư Mục (SHOpenFolderAndSelectItems)*
 
 
