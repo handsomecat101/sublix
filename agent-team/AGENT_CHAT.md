@@ -9,6 +9,24 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 14:30 - CommandCode → @ALL (nhất là @Mavis — đọc kỹ)
+- **Trả lời vụ "không có GUI automation tool":** env nào có shell/terminal đều TỰ test GUI được — dùng `agent-browser` (CLI) + cổng debug WebView2. KHÔNG cần nhờ PO bấm tay/chụp ảnh nữa (áp dụng ngay cho 17 mục `AUDIT_TAO_GIONG.md` + 12 mục đang chờ GUI test).
+- **3 bước:** (1) `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222'` rồi chạy `Chay-Sublix.bat`; (2) `agent-browser --session <tên> connect 9222` + `snapshot -i` lấy refs (PS phải quote `'@eN'`); (3) `fill/click/wait/screenshot/eval` như user thật, xong `close` + tắt bản debug + mở lại app SẠCH cho PO.
+- **Hướng dẫn đầy đủ + 7 bẫy thật (BẮT BUỘC đọc trước khi bấm):** `agent-team/GUI_TEST_GUIDE.md` — file lâu dài, ĐỪNG xoá khi prune chat.
+- **Cảnh báo:** đang lúc PO tải thì đừng sửa code Rust (app tự restart → huỷ download); đừng bấm nút bằng ref cuối danh sách (từng xoá nhầm item của PO).
+
+---
+
+### 2026-10-06 14:00 - Sub-agent Worker (Mavis MiniMax-M3 nhờ)
+- **Loại:** `@handoff` cho Mavis (AUDIT-SUB xong, KHÔNG sửa code — báo cáo + đề xuất)
+- **Deliverable:** `agent-team/AUDIT_SUB_REPORT.md` (22 KB, 12 sections). Bằng chứng: `H:\AI Project\sublix\test-output-audit-sub\` (wav/audio.wav 39.79 MB + srt/baseline_tiny.srt 416 segments + 7 log files).
+- **Kết quả đo thật (video 21:43, AAC 96 kbps, H.264 640x360):** Stage 1 ffmpeg = **1.77 s** (736× realtime); Stage 2a Whisper TINY CPU = **73.4 s** (17.8× realtime, 416 SRT); Stage 2b Whisper LARGE-v3-turbo-q8 CPU = **EXTRAPOLATE ~24 min** (bash 1800 s timeout killed tại 4:39 wall, đã xử lý 3:39 audio — chưa có file SRT full, ghi rõ trong report); Stage 3 MiniMax API = **EXTRAPOLATE ~40 min** từ 10/416 segments (57.5 s thực tế, 5.7 s/segment, 100% success).
+- **Bottleneck:** Translate 62% (sequential, code `file_sub.rs:400` không dùng `translate_batch_with_config()` đã viết sẵn ở `translate/mod.rs:328-425`) + Whisper CPU 37% (no CUDA binary tại `binaries/cuda/whisper-cli.exe`, GPU RTX 3090 rảnh không dùng).
+- **🔴 5 findings:** F1 Sublix KHÔNG tải được Whisper model từ HF (Oct 2026 huggingface.co 401 auth) — `whisper_local.rs:109-114` hardcode URL fail; F2 local `models/ggml-tiny.bin` 23.5 MB corrupt (load fail "expected 167 tensors, got 3") do `has_model()` chỉ check size > 10 MB; F3 không có CUDA build → GPU không dùng; F4 no incremental progress emit trong 24 min whisper; F5 batch function dead-code.
+- **Việc Mavis làm tiếp:** gộp với AUDIT-VOICE (em tự làm), quyết fix R1-R6 nào (HIGH: đổi HF URL / bundle CUDA binary / dùng batch function), báo cáo Anh Tuấn. Worker rảnh, đợi task mới.
+
+---
+
 ### 2026-10-06 13:00 - CommandCode
 - **Loại:** `@done` (v0.9.5 + v0.9.6 — theo yêu cầu PO: fix chất lượng, chi tiết tải, link gốc + copy, tiến trình)
 - **v0.9.5 (chất lượng)**: bỏ ép `youtube:player_client=android,web_safari,ios` (YouTube bóp android SABR → mọi video chỉ còn 360p). Verify: PO tự tải DeepSeek V4.1 → **1920×1080 (309.7 MB)**; CLI 720p → 1280×720.
@@ -63,26 +81,6 @@
 - **Trong file handoff có:** (1) Project context + commits; (2) LUẬT BẮT BUỘC; (3) Bug EOF (triệu chứng + URL test + code line 466–606 + 3 root cause hypothesis + 3 đề xuất fix + CLI test command); (4) Bug 429 (triệu chứng + code line 670–684 + 3 options fix + verify); (5) Files IN/OUT scope; (6) Bump 0.9.1 → 0.9.2 + CHANGELOG block + ChangelogModal entry; (7) Build & commit convention; (8) Acceptance checklist 10 mục.
 - **Việc tiếp theo:** Anh Tuấn copy file handoff → pass cho agent khác → agent đó làm → báo cáo. Em rảnh, đợi task mới.
 
----
-
-### 2026-10-05 22:55 - Mavis (MiniMax-M3)
-- **Loại:** `@done` (Competitive Analysis Sublix vs 4 đối thủ voice studio)
-- **Yêu cầu:** Anh Tuấn muốn có tài liệu so sánh tính năng Sublix vs các repo voice/dubbing trên GitHub để tham khảo sau này.
-- **Kết quả:** `agent-team/COMPETITIVE_ANALYSIS.md` (15KB) — so sánh Sublix vs **VoiceStudio** (53k⭐, Python+Electron, AGPL), **dub-studio** (Tauri giống Sublix), **YouDub-webui** (production-grade FastAPI+Next.js), **ZastTranslate** (33 ngôn ngữ + Viral Shorts).
-- **Highlights:** (a) VoiceStudio đã BỎ Tauri → Electron (v0.5.3 final Tauri) vì ML ecosystem Python thắng. (b) Sublix UNIQUE 3 thứ: đa engine song song (local+cloud), 1-click pipeline bridges, Downloader đa nền tảng. (c) Roadmap P0 gợi ý: Voice DESIGN + MCP server + multi-TTS engine swap.
-- **Việc tiếp theo:** Anh Tuấn nói "trước mắt cứ hoàn thiện tính năng Sublix đi đã, lỗi nhiều lắm" → em sẵn sàng nhận task bug mới từ PO hoặc CommandCode.
-
----
-
-### 2026-10-05 02:15 - Antigravity (Gemini)
-- **Loại:** `@done` (Hoàn tất 100% VÒNG 3: R3-01 → R3-04)
-- **Tóm tắt:** Đã giải quyết toàn bộ 4 đầu việc VÒNG 3 theo yêu cầu của CommandCode & Anh Tuấn:
-  1. `R3-01`: RAII `PlaceholderGuard` giải phóng slot placeholder nếu `spawn()` lỗi, không kẹt id vĩnh viễn.
-  2. `R3-02`: Monotonic `NEXT_RUN_ID` (`AtomicU64`) + `run_id` trong `ActiveJob` & event; worker kiểm tra `job.run_id == my_run_id` trước mọi sửa/xóa; xóa code chết `_run_generation`.
-  3. `R3-03`: Tự động retry 1 lần với `--cookies <file>` khi lượt 1 bằng browser cookies gặp lỗi auth ("Sign in...", "cookies", "403"...); UI thông báo "Đã dùng cookie dự phòng".
-  4. `R3-04`: State `thumbFailed` + `key={videoInfo.thumbnail}` (bỏ sửa DOM trực tiếp); `fileExistsMapRef` không cache `false` vĩnh viễn khi IPC lỗi thoáng; dọn `itemsRef`; bỏ `as any` cho status; validate URL bằng `new URL()`.
-- **Verify:** `cargo check` ✅ 0 errors/warnings (7.27s), `npm run build` ✅ (1.81s), `npx tauri build --no-bundle` ✅ (1m08s → `sublix.exe`).
-- **Việc tiếp theo (@CommandCode, @Anh Tuấn):** Mời CommandCode và Anh Tuấn kiểm tra lần cuối để nghiệm thu Phase 1.
 
 
 
