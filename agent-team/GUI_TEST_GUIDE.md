@@ -65,3 +65,43 @@ Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','"H:\AI Project\sublix\Chay
 5. `snapshot -i` bỏ qua chữ tĩnh (StaticText) — muốn đọc %, đường dẫn, nhãn thì dùng `snapshot` đầy đủ.
 6. Nếu screenshot/vision lỗi: bằng chứng snapshot text (a11y tree) vẫn là dữ liệu THẬT từ DOM — dùng nó thay ảnh.
 7. Test xong PHẢI đóng cổng debug (mục 5) — vì cổng cho phép điều khiển app từ localhost (bảo mật).
+
+---
+
+## 7) DỤNG CỤ & TRICK MỚI (từ phiên v0.9.9 — CommandCode 2026-10-07)
+
+### 7.1 `ab2.ps1` — gọi agent-browser KHÔNG BAO GIỜ TREO
+```powershell
+& 'H:\AI Project\sublix\test_dubbing_input\ab2.ps1' -fresh connect 9222   # dọn daemon cũ + connect
+& 'H:\AI Project\sublix\test_dubbing_input\ab2.ps1' eval "document.title"  # các lệnh sau: KHÔNG dùng -fresh
+& 'H:\AI Project\sublix\test_dubbing_input\ab2.ps1' screenshot 'H:\AIPROJ~1\sublix\TEST-O~2\shot.png'
+```
+- **Vì sao:** CLI agent-browser thỉnh thoảng treo vô hạn (session lock). Script chạy exe trực tiếp, tự kill sau 45s, đọc output chuẩn UTF-8 (hết mojibake).
+- **QUY TẮC VÀNG:** KHÔNG kill process `agent-browser` giữa các lệnh — sẽ mất kết nối CDP (câu lệnh sau chạy trên browser trắng của nó → kết quả sai im lặng). Chỉ `-fresh` **trước `connect`**.
+- **Path có dấu cách** sẽ bị cắt → lấy path 8.3: `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('<path>').ShortPath`
+
+### 7.2 Chèn file test KHÔNG cần hộp thoại (drop giả lập — đã chạy thật)
+```js
+const dt=new DataTransfer(); const f=new File([new Uint8Array([82,73,70,70])],'x.wav',{type:'audio/wav'});
+f.path='H:\\AIPROJ~1\\sublix\\TEST_D~1\\DIALOG~1.WAV'; dt.items.add(f);
+document.querySelector('.dubbing-dropzone').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));
+```
+
+### 7.3 Muốn NGHE THẬT phải click bằng CDP (không dùng JS click)
+- `eval "...click()"` KHÔNG tính là user-gesture → `audio.play()` bị chặn (`paused:true`).
+- Đúng cách: `snapshot -i` lấy ref nút 🔊 → `ab2.ps1 click '@eN'` (CDP input thật) → kiểm tra: `eval "(()=>{const a=document.querySelector('audio');return JSON.stringify({paused:a.paused,t:a.currentTime})})()"`.
+
+### 7.4 Né bẫy `-i` của PowerShell
+`& ab2.ps1 snapshot -i` → lỗi "parameter 'i' ambiguous". Né bằng biến chuỗi: `$b='-'+'i'; & ab2.ps1 snapshot $b`.
+
+### 7.5 File .ps1 có tiếng Việt — phải thêm BOM
+PowerShell 5.1 đọc .ps1 không BOM theo ANSI → lỗi cú pháp ký tự lạ. Sau khi tạo file:
+```powershell
+$c=[IO.File]::ReadAllText($f,[Text.Encoding]::UTF8); [IO.File]::WriteAllText($f,$c,(New-Object Text.UTF8Encoding($true)))
+```
+
+### 7.6 Tạo file test hội thoại NHIỀU NGƯỜI (cho phân vai)
+`test_dubbing_input/make_dialogue.ps1` — synth từng câu bằng Kokoro nhiều giọng + ffmpeg concat → `dialogue_2spk.wav` (20,6s, 5 câu nam/nữ — biết chắc đáp án từng câu). Muốn test 3 vai: sửa mảng `$lines` (thêm giọng thứ 3).
+
+### 7.7 Dev mode + ghi model = watcher restart (BUG-H08)
+App dev ghi samples/model vào `src-tauri/models` → `tauri dev` tưởng đổi code → **auto-restart giết tiến trình**. Test tính năng ghi model: `npm run tauri dev -- --no-watch`.

@@ -39,6 +39,9 @@
 2. Đầu ra: bảng kịch bản gán đúng "Ai nói câu nào"; đổi tên vai được (vd "Speaker 0" → "Minh"); **trích xuất tự động clip giọng mẫu 5–10s cho từng vai** (nguyên liệu cho Phase V3).
 3. Gỡ hẳn lời "AI Diarization" tạm, thay bằng tên thật của công nghệ đang dùng.
 
+**➡️ Phương án chi tiết (2026-10-07 — CommandCode, CHỜ PO DUYỆT):** xem `KE_HOACH_V2_PHAN_VAI_THAT.md`.
+- Engine chốt đề xuất: **sherpa-onnx diarization offline qua Python sidecar** (model pyannote-segmentation-3.0 + wespeaker **đã tải sẵn** trong `models/voice/sherpa-diarization/`; wheel Windows có sẵn trên PyPI). KHÔNG dùng VibeVoice (đó là engine TTS đa người nói, không phải diarization) — cũng không dùng Pyannote gốc (repo gated).
+
 **Nghiệm thu:**
 - [ ] Test 3 video mẫu (2 người nói, 3 người nói, 1 video có nhạc nền): phân vai **đúng ≥90% số câu** (nghe lại đối chiếu)
 - [ ] Đổi tên vai được, clip giọng mẫu 5–10s/vai trích ra nghe đúng giọng người đó

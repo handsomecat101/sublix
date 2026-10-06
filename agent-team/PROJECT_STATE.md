@@ -49,8 +49,8 @@
 |----|------|---------------|----------|--------------|
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | Claude Code / Antigravity | 🔴 HIGH | Windows Job Object kill-on-close, async spawn_blocking |
-| `TSK-012` | Tích hợp Sherpa-ONNX 3D-Speaker Diarization nâng cao | Antigravity | 🔴 HIGH | Nhận diện giọng nói đa vai bằng vector embedding |
-| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật |
+| `TSK-012` | **Phase V2: Phân vai thật** — tích hợp sherpa-onnx diarization offline (thay heuristic đếm-turn; trích clip giọng mẫu 5–10s/vai cho V3) | Antigravity / **CommandCode** (chờ PO duyệt) | 🔴 HIGH | Phương án chi tiết: `agent-team/KE_HOACH_V2_PHAN_VAI_THAT.md` (S1 sidecar+CLI → PO duyệt → S2 tích hợp → S3 cast+clip mẫu → S4 verify v0.10.0) |
+| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng còn ở Phase V3) |
 
 ---
 
