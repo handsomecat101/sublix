@@ -367,6 +367,11 @@ export const sublix = {
     return await invoke<string>("downloader_downloads_dir");
   },
 
+  // v0.9.6: probe a finished file for size + resolution (lazy backfill).
+  async downloaderFileMeta(path: string): Promise<FileMeta | null> {
+    return await invoke<FileMeta | null>("downloader_file_meta", { path });
+  },
+
   // BUG-051: how many bytes are free on the volume that would hold
   // a download at `path` (defaults to the internal downloads dir).
   async downloaderCheckDisk(path?: string): Promise<number> {
@@ -463,6 +468,19 @@ export interface DownloadProgressPayload {
   run_id?: number | null;
 }
 
+// v0.9.6: extra metadata emitted once per completed download.
+export interface DownloadMetaPayload {
+  id: string;
+  size_text?: string | null;
+  resolution?: string | null;
+}
+
+// v0.9.6: on-demand probe result for a finished file.
+export interface FileMeta {
+  size_text?: string | null;
+  resolution?: string | null;
+}
+
 export async function downloaderGetInfo(url: string): Promise<VideoInfo> {
   return invoke<VideoInfo>("downloader_get_info", { url });
 }
@@ -493,6 +511,10 @@ export async function downloaderOpenFile(path: string): Promise<void> {
 
 export async function downloaderDownloadsDir(): Promise<string> {
   return invoke<string>("downloader_downloads_dir");
+}
+
+export async function downloaderFileMeta(path: string): Promise<FileMeta | null> {
+  return invoke<FileMeta | null>("downloader_file_meta", { path });
 }
 
 

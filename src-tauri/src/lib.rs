@@ -155,6 +155,7 @@ pub fn run() {
             downloader_reveal_file,
             downloader_open_file,
             downloader_downloads_dir,
+            downloader_file_meta,
             downloader_check_disk,
             downloader_file_exists
         ])
@@ -1076,11 +1077,18 @@ fn downloader_open_file(path: String) -> Result<(), String> {
     downloader::open_downloaded_file(&path).map_err(|e| format!("{e:#}"))
 }
 
-/// v0.9.4: full path of the folder where downloads are stored, so the UI
+/// v0.9.6: full path of the folder where downloads are stored, so the UI
 /// can show the user exactly where files land.
 #[tauri::command]
 fn downloader_downloads_dir(app: tauri::AppHandle) -> String {
     downloader::get_downloads_dir(&app).to_string_lossy().to_string()
+}
+
+/// v0.9.6: size + resolution of a finished file for the download list
+/// (lazy backfill for items completed before this feature existed).
+#[tauri::command]
+fn downloader_file_meta(path: String) -> Option<downloader::FileMeta> {
+    downloader::file_meta(&path)
 }
 
 /// BUG-051: returns the number of free bytes on the volume that would

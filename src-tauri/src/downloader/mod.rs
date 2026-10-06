@@ -601,9 +601,8 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
         }
         if platform == "youtube" {
             cmd.arg("--remote-components").arg("ejs:github");
-            cmd.arg("--extractor-args")
-                .arg("youtube:player_client=android,web_safari,ios");
         }
+        // v0.9.5: no forced player_client — see build_download_command.
 
         cmd.arg("--").arg(&url_owned);
 
@@ -785,10 +784,13 @@ fn build_download_command(
         .arg("download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s")
         .arg("--continue");
 
-    if platform == "youtube" {
-        cmd.arg("--extractor-args")
-            .arg("youtube:player_client=android,web_safari,ios");
-    }
+    // v0.9.5: do NOT force legacy player clients for YouTube anymore.
+    // The old `android,web_safari,ios` override made YouTube hide every
+    // DASH format (SABR-only experiment) leaving only progressive 360p —
+    // every download silently capped at 640x360. With the JS runtime +
+    // `ejs:github` solver present, yt-dlp's default client selection
+    // exposes the full format list (4K/1440p/1080p/720p DASH) again —
+    // verified via `-F` diff and a real 720p download (1280x720).
 
     if let Some(b) = use_browser_cookie {
         cmd.arg("--cookies-from-browser").arg(b);
@@ -884,6 +886,9 @@ fn drain_child_process(
     let mut current_speed = String::new();
     let mut current_eta = String::new();
     let mut current_size = String::new();
+    // v0.9.6: latest raw downloaded byte count, so the progress row can
+    // show "đã tải / tổng" and the user sees how far the download has come.
+    let mut downloaded_now: u64 = 0;
     let mut detected_filename = String::new();
     let mut detected_filepath: Option<PathBuf> = None;
     let mut last_emit = std::time::Instant::now();
@@ -923,9 +928,10 @@ fn drain_child_process(
                         } else {
                             0
                         };
+                        downloaded_now = downloaded;
                         if total > 0 {
                             let p = (downloaded as f64 / total as f64) * 100.0;
-                            current_size = format!("{:.1} MiB", total as f64 / 1_048_576.0);
+                            current_size = format_size_text(total);
                             Some(p as f32)
                         } else {
                             Some(last_percent.max(0.0))
@@ -990,10 +996,21 @@ fn drain_child_process(
                 let pct_changed = pct.is_some() && percent_delta >= 0.5;
                 let time_elapsed = last_emit.elapsed();
                 if pct_changed || time_elapsed.as_millis() >= 250 {
+                    // v0.9.6: show "đã tải / tổng" so the user can see how
+                    // far the download has come at a glance.
+                    let size_display = if downloaded_now > 0 && !current_size.is_empty() {
+                        format!("{} / {}", format_size_text(downloaded_now), current_size)
+                    } else if !current_size.is_empty() {
+                        current_size.clone()
+                    } else if downloaded_now > 0 {
+                        format_size_text(downloaded_now)
+                    } else {
+                        String::new()
+                    };
                     let formatted_size = match size_prefix {
-                        Some(prefix) if !current_size.is_empty() => format!("{} • {}", prefix, current_size),
+                        Some(prefix) if !size_display.is_empty() => format!("{} • {}", prefix, size_display),
                         Some(prefix) => prefix.to_string(),
-                        None => current_size.clone(),
+                        None => size_display,
                     };
                     let _ = app_clone.emit(
                         "downloader:progress",
@@ -1323,6 +1340,13 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             final_res.detected_filename.clone()
         };
 
+        // v0.9.6: ground-truth size + resolution of the finished file, used
+        // for the completed row and the `downloader:meta` event.
+        let (probed_size, probed_resolution) = effective_output
+            .as_ref()
+            .map(|p| probe_media_meta(p))
+            .unwrap_or((None, None));
+
         if final_res.is_success && effective_output.is_some() {
             info!("✅ Downloader job {} finished successfully", job_id);
             let _ = app_clone.emit(
@@ -1333,11 +1357,19 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     percent: 100.0,
                     speed: "0 B/s".to_string(),
                     eta: "00:00".to_string(),
-                    size_text: final_res.current_size,
+                    size_text: probed_size.clone().unwrap_or_else(|| final_res.current_size.clone()),
                     filename: effective_name,
                     file_path: effective_output.as_ref().map(|p| p.to_string_lossy().to_string()),
                     error: None,
                     run_id: Some(my_run_id),
+                },
+            );
+            let _ = app_clone.emit(
+                "downloader:meta",
+                DownloadMetaPayload {
+                    id: job_id.clone(),
+                    size_text: probed_size.clone(),
+                    resolution: probed_resolution.clone(),
                 },
             );
         } else if is_subtitle_only_failure(req_clone.extract_subtitles, &final_res.stderr_text, has_own_output) {
@@ -1354,11 +1386,19 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     percent: 100.0,
                     speed: "0 B/s".to_string(),
                     eta: "00:00".to_string(),
-                    size_text: final_res.current_size,
+                    size_text: probed_size.clone().unwrap_or_else(|| final_res.current_size.clone()),
                     filename: final_res.detected_filename,
                     file_path: final_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
                     error: Some(warning.to_string()),
                     run_id: Some(my_run_id),
+                },
+            );
+            let _ = app_clone.emit(
+                "downloader:meta",
+                DownloadMetaPayload {
+                    id: job_id.clone(),
+                    size_text: probed_size.clone(),
+                    resolution: probed_resolution.clone(),
                 },
             );
         } else {
@@ -1480,6 +1520,97 @@ fn with_extension(path: &Path, ext: &str) -> PathBuf {
     s.push(".");
     s.push(ext);
     PathBuf::from(s)
+}
+
+/// v0.9.6: human-friendly byte size ("309.7 MB", "1.20 GB", "512 KB").
+fn format_size_text(bytes: u64) -> String {
+    let mb = bytes as f64 / 1_048_576.0;
+    if mb >= 1024.0 {
+        format!("{:.2} GB", mb / 1024.0)
+    } else if mb >= 1.0 {
+        format!("{:.1} MB", mb)
+    } else {
+        format!("{:.0} KB", bytes as f64 / 1024.0)
+    }
+}
+
+/// v0.9.6: best-effort probe of a finished media file's video resolution
+/// via the ffprobe shipped next to the app's ffmpeg. Returns `None` on any
+/// failure so callers can simply skip displaying it.
+fn probe_video_resolution(path: &Path) -> Option<String> {
+    let ffprobe = crate::dubbing::find_ffmpeg().with_file_name(if cfg!(windows) {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    });
+    let mut cmd = if ffprobe.exists() {
+        Command::new(&ffprobe)
+    } else {
+        Command::new("ffprobe")
+    };
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    let out = cmd
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=s=x:p=0",
+        ])
+        .arg(path)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+/// v0.9.6: size + resolution of a finished media file (best effort).
+pub fn probe_media_meta(path: &Path) -> (Option<String>, Option<String>) {
+    let size_text = fs::metadata(path).ok().map(|m| format_size_text(m.len()));
+    let resolution = probe_video_resolution(path);
+    (size_text, resolution)
+}
+
+/// v0.9.6: metadata emitted once per completed download (`downloader:meta`),
+/// kept separate from the progress payload so nothing else has to change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadMetaPayload {
+    pub id: String,
+    #[serde(default)]
+    pub size_text: Option<String>,
+    #[serde(default)]
+    pub resolution: Option<String>,
+}
+
+/// v0.9.6: on-demand metadata for the download list (lazy backfill for
+/// items that completed before this feature existed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileMeta {
+    pub size_text: Option<String>,
+    pub resolution: Option<String>,
+}
+
+pub fn file_meta(path_str: &str) -> Option<FileMeta> {
+    let p = Path::new(path_str);
+    if !p.is_file() {
+        return None;
+    }
+    let (size_text, resolution) = probe_media_meta(p);
+    Some(FileMeta {
+        size_text,
+        resolution,
+    })
 }
 
 /// Pause download: gracefully stops the process while keeping .part file intact for resume

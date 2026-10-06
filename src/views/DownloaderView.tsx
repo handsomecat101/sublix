@@ -9,6 +9,7 @@ import {
   type VideoInfo,
   type DownloadRequest,
   type DownloadProgressPayload,
+  type DownloadMetaPayload,
 } from "../lib/tauri";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import {
@@ -29,6 +30,17 @@ interface DownloaderViewProps {
   onNavigateToDubbing: (filePath: string) => void;
 }
 
+// v0.9.6: friendly quality label for a "WIDTHxHEIGHT" resolution string.
+function resolutionLabel(res?: string | null): string | null {
+  if (!res) return null;
+  const m = /^(\d+)x(\d+)$/.exec(res.trim());
+  if (!m) return res;
+  const h = parseInt(m[2], 10);
+  const name =
+    h >= 2160 ? "4K" : h >= 1440 ? "2K" : h >= 1080 ? "Full HD" : h >= 720 ? "HD" : h >= 480 ? "SD" : `${h}p`;
+  return `${m[1]}×${m[2]} (${name})`;
+}
+
 interface DownloadItem {
   id: string;
   url: string;
@@ -46,6 +58,8 @@ interface DownloadItem {
   filename: string;
   filePath?: string | null;
   error?: string | null;
+  // v0.9.6: video resolution like "1920x1080" (filled at completion).
+  resolution?: string | null;
   createdAt: number;
 }
 
@@ -205,6 +219,8 @@ export default function DownloaderView({
   const [fileExistsMap, setFileExistsMap] = useState<Record<string, boolean>>({});
   const fileExistsMapRef = useRef<Record<string, boolean>>({});
   fileExistsMapRef.current = fileExistsMap;
+  // v0.9.6: one-shot guard for the lazy size/resolution backfill probe.
+  const metaProbedRef = useRef<Record<string, boolean>>({});
 
   // Save history on change
   useEffect(() => {
@@ -230,6 +246,39 @@ export default function DownloaderView({
           // Do not cache false permanently on transient IPC errors
           console.warn("downloaderFileExists IPC error:", err);
         });
+      }
+    });
+  }, [items]);
+
+  // v0.9.6: lazily backfill size + resolution for completed items that
+  // don't have them yet (items finished before this feature existed).
+  // One probe per item per session.
+  useEffect(() => {
+    items.forEach((item) => {
+      if (
+        item.status === "completed" &&
+        item.filePath &&
+        !item.resolution &&
+        !metaProbedRef.current[item.id]
+      ) {
+        metaProbedRef.current[item.id] = true;
+        sublix
+          .downloaderFileMeta(item.filePath)
+          .then((meta) => {
+            if (!meta) return;
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === item.id
+                  ? {
+                      ...i,
+                      sizeText: meta.size_text || i.sizeText,
+                      resolution: meta.resolution ?? i.resolution,
+                    }
+                  : i
+              )
+            );
+          })
+          .catch((err) => console.warn("downloaderFileMeta IPC error:", err));
       }
     });
   }, [items]);
@@ -287,8 +336,24 @@ export default function DownloaderView({
       );
     });
 
+    const pMeta = listen<DownloadMetaPayload>("downloader:meta", (event) => {
+      const p = event.payload;
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === p.id
+            ? {
+                ...item,
+                sizeText: p.size_text || item.sizeText,
+                resolution: p.resolution ?? item.resolution,
+              }
+            : item
+        )
+      );
+    });
+
     return () => {
       pProgress.then((u) => u()).catch(() => {});
+      pMeta.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -570,6 +635,32 @@ export default function DownloaderView({
       console.warn("downloaderOpenFile failed:", e);
       await handleReveal(path);
     }
+  };
+
+  // v0.9.6: brief "copied" feedback per item for the source-link button.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const handleCopyLink = async (item: DownloadItem) => {
+    const text = item.url || "";
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for webviews where the async clipboard API is blocked.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // Last resort — nothing else we can do.
+      }
+      document.body.removeChild(ta);
+    }
+    setCopiedId(item.id);
+    window.setTimeout(() => setCopiedId((cur) => (cur === item.id ? null : cur)), 2000);
   };
 
   const filteredItems = items.filter((item) => {
@@ -870,6 +961,39 @@ export default function DownloaderView({
                         {item.filename || item.title}
                       </h4>
 
+                      {/* v0.9.6: source link — copyable so a failed or dead
+                          download can be pasted back and retried */}
+                      {item.url && (
+                        <div className="item-source-row">
+                          <span className="item-source-url" title={item.url}>
+                            🔗 {item.url}
+                          </span>
+                          <button
+                            type="button"
+                            className="item-btn tiny"
+                            onClick={() => handleCopyLink(item)}
+                            title="Copy link video gốc vào clipboard"
+                          >
+                            {copiedId === item.id ? "✅ Đã copy" : "📋 Copy link"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* v0.9.6: completed file info — quality, size, path */}
+                      {item.status === "completed" && (item.resolution || item.sizeText || item.filePath) && (
+                        <div className="item-file-meta">
+                          {item.resolution && (
+                            <span className="meta-chip">🎞 {resolutionLabel(item.resolution)}</span>
+                          )}
+                          {item.sizeText && <span className="meta-chip">💾 {item.sizeText}</span>}
+                          {item.filePath && (
+                            <span className="meta-chip item-file-path" title={item.filePath}>
+                              📁 {item.filePath}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* PROGRESS BAR */}
                       {(item.status === "downloading" || item.status === "paused") && (
                         <div className="item-progress-wrapper">
@@ -888,7 +1012,7 @@ export default function DownloaderView({
                             {item.eta && item.eta !== "--:--" && (
                               <span className="eta-text">⏱️ Còn {item.eta}</span>
                             )}
-                            {item.sizeText && <span className="size-text">📦 {item.sizeText}</span>}
+                            {item.sizeText && <span className="size-text">📥 {item.sizeText}</span>}
                           </div>
                         </div>
                       )}

@@ -714,3 +714,52 @@
 .banner-content strong {
   color: var(--t1);
 }
+
+/* v0.9.6: completed file meta row (quality / size / path) */
+.item-file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--t2);
+  line-height: 1.5;
+}
+
+.item-file-meta .meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.item-file-path {
+  word-break: break-all;
+  opacity: 0.85;
+}
+
+/* v0.9.6: source link row (copyable) */
+.item-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.item-source-url {
+  flex: 0 1 auto;
+  max-width: 560px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-family: Consolas, monospace;
+  color: var(--t2);
+  opacity: 0.8;
+}
+
+.item-btn.tiny {
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
