@@ -23,10 +23,42 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.6",
+    date: "06/10/2026",
+    title: "Chi Tiết Tải Video: Đường Dẫn, Dung Lượng, Chất Lượng & Tiến Trình",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Nâng Cấp Danh Sách Tải",
+        icon: "📋",
+        items: [
+          "Video đã tải xong giờ hiện đủ: 🎞 chất lượng (vd 1920×1080 (Full HD)) · 💾 dung lượng thật đo từ file trên ổ đĩa · 📁 đường dẫn đầy đủ.",
+          "Đang tải thì thấy rõ tiến độ: thanh chạy + % + tốc độ + thời gian còn lại + 'đã tải / tổng' (vd 📥 202.0 MB / 450.0 MB).",
+          "Các mục tải từ bản cũ tự được đo lại dung lượng + chất lượng khi mở app — không cần tải lại.",
+          "🔗 Mỗi mục hiện link video gốc kèm nút '📋 Copy link' — video die hay tải lỗi thì copy link dán lại là tải lại được.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.9.5",
+    date: "06/10/2026",
+    title: "Sửa Chất Lượng Tải: Hết Kẹt 360p",
+    highlights: [
+      {
+        category: "Sửa Lỗi Tải Video",
+        icon: "🎞️",
+        items: [
+          "Chọn 'MAX — chất lượng cao nhất' nhưng video chỉ 360p: nguyên nhân do cấu hình cũ ép client android (YouTube bóp về 360p, mất hết format nét cao). Đã bỏ — giờ MAX lấy được đủ 4K/1440p/1080p/720p.",
+          "Đã test thật: tải 720p ra đúng 1280x720 (trước đó 640x360). Lưu ý: file cũ đã tải 360p muốn nét hơn thì xóa file cũ rồi tải lại.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.4",
     date: "06/10/2026",
     title: "Nút Chạy Video & Hiển Thị Thư Mục Tải",
-    isCurrent: true,
     highlights: [
       {
         category: "Tiện Ích Tải Video",

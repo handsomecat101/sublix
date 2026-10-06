@@ -10,6 +10,25 @@
 
 ---
 
+## v0.9.6 — 2026-10-06
+### Hiển Thị Rõ Đường Dẫn, Dung Lượng, Chất Lượng & Tiến Trình Tải
+- **Video đã tải xong** giờ hiện đủ trong danh sách: **🎞 chất lượng** (vd *1920×1080 (Full HD)*), **💾 dung lượng thật** của file (đo trực tiếp từ ổ đĩa, vd *309.7 MB*) và **📁 đường dẫn đầy đủ** của file.
+- **Khi đang tải**: thanh tiến trình hiện thêm **"đã tải / tổng"** (vd *📥 202.0 MB / 450.0 MB*) bên cạnh % + tốc độ + thời gian còn lại — nhìn là biết đang tải đến đâu.
+- **Backfill**: các mục đã tải TRƯỚC bản này sẽ tự được đo lại dung lượng + độ phân giải khi mở app (không cần tải lại).
+- **🔗 Link video gốc + nút Copy**: mỗi mục giờ hiện **link nguồn** kèm nút **📋 Copy link** — khi video die hoặc tải lỗi, chỉ cần copy link dán lại là tải lại được.
+- Kỹ thuật: sự kiện `downloader:meta` (size + resolution) khi hoàn tất, command `downloader_file_meta` cho danh sách cũ; độ phân giải probe bằng ffprobe.
+
+---
+
+## v0.9.5 — 2026-10-06
+### Sửa Chất Lượng Tải: Hết Bị Kẹt 360p (MAX giờ lên tới 4K)
+- **Hiện tượng**: chọn "MAX — chất lượng cao nhất" nhưng video tải về chỉ 640x360.
+- **Root cause**: cấu hình cũ ép `youtube:player_client=android,web_safari,ios` — YouTube đã bóp client android về SABR-only/360p, mọi format DASH (1080p/1440p/4K) biến mất khỏi danh sách ⇒ yt-dlp rơi về progressive 360p cho mọi video.
+- **Fix**: bỏ ép client cũ — để yt-dlp tự chọn client mặc định (vẫn kèm JS runtime + EJS solver). Verify: danh sách format có đủ 4K/1440p/1080p/720p; tải thật 720p ra **1280x720** (trước đó 640x360).
+- **Lưu ý cho người dùng**: file CŨ đã tải ở 360p không tự nâng cấp — muốn bản nét thì xóa file cũ trong thư mục downloads rồi tải lại.
+
+---
+
 ## v0.9.4 — 2026-10-06
 ### Thêm Nút "Chạy Video" & Hiển Thị Rõ Thư Mục Tải
 - **▶ Chạy Video**: mỗi video đã tải xong giờ có nút phát ngay bằng trình phát mặc định của Windows (dùng ShellExecuteW — xử lý đúng cả tên file có ký tự đặc biệt).

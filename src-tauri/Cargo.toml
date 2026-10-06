@@ -1,6 +1,6 @@
 [package]
 name = "sublix"
-version = "0.9.4"
+version = "0.9.6"
 description = "Sublix - Real-time subtitle overlay for any video"
 authors = ["Anh Tuấn"]
 edition = "2021"
