@@ -23,10 +23,24 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.1",
+    date: "06/10/2026",
+    title: "Sửa Window Title Version Mismatch",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🔧",
+        items: [
+          "Window title (title bar + taskbar) của main và overlay window bị hardcode 'v0.8.0' trong tauri.conf.json dù sidebar/Changelog đã hiển thị 'v0.9.0'. Giờ cả 2 title match version thật.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.0",
     date: "06/10/2026",
     title: "Sửa Lỗi YouTube Download & Competitive Analysis",
-    isCurrent: true,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng: YouTube Download Hoạt Động Trở Lại",

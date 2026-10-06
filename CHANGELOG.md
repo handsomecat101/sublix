@@ -10,6 +10,13 @@
 
 ---
 
+## v0.9.1 — 2026-10-06
+### Sửa Lỗi Window Title Version Mismatch
+- Window title (title bar + taskbar) của 2 window (`main` + `overlay`) bị hardcode `v0.8.0` trong `src-tauri/tauri.conf.json` dù sidebar/Changelog đã hiển thị `v0.9.0`.
+- Sửa: cả 2 title giờ match với version thật.
+
+---
+
 ## v0.9.0 — 2026-10-06
 ### Sửa Lỗi Quan Trọng: YouTube Download Hoạt Động Trở Lại
 - Phát hiện root cause: **yt-dlp 2024.10+ yêu cầu JS runtime (Node.js/Deno) + remote challenge solver** để bypass YouTube anti-bot. Sublix chưa pass 2 flag này nên **mọi URL YouTube fail im lặng** (return `"n challenge solving failed"` → 0 bytes).
