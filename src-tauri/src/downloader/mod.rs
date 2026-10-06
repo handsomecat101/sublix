@@ -148,6 +148,19 @@ fn is_cookie_or_login_error(stderr: &str) -> bool {
         || lower.contains("could not send cookie")
 }
 
+/// v0.9.2 (429 bug): detect a failure that only hit subtitle downloads
+/// (YouTube rate limit) while the media itself downloaded fine. Such jobs
+/// are reported as completed with a visible warning instead of an error —
+/// the video is already on disk and must not be thrown away.
+fn is_subtitle_only_failure(extract_subtitles: bool, stderr: &str, has_own_output: bool) -> bool {
+    if !extract_subtitles || !has_own_output {
+        return false;
+    }
+    let lower = stderr.to_lowercase();
+    lower.contains("unable to download video subtitles")
+        || (lower.contains("429") && lower.contains("subtitle"))
+}
+
 /// Validate URL is a safe http(s) URL. yt-dlp accepts anything starting with `-`
 /// as a flag, so passing user input directly is a shell-injection vector.
 /// Reject anything that isn't a syntactically valid http(s) URL.
@@ -460,6 +473,21 @@ pub fn get_downloads_dir(app: &AppHandle) -> PathBuf {
     dir
 }
 
+/// v0.9.2 (EOF bug): extract the JSON object from yt-dlp `--dump-json`
+/// stdout. yt-dlp occasionally surrounds the payload with informational
+/// lines (e.g. first-run remote-component downloads), so parse from the
+/// first `{` to the last `}` instead of demanding pure JSON. Returns `None`
+/// when stdout carries no parsable JSON object at all.
+fn extract_json_object(stdout: &str) -> Option<serde_json::Value> {
+    let start = stdout.find('{')?;
+    let rest = &stdout[start..];
+    if let Ok(value) = serde_json::from_str(rest) {
+        return Some(value);
+    }
+    let end = rest.rfind('}')?;
+    serde_json::from_str(&rest[..=end]).ok()
+}
+
 /// Fast metadata inspection (--dump-json) without downloading video.
 /// BUG-057: hard 60s watchdog — if yt-dlp hangs on a private/region-locked
 /// URL the inspector used to lock the UI forever.
@@ -511,6 +539,15 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
 
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
+
+        // v0.9.2 (EOF bug): `Child::wait_with_output()` only captures output
+        // from PIPED handles. `Command::output()` used to pipe implicitly;
+        // when R2-08.3 switched to manual `spawn()` for orphan-killing the
+        // pipes were never re-added, so stdout/stderr always came back empty
+        // — every successful fetch died on serde's "EOF while parsing a
+        // value" and every failure lost its stderr message.
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
 
         info!("🔍 Inspecting video metadata via yt-dlp: {}", url_owned);
 
@@ -573,8 +610,26 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let json: serde_json::Value =
-        serde_json::from_str(&stdout).context("Không thể phân tích dữ liệu JSON từ yt-dlp")?;
+    // v0.9.2 (EOF bug): never surface serde's raw "EOF while parsing a
+    // value" to the user. yt-dlp may exit 0 with an empty or banner-polluted
+    // stdout; extract the JSON object and fall back to a human-readable
+    // "video unavailable" message when there is none.
+    let json = extract_json_object(&stdout).ok_or_else(|| {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(
+            "fetch_video_info: yt-dlp exited 0 but stdout has no JSON (stdout {} bytes, stderr: {})",
+            stdout.len(),
+            stderr.trim()
+        );
+        let stderr_trimmed = stderr.trim();
+        if stderr_trimmed.is_empty() {
+            anyhow::anyhow!(
+                "Không lấy được thông tin video. Video có thể không khả dụng (đã bị xóa, ở chế độ riêng tư hoặc bị chặn khu vực)."
+            )
+        } else {
+            anyhow::anyhow!("Không thể lấy thông tin video: {}", stderr_trimmed)
+        }
+    })?;
 
     let title = json["title"]
         .as_str()
@@ -671,7 +726,13 @@ fn build_download_command(
         cmd.arg("--write-subs")
             .arg("--write-auto-subs")
             .arg("--convert-subs")
-            .arg("srt");
+            .arg("srt")
+            // v0.9.2 (429 bug): requesting several subtitle languages in a
+            // burst trips YouTube's rate limit (HTTP 429). Let yt-dlp
+            // throttle between subtitle requests. 2s was not enough during
+            // back-to-back runs — 5s passed cleanly in CLI verification.
+            .arg("--sleep-subtitles")
+            .arg("5");
         if let Some(ref langs) = req.subtitle_langs {
             if !langs.is_empty() {
                 cmd.arg("--sub-langs").arg(langs.join(","));
@@ -1167,6 +1228,27 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     run_id: Some(my_run_id),
                 },
             );
+        } else if is_subtitle_only_failure(req_clone.extract_subtitles, &final_res.stderr_text, has_own_output) {
+            // v0.9.2 (429 bug): media file exists on disk; only subtitle
+            // downloads were rate-limited. Complete the job with a visible
+            // warning instead of discarding the video into an error state.
+            let warning = "Video đã tải xong nhưng phụ đề chưa tải được do YouTube giới hạn tạm thời (HTTP 429). Thử lại sau vài phút để lấy phụ đề.";
+            warn!("⚠️ Downloader job {} completed without subtitles: {}", job_id, warning);
+            let _ = app_clone.emit(
+                "downloader:progress",
+                DownloadProgressPayload {
+                    id: job_id.clone(),
+                    status: "completed".to_string(),
+                    percent: 100.0,
+                    speed: "0 B/s".to_string(),
+                    eta: "00:00".to_string(),
+                    size_text: final_res.current_size,
+                    filename: final_res.detected_filename,
+                    file_path: final_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
+                    error: Some(warning.to_string()),
+                    run_id: Some(my_run_id),
+                },
+            );
         } else {
             let err_msg = if !final_res.stderr_text.trim().is_empty() {
                 final_res.stderr_text.trim().to_string()
@@ -1570,6 +1652,40 @@ mod tests {
 
         let ytdl = with_extension(original, "ytdl");
         assert_eq!(ytdl, PathBuf::from("C:\\Users\\TTC\\Downloads\\my_video.mp4.ytdl"));
+    }
+
+    #[test]
+    fn test_extract_json_object_handles_noise_and_empty() {
+        // Clean payload parses directly.
+        let clean = r#"{"id": "abc", "title": "Hello"}"#;
+        let value = extract_json_object(clean).expect("clean JSON should parse");
+        assert_eq!(value["id"], "abc");
+
+        // Banner lines before the payload are skipped.
+        let prefixed = format!("Downloading remote components...\nDownloaded\n{clean}");
+        let value = extract_json_object(&prefixed).expect("prefixed JSON should parse");
+        assert_eq!(value["title"], "Hello");
+
+        // Trailing informational lines after the payload are ignored.
+        let suffixed = format!("{clean}\n[debug] finished");
+        let value = extract_json_object(&suffixed).expect("suffixed JSON should parse");
+        assert_eq!(value["id"], "abc");
+
+        // Empty / non-JSON stdout (the user-facing EOF bug) yields None.
+        assert!(extract_json_object("").is_none());
+        assert!(extract_json_object("   \r\n").is_none());
+        assert!(extract_json_object("WARNING: nothing to dump").is_none());
+    }
+
+    #[test]
+    fn test_subtitle_only_failure_detection() {
+        let sub_429 =
+            "ERROR: Unable to download video subtitles for 'vi': HTTP Error 429: Too Many Requests";
+        assert!(is_subtitle_only_failure(true, sub_429, true));
+        assert!(!is_subtitle_only_failure(false, sub_429, true)); // subtitles not requested
+        assert!(!is_subtitle_only_failure(true, sub_429, false)); // no media output on disk
+        assert!(!is_subtitle_only_failure(true, "ERROR: Video unavailable", true));
+        assert!(!is_subtitle_only_failure(true, "", true));
     }
 
     #[test]
