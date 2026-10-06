@@ -13,7 +13,7 @@
 ## v0.9.3 — 2026-10-06
 ### Sửa Lỗi Hiển Thị Oan "Không In Ra Đường Dẫn File"
 - **Hiện tượng**: Video tải xong thật (file nằm trên ổ cứng) nhưng app báo ❌ Lỗi *"yt-dlp đã thoát thành công nhưng không in ra đường dẫn file"* — anh Tuấn gặp với video "Arthas: Betrayer of the Light | Warcraft Cinematic" (45MB đã tải xong nhưng UI báo lỗi).
-- **Root cause**: chuỗi đường dẫn do yt-dlp in ra stdout **thỉnh thoảng bị hỏng mã hoá trên Windows** (quan sát bằng byte: `C:` biến thành `C#`, ký tự fullwidth `：｜` bị xoá) → app so chuỗi hỏng với ổ đĩa → không thấy file → báo lỗi oan dù yt-dlp exit 0. Không tái hiện ổn định (phụ thuộc trạng thái môi trường console của máy).
+- **Root cause**: khi output của yt-dlp không phải UTF-8, **chuỗi đường dẫn in ra stdout bị mất/thay thế các ký tự mà codepage không biểu diễn được** (fullwidth `：｜`, chữ CJK...) — trong khi file thật trên ổ đĩa vẫn có đủ ký tự → app so chuỗi in ra với ổ đĩa → không thấy file → báo lỗi oan dù yt-dlp exit 0 (hiện tượng không ổn định, phụ thuộc môi trường console của máy).
 - **Fix**: (1) Ép UTF-8 output cho mọi tiến trình yt-dlp (`PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1`); (2) **Không tin chuỗi in ra nữa** — khi yt-dlp exit 0 mà chưa xác minh được file, app quét thư mục tải tìm file media đúng **mã video** (`[<id>]`) làm bằng chứng gốc (an toàn theo luật BUG-046: không bao giờ lấy file của video khác); (3) UI: "Thử lại" thành công sẽ xoá cảnh báo lỗi cũ.
 
 ---

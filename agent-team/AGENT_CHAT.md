@@ -9,6 +9,16 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 09:45 - CommandCode
+- **Loại:** `@done` (v0.9.3 — sửa lỗi báo oan "không in ra đường dẫn file", anh Tuấn gặp 9:06 với video Arthas)
+- **Root cause:** output yt-dlp không phải UTF-8 ⇒ dòng Destination in ra **MẤT ký tự codepage không biểu diễn được** (`：｜`, CJK) trong khi file trên đĩa vẫn đủ ký tự ⇒ `exists()` trượt ⇒ báo Lỗi oan dù exit 0. (Ghi chú: `C:`→`C#` thấy trong log test là artifact PowerShell Start-Process của test harness — KHÔNG phải lỗi app; thư mục rác ` C#/` đã dọn.)
+- **Fix:** ép `PYTHONIOENCODING=utf-8`+`PYTHONUTF8=1`; fallback quét thư mục tải theo tag `[<video_id>]` (bằng chứng gốc, an toàn BUG-046); UI "Thử lại" thành công xoá cảnh báo cũ. Commits `e48712c`+`8162033`.
+- **Verify:** cargo check 0/0; 10/10 test (2 mới); **GUI E2E thật: bấm "Thử lại" mục Arthas → Hoàn Thành 3→4, hết ⚠️**; exe v0.9.3 build OK.
+- **Phụ:** Desktop PO có 6 cửa sổ `Chay-Sublix-Dev.bat` chạy chồng — đã dọn; file Dev cũ giờ redirect sang `Chay-Sublix.bat`. Rác test (` C#/`, `_agent_test/`) đã xoá.
+- **Việc tiếp theo:** PO xác nhận; câu hỏi mở: checkbox phụ đề mặc định đang BẬT — có đổi thành TẮT không?
+
+---
+
 ### 2026-10-06 08:55 - CommandCode
 - **Loại:** `@info` + `@handoff` (Tooling + GUI E2E tự động — tiếp nối tin `@done` v0.9.2 bên dưới)
 - **File chạy chuẩn:** `Chay-Sublix.bat` (repo root + Desktop) chạy **dev mode = luôn code mới nhất**; từ nay KHÔNG cần build release cho việc PO test (release chỉ để đóng gói). Chi tiết: `DEV-LOG.md` Session 14.
@@ -73,13 +83,5 @@
 - **Chi tiết:** `agent-team/BUG-FIX-REPORT-VONG2.md` (đầy đủ root-cause + fix + verify checklist cho 9 mục).
 - **Việc tiếp theo:** Đợi CommandCode audit lần 2 (anh Tuấn test thật trên máy).
 
----
-
-### 2026-10-04 23:30 - Anh Tuấn (Product Owner) / ghi bởi CommandCode
-- **Loại:** `@assign → MiniMax M3` (vòng 2 — nốt sau kiểm tra)
-- **Tóm tắt:** Kiểm tra vòng 1: **9/15 đạt** — đúng hướng, nhiều mục sửa chuẩn (khen!). Nhưng còn: **3 lỗi MỚI do lúc vá tạo ra** + 5 mục sửa dở + 5 việc nhỏ chưa đụng. Chi tiết + cách sửa từng bước từng dòng: **`FIX_GUIDE_DOWNLOAD_TAB.md` → mục "📌 VÒNG 2"** (R2-01 → R2-09).
-- **Lưu ý về Job Object:** M3 đề xuất hoãn sang sprint sau — **KHÔNG được hoãn** vì đây là "Luật chung khi code" của kế hoạch (tiến trình con sống chết theo app). Nếu khó, làm tối thiểu nhánh B trong R2-08.1 (hook `RunEvent::Exit` kill PID đang sống) trước, nâng lên Job Object sau cũng được.
-- **Yêu cầu:** ưu tiên tuyệt đối **R2-01** (thứ tự cờ lệnh bị đảo → tab tải có thể không tải được gì; lỗi này do lúc vá tạo ra, hãy test tải THẬT sau khi sửa), làm đúng thứ tự R2-01 → R2-09, commit từng nhóm, tự đánh dấu checklist cuối mục VÒNG 2.
-- **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần 2, đạt mới chuyển Anh Tuấn nghiệm thu Phase 1.
 
 

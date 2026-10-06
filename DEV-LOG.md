@@ -571,6 +571,30 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-06 — File chạy chuẩn + GUI E2E v0.9.2*
+## Session 15 — 2026-10-06 (v0.9.3: Fix lỗi báo oan "không in ra đường dẫn file")
+
+### Triệu chứng & điều tra
+- Anh Tuấn tải "Arthas: Betrayer of the Light | Warcraft Cinematic" — file 45MB nằm thật trên đĩa nhưng UI báo ❌ Lỗi "yt-dlp đã thoát thành công nhưng không in ra đường dẫn file".
+- Điều tra CLI + hexdump: khi output yt-dlp không phải UTF-8, **dòng `Destination:` in ra bị mất ký tự mà codepage không biểu diễn được** (fullwidth `：｜` — file trên đĩa có `：｜`, dòng log in ra không có) → `Path::exists()` của app trượt → báo lỗi oan dù exit 0.
+- Ghi chú điều tra: hiện tượng `C:`→`C#` nhìn thấy trong vài lần test CLI là **artifact của PowerShell 5.1 `Start-Process` argument-quoting** (đã tạo nhầm thư mục ` C#/` trong repo, đã dọn) — KHÔNG phải lỗi của app.
+
+### Fix (v0.9.3 — commits e48712c + 8162033)
+1. Ép UTF-8 output cho mọi tiến trình yt-dlp: `PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1` (cả download lẫn fetch metadata).
+2. `recover_output_file()` — **bằng chứng gốc trên ổ đĩa**: khi exit 0 mà path in ra không xác minh được, quét thư mục tải tìm file media có tag `[<video_id>]` (chỉ khớp id của chính request — an toàn luật BUG-046; cùng id coi như "đã tải rồi" đúng ngữ nghĩa yt-dlp).
+3. UI: "Thử lại" thành công xoá cảnh báo lỗi cũ (`p.error !== undefined ? p.error : item.error`).
+4. Unit tests mới: `extract_video_id`, `recover_output_file_finds_media_by_video_id`.
+
+### Verification
+- ✅ `cargo check` 0/0; `cargo test --lib downloader` 10/10 PASS.
+- ✅ **GUI E2E thật (agent-browser)**: bấm "🔄 Thử lại" mục Arthas → tab Hoàn Thành 3→4, item hiện đúng tên file đầy đủ (có `：｜`), cảnh báo ⚠️ cũ biến mất.
+- ✅ `npx tauri build --no-bundle` → exe v0.9.3 (~15.2MB).
+
+### Dọn dẹp môi trường
+- Desktop PO có **6 cửa sổ `Chay-Sublix-Dev.bat` chạy chồng** (tranh cổng 1420 / build lock) — đã kill hết; file Dev cũ giờ chỉ redirect sang `Chay-Sublix.bat` chuẩn.
+- Xoá rác test: ` C#/` (artifact harness), `_agent_test/`, `%TEMP%\sublix_v092`.
+
+---
+
+*Last updated: 2026-10-06 — v0.9.3: lỗi báo oan "không in ra đường dẫn file" đã fix + GUI E2E xanh*
 
 

@@ -32,7 +32,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
         category: "Sửa Lỗi Nhỏ",
         icon: "🔧",
         items: [
-          "Video tải xong thật nhưng app báo Lỗi oan ('không in ra đường dẫn file'). Nguyên nhân: chuỗi đường dẫn do yt-dlp in ra thỉnh thoảng bị hỏng mã hoá trên Windows (C: thành C#, mất ký tự fullwidth) nên app không tìm thấy file dù nó đã nằm trên ổ cứng.",
+          "Video tải xong thật nhưng app báo Lỗi oan ('không in ra đường dẫn file'). Nguyên nhân: chuỗi đường dẫn yt-dlp in ra bị mất ký tự đặc biệt (như ：, ｜) khi output không phải UTF-8 — trong khi file thật trên ổ cứng vẫn đủ ký tự, nên app không tìm thấy file dù nó đã tải xong.",
           "Đã sửa: ép UTF-8 cho output yt-dlp + khi exit thành công mà chưa xác minh được file, app quét thư mục tải tìm đúng file theo mã video làm bằng chứng gốc. Bấm 'Thử lại' giờ cũng xoá cảnh báo lỗi cũ khi thành công.",
         ],
       },

@@ -102,6 +102,11 @@
 | `BUG-V092-01` | Kiểm Tra Link: lỗi serde thô `EOF while parsing a value at line 1 column 0` / mất hẳn stderr khi yt-dlp lỗi | `downloader/mod.rs` (`fetch_video_info`) | `spawn()` + `wait_with_output()` BẮT BUỘC phải kèm `Stdio::piped()` cho stdout+stderr — `output()` tự pipe, `spawn()` thì không | ✅ Fixed |
 | `BUG-V092-02` | Tải phụ đề 4 ngôn ngữ bị HTTP 429 khi chạy dồn; job báo ❌ Lỗi oan dù video đã tải xong | `downloader/mod.rs` (`build_download_command` + worker) | Sub giãn cách `--sleep-subtitles 5`; lỗi CHỈ ở sub + media đã có ⇒ báo `completed` + cảnh báo UI (không nuốt lỗi) | ✅ Fixed |
 
+### 🧾 1 Lỗi Fix Tại v0.9.3 (CommandCode — 2026-10-06):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-V092-03` | Video tải xong thật nhưng app báo ❌ Lỗi "không in ra đường dẫn file" — dòng path yt-dlp in ra bị mất ký tự codepage không biểu diễn được (`：｜`, CJK) khi output không phải UTF-8 | `downloader/mod.rs` (`start_download`, `build_download_command`) | KHÔNG chỉ tin chuỗi in ra: xác minh "bằng chứng gốc" trên ổ đĩa theo mã video + ép `PYTHONIOENCODING=utf-8`/`PYTHONUTF8=1` cho mọi tiến trình yt-dlp | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -243,4 +248,10 @@
 - **File:** `src-tauri/src/downloader/mod.rs` (`build_download_command`, worker thread)
 - **Root Cause:** 4 ngôn ngữ × (manual + auto) = burst request phụ đề liên tiếp → YouTube trả 429; rate-limit phía server, kể cả delay 5s chạy dồn vẫn có thể dính. yt-dlp exit 1 ⇒ app phủ định cả job dù file video đã nằm trên ổ cứng.
 - **Cách fix & Bài học:** `--sleep-subtitles 5` giãn cách request + khi lỗi CHỈ ở subtitle mà media đã có ⇒ emit `completed` kèm cảnh báo UI. *Rate-limit server không xóa được 100% bằng client — thiết kế phải "degrade gracefully", giữ kết quả đã có.*
+
+### [BUG-V092-03] yt-dlp in đường dẫn mất ký tự codepage — job "Lỗi" oan dù file đã tải xong
+- **Ngày:** 2026-10-06 | **Phát hiện bởi:** Anh Tuấn (screenshot) | **Fix bởi:** CommandCode | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`start_download`, `build_download_command`, `fetch_video_info`)
+- **Root Cause:** Khi output của yt-dlp không phải UTF-8, dòng `[download] Destination: <path>` bị mất/thay thế ký tự mà codepage không biểu diễn được (fullwidth `：｜`, CJK). File trên đĩa vẫn đủ ký tự ⇒ `Path::exists()` trượt ⇒ app báo "thoát thành công nhưng không in ra đường dẫn file" oan dù yt-dlp exit 0.
+- **Cách fix & Bài học:** (1) Ép `PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1` cho mọi tiến trình yt-dlp; (2) Recovery "bằng chứng gốc": exit 0 mà path không verify được ⇒ quét thư mục tải tìm media theo tag `[<video_id>]` (chỉ khớp id của chính request — luật BUG-046). *Không bao giờ chỉ tin chuỗi text do tool in ra để xác minh sự tồn tại của file — phải hỏi thẳng filesystem.*
 
