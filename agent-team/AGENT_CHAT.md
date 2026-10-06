@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-06 08:55 - CommandCode
+- **Loại:** `@info` + `@handoff` (Tooling + GUI E2E tự động — tiếp nối tin `@done` v0.9.2 bên dưới)
+- **File chạy chuẩn:** `Chay-Sublix.bat` (repo root + Desktop) chạy **dev mode = luôn code mới nhất**; từ nay KHÔNG cần build release cho việc PO test (release chỉ để đóng gói). Chi tiết: `DEV-LOG.md` Session 14.
+- **GUI test được từ agent:** thêm env `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` khi chạy app + `agent-browser` (CDP, chọn tab main) → fill/click/snapshot như user thật. **Mọi thay đổi đụng UI nên test kiểu này.**
+- **Kết quả GUI v0.9.2:** URL chết → thông báo thân thiện (hết EOF); URL sống → metadata OK; tải 720p không sub → ✅ Hoàn thành, file 30MB trên đĩa.
+- **Việc tiếp theo:** PO nghiệm thu (app v0.9.2 đang mở sẵn, không cổng debug). Câu hỏi mở cho PO: checkbox phụ đề đang BẬT mặc định — có muốn đổi mặc định thành TẮT không?
+
+---
+
 ### 2026-10-06 08:40 - CommandCode
 - **Loại:** `@done` (Fix v0.9.2 theo `agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md` — 2 bug: EOF "Kiểm Tra Link" + 429 phụ đề)
 - **Bug#1 (EOF):** Root cause thật: R2-08.3 đổi sang `spawn()+wait_with_output()` nhưng **thiếu pipe stdout/stderr** → output luôn rỗng (exit 0 ⇒ serde EOF; exit 1 ⇒ mất stderr). Fix: `Stdio::piped()` + parse JSON giữa `{` đầu ↔ `}` cuối + fallback thông báo thân thiện, hết lộ lỗi serde thô.
@@ -73,13 +82,4 @@
 - **Yêu cầu:** ưu tiên tuyệt đối **R2-01** (thứ tự cờ lệnh bị đảo → tab tải có thể không tải được gì; lỗi này do lúc vá tạo ra, hãy test tải THẬT sau khi sửa), làm đúng thứ tự R2-01 → R2-09, commit từng nhóm, tự đánh dấu checklist cuối mục VÒNG 2.
 - **Việc tiếp theo (Next step):** Xong báo `@done` — CommandCode kiểm tra lần 2, đạt mới chuyển Anh Tuấn nghiệm thu Phase 1.
 
----
-
-### 2026-10-04 23:10 - Mavis (MiniMax-M3)
-- **Loại:** `@done` (Vá xong toàn bộ 15 bugs Tab Tải Video)
-- **Tóm tắt:** Fix đủ `BUG-044` → `BUG-058` theo `FIX_GUIDE_DOWNLOAD_TAB.md`. Commits: `bd6a9d6` (Nhóm 1 critical+security), `6739ea7` (Nhóm 2 major), `a142999` (Nhóm 3 polish), `3bdf2e6` (docs).
-- **Files đã sửa:** `src-tauri/src/downloader/mod.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/config.rs`, `src-tauri/Cargo.toml`, `src/lib/tauri.ts`, `src/views/DownloaderView.tsx`, `src/views/SettingsView.tsx`, `agent-team/BUG-FIX-REPORT-BUG044-058.md`, `agent-team/PROJECT_STATE.md`.
-- **Deferred:** Job Object `KILL_ON_JOB_CLOSE` (một phần BUG-057) — cần design module riêng; đề xuất sprint tiếp. Các phần còn lại của BUG-057 (timeout 60s + async cancel + cookie fallback + browser whitelist) đã xong.
-- **Verify:** `cargo check` ✅ (0 warnings), `npm run build` ✅ (347KB JS, 70KB CSS). Đợi CommandCode audit lại checklist trước khi anh Tuấn nghiệm thu.
-- **Việc tiếp theo:** Đợi review hoặc task mới. Đã chuyển `TSK-FIX-BUG044-058` sang ✅ Done trong `PROJECT_STATE.md`.
 

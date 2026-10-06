@@ -553,6 +553,24 @@ sublix/
 
 ---
 
-*Last updated: 2026-10-04 — LLM Engine Switcher & Local Qwen 3 GPU Batching (v0.8.0)*
+## Session 14 — 2026-10-06 (File chạy chuẩn + Lần đầu Test GUI tự động + v0.9.2)
+
+### What was done
+- **Fix v0.9.2 (CommandCode)**: 2 bug từ `agent-team/HANDOFF_V0.9.2_BUG_EOF_AND_429.md` — (1) EOF "Kiểm Tra Link" (root cause: R2-08.3 thiếu pipe stdout/stderr trong `fetch_video_info`); (2) HTTP 429 phụ đề (`--sleep-subtitles 5` + lỗi chỉ ở sub mà video đã xong → ✅ Hoàn thành kèm cảnh báo UI). Commits `54f5ae2` + `6d7bc1b` + `2f6a49c`.
+- **File chạy chuẩn `Chay-Sublix.bat`** (repo root + Desktop): chạy **dev mode** (`npm run tauri dev`) — mỗi lần mở = code mới nhất, sửa UI hot-reload, sửa Rust tự rebuild. **Từ nay không cần build release cho việc PO test nữa** (release exe chỉ dùng để đóng gói/phát hành — xem BUG-H07).
+- **Lần đầu test GUI từ agent**: bật `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` khi chạy app → `agent-browser` (CDP) fill/click/snapshot như user thật. Lưu ý: main + overlay là 2 tab CDP, chọn tab chính (`http://localhost:1420/`).
+
+### Verification (GUI thật, v0.9.2)
+- ✅ URL chết (`uqkD4SxPK0I`) → UI hiện "⚠️ Không thể lấy thông tin video: ... This video is unavailable" (hết lỗi EOF).
+- ✅ URL sống → metadata card hiện đúng (title/thumbnail/hàng chờ).
+- ✅ Bấm tải 720p, KHÔNG sub → ✅ Hoàn thành; file 30,002,640 bytes trong `%APPDATA%\com.sublix.desktop\downloads`.
+
+### Lessons
+- Sửa luồng app (Tauri/IPC/UI) thì phải test GUI thật — CLI chỉ chứng minh ruột yt-dlp.
+- Cổng debug chỉ bật khi test; giao PO thì mở lại app sạch (không port).
+
+---
+
+*Last updated: 2026-10-06 — File chạy chuẩn + GUI E2E v0.9.2*
 
 
