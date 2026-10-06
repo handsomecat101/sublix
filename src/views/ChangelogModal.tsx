@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.4",
+    date: "06/10/2026",
+    title: "Nút Chạy Video & Hiển Thị Thư Mục Tải",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tiện Ích Tải Video",
+        icon: "▶️",
+        items: [
+          "Nút '▶ Chạy Video' trên mỗi video đã tải xong — phát ngay bằng trình phát mặc định của Windows (xử lý đúng cả tên file có ký tự đặc biệt như ： ｜).",
+          "Hiển thị rõ thư mục tải ngay màn hình Tải Video: '📁 File tải về được lưu tại: C:\\...' — biết chính xác file nằm ở đâu; nút 'Mở Thư Mục' mở Explorer chọn sẵn file.",
+          "Mặc định TẮT 'Tự động trích xuất phụ đề' — ưu tiên video, tải nhanh hơn, tránh rate-limit 429 của YouTube khi không cần phụ đề.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.3",
     date: "06/10/2026",
     title: "Sửa Lỗi 'Không In Ra Đường Dẫn File' Oan",
-    isCurrent: true,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

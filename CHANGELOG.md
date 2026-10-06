@@ -10,6 +10,14 @@
 
 ---
 
+## v0.9.4 — 2026-10-06
+### Thêm Nút "Chạy Video" & Hiển Thị Rõ Thư Mục Tải
+- **▶ Chạy Video**: mỗi video đã tải xong giờ có nút phát ngay bằng trình phát mặc định của Windows (dùng ShellExecuteW — xử lý đúng cả tên file có ký tự đặc biệt).
+- **Hiển thị thư mục tải**: màn hình Tải Video hiện rõ dòng *"📁 File tải về được lưu tại: C:\...\downloads"* — không còn phải đoán file nằm ở đâu. Nút "Mở Thư Mục" vẫn mở Explorer chọn sẵn file.
+- **Mặc định TẮT "Trích xuất phụ đề"**: theo nhu cầu thực tế (ưu tiên video), checkbox phụ đề mặc định tắt — tải nhanh hơn và tránh rate-limit 429 khi không cần sub.
+
+---
+
 ## v0.9.3 — 2026-10-06
 ### Sửa Lỗi Hiển Thị Oan "Không In Ra Đường Dẫn File"
 - **Hiện tượng**: Video tải xong thật (file nằm trên ổ cứng) nhưng app báo ❌ Lỗi *"yt-dlp đã thoát thành công nhưng không in ra đường dẫn file"* — anh Tuấn gặp với video "Arthas: Betrayer of the Light | Warcraft Cinematic" (45MB đã tải xong nhưng UI báo lỗi).
