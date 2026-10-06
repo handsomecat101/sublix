@@ -221,9 +221,152 @@ pub fn find_edge_tts() -> PathBuf {
     PathBuf::from("edge-tts")
 }
 
+// ===========================================================================
+// Kokoro-Vietnamese — LOCAL, OFFLINE TTS engine (Edge-TTS is only a fallback).
+// The ONNX model files live in `models/voice/kokoro-vi/`. Inference runs via a
+// tiny Python sidecar (onnxruntime + vig2p) that is embedded in the binary so
+// a packaged build always carries it.
+// ===========================================================================
+
+/// Embedded Kokoro sidecar script. Written to disk on first use.
+const KOKORO_TTS_SCRIPT: &str = include_str!("../../scripts/kokoro_vi_tts.py");
+
+/// Prefix used in voice ids / speaker.voice to select the local Kokoro engine.
+pub const KOKORO_VOICE_PREFIX: &str = "kokoro:";
+
+/// Helper to find a usable python interpreter for the Kokoro sidecar.
+pub fn find_python() -> PathBuf {
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        let p = PathBuf::from(format!(r"{}\Python\Python313\python.exe", app_data));
+        if p.exists() {
+            return p;
+        }
+    }
+    for cand in [
+        r"C:\Program Files\Python313\python.exe",
+        r"C:\Program Files\Python312\python.exe",
+        r"C:\Program Files\Python311\python.exe",
+    ] {
+        let pb = PathBuf::from(cand);
+        if pb.exists() {
+            return pb;
+        }
+    }
+    PathBuf::from("python")
+}
+
+/// Directory holding the Kokoro-Vietnamese artifacts.
+pub fn kokoro_model_dir() -> PathBuf {
+    crate::config::app_base_dir()
+        .join("models")
+        .join("voice")
+        .join("kokoro-vi")
+}
+
+/// True when the local Kokoro model is fully present on disk.
+pub fn kokoro_available() -> bool {
+    let dir = kokoro_model_dir();
+    dir.join("kokoro_vi.onnx").exists()
+        && dir.join("config.json").exists()
+        && (dir.join("kokoro_vi_voicepack.pt").exists()
+            || dir.join("voicepacks").join("diem_trinh.pt").exists())
+}
+
+/// Write the embedded sidecar to the app's scripts dir (idempotent) and return it.
+fn ensure_kokoro_script() -> Result<PathBuf> {
+    let dir = crate::config::app_base_dir().join("scripts");
+    fs::create_dir_all(&dir).with_context(|| format!("Tạo thư mục {}", dir.display()))?;
+    let path = dir.join("kokoro_vi_tts.py");
+    let needs_write = match fs::read_to_string(&path) {
+        Ok(existing) => existing != KOKORO_TTS_SCRIPT,
+        Err(_) => true,
+    };
+    if needs_write {
+        fs::write(&path, KOKORO_TTS_SCRIPT)
+            .with_context(|| format!("Ghi sidecar vào {}", path.display()))?;
+    }
+    Ok(path)
+}
+
+/// Synthesize with the local Kokoro-Vietnamese ONNX model (offline).
+pub fn synthesize_kokoro(text: &str, voice_id: &str, out_path: &Path) -> Result<()> {
+    let model_dir = kokoro_model_dir();
+    if !model_dir.join("kokoro_vi.onnx").exists() {
+        anyhow::bail!(
+            "Chưa tải model Kokoro-Vietnamese (thiếu {}). Vào tab Studio Lồng Tiếng để tải.",
+            model_dir.join("kokoro_vi.onnx").display()
+        );
+    }
+    let script = ensure_kokoro_script()?;
+    let python = find_python();
+
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script)
+        .arg("--text")
+        .arg(text)
+        .arg("--voice")
+        .arg(voice_id)
+        .arg("--out")
+        .arg(out_path)
+        .arg("--model-dir")
+        .arg(&model_dir)
+        .arg("--device")
+        .arg("cpu");
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = cmd
+        .status()
+        .with_context(|| "Không chạy được sidecar Kokoro (thiếu python?)")?;
+    if !status.success() {
+        anyhow::bail!("Kokoro TTS thất bại (exit code: {:?})", status.code());
+    }
+    Ok(())
+}
+
+/// True when a produced audio file exists and FFmpeg can read a real duration.
+fn is_valid_audio(path: &Path) -> bool {
+    match fs::metadata(path) {
+        Ok(meta) if meta.len() > 2048 => get_audio_duration(path).is_ok(),
+        _ => false,
+    }
+}
+
+/// 14 preset Vietnamese Kokoro voices shipped with the model (offline, CPU-friendly).
+pub fn get_kokoro_voices() -> Vec<VoicePreset> {
+    // (voice_id, display_name, gender)
+    const KOKORO_VOICES: &[(&str, &str, &str)] = &[
+        ("diem_trinh", "Diễm Trinh", "female"),
+        ("hung_thinh", "Hưng Thịnh", "male"),
+        ("mai_linh", "Mai Linh", "female"),
+        ("mai_loan", "Mai Loan", "female"),
+        ("manh_dung", "Mạnh Dũng", "male"),
+        ("my_yen", "Mỹ Yến", "female"),
+        ("ngoc_huyen", "Ngọc Huyền", "female"),
+        ("phat_tai", "Phát Tài", "male"),
+        ("thanh_dat", "Thành Đạt", "male"),
+        ("thuc_trinh", "Thục Trinh", "female"),
+        ("tuan_ngoc", "Tuấn Ngọc", "male"),
+        ("storyvert", "Storyvert", "female"),
+        ("duc_an", "Đức An", "male"),
+        ("duc_duy", "Đức Duy", "male"),
+    ];
+    KOKORO_VOICES
+        .iter()
+        .map(|(id, name, gender)| VoicePreset {
+            id: format!("kokoro:{}", id),
+            name: format!("VN • {} (Kokoro — offline)", name),
+            gender: gender.to_string(),
+            lang: "vi".to_string(),
+            description: format!("Giọng {} tiếng Việt chạy offline bằng Kokoro ONNX.", name),
+        })
+        .collect()
+}
+
 /// Get curated list of high-quality neural voices
 pub fn get_preset_voices() -> Vec<VoicePreset> {
-    vec![
+    let mut voices = vec![
         VoicePreset {
             id: "vi-VN-NamMinhNeural".to_string(),
             name: "Nam Minh (Nam Điện Ảnh - Trầm Ấm)".to_string(),
@@ -280,11 +423,21 @@ pub fn get_preset_voices() -> Vec<VoicePreset> {
             lang: "zh".to_string(),
             description: "Expressive Chinese female voice".to_string(),
         },
-    ]
+    ];
+    voices.extend(get_kokoro_voices());
+    voices
 }
 
 /// Synthesize a speech file via edge-tts with python -m fallback
 pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_path: &Path) -> Result<()> {
+    // Local, offline engine first. Anything not prefixed with `kokoro:` uses the
+    // (optional, network) Edge-TTS fallback below.
+    if let Some(kokoro_id) = voice.strip_prefix(KOKORO_VOICE_PREFIX) {
+        let id = kokoro_id.trim();
+        let voice_id = if id.is_empty() { "diem_trinh" } else { id };
+        return synthesize_kokoro(text, voice_id, out_path);
+    }
+
     let tts_bin = find_edge_tts();
     let mut cmd = Command::new(&tts_bin);
     cmd.arg("--text")
@@ -611,11 +764,21 @@ pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) 
                     (format!("讲述人 {} (女)", idx + 1), "zh-CN-XiaoxiaoNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
                 }
             }
-            _ => { // vi
+            _ => { // vi — ưu tiên engine Kokoro chạy offline khi đã tải model
                 if is_male {
-                    (format!("Nhân vật {} (Nam)", idx + 1), "vi-VN-NamMinhNeural".to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                    let voice = if kokoro_available() {
+                        ["kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat", "kokoro:phat_tai"][p_idx % 4]
+                    } else {
+                        "vi-VN-NamMinhNeural"
+                    };
+                    (format!("Nhân vật {} (Nam)", idx + 1), voice.to_string(), male_pitches[p_idx].to_string(), rates[r_idx].to_string())
                 } else {
-                    (format!("Nhân vật {} (Nữ)", idx + 1), "vi-VN-HoaiMyNeural".to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
+                    let voice = if kokoro_available() {
+                        ["kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen", "kokoro:diem_trinh"][p_idx % 4]
+                    } else {
+                        "vi-VN-HoaiMyNeural"
+                    };
+                    (format!("Nhân vật {} (Nữ)", idx + 1), voice.to_string(), female_pitches[p_idx].to_string(), rates[r_idx].to_string())
                 }
             }
         };
@@ -792,17 +955,28 @@ pub fn diarize_and_script_via_minimax(
                     ("zh-CN-YunxiNeural".to_string(), p.to_string(), r.to_string())
                 }
             }
-            _ => { // vi
+            _ => { // vi — ưu tiên engine Kokoro chạy offline khi đã tải model
+                let use_kokoro = kokoro_available();
                 if is_female {
                     let p = female_pitches[female_count % female_pitches.len()];
                     let r = rates[female_count % rates.len()];
+                    let voice = if use_kokoro {
+                        ["kokoro:mai_linh", "kokoro:ngoc_huyen", "kokoro:my_yen"][female_count % 3]
+                    } else {
+                        "vi-VN-HoaiMyNeural"
+                    };
                     female_count += 1;
-                    ("vi-VN-HoaiMyNeural".to_string(), p.to_string(), r.to_string())
+                    (voice.to_string(), p.to_string(), r.to_string())
                 } else {
                     let p = male_pitches[male_count % male_pitches.len()];
                     let r = rates[male_count % rates.len()];
+                    let voice = if use_kokoro {
+                        ["kokoro:tuan_ngoc", "kokoro:manh_dung", "kokoro:thanh_dat"][male_count % 3]
+                    } else {
+                        "vi-VN-NamMinhNeural"
+                    };
                     male_count += 1;
-                    ("vi-VN-NamMinhNeural".to_string(), p.to_string(), r.to_string())
+                    (voice.to_string(), p.to_string(), r.to_string())
                 }
             }
         };
@@ -1114,6 +1288,7 @@ pub fn export_dubbed_video(
 
     let ffmpeg_bin = find_ffmpeg();
     let mut speech_inputs = Vec::new();
+    let mut skipped_segments: Vec<usize> = Vec::new();
 
     // 1. Synthesize each segment and check duration
     for (i, seg) in project.segments.iter().enumerate() {
@@ -1137,31 +1312,56 @@ pub fn export_dubbed_video(
             .find(|s| s.id == seg.speaker_id)
             .unwrap_or(&project.speakers[0]);
 
-        let seg_mp3 = temp_dir.join(format!("seg_{}.mp3", i));
+        // Kokoro (offline) writes WAV; Edge-TTS writes MP3. FFmpeg reads either.
+        let ext = if speaker.voice.starts_with(KOKORO_VOICE_PREFIX) { "wav" } else { "mp3" };
+        let seg_audio = temp_dir.join(format!("seg_{}.{}", i, ext));
         let synth_text = if seg.dubbed_text.trim().is_empty() {
             "..."
         } else {
             &seg.dubbed_text
         };
 
-        if let Err(e) = synthesize_speech(
-            synth_text,
-            &speaker.voice,
-            &speaker.rate,
-            &speaker.pitch,
-            &seg_mp3,
-        ) {
-            warn!("TTS failed for segment {i} ('{}'): {e:#}. Continuing with fallback...", seg.dubbed_text);
+        // Retry-then-skip: never let an empty/invalid file poison the final mux.
+        let mut synth_ok = false;
+        let mut last_err = String::new();
+        for attempt in 0..2 {
+            let _ = fs::remove_file(&seg_audio);
+            match synthesize_speech(
+                synth_text,
+                &speaker.voice,
+                &speaker.rate,
+                &speaker.pitch,
+                &seg_audio,
+            ) {
+                Ok(()) if is_valid_audio(&seg_audio) => {
+                    synth_ok = true;
+                    break;
+                }
+                Ok(()) => {
+                    last_err = "file audio rỗng/không hợp lệ".to_string();
+                }
+                Err(e) => {
+                    last_err = format!("{e:#}");
+                }
+            }
+            if attempt == 0 {
+                warn!("TTS câu {i} lần 1 thất bại ({last_err}). Thử lại...");
+            }
         }
 
-        if !seg_mp3.exists() {
+        if !synth_ok {
+            warn!(
+                "⏭️ Bỏ qua câu {} ('{}'): {}. Video vẫn xuất tiếp các câu còn lại.",
+                seg.id, seg.dubbed_text, last_err
+            );
+            skipped_segments.push(seg.id);
             continue;
         }
 
         let slot_duration = (seg.end_sec - seg.start_sec).max(0.5);
 
-        // Get actual duration of generated mp3 via ffprobe/ffmpeg
-        let actual_dur = get_audio_duration(&seg_mp3).unwrap_or(slot_duration);
+        // Get actual duration of generated audio via ffprobe/ffmpeg
+        let actual_dur = get_audio_duration(&seg_audio).unwrap_or(slot_duration);
 
         // If audio duration is longer than the dialogue slot, time-stretch with atempo
         let final_audio = if actual_dur > slot_duration * 1.05 {
@@ -1171,7 +1371,7 @@ pub fn export_dubbed_video(
             stretch_cmd
                 .arg("-y")
                 .arg("-i")
-                .arg(&seg_mp3)
+                .arg(&seg_audio)
                 .arg("-filter:a")
                 .arg(format!("atempo={:.2}", tempo))
                 .arg(&stretched);
@@ -1182,10 +1382,10 @@ pub fn export_dubbed_video(
             if run_child_with_cancel(stretch_cmd, my_gen).map(|s| s.success()).unwrap_or(false) {
                 stretched
             } else {
-                seg_mp3
+                seg_audio
             }
         } else {
-            seg_mp3
+            seg_audio
         };
 
         if final_audio.exists() {
@@ -1196,6 +1396,31 @@ pub fn export_dubbed_video(
     if is_generation_cancelled(my_gen) {
         let _ = fs::remove_dir_all(&temp_dir);
         return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
+    }
+
+    // Report any dialogue lines that could not be synthesized (TTS error / invalid audio).
+    if !skipped_segments.is_empty() {
+        let list = skipped_segments
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        emit(
+            "synthesizing",
+            62.0,
+            &format!(
+                "⚠️ Đã bỏ qua {} câu không tổng hợp được giọng (câu #{}). Video vẫn được xuất.",
+                skipped_segments.len(),
+                list
+            ),
+            total_segs,
+            total_segs,
+        );
+        warn!(
+            "⏭️ Skipped {} segment(s) during export: [{}]",
+            skipped_segments.len(),
+            list
+        );
     }
 
     // Check if user requested True Vocal Isolation via Demucs AI
@@ -1488,6 +1713,19 @@ mod tests {
     }
 
     #[test]
+    fn test_kokoro_voices_registered() {
+        let voices = get_preset_voices();
+        let kokoro: Vec<&VoicePreset> = voices
+            .iter()
+            .filter(|v| v.id.starts_with(KOKORO_VOICE_PREFIX))
+            .collect();
+        assert_eq!(kokoro.len(), 14, "Phải đăng ký đủ 14 giọng Kokoro");
+        assert!(voices.iter().any(|v| v.id == "kokoro:tuan_ngoc"));
+        assert!(voices.iter().any(|v| v.id == "kokoro:mai_linh"));
+        assert!(kokoro.iter().all(|v| v.lang == "vi"));
+    }
+
+    #[test]
     fn test_generation_cancellation() {
         let gen1 = start_new_generation();
         assert!(!is_generation_cancelled(gen1));
@@ -1551,4 +1789,49 @@ mod tests {
             }
         }
     }
+}
+
+/// v0.9.8: Open Windows Explorer with the given file SELECTED in its parent
+/// folder. Used by Studio Lồng Tiếng to jump straight to the dubbed output.
+/// Uses `SHOpenFolderAndSelectItems` (v0.9.4 approach) instead of fragile
+/// `explorer.exe /select,...` quoting — handles exotic characters in paths.
+#[cfg(windows)]
+pub fn open_output_folder(path_str: &str) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::UI::Shell::Common::ITEMIDLIST;
+    use windows::Win32::UI::Shell::{ILFree, SHOpenFolderAndSelectItems, SHParseDisplayName};
+
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
+    }
+    let wide: Vec<u16> = p
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut pidl: *mut ITEMIDLIST = std::ptr::null_mut();
+    unsafe {
+        SHParseDisplayName(
+            windows::core::PCWSTR(wide.as_ptr()),
+            None,
+            &mut pidl,
+            0,
+            None,
+        )
+        .map_err(|e| anyhow::anyhow!("Không phân giải được đường dẫn: {} ({e})", p.display()))?;
+        let result = SHOpenFolderAndSelectItems(pidl as *const ITEMIDLIST, None, 0);
+        ILFree(Some(pidl as *const ITEMIDLIST));
+        result.map_err(|e| anyhow::anyhow!("Không mở được thư mục chứa file ({e})"))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn open_output_folder(path_str: &str) -> Result<()> {
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {path_str}"));
+    }
+    Ok(())
 }

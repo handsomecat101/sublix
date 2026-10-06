@@ -10,6 +10,17 @@
 
 ---
 
+## v0.9.8 — 2026-10-06
+### Studio Lồng Tiếng: Nút "Mở Thư Mục Lồng Tiếng" & "Mở Thư Mục File Gốc"
+- **Vấn đề (anh Tuấn báo):** Tab Lồng Tiếng KHÔNG có nút để mở folder chứa file lồng tiếng đã xuất — user phải tự explorer đến folder.
+- **Fix v0.9.8:** Thêm 2 nút ở thanh "Export Action Bar":
+  - **"📂 Mở Thư Mục Lồng Tiếng"** — chỉ hiện sau khi export thành công → mở folder chứa file output `*_dubbed.mp4` (có select file).
+  - **"📂 Mở Thư Mục File Gốc"** — luôn hiển thị khi đã chọn video input → mở folder chứa video gốc (user có thể duyệt cùng folder với file .srt / audio khác).
+- **Backend mới:** Tauri command `dubbing_open_output_folder(path)` dùng `SHOpenFolderAndSelectItems` (approach giống downloader v0.9.4, fix lỗi path có ký tự đặc biệt) — thay thế `reveal_in_explorer` cũ dùng `explorer.exe /select,...` (dễ fail với path CJK).
+- Phạm vi: `src-tauri/src/dubbing/mod.rs` (open_output_folder function), `src-tauri/src/lib.rs` (Tauri command), `src/lib/tauri.ts` (method `dubbingOpenOutputFolder`), `src/views/DubbingStudioView.tsx` (UI).
+
+---
+
 ## v0.9.7 — 2026-10-06
 ### Tối Ưu Stage Dịch Phụ Đề: Dùng Batch Translate (Tiết Kiệm ~30 Phút/Video)
 - Phát hiện qua AUDIT-SUB (xem `agent-team/AUDIT_SUB_REPORT.md`): pipeline "Tạo phụ đề" với video 21:43 mất **~64 phút** do Stage 3 (Translate MiniMax-M3 API) chiếm **~40 phút** (62% tổng). Code `file_sub.rs:400` loop từng segment → 416 segments × 5.7s ≈ 40 phút.

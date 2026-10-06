@@ -10,6 +10,8 @@ import {
   type DubbingSegment,
   type DubbingProgress,
   type VoicePreset,
+  type VoiceModelStatus,
+  type ModelDownloadProgress,
 } from "../lib/tauri";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import "./DubbingStudioView.css";
@@ -44,6 +46,14 @@ const SAMPLE_PHRASES: Record<string, string> = {
   zh: "你好！我是Sublix的AI配音员，随时准备为您的影视作品提供电影级配音。",
 };
 
+// Slim sub-headers for the compact voice-model picker.
+const VOICE_CATEGORY_TITLES: Record<string, string> = {
+  clone: "🎭 Giọng Clone — nhại giọng diễn viên",
+  preset: "🗣️ Giọng Đọc Sẵn — nhẹ & nhanh",
+  diarization: "👥 Phân Vai — nhận diện ai nói câu nào",
+  cloud: "☁️ Giọng Cloud — dùng API, cần mạng",
+};
+
 export default function DubbingStudioView({
   defaultSourceLang = "ja",
   initialFilePath = "",
@@ -71,6 +81,18 @@ export default function DubbingStudioView({
   const [exportPath, setExportPath] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
 
+  // Compact Voice & Model hub (moved from Settings — model giọng nói thuộc mục Lồng Tiếng)
+  const [voiceModels, setVoiceModels] = useState<VoiceModelStatus[]>([]);
+  const [voiceBusyId, setVoiceBusyId] = useState<string | null>(null);
+  const [showVoiceHub, setShowVoiceHub] = useState<boolean>(false);
+  const [voiceProgress, setVoiceProgress] = useState<Record<string, {
+    percent: number;
+    downloaded_bytes?: number;
+    total_bytes?: number;
+    phase?: string;
+    error?: string;
+  }>>({});
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load preset voices & config on mount
@@ -91,8 +113,31 @@ export default function DubbingStudioView({
       setProgress(event.payload);
     });
 
+    // Voice model hub: catalog + live download progress (reused backend events).
+    sublix.voiceModelList().then(setVoiceModels).catch((err) => {
+      console.warn("Failed to load voice models:", err);
+    });
+    const pModel = listen<ModelDownloadProgress>("model:download_progress", (event) => {
+      const p = event.payload;
+      if (p.component !== "voice") return;
+      setVoiceProgress((prev) => ({
+        ...prev,
+        [p.name]: {
+          percent: p.percent,
+          downloaded_bytes: p.downloaded_bytes,
+          total_bytes: p.total_bytes,
+          phase: p.phase,
+          error: p.error,
+        },
+      }));
+      if (p.phase === "done" || p.phase === "error") {
+        sublix.voiceModelList().then(setVoiceModels).catch(() => {});
+      }
+    });
+
     return () => {
       pProgress.then((u) => u()).catch(() => {});
+      pModel.then((u) => u()).catch(() => {});
     };
   }, []);
 
@@ -163,6 +208,32 @@ export default function DubbingStudioView({
       }
     } catch (err) {
       setStatusMessage({ kind: "error", text: `Lỗi chọn file: ${err}` });
+    }
+  }
+
+  // ---- Compact Voice & Model hub helpers ----
+  function formatSizeMb(mb: number): string {
+    if (mb <= 0) return "—";
+    return mb >= 1024 ? `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB` : `${Math.round(mb)} MB`;
+  }
+
+  function formatBytes(b?: number): string {
+    if (!b || b <= 0) return "—";
+    const mb = b / 1048576;
+    return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${Math.max(1, Math.round(mb))} MB`;
+  }
+
+  async function handleVoiceDownload(id: string) {
+    if (voiceBusyId) return;
+    setVoiceBusyId(id);
+    try {
+      await sublix.voiceModelDownload(id);
+    } catch (err) {
+      console.error("Voice model download failed:", err);
+      setStatusMessage({ kind: "error", text: `Tải model thất bại: ${err}` });
+    } finally {
+      setVoiceBusyId(null);
+      sublix.voiceModelList().then(setVoiceModels).catch(() => {});
     }
   }
 
@@ -426,6 +497,81 @@ export default function DubbingStudioView({
           <span>{statusMessage.text}</span>
         </div>
       )}
+
+      {/* COMPACT VOICE & MODEL PICKER (chuyển từ Settings — model giọng nói thuộc mục Lồng Tiếng) */}
+      <div className="dubbing-card dubbing-voice-hub">
+        <button
+          type="button"
+          className="dubbing-voice-hub-head"
+          onClick={() => setShowVoiceHub((v) => !v)}
+          aria-expanded={showVoiceHub}
+          title="Bấm để chọn giọng và tải model về dùng ngay"
+        >
+          <span className="dubbing-voice-hub-title">🎛 Chọn Giọng &amp; Tải Model</span>
+          <span className="dubbing-voice-hub-hint">
+            {voiceModels.length > 0
+              ? `${voiceModels.filter((m) => m.downloaded).length}/${voiceModels.length} model đã tải`
+              : "Đang nạp danh sách…"}{" "}
+            • Kokoro offline dùng ngay
+          </span>
+          <span className="dubbing-voice-hub-caret">{showVoiceHub ? "▲" : "▼"}</span>
+        </button>
+
+        {showVoiceHub && (
+          <div className="dubbing-voice-hub-body">
+            {voiceModels.length === 0 && (
+              <p className="dubbing-card-desc" style={{ margin: "4px 0" }}>Đang nạp danh sách model…</p>
+            )}
+            {(["clone", "preset", "diarization", "cloud"] as const).map((cat) => {
+              const items = voiceModels.filter((m) => m.category === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <div className="dubbing-voice-hub-cat">{VOICE_CATEGORY_TITLES[cat]}</div>
+                  {items.map((m) => {
+                    const prog = voiceProgress[m.id];
+                    const busy = !!prog && prog.phase !== "done" && prog.phase !== "error";
+                    return (
+                      <div key={m.id} className="dubbing-voice-hub-row">
+                        <span className="dubbing-voice-hub-name">{m.name}</span>
+                        <span className="dubbing-voice-hub-size">{formatSizeMb(m.size_mb)}</span>
+                        <span className="dubbing-voice-hub-action">
+                          {m.is_cloud ? (
+                            <span className="dubbing-voice-hub-state cloud">☁️ Dùng API</span>
+                          ) : m.downloaded ? (
+                            <span className="dubbing-voice-hub-state">✅ Đã tải</span>
+                          ) : busy ? (
+                            <span className="dubbing-voice-hub-progress">
+                              <span className="dubbing-voice-hub-plabel">
+                                Đang tải {prog?.percent ?? 0}% — {formatBytes(prog?.downloaded_bytes)} /{" "}
+                                {prog?.total_bytes ? formatBytes(prog.total_bytes) : formatSizeMb(m.size_mb)}
+                              </span>
+                              <span className="dubbing-voice-hub-bar">
+                                <span style={{ width: `${prog?.percent ?? 0}%` }} />
+                              </span>
+                            </span>
+                          ) : m.files.length === 0 ? (
+                            <span className="dubbing-voice-hub-state locked">🔒 Cần HF</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="dubbing-voice-hub-dl"
+                              disabled={voiceBusyId !== null}
+                              onClick={() => handleVoiceDownload(m.id)}
+                            >
+                              ⬇️ Tải về ({formatSizeMb(m.size_mb)})
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* SECTION 1: MEDIA INPUT & DRAG AND DROP */}
       <div className="dubbing-card">
@@ -951,21 +1097,36 @@ export default function DubbingStudioView({
 
           {/* Export Action Bar */}
           <div className="dubbing-export-bar">
-            <div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               {exportPath && (
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <>
                   <span style={{ fontSize: 13, color: "var(--ok)", fontWeight: 600 }}>
                     ✅ Đã xuất: {exportPath.split(/[\\/]/).pop()}
                   </span>
                   <button
                     type="button"
-                    onClick={() => sublix.revealInExplorer(exportPath)}
+                    onClick={() => sublix.dubbingOpenOutputFolder(exportPath)}
                     className="dubbing-btn dubbing-btn-secondary"
                     style={{ fontSize: 12, padding: "6px 12px" }}
+                    title="Mở thư mục chứa video lồng tiếng vừa xuất"
                   >
-                    📁 Mở Thư Mục
+                    📂 Mở Thư Mục Lồng Tiếng
                   </button>
-                </div>
+                </>
+              )}
+              {/* v0.9.8: Always-on button to jump to the input video's folder, so users
+                  can browse other files in the same folder (subtitles, srt, raw audio) while
+                  the analysis is running or before export. */}
+              {filePath && (
+                <button
+                  type="button"
+                  onClick={() => sublix.dubbingOpenOutputFolder(filePath)}
+                  className="dubbing-btn dubbing-btn-secondary"
+                  style={{ fontSize: 12, padding: "6px 12px" }}
+                  title="Mở thư mục chứa video gốc đã chọn"
+                >
+                  📂 Mở Thư Mục File Gốc
+                </button>
               )}
             </div>
 

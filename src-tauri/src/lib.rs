@@ -18,6 +18,7 @@ pub mod file_sub;
 pub mod overlay;
 pub mod stt;
 pub mod translate;
+pub mod voice_models;
 
 use audio::{
     capture_to_wav, is_live_running, list_render_devices, start_live_capture, stop_live_capture,
@@ -132,6 +133,8 @@ pub fn run() {
             set_stt_engine_preference,
             set_translation_engine_preference,
             check_setup,
+            voice_model_list,
+            voice_model_download,
             download_whisper_binary_cmd,
             download_stt_model_cmd,
             download_translation_model_cmd,
@@ -147,6 +150,7 @@ pub fn run() {
             dubbing_preview_tts,
             dubbing_export,
             dubbing_cancel,
+            dubbing_open_output_folder,
             downloader_get_info,
             downloader_start,
             downloader_pause,
@@ -610,6 +614,57 @@ fn check_setup() -> SetupStatus {
 }
 
 #[tauri::command]
+fn voice_model_list() -> Vec<voice_models::VoiceModelStatus> {
+    voice_models::list()
+}
+
+#[tauri::command]
+async fn voice_model_download(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let id_progress = id.clone();
+    let app_handle = app.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let app_p = app_handle.clone();
+        let name = id_progress.clone();
+        let mut last_pct = 0u32;
+        voice_models::download_with_progress(&id_progress, move |downloaded, total, pct| {
+            if pct > last_pct || pct == 100 {
+                last_pct = pct;
+                let _ = app_p.emit(
+                    "model:download_progress",
+                    serde_json::json!({
+                        "component": "voice",
+                        "name": name,
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total,
+                        "percent": pct
+                    }),
+                );
+            }
+        })
+    })
+    .await
+    .map_err(|e| format!("{e}"))?;
+
+    match result {
+        Ok(_) => {
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({ "component": "voice", "name": id, "percent": 100, "phase": "done" }),
+            );
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("{e:#}");
+            let _ = app.emit(
+                "model:download_progress",
+                serde_json::json!({ "component": "voice", "name": id, "phase": "error", "error": msg }),
+            );
+            Err(msg)
+        }
+    }
+}
+
+#[tauri::command]
 fn download_whisper_binary_cmd(app: tauri::AppHandle) -> Result<(), String> {
     let _ = app.emit(
         "setup:progress",
@@ -1012,6 +1067,13 @@ async fn dubbing_export(
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| format!("{e:#}"))
+}
+
+/// v0.9.8: Open Windows Explorer with the dubbed video file selected in its
+/// parent folder, so users can jump straight to the finished MP4.
+#[tauri::command]
+fn dubbing_open_output_folder(path: String) -> Result<(), String> {
+    dubbing::open_output_folder(&path).map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]

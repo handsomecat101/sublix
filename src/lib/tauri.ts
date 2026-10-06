@@ -35,8 +35,30 @@ export interface ModelStatusItem {
   downloaded: boolean;
 }
 
+export interface VoiceModelFile {
+  url: string;
+  filename: string;
+  size_mb: number;
+}
+
+export interface VoiceModelStatus {
+  id: string;
+  name: string;
+  label: string;
+  desc: string;
+  category: "clone" | "preset" | "diarization" | "cloud";
+  size_mb: number;
+  size_note: string;
+  vram_note: string;
+  license: string;
+  vi_support: string;
+  is_cloud: boolean;
+  files: VoiceModelFile[];
+  downloaded: boolean;
+}
+
 export interface ModelDownloadProgress {
-  component: "stt" | "translation";
+  component: "stt" | "translation" | "voice";
   name: string;
   downloaded_bytes?: number;
   total_bytes?: number;
@@ -307,6 +329,14 @@ export const sublix = {
     return await invoke<VoicePreset[]>("dubbing_get_voices");
   },
 
+  async voiceModelList(): Promise<VoiceModelStatus[]> {
+    return await invoke<VoiceModelStatus[]>("voice_model_list");
+  },
+
+  async voiceModelDownload(id: string): Promise<void> {
+    return await invoke<void>("voice_model_download", { id });
+  },
+
   async dubbingAnalyze(
     filePath: string,
     sourceLang?: string,
@@ -331,6 +361,15 @@ export const sublix = {
 
   async dubbingExport(project: DubbingProject, outputPath?: string): Promise<string> {
     return await invoke<string>("dubbing_export", { project, outputPath });
+  },
+
+  /**
+   * v0.9.8: Open Windows Explorer with the dubbed output file selected in its
+   * parent folder. Use after `dubbingExport()` returns the output path so the
+   * user can jump straight to the finished MP4 without hunting for it.
+   */
+  async dubbingOpenOutputFolder(path: string): Promise<void> {
+    return await invoke<void>("dubbing_open_output_folder", { path });
   },
 
   async downloaderGetInfo(url: string): Promise<VideoInfo> {

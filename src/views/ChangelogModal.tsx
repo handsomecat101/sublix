@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.8",
+    date: "06/10/2026",
+    title: "Studio Lồng Tiếng: Nút Mở Thư Mục Lồng Tiếng",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "📂",
+        items: [
+          "Thêm 2 nút ở thanh Export Action Bar trong tab Lồng Tiếng:",
+          "📂 'Mở Thư Mục Lồng Tiếng' — hiện sau khi export thành công, mở folder chứa video *_dubbed.mp4 (có select file).",
+          "📂 'Mở Thư Mục File Gốc' — luôn hiển thị khi đã chọn video input, mở folder chứa video gốc để duyệt các file .srt / audio khác cùng folder.",
+          "Backend mới `dubbing_open_output_folder(path)` dùng `SHOpenFolderAndSelectItems` (giống downloader v0.9.4) thay `explorer.exe /select,...` cũ — fix lỗi path CJK.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.7",
     date: "06/10/2026",
     title: "Tối Ưu Tốc Độ Dịch Phụ Đề (Batch API)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Tối Ưu Hiệu Năng",
