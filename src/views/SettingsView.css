@@ -841,6 +841,19 @@
   color: var(--t1);
 }
 
+.model-desc-text {
+  font-size: 11px;
+  color: var(--t3);
+  line-height: 1.4;
+  max-width: 320px;
+}
+
+.model-size-note {
+  font-size: 10.5px;
+  color: var(--t4);
+  line-height: 1.5;
+}
+
 .model-tier-badge {
   display: inline-block;
   font-size: 10px;

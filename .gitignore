@@ -97,3 +97,11 @@ preview-*.png
 !icons/*.png
 !src-tauri/icons/*.png
 !src-tauri/target/**/*.png
+
+# Large test outputs & media
+*.mp4
+*.mkv
+test_media/
+test-output-*/
+.commandcode/
+

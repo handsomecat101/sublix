@@ -52,6 +52,19 @@
 
 ---
 
+## 🧪 LUẬT CHẠY THẬT (BẮT BUỘC — thêm 2026-10-06 — LUẬT NÀY THẮNG CẢ 6 BƯỚC TRÊN)
+
+> BƯỚC 5 chỉ được ghi **"Hoàn Thành"** khi có **BẰNG CHỨNG CHẠY THẬT**. Bài học ngày 2026-10-06: review 3 vòng "đạt" toàn bằng đọc code + build xanh, mở app ra thì tính năng tải video hỏng bét — PO mất nhiều giờ sửa lại. Tốn thời gian của Anh Tuấn là lỗi nặng nhất.
+
+- □ **Mở app thật** (`Chay-Sublix.bat`) và **làm thật đúng tính năng vừa sửa/làm**: tải video → phải có file video thật trên đĩa; sửa nút → phải bấm nút đó; sửa lỗi nào → test chính cảnh đó.
+- □ **Kèm bằng chứng** khi báo cáo: screenshot / đường dẫn file thật / output thật.
+- □ **Agent test GUI bằng `agent-browser`** qua cổng 9222 (cách làm: `GOVERNANCE.md` mục 0).
+- □ **`cargo check` + `npm run build` chỉ là bước THÔNG QUA** — không bao giờ được gọi là "nghiệm thu"/"đạt".
+- □ **Chưa chạy được** → báo cáo ghi đúng 4 chữ **"CHƯA CHẠY THỬ"**, không viết "đạt" / "xong".
+- □ Báo cáo `@done` thiếu bằng chứng chạy thật sẽ bị **trả về**.
+
+---
+
 ## ✂️ Quy Tắc Tiết Kiệm Token Tuyệt Đối
 
 1. **`SOUL.md`**: Cố định (~1–2 KB), chỉ đọc để hiểu kiến trúc.

@@ -23,10 +23,43 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.10.0",
+    date: "07/10/2026",
+    title: "Phase V2: Phân Vai AI Chuẩn Xác (Sherpa-ONNX) + UI Detect Nhân Vật & Clip Mẫu",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Phân Vai AI Offline (SOTA)",
+        icon: "🎭",
+        items: [
+          "Tích hợp mô hình nhận diện giọng nói pyannote-segmentation-3.0 + wespeaker offline qua sidecar sherpa-onnx (không tốn GPU/VRAM).",
+          "Phân vai câu thoại dựa trên phân tích âm sắc thực tế thay vì đoán mò bằng dấu câu — triệt tiêu tình trạng cùng 1 nhân vật bị nhảy giọng.",
+          "Tự động trích xuất clip âm thanh gốc (2-8s) của từng nhân vật trong video để người dùng nghe kiểm tra.",
+        ],
+      },
+      {
+        category: "Giao Diện Studio Lồng Tiếng Mới",
+        icon: "🎛",
+        items: [
+          "Nút '🔊 Nghe giọng gốc' trên từng thẻ nhân vật để nghe lại đoạn thoại gốc của diễn viên trước khi lồng.",
+          "Tính năng '🔗 Gộp vào vai...' cho phép gộp 2 nhân vật làm 1 trực tiếp trên giao diện chỉ với 1 click.",
+          "Hiển thị số lượng câu thoại và huy hiệu phân vai (🟢 Sherpa AI / 🟡 Heuristic).",
+        ],
+      },
+      {
+        category: "Hotfix Phim Dài",
+        icon: "⚡",
+        items: [
+          "Xóa bỏ hoàn toàn giới hạn 32KB dòng lệnh trên Windows khi lồng tiếng phim dài (400+ câu thoại) bằng cơ chế hòa âm phân tầng (chunked amix).",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.10",
     date: "07/10/2026",
     title: "Lồng Tiếng: Dùng Gender Thật + Filter Noise Speaker",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",
@@ -45,9 +78,6 @@ const CHANGELOG_DATA: VersionEntry[] = [
     date: "07/10/2026",
     title: "Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử + Khớp Voice Đa Vai",
     isCurrent: false,
-    date: "07/10/2026",
-    title: "Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử + Khớp Voice Đa Vai",
-    isCurrent: true,
     highlights: [
       {
         category: "Tính Năng Mới",

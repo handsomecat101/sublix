@@ -59,9 +59,17 @@ def ensure_16k_mono_wav(wav_path: str) -> tuple[str, bool]:
             creationflags=creation_flags,
         )
     except Exception as e:
-        # Fallback to direct ffmpeg path lookup if in standard Sublix location
-        alt_ffmpeg = r"C:\Program Files\AI Automation\bin\ffmpeg.exe"
-        if os.path.exists(alt_ffmpeg):
+        # Fallback: FFmpeg cạnh app (binaries/) hoặc cạnh script — KHÔNG hardcode
+        # đường dẫn máy cá nhân (luật dự án: BUG-001/BUG-017).
+        import shutil
+
+        alt_candidates = [
+            shutil.which("ffmpeg"),
+            str(Path(__file__).resolve().parent.parent / "binaries" / "ffmpeg.exe"),
+            str(Path(__file__).resolve().parent.parent / "binaries" / "cuda" / "ffmpeg.exe"),
+        ]
+        alt_ffmpeg = next((p for p in alt_candidates if p and os.path.exists(p)), None)
+        if alt_ffmpeg:
             cmd[0] = alt_ffmpeg
             subprocess.run(
                 cmd,

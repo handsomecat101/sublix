@@ -4,6 +4,18 @@
 
 ---
 
+## 0. LUẬT CHẠY THẬT — "CHƯA CHẠY LÀ CHƯA XONG" (Thêm 2026-10-06 — chỉ đạo trực tiếp của Anh Tuấn)
+
+> **Sự cố để lại bài học:** 3 vòng review tuyên bố "đạt" hoàn toàn bằng **đọc code + build xanh**, trong khi mở app thật ra thì tính năng Tải Video hỏng hàng loạt (EOF, 429, chỉ tải 360p, báo oan...). Anh Tuấn phải tự gọi agent khác ngồi sửa mất nhiều giờ. Luật này để **KHÔNG BAO GIỜ** tái phạm.
+
+1. **KHÔNG được viết/tuyên bố "đạt", "hoàn thành", "xong", "verify OK" khi CHƯA mở app và làm THẬT đúng tính năng đó.** (Ví dụ: tính năng tải video = phải tải về được 1 video thật trên đĩa; sửa nút = phải bấm thật nút đó.)
+2. **Mọi task đụng UI / chức năng phải có BẰNG CHỨNG CHẠY THẬT** khi báo cáo: screenshot, đường dẫn file tải về thật, output thật. **Build xanh + đọc code KHÔNG PHẢI bằng chứng.**
+3. **Cách test GUI thật (bắt buộc với agent):** chạy `Chay-Sublix.bat` (dev mode) kèm `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`, dùng `agent-browser` bấm chuột như người thật (hướng dẫn chi tiết: `AGENT_CHAT.md` tin 2026-10-06 08:55). Không tự chạy được thì nhờ Anh Tuấn bấm và ghi rõ "đang chờ PO test".
+4. **Không tự chạy được thì ghi đúng 4 chữ "CHƯA CHẠY THỬ"** — tuyệt đối không dùng từ "đạt" / "hoàn thành" trong trường hợp này.
+5. **Sửa lỗi nào — test chính cảnh đó.** Báo cáo `@done` thiếu bằng chứng chạy thật sẽ bị TRẢ VỀ, không được bàn giao tiếp.
+
+---
+
 ## 1. Quy Trình Trước & Sau Khi Làm Việc
 
 ### 1.1 Trước Khi Sửa Code (Bước 0 & Bước 1)

@@ -68,6 +68,7 @@ export default function SettingsView() {
     downloaded_bytes?: number;
     total_bytes?: number;
     phase?: string;
+    error?: string;
   }>>({});
 
   // Live capture & translation settings
@@ -257,6 +258,7 @@ export default function SettingsView() {
           downloaded_bytes: p.downloaded_bytes,
           total_bytes: p.total_bytes,
           phase: p.phase,
+          error: p.error,
         },
       }));
       if (p.percent === 100 || p.phase === "done") {

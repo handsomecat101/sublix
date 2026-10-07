@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.9.9` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Bản Build Hiện Tại** | `v0.10.0` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
 | **Git Commit** | `v0.9.6` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Voice catalog theo model + mẫu nghe thử cache + khớp voice đa vai xong — v0.9.9; Downloader đầy đủ từ v0.9.6) |
+| **Trạng Thái** | 🟢 Active (Phase V2 Phân vai AI Offline sherpa-onnx + Speaker Roster UI v0.10.0 hoàn thành trọn gói E2E; Downloader đầy đủ từ v0.9.6) |
 
 ---
 
@@ -22,11 +22,11 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đang trực ca chính |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Phase V2 (S1-S4) bàn giao cho Mavis & CommandCode |
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
 | **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
-| **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Đã audit đợt 1 (BUG-001→025) + đợt 2 (BUG-026→043) |
-| **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo từ Antigravity/CommandCode, làm đúng việc được giao (`@assign`). Tên hiển thị trong team chat: "MiniMax M3" / "Mavis". | 🔧 Debugger | Ghi danh chính thức 2026-10-04 21:45 |
+| **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Nhận bàn giao V2, review code & nghiệm thu |
+| **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo từ Antigravity/CommandCode, làm đúng việc được giao (`@assign`). Tên hiển thị trong team chat: "MiniMax M3" / "Mavis". | 🔧 Debugger | Nhận bàn giao V2, test GUI độc lập theo checklist |
 | **Anh Tuấn (`jimmyvu`)** | Product Owner, Reviewer, Kiến trúc sư trưởng | 👤 Available | Duyệt merge & roadmap |
 
 ---
@@ -40,7 +40,7 @@
 | `TSK-AUDIT-VOICE-2026-10-06` | **Audit 17 mục tạo giọng** theo `AUDIT_TAO_GIONG.md` (BƯỚC 1: điền bảng) + **viết code cho thật** | **CommandCode** (chuyển giao 2026-10-06 15:38) | 🔴 HIGH | **PO chuyển giao cho CommandCode lúc 15:38.** Mavis đã điền bảng code-level (17/17 mục, evidence `path:line`); CommandCode tiếp tục: GUI test thật 12 mục cần UI + viết code cho 3 mục "trên giấy" (#11-13 F5-TTS/Viterbox/Kokoro) + sửa lời quảng cáo #14-15. Bằng chứng vào `test-output-audit-giong/`. | `agent-team/AUDIT_TAO_GIONG.md` (bảng đã điền) |
 | `TSK-AUDIT-SUB-2026-10-06` | ~~Audit pipeline tạo phụ đề (file_sub.rs + stt/ + translate/) — đo thời gian thực tế + tìm bottleneck~~ | **Mavis + sub-agent (worker)** | 🔴 DONE | ✅ Worker đo 3 stage end-to-end trên video 21:43. Tổng ~64 phút (large model CPU) / ~41 phút (tiny model). 5 findings (2 🔴 blocker + 3 🟡 UX). Bằng chứng file thật 10 file trong `test-output-audit-sub/`. | `agent-team/AUDIT_SUB_REPORT.md` (22KB, 12 sections) |
 | `TSK-VOICE-CATALOG-2026-10-07` | ~~Voice Catalog theo Model + mẫu nghe thử trước khi chọn + khớp voice đa vai~~ | **CommandCode** | 🔴 HIGH | ✅ DONE (v0.9.9) — model bấm ▸ hiện 7 nam/7 nữ (cả TRƯỚC khi tải); 🎧 tạo mẫu 14/14 cache → nghe tức thì (verified audio thật); multi-role 5 vai→5 giọng khác nhau + chip ⚠️ Trùng giọng. Bằng chứng `test-output-audit-giong/v099_*.png`. Dev-test cần `--no-watch` (BUG-H08) | `dubbing/mod.rs`, `lib.rs`, `DubbingStudioView.tsx/css`, `tauri.ts` |
-| `TSK-V2-S2-INTEGRATE` | **Phase V2 Step S2**: Tích hợp sherpa diarization vào `analyze_and_create_project()` + fallback heuristic | **Antigravity** | 🔴 HIGH | 🟡 Đã hoàn thành S1 & Hotfix 32KB; sẵn sàng bắt đầu S2 sau khi PO duyệt | `src-tauri/src/dubbing/mod.rs` |
+| `TSK-V2-E2E-HANDOFF` | **Phase V2 Bàn giao & Nghiệm thu**: S1-S4 hoàn thành trọn vẹn, sẵn sàng bàn giao Mavis GUI test & CommandCode audit | **Mavis + CommandCode** | 🔴 HIGH | 🟢 Antigravity đã xong code + test + deliverables; đang chờ Mavis test GUI và CommandCode review | `agent-team/REPORT_PHASE_V2_COMPLETION.md` |
 
 ---
 
@@ -50,8 +50,8 @@
 |----|------|---------------|----------|--------------|
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | Claude Code / Antigravity | 🔴 HIGH | Windows Job Object kill-on-close, async spawn_blocking |
-| `TSK-012` | **Phase V2: Phân vai thật** — tích hợp sherpa-onnx diarization offline (thay heuristic đếm-turn; trích clip giọng mẫu 5–10s/vai cho V3) | Antigravity / **CommandCode** (chờ PO duyệt) | 🔴 HIGH | Phương án chi tiết: `agent-team/KE_HOACH_V2_PHAN_VAI_THAT.md` (S1 sidecar+CLI → PO duyệt → S2 tích hợp → S3 cast+clip mẫu → S4 verify v0.10.0) |
-| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng còn ở Phase V3) |
+| `TSK-012` | ~~Phase V2: Phân vai thật (sherpa-onnx diarization offline)~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành ở v0.10.0 (S1 sidecar + S2 Rust backend + S3 UI roster + S4 E2E deliverables) |
+| `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning (Phase V3) | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng chuẩn bị ở Phase V3) |
 
 ---
 
@@ -59,6 +59,9 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-V2-S4-VERIFY` | Step S4: E2E Verification video đa vai + trích xuất deliverables v2_* & bump v0.10.0 | **Antigravity** | 2026-10-07 | ✅ E2E multi_speaker_scene.mp4 -> v2_multi_speaker_DUBBED.mp4 (375KB, 26s), 2 clips sample audio, test_v2_diarization_e2e pass |
+| `TSK-V2-S3-UI` | Step S3: UI Bảng vai diễn: nghe giọng gốc (Base64 data URI), gộp vai, badge AI Sherpa/Heuristic | **Antigravity** | 2026-10-07 | ✅ UI DubbingStudioView đầy đủ nút Nghe giọng gốc, dropdown gộp vai, badge phân vai, đếm câu thoại, npm run build xanh 2.45s |
+| `TSK-V2-S2-INTEGRATE` | Step S2: Tích hợp sherpa diarization vào backend analyze_and_create_project + clip audio mẫu | **Antigravity** | 2026-10-07 | ✅ Map segments theo time overlap, trích 2-8s sample audio Data URI per speaker, fallback heuristic an toàn, unit test pass 6.07s |
 | `TSK-HOTFIX-32KB` | Hotfix Phim Dài: Fix Windows 32KB CMD limit khi export phim dài (445 segments) bằng chunked amix track | **Antigravity** | 2026-10-07 | ✅ `render_combined_speech_track` hierarchical chunks $\le 28$ inputs, unit test 100 segments pass 0.87s, CMD <300 chars |
 | `TSK-V2-S1-DIARIZE` | Step S1: Diarization Sidecar (`sherpa-onnx` pyannote + wespeaker) + CLI test ground truth | **Antigravity** | 2026-10-07 | ✅ `sherpa_diarize.py` tách chuẩn 2 vai `[0, 1, 0, 1, 0]` trên `dialogue_2spk.wav` (100% ground truth), 1 vai trên 1-speaker |
 | `TSK-FEAT-KOKORO-OFFLINE` | Feat: dời Model Giọng Nói vào tab "Studio Lồng Tiếng AI" (panel gọn "🎛 Chọn Giọng & Tải Model") + engine **Kokoro-Vietnamese OFFLINE** (sidecar onnxruntime+vig2p, retry-rồi-skip câu lỗi, 14 VoicePreset `kokoro:*`) | **CommandCode** | 2026-10-06 | E2E Kokoro offline → `test_dubbing_input/kokoro_DUBBED_TEST.mp4` (378.671B, 26s); 2 sample mp3; GUI agent-browser xác nhận panel + tab Models đã sạch mục cũ |

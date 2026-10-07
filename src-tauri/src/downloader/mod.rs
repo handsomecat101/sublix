@@ -135,7 +135,9 @@ impl Drop for PlaceholderGuard {
 fn is_cookie_or_login_error(stderr: &str) -> bool {
     let lower = stderr.to_lowercase();
     lower.contains("sign in to confirm")
-        || lower.contains("cookies")
+        || lower.contains("cookie") // v0.9.10: "Could not copy Chrome cookie database" (yt-dlp#7271)
+        || lower.contains("dpapi") // v0.9.10: "Failed to decrypt with DPAPI" (yt-dlp#10927)
+        || lower.contains("decrypt")
         || lower.contains("login")
         || lower.contains("403")
         || lower.contains("forbidden")
@@ -910,16 +912,33 @@ fn drain_child_process(
                     break;
                 }
 
-                let pct: Option<f32> = if let Some(rest) = line.strip_prefix("download:") {
+                // v0.9.10 fix (PO: "đang tải không hiện tiến trình"): yt-dlp coi
+                // "download:" trong --progress-template là LOẠI tiến trình và KHÔNG
+                // in ra — dòng thật là "1024|223779|NA|407840.4|0". Parser chấp nhận
+                // cả dòng CÓ lẫn KHÔNG có tiền tố (không phụ thuộc version yt-dlp);
+                // chỉ nhận dòng mà 2 ô đầu là số byte hợp lệ để không dính câu khác.
+                let pct: Option<f32> = {
+                    let rest = line.strip_prefix("download:").unwrap_or(line.as_str());
                     let parts: Vec<&str> = rest.split('|').collect();
-                    if parts.len() >= 2 {
-                        let downloaded: u64 = parts[0].parse().unwrap_or(0);
-                        let known_total: u64 = parts[1].parse().unwrap_or(0);
+                    let looks_like_progress = parts.len() >= 2
+                        && parts[0].trim().parse::<u64>().is_ok()
+                        && parts[1].trim().parse::<u64>().is_ok();
+                    if looks_like_progress {
+                        let downloaded: u64 = parts[0].trim().parse().unwrap_or(0);
+                        let known_total: u64 = parts[1].trim().parse().unwrap_or(0);
                         let estimate_total: u64 = parts.get(2)
-                            .and_then(|s| s.parse().ok())
+                            .and_then(|s| s.trim().parse().ok())
                             .unwrap_or(0);
-                        current_speed = parts.get(3).unwrap_or(&"").to_string();
-                        current_eta = parts.get(4).unwrap_or(&"").to_string();
+                        let clean = |s: &str| {
+                            let t = s.trim();
+                            if t.is_empty() || t == "NA" || t == "0" {
+                                String::new()
+                            } else {
+                                t.to_string()
+                            }
+                        };
+                        current_speed = parts.get(3).map(|s| clean(s)).unwrap_or_default();
+                        current_eta = parts.get(4).map(|s| clean(s)).unwrap_or_default();
 
                         let total = if known_total > 0 {
                             known_total
@@ -939,8 +958,6 @@ fn drain_child_process(
                     } else {
                         None
                     }
-                } else {
-                    None
                 };
 
                 // Parse Destination / Merger (R2-03)
@@ -1119,6 +1136,12 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     };
 
     // Determine cookie options (R2-08.5 & R3-03)
+    // v0.9.10 (PO 2026-10-07 — "tích cookie là không tải được gì"): Chrome/Edge bản mới
+    // (App-Bound Encryption) khiến yt-dlp KHÔNG đọc/giải mã được cookie
+    // (yt-dlp#7271 "Could not copy Chrome cookie database", #10927 "Failed to decrypt
+    // with DPAPI") — đúng lỗi PO gặp. TẮT hẳn đường "cookie từ trình duyệt": mặc định
+    // tải ẩn danh (hoạt động tốt cho video công khai); ai cần đăng nhập thì dùng file
+    // cookies.txt (đường duy nhất đáng tin trên Windows mới).
     let browser_cookie_enabled: Option<String> = req
         .browser_cookies
         .as_deref()
@@ -1126,12 +1149,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         .filter(|s| !s.is_empty() && s.to_lowercase() != "none")
         .map(|s| s.to_lowercase())
         .and_then(|b| {
-            if matches!(b.as_str(), "edge" | "chrome" | "firefox") {
-                Some(b)
-            } else {
-                warn!("Bỏ qua browser_cookies={} (không nằm trong whitelist)", b);
-                None
-            }
+            warn!(
+                "Bỏ qua browser_cookies={}: Chrome/Edge mới chặn đọc cookie (yt-dlp#7271/#10927) — tải KHÔNG cookie",
+                b
+            );
+            None
         });
 
     let valid_cookies_file: Option<String> = req
@@ -1152,8 +1174,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
         (None, None)
     };
 
-    // Backup cookie file available if we used browser cookie first AND cookies file exists:
-    let backup_cookies_file: Option<String> = if browser_cookie_enabled.is_some() {
+    // v0.9.10 (PO): chiến lược THỬ LẠI khi lỗi cookie/đăng nhập —
+    //   lần 1 (nếu có dùng cookie) → lần 2: cookies.txt (nếu có) hoặc KHÔNG cookie.
+    // Video công khai tải được ẩn danh: tuyệt đối không để người dùng chết vì cookie.
+    let used_cookies = primary_browser.is_some() || primary_file.is_some();
+    let retry_cookies_file: Option<String> = if primary_browser.is_some() {
         valid_cookies_file.clone()
     } else {
         None
@@ -1207,14 +1232,21 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
     std::thread::spawn(move || {
         let drain_res = drain_child_process(child, &app_clone, &job_id, my_run_id, None);
 
-        // Check if retry with backup cookies is needed (R3-03)
+        // R3-03 + v0.9.10 (PO: "tích cookie là không tải được gì"): nếu lần 1 thất bại
+        // vì cookie/đăng nhập → tự thử lại với cookies.txt (nếu có) hoặc KHÔNG dùng
+        // cookie. Video công khai tải được ẩn danh — không bao giờ chết cứng vì cookie.
         let is_auth_fail = !drain_res.is_success && is_cookie_or_login_error(&drain_res.stderr_text);
 
-        let final_res = if is_auth_fail && backup_cookies_file.is_some() {
-            let backup_file = backup_cookies_file.as_ref().unwrap();
+        let final_res = if is_auth_fail && used_cookies {
+            let retry_file = retry_cookies_file.clone();
+            let retry_label: &'static str = if retry_file.is_some() {
+                "Đang thử lại với cookie dự phòng (cookies.txt)..."
+            } else {
+                "Cookie không đọc được — Đang thử lại KHÔNG dùng cookie..."
+            };
             info!(
-                "⚠️ Downloader job {} failed with browser cookies ({}), retrying with backup cookies file: {}",
-                job_id, drain_res.stderr_text, backup_file
+                "⚠️ Downloader job {} failed with cookies ({}), {}",
+                job_id, drain_res.stderr_text, retry_label
             );
 
             // Check if still current run before retrying
@@ -1232,7 +1264,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                         percent: drain_res.last_percent.max(0.0),
                         speed: "".to_string(),
                         eta: "".to_string(),
-                        size_text: "Đang thử lại với cookie dự phòng...".to_string(),
+                        size_text: retry_label.to_string(),
                         filename: drain_res.detected_filename.clone(),
                         file_path: drain_res.detected_filepath.as_ref().map(|p| p.to_string_lossy().to_string()),
                         error: None,
@@ -1245,7 +1277,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     &save_dir_clone,
                     &req_clone,
                     None,
-                    Some(backup_file.as_str()),
+                    retry_file.as_deref(),
                     js_runtime_token.as_deref(),
                 );
 
@@ -1278,11 +1310,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                             &app_clone,
                             &job_id,
                             my_run_id,
-                            Some("Đã dùng cookie dự phòng"),
+                            Some(retry_label),
                         )
                     }
                     Err(e) => {
-                        warn!("❌ Failed to spawn retry with backup cookie for {}: {}", job_id, e);
+                        warn!("❌ Failed to spawn cookie-less retry for {}: {}", job_id, e);
                         drain_res
                     }
                 }

@@ -101,6 +101,8 @@ export default function DubbingStudioView({
   const [sampleGenProgress, setSampleGenProgress] = useState<{ done: number; total: number } | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingSpeakerId, setPlayingSpeakerId] = useState<string | null>(null);
+  const speakerAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load preset voices & config on mount
   useEffect(() => {
@@ -162,6 +164,9 @@ export default function DubbingStudioView({
       pProgress.then((u) => u()).catch(() => {});
       pModel.then((u) => u()).catch(() => {});
       pSample.then((u) => u()).catch(() => {});
+      if (speakerAudioRef.current) {
+        speakerAudioRef.current.pause();
+      }
     };
   }, []);
 
@@ -474,6 +479,51 @@ export default function DubbingStudioView({
       speakers: remaining,
       segments: updatedSegments,
     });
+  }
+
+  function handleMergeSpeaker(sourceSpeakerId: string, targetSpeakerId: string) {
+    if (!project || sourceSpeakerId === targetSpeakerId) return;
+    const sourceSpk = project.speakers.find((s) => s.id === sourceSpeakerId);
+    const targetSpk = project.speakers.find((s) => s.id === targetSpeakerId);
+    if (!sourceSpk || !targetSpk) return;
+
+    const updatedSegments = project.segments.map((seg) =>
+      seg.speaker_id === sourceSpeakerId ? { ...seg, speaker_id: targetSpeakerId } : seg
+    );
+    const updatedSpeakers = project.speakers.filter((s) => s.id !== sourceSpeakerId);
+
+    setProject({
+      ...project,
+      speakers: updatedSpeakers,
+      segments: updatedSegments,
+    });
+    setStatusMessage({
+      kind: "info",
+      text: `Đã gộp "${sourceSpk.label}" vào "${targetSpk.label}".`,
+    });
+  }
+
+  function handlePlaySpeakerSample(speakerId: string, sampleData: string) {
+    if (playingSpeakerId === speakerId) {
+      if (speakerAudioRef.current) {
+        speakerAudioRef.current.pause();
+      }
+      setPlayingSpeakerId(null);
+      return;
+    }
+    if (speakerAudioRef.current) {
+      speakerAudioRef.current.pause();
+    }
+    try {
+      const audio = new Audio(sampleData);
+      speakerAudioRef.current = audio;
+      setPlayingSpeakerId(speakerId);
+      audio.onended = () => setPlayingSpeakerId(null);
+      audio.onerror = () => setPlayingSpeakerId(null);
+      audio.play().catch(() => setPlayingSpeakerId(null));
+    } catch {
+      setPlayingSpeakerId(null);
+    }
   }
 
   async function handleExportVideo() {
@@ -1147,6 +1197,37 @@ export default function DubbingStudioView({
               <span style={{ fontSize: 13, color: "var(--ac-txt)", fontWeight: 600 }}>
                 Thời lượng: ~{Math.round(project.media_duration_sec)}s • {project.segments.length} câu thoại • {project.speakers.length} nhân vật
               </span>
+              {project.diarization_engine === "sherpa" ? (
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    background: "rgba(16, 185, 129, 0.15)",
+                    color: "#34d399",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                  }}
+                  title="Phân vai offline bằng mô hình AI Sherpa-ONNX (pyannote + wespeaker)"
+                >
+                  🟢 Phân vai AI Offline (Sherpa)
+                </span>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    background: "rgba(245, 158, 11, 0.15)",
+                    color: "#fbbf24",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                  }}
+                  title="Phân vai dựa trên khoảng nghỉ & dấu câu"
+                >
+                  🟡 Phân vai Ngữ điệu (Heuristic)
+                </span>
+              )}
             </div>
           </div>
 
@@ -1155,6 +1236,7 @@ export default function DubbingStudioView({
             {project.speakers.map((spk, idx) => {
               const matchedVoice = voices.find((v) => v.id === spk.voice);
               const isFemale = matchedVoice?.gender === "female";
+              const segCount = project.segments.filter((s) => s.speaker_id === spk.id).length;
               return (
                 <div key={spk.id} className="dubbing-speaker-card">
                   <div className="dubbing-speaker-header">
@@ -1168,6 +1250,20 @@ export default function DubbingStudioView({
                       className="dubbing-speaker-label-input"
                       title="Đổi tên/vai nhân vật"
                     />
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: "rgba(148, 163, 184, 0.15)",
+                        color: "#94a3b8",
+                        fontWeight: 600,
+                        marginLeft: 4,
+                      }}
+                      title="Số lượng câu thoại của nhân vật này"
+                    >
+                      💬 {segCount}
+                    </span>
                     {duplicateVoiceIds.has(spk.voice) && (
                       <span
                         className="dubbing-dup-chip"
@@ -1196,7 +1292,91 @@ export default function DubbingStudioView({
                     )}
                   </div>
 
-                  <div style={{ marginTop: 12 }}>
+                  {/* Sample Audio Clip & Merge Controls */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      marginTop: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {spk.sample_audio_data ? (
+                      <button
+                        type="button"
+                        onClick={() => handlePlaySpeakerSample(spk.id, spk.sample_audio_data!)}
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                          border:
+                            playingSpeakerId === spk.id
+                              ? "1px solid #38bdf8"
+                              : "1px solid rgba(148, 163, 184, 0.3)",
+                          background:
+                            playingSpeakerId === spk.id
+                              ? "rgba(56, 189, 248, 0.2)"
+                              : "rgba(30, 41, 59, 0.6)",
+                          color: playingSpeakerId === spk.id ? "#38bdf8" : "#e2e8f0",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontWeight: 500,
+                        }}
+                        title="Nghe đoạn clip giọng nói gốc (2-8s) của nhân vật này trong video"
+                      >
+                        {playingSpeakerId === spk.id ? "⏹ Dừng mẫu" : "🔊 Nghe giọng gốc"}
+                      </button>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          fontStyle: "italic",
+                          padding: "2px 4px",
+                        }}
+                      >
+                        🎙️ Giọng gốc
+                      </span>
+                    )}
+
+                    {project.speakers.length > 1 && (
+                      <select
+                        title="Gộp nhân vật này vào nhân vật khác nếu AI phân tách thừa vai"
+                        defaultValue=""
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 6px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(148, 163, 184, 0.25)",
+                          background: "rgba(15, 23, 42, 0.8)",
+                          color: "#cbd5e1",
+                          cursor: "pointer",
+                        }}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleMergeSpeaker(spk.id, e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                      >
+                        <option value="" disabled>
+                          🔗 Gộp vào vai...
+                        </option>
+                        {project.speakers
+                          .filter((other) => other.id !== spk.id)
+                          .map((other) => (
+                            <option key={other.id} value={other.id}>
+                              ➡️ {other.label}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
                     <CustomSelect
                       label="Giọng Đọc AI:"
                       value={spk.voice}

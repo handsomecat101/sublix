@@ -76,10 +76,10 @@ const FORMAT_OPTIONS: SelectOption[] = [
 ];
 
 const BROWSER_COOKIE_OPTIONS: SelectOption[] = [
-  { value: "none", label: "Không dùng cookies (Mặc định)" },
-  { value: "edge", label: "Microsoft Edge", badge: "Windows" },
-  { value: "chrome", label: "Google Chrome" },
-  { value: "firefox", label: "Mozilla Firefox" },
+  { value: "none", label: "Không dùng cookies (Mặc định — Khuyến dùng)" },
+  { value: "edge", label: "Microsoft Edge (thử nghiệm — hay bị chặn, app tự tải không cookie)" },
+  { value: "chrome", label: "Google Chrome (thử nghiệm — hay bị chặn, app tự tải không cookie)" },
+  { value: "firefox", label: "Mozilla Firefox (thử nghiệm — hay bị chặn)" },
 ];
 
 const PLATFORM_META: Record<string, { label: string; icon: string; color: string }> = {

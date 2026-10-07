@@ -162,6 +162,7 @@ pub fn run() {
             downloader_reveal_file,
             downloader_open_file,
             downloader_downloads_dir,
+            open_thanh_pham_folder,
             downloader_file_meta,
             downloader_check_disk,
             downloader_file_exists
@@ -1171,6 +1172,19 @@ fn downloader_open_file(path: String) -> Result<(), String> {
 #[tauri::command]
 fn downloader_downloads_dir(app: tauri::AppHandle) -> String {
     downloader::get_downloads_dir(&app).to_string_lossy().to_string()
+}
+
+/// v0.9.10 (PO): open the ONE folder that holds both downloaded videos and
+/// finished dubbed files ("chỗ nào thì tìm thấy chỗ đó").
+#[tauri::command]
+fn open_thanh_pham_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = downloader::get_downloads_dir(&app);
+    let _ = std::fs::create_dir_all(&dir);
+    std::process::Command::new("explorer.exe")
+        .arg(dir.as_os_str())
+        .spawn()
+        .map_err(|e| format!("Không mở được thư mục: {e}"))?;
+    Ok(())
 }
 
 /// v0.9.6: size + resolution of a finished file for the download list

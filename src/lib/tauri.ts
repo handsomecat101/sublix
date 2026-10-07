@@ -467,6 +467,8 @@ export interface DubbingSpeaker {
   rate: string;
   /** v0.9.10: "male" | "female" — để GUI/CLI re-assign voice đúng gender thay vì đoán. */
   gender?: string;
+  /** v0.10.0: Base64 Data URI of a 2-8s original audio clip of this speaker for UI preview. */
+  sample_audio_data?: string | null;
 }
 
 export interface DubbingSegment {
@@ -489,6 +491,8 @@ export interface DubbingProject {
   voice_volume: number;
   dubbing_mode?: "ducking" | "vocal_isolation";
   time_limit_sec?: number | null;
+  /** v0.10.0: "sherpa" | "heuristic" | "minimax" */
+  diarization_engine?: "sherpa" | "heuristic" | string;
 }
 
 export interface DubbingProgress {

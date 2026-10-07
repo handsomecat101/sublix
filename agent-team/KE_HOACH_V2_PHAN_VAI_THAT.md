@@ -95,3 +95,21 @@
 ## 6. Thứ tự thực hiện
 
 S1 (sidecar + bằng chứng sống) → **PO duyệt kết quả S1** → S2 (tích hợp) → S3 (cast + clip mẫu) → S4 (verify + commit v0.10.0).
+
+---
+
+## 7. BỔ SUNG SAU REVIEW (CommandCode — 2026-10-06, theo yêu cầu PO "xem có bổ sung gì không")
+
+**Đánh giá chung: kế hoạch ĐẠT, hướng đi đúng** (chọn sherpa-onnx chuẩn, có fallback, có điểm dừng S1 cho PO, cơ chế 2b giải thích đúng bản chất "so khớp mốc thời gian"). Các điểm sau là bổ sung cho kín, **không phải phản bác**:
+
+1. **Ghi rõ LUẬT CHẠY THẬT vào bước nghiệm thu (bắt buộc):** S1 chạy CLI là được; nhưng **S2–S4 phải kèm test GUI thật** (`agent-browser --cdp 9222`, bấm thật) + bằng chứng ảnh/JSON vào `test-output-audit-giong/`. Báo cáo thiếu bằng chứng = chưa xong (`GOVERNANCE.md` mục 0).
+2. **Câu dài chứa NHIỀU người nói (lỗ hổng lớn nhất của phép map overlap):** câu Whisper kéo 8s mà bên trong đổi 2 người → "overlap lớn nhất" gán hết cho 1 người. Đối sách: (a) chia lại câu theo ranh giới turn của sherpa (split thành 2 sub-segment); hoặc (b) tối thiểu phải **phát hiện + cảnh báo** trên UI ("⚠ Câu #X có nhiều người nói") — làm (a) là tốt, (b) là bắt buộc.
+3. **Định nghĩa cách chấm "≥90%" cho kiểm chứng lại được:** khi dựng fixture (S4a/b) tạo kèm `test_dubbing_input/ground_truth_<tên>.json` (mốc thời gian + người nói kỳ vọng). Cách chấm: mỗi câu Whisper "đúng" khi ≥50% thời lượng của câu overlap speaker đúng trong ground-truth. Ghi công thức chấm này vào S4 để không chấm cảm tính.
+4. **Phối hợp với Mavis (đang làm `TASK_A_Z_ONE_CLICK.md` — trùng khu vực `dubbing/mod.rs`):** theo QUY_TRINH Bước 1, **khóa task trong `PROJECT_STATE.md` trước khi sửa**; chỉ **THÊM** field optional vào `DubbingProject` (`diarization_engine`, `speaker_samples`…), **KHÔNG đổi signature/đặt tên field có sẵn** để dây chuyền A→Z của Mavis không vỡ. Báo 1 dòng trên `AGENT_CHAT.md` trước khi đụng `analyze_and_create_project()`.
+5. **Thêm 1 ca test biên vào S4: file 1 người nói** — quá trình gom cụm phải ra **đúng 1 vai** (chống tách nhỏ quá mức khi chỉ có 1 giọng). Đây là mặt trái dễ bỏ của "đúng 2 vai".
+6. **Clip giọng mẫu (S3) — làm sạch & chuẩn vị trí:** chọn đoạn có **năng lượng giọng thuần** (loại đoạn có nhạc nền/hiệu ứng lọt — đo RMS/energy đơn giản là được); xuất WAV mono; đặt `sample_<speaker>_<start>_<end>.wav`; gom vào **`<Thư Mục Thành Phẩm>/voice_samples/`** (không rải cạnh file export) + ghi đường dẫn vào `DubbingProject` để V3 dùng thẳng.
+7. **Test tiếng Việt là bắt buộc (wespeaker `en_voxceleb`):** embedding dùng cho **tiếng Việt** — fixture S4 nên có ít nhất 1 file **tiếng Việt 2-3 người** (Kokoro tạo được) để xác nhận gom cụm vẫn tốt với thanh điệu — nếu accuracy tụt thì đổi sang embedding `3dspeaker`/`cam++` (đa ngôn ngữ tốt hơn, cùng repo k2-fsa, cùng giấy phép).
+8. **UI chống "đơ":** sidecar CPU chạy 1-2 phút cho clip 3 phút → chạy thread riêng + progress (nếu sherpa không có callback thì hiện "Đang phân tích giọng… (~1–2 phút cho video 3 phút)") — người dùng không được thấy app "chết lặng".
+9. **Nam/nữ theo f0 (S3 tùy chọn):** ngưỡng 2 dải giao nhau ở 165–180Hz — với giọng "lai" thì ưu tiên gợi ý tên vai của LLM (mục 2b-b) thay vì đoán máy; ghi nhận kết quả f0 vào JSON để debug.
+
+*(Review bởi CommandCode — đồng ý cho triển khai S1 sau khi PO duyệt.)*

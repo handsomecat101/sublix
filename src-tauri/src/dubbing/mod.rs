@@ -154,6 +154,9 @@ pub struct DubbingSpeaker {
     /// `#[serde(default)]` keeps backward compat with older saved projects.
     #[serde(default)]
     pub gender: String,
+    /// v0.10.0: Base64 Data URI of a 2-8s original audio clip of this speaker for UI preview.
+    #[serde(default)]
+    pub sample_audio_data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,6 +183,9 @@ pub struct DubbingProject {
     pub dubbing_mode: String, // "ducking" | "vocal_isolation"
     #[serde(default)]
     pub time_limit_sec: Option<f64>,
+    /// v0.10.0: "sherpa" | "heuristic" | "minimax"
+    #[serde(default)]
+    pub diarization_engine: Option<String>,
 }
 
 fn default_dubbing_mode() -> String {
@@ -292,6 +298,141 @@ fn ensure_kokoro_script() -> Result<PathBuf> {
             .with_context(|| format!("Ghi sidecar vào {}", path.display()))?;
     }
     Ok(path)
+}
+
+// ===========================================================================
+// Sherpa-ONNX — LOCAL, OFFLINE Diarization sidecar (pyannote + wespeaker).
+// Models live in `models/voice/sherpa-diarization/`.
+// ===========================================================================
+
+/// Embedded Sherpa Diarization sidecar script. Written to disk on first use.
+const SHERPA_DIARIZE_SCRIPT: &str = include_str!("../../scripts/sherpa_diarize.py");
+
+/// Directory holding the Sherpa Diarization artifacts.
+pub fn sherpa_model_dir() -> PathBuf {
+    let p = crate::config::app_base_dir()
+        .join("models")
+        .join("voice")
+        .join("sherpa-diarization");
+    if p.exists() {
+        return p;
+    }
+    let dev = PathBuf::from(r"H:\AI Project\sublix\src-tauri\models\voice\sherpa-diarization");
+    if dev.exists() {
+        return dev;
+    }
+    p
+}
+
+/// True when the local Sherpa Diarization models are present on disk.
+pub fn sherpa_available() -> bool {
+    let dir = sherpa_model_dir();
+    (dir.join("sherpa-onnx-pyannote-segmentation-3-0").join("model.onnx").exists()
+        || dir.join("model.onnx").exists())
+        && dir.join("wespeaker_en_voxceleb_resnet34_LM.onnx").exists()
+}
+
+/// Write the embedded Sherpa diarization sidecar to the app's scripts dir (idempotent) and return it.
+pub fn ensure_sherpa_script() -> Result<PathBuf> {
+    let dir = crate::config::app_base_dir().join("scripts");
+    fs::create_dir_all(&dir).with_context(|| format!("Tạo thư mục {}", dir.display()))?;
+    let path = dir.join("sherpa_diarize.py");
+    let needs_write = match fs::read_to_string(&path) {
+        Ok(existing) => existing != SHERPA_DIARIZE_SCRIPT,
+        Err(_) => true,
+    };
+    if needs_write {
+        fs::write(&path, SHERPA_DIARIZE_SCRIPT)
+            .with_context(|| format!("Ghi sidecar vào {}", path.display()))?;
+    }
+    Ok(path)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SherpaSegment {
+    pub start: f64,
+    pub end: f64,
+    pub speaker: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SherpaDiarizeResult {
+    pub num_speakers: usize,
+    pub num_segments: usize,
+    pub segments: Vec<SherpaSegment>,
+}
+
+pub fn run_sherpa_diarization(wav_path: &Path, temp_dir: &Path, my_gen: u64) -> Result<Vec<SherpaSegment>> {
+    if !sherpa_available() {
+        anyhow::bail!("Chưa có model sherpa-diarization offline");
+    }
+    let script_path = ensure_sherpa_script()?;
+    let python = find_python();
+    let model_dir = sherpa_model_dir();
+    let out_json = temp_dir.join(format!("diarize_{}.json", gen_unique_id()));
+
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script_path)
+        .arg("--wav")
+        .arg(wav_path)
+        .arg("--model-dir")
+        .arg(&model_dir)
+        .arg("--threshold")
+        .arg("0.45")
+        .arg("--out")
+        .arg(&out_json);
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = run_child_with_cancel(cmd, my_gen)
+        .with_context(|| "Lỗi thực thi sidecar sherpa-diarize")?;
+
+    if !status.success() || !out_json.exists() {
+        let _ = fs::remove_file(&out_json);
+        anyhow::bail!("Sherpa diarization sidecar thất bại hoặc không tạo được file JSON");
+    }
+
+    let json_content = fs::read_to_string(&out_json).context("Đọc kết quả diarization JSON")?;
+    let _ = fs::remove_file(&out_json);
+
+    let res: SherpaDiarizeResult = serde_json::from_str(&json_content)
+        .context("Parse JSON kết quả diarization")?;
+
+    Ok(res.segments)
+}
+
+/// Extract a short 2-8 second audio sample clip of a speaker from the audio track as Base64 Data URI
+pub fn extract_speaker_sample_clip(
+    ffmpeg_bin: &Path,
+    wav_path: &Path,
+    start_sec: f64,
+    duration_sec: f64,
+    out_wav: &Path,
+) -> Result<String> {
+    let mut cmd = Command::new(ffmpeg_bin);
+    cmd.arg("-y")
+        .arg("-ss")
+        .arg(format!("{:.3}", start_sec.max(0.0)))
+        .arg("-t")
+        .arg(format!("{:.3}", duration_sec.clamp(1.5, 7.0)))
+        .arg("-i")
+        .arg(wav_path)
+        .arg("-c:a")
+        .arg("pcm_s16le")
+        .arg(out_wav);
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let st = cmd.status().context("FFmpeg cắt sample clip thất bại")?;
+    if !st.success() || !out_wav.exists() {
+        anyhow::bail!("Cắt sample clip không thành công");
+    }
+
+    let bytes = fs::read(out_wav)?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:audio/wav;base64,{b64}"))
 }
 
 /// Synthesize with the local Kokoro-Vietnamese ONNX model (offline).
@@ -904,6 +1045,7 @@ pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) 
             // không có), đánh dấu để test_dubbing_srt biết không phải gender
             // thật và tránh re-assign lung tung.
             gender: if is_male { "male".to_string() } else { "female".to_string() },
+            sample_audio_data: None,
         });
     }
 
@@ -1112,6 +1254,7 @@ pub fn diarize_and_script_via_minimax(
             pitch,
             rate,
             gender: if is_female { "female".to_string() } else { "male".to_string() },
+            sample_audio_data: None,
         });
     }
 
@@ -1244,14 +1387,15 @@ pub fn analyze_and_create_project(
 
     let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
         .context("Lỗi thực thi whisper-cli")?;
-    let _ = fs::remove_file(&temp_wav);
 
     if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_file(&temp_wav);
         let _ = fs::remove_file(&temp_srt_file);
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
 
     if !whisper_res.success() || !temp_srt_file.exists() {
+        let _ = fs::remove_file(&temp_wav);
         return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
     }
 
@@ -1260,6 +1404,7 @@ pub fn analyze_and_create_project(
 
     let raw_segments = crate::file_sub::parse_srt_content(&raw_srt_content);
     if raw_segments.is_empty() {
+        let _ = fs::remove_file(&temp_wav);
         return Err(anyhow::anyhow!("Không nhận diện được giọng nói trong tệp này."));
     }
 
@@ -1268,11 +1413,48 @@ pub fn analyze_and_create_project(
     let mut parsed_segments = clean_and_merge_raw_segments(raw_segments, &src_lang);
 
     if parsed_segments.is_empty() {
+        let _ = fs::remove_file(&temp_wav);
         return Err(anyhow::anyhow!("Không phát hiện được câu thoại hợp lệ trong tệp này."));
     }
 
     let total = parsed_segments.len();
     info!("🎬 Parsed & merged into {} natural dialogue lines", total);
+
+    // 3b. Offline AI Speaker Diarization via Sherpa-ONNX (pyannote + wespeaker)
+    let mut diarization_engine_used = "heuristic".to_string();
+    if sherpa_available() {
+        emit("diarizing", 38.0, "Đang phân tích âm sắc giọng nói bằng Sherpa AI (Offline)...", 0, total);
+        match run_sherpa_diarization(&temp_wav, &temp_dir, my_gen) {
+            Ok(sherpa_segs) if !sherpa_segs.is_empty() => {
+                info!("🎬 Sherpa Diarization returned {} audio speech turns", sherpa_segs.len());
+                for seg in parsed_segments.iter_mut() {
+                    let mut best_spk = None;
+                    let mut max_overlap = 0.0f64;
+                    for turn in &sherpa_segs {
+                        let overlap_start = seg.start_sec.max(turn.start);
+                        let overlap_end = seg.end_sec.min(turn.end);
+                        let overlap = (overlap_end - overlap_start).max(0.0);
+                        if overlap > max_overlap {
+                            max_overlap = overlap;
+                            best_spk = Some(turn.speaker);
+                        }
+                    }
+                    if let Some(spk_num) = best_spk {
+                        if max_overlap > 0.05 {
+                            seg.speaker_id = format!("speaker_{spk_num}");
+                        }
+                    }
+                }
+                diarization_engine_used = "sherpa".to_string();
+            }
+            Ok(_) => {
+                warn!("⚠️ Sherpa Diarization returned 0 turns, keeping heuristic speaker assignments");
+            }
+            Err(e) => {
+                warn!("⚠️ Sherpa Diarization failed: {:#}, keeping heuristic speaker assignments", e);
+            }
+        }
+    }
 
     let tgt_lang = target_lang.unwrap_or_else(|| "vi".to_string());
 
@@ -1356,6 +1538,33 @@ pub fn analyze_and_create_project(
         }
     }
 
+    // 4b. Extract original audio preview sample (2-8s) for each detected speaker
+    emit("diarizing", 48.0, "Đang trích xuất đoạn âm thanh mẫu cho từng nhân vật...", 0, speakers.len());
+    for spk in speakers.iter_mut() {
+        let mut best_seg: Option<&DubbingSegment> = None;
+        let mut best_score = -1.0f64;
+        for seg in &parsed_segments {
+            if seg.speaker_id == spk.id {
+                let dur = seg.end_sec - seg.start_sec;
+                let score = if (2.5..=7.0).contains(&dur) { dur + 10.0 } else { dur };
+                if score > best_score {
+                    best_score = score;
+                    best_seg = Some(seg);
+                }
+            }
+        }
+        if let Some(seg) = best_seg {
+            let clip_path = temp_dir.join(format!("sample_{}_{}.wav", spk.id, gen_unique_id()));
+            let dur = (seg.end_sec - seg.start_sec).clamp(1.5, 7.0);
+            if let Ok(data_uri) = extract_speaker_sample_clip(&ffmpeg_bin, &temp_wav, seg.start_sec, dur, &clip_path) {
+                spk.sample_audio_data = Some(data_uri);
+            }
+            let _ = fs::remove_file(&clip_path);
+        }
+    }
+
+    let _ = fs::remove_file(&temp_wav);
+
     if is_generation_cancelled(my_gen) {
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
@@ -1377,6 +1586,7 @@ pub fn analyze_and_create_project(
         voice_volume: 1.30,
         dubbing_mode: "ducking".to_string(),
         time_limit_sec,
+        diarization_engine: Some(diarization_engine_used),
     })
 }
 
@@ -2017,6 +2227,36 @@ mod tests {
             assert!(out_wav.exists(), "Output combined speech WAV must exist!");
             assert!(std::fs::metadata(&out_wav).unwrap().len() > 100, "WAV must have content");
         }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_sherpa_diarization_integration() {
+        if !sherpa_available() {
+            println!("Sherpa model not present, skipping diarization test");
+            return;
+        }
+        let test_wav = PathBuf::from(r"H:\AI Project\sublix\test_dubbing_input\dialogue_2spk.wav");
+        if !test_wav.exists() {
+            println!("Test fixture dialogue_2spk.wav not found, skipping");
+            return;
+        }
+
+        let temp_dir = std::env::temp_dir().join(format!("sublix_test_diarize_{}", gen_unique_id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let my_gen = start_new_generation();
+        let res = run_sherpa_diarization(&test_wav, &temp_dir, my_gen);
+        assert!(res.is_ok(), "run_sherpa_diarization failed: {:?}", res.err());
+        let turns = res.unwrap();
+        assert!(!turns.is_empty(), "Sherpa turns must not be empty");
+
+        let mut spks = std::collections::HashSet::new();
+        for t in &turns {
+            spks.insert(t.speaker);
+        }
+        assert_eq!(spks.len(), 2, "Must detect exactly 2 speakers on dialogue_2spk.wav!");
 
         let _ = fs::remove_dir_all(&temp_dir);
     }
