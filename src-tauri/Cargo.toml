@@ -1,8 +1,8 @@
-[package]
+﻿[package]
 name = "sublix"
-version = "0.9.9"
+version = "0.9.10"
 description = "Sublix - Real-time subtitle overlay for any video"
-authors = ["Anh Tuấn"]
+authors = ["Anh Tuáº¥n"]
 edition = "2021"
 
 [lib]
@@ -32,7 +32,7 @@ thiserror = "1"                              # Typed error definitions
 tracing = "0.1"                              # Structured logging
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# === M2: Speech-to-Text (local whisper.cpp via subprocess — no LLVM, no API) ===
+# === M2: Speech-to-Text (local whisper.cpp via subprocess â€” no LLVM, no API) ===
 # Uses prebuilt whisper.cpp Windows binary (downloaded on first run, ~30MB).
 # Model: ggml-tiny.bin (~75MB) for fast MVP, can upgrade to large-v3 (~3GB) later.
 # Cloud OpenAI API remains as opt-in for users who want better quality.
@@ -41,7 +41,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }  # Ext
 url = "2"  # BUG-058: parse URL host for accurate platform matching
 tokio = { version = "1", features = ["fs", "rt-multi-thread"] }
 
-# === M4: Overlay UI — Win32 API for click-through + always-on-top ===
+# === M4: Overlay UI â€” Win32 API for click-through + always-on-top ===
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
     "Win32_Foundation",
@@ -58,7 +58,7 @@ windows = { version = "0.58", features = [
     "Win32_System_Threading",
 ] }
 
-# === M2.5: Live capture → STT → overlay (real-time) ===
+# === M2.5: Live capture â†’ STT â†’ overlay (real-time) ===
 crossbeam-channel = "0.5"  # For stop signal + chunk queue
 
 [features]

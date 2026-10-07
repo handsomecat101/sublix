@@ -449,6 +449,8 @@ export default function DubbingStudioView({
       voice: pickUnusedVoice(isMale),
       pitch: "+0Hz",
       rate: "+0%",
+      // v0.9.10: lưu gender để re-assign voice cho đúng khi dub lại.
+      gender: isMale ? "male" : "female",
     };
     setProject({
       ...project,
@@ -770,6 +772,26 @@ export default function DubbingStudioView({
             })}
           </div>
         )}
+      </div>
+
+      {/* v0.9.10 (PO): nút mở THƯ MỤC THÀNH PHẨM — video tải về + file lồng tiếng cùng một chỗ */}
+      <div
+        className="dubbing-thanhpham-bar"
+        style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+      >
+        <button
+          type="button"
+          className="settings-btn-secondary"
+          onClick={() => {
+            sublix.openThanhPhamFolder().catch((e) => console.error("openThanhPhamFolder:", e));
+          }}
+          title="Mở thư mục chứa video tải về & file lồng tiếng hoàn chỉnh"
+        >
+          📁 Mở Thư Mục Thành Phẩm
+        </button>
+        <span style={{ fontSize: 11.5, color: "var(--t3)" }}>
+          Video tải về &amp; file lồng tiếng đều nằm chung trong đây — không phải đi tìm hai nơi.
+        </span>
       </div>
 
       {/* SECTION 1: MEDIA INPUT & DRAG AND DROP */}

@@ -23,7 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.9.10",
+    date: "07/10/2026",
+    title: "Lồng Tiếng: Dùng Gender Thật + Filter Noise Speaker",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "🐛",
+        items: [
+          "Bug cũ: test_dubbing_srt.rs ép 6 voice khác nhau theo `idx % 2` (male/female xen kẽ) — sai logic, lãng phí voice khi video chỉ 1 narrator, có thể gán nam vào speaker nữ.",
+          "Fix: lưu `gender` vào DubbingSpeaker struct (từ LLM response); ép voice dựa trên `spk.gender` thật; nếu chỉ 1 speaker non-noise → chỉ assign 1 voice.",
+          "Filter noise: speaker có <3 segments hoặc <3% tổng → gộp vào main speaker (giọng đồng nhất).",
+          "Backward compat: `#[serde(default)]` cho gender → project cũ vẫn load được.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.9.9",
+    date: "07/10/2026",
+    title: "Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử + Khớp Voice Đa Vai",
+    isCurrent: false,
     date: "07/10/2026",
     title: "Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử + Khớp Voice Đa Vai",
     isCurrent: true,

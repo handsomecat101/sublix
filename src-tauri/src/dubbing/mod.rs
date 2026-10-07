@@ -148,6 +148,12 @@ pub struct DubbingSpeaker {
     pub voice: String, // e.g. "vi-VN-NamMinhNeural"
     pub pitch: String, // "+0Hz"
     pub rate: String,  // "+0%"
+    /// v0.9.10: "male" | "female" — saved from LLM response so downstream
+    /// voice re-assignment (test_dubbing_srt.rs etc.) can keep each speaker's
+    /// voice consistent across re-runs instead of guessing idx % 2.
+    /// `#[serde(default)]` keeps backward compat with older saved projects.
+    #[serde(default)]
+    pub gender: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -894,6 +900,10 @@ pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) 
             voice,
             pitch,
             rate,
+            // v0.9.10: default fallback chỉ biết idx % 2 (best-effort khi LLM
+            // không có), đánh dấu để test_dubbing_srt biết không phải gender
+            // thật và tránh re-assign lung tung.
+            gender: if is_male { "male".to_string() } else { "female".to_string() },
         });
     }
 
@@ -1101,6 +1111,7 @@ pub fn diarize_and_script_via_minimax(
             voice,
             pitch,
             rate,
+            gender: if is_female { "female".to_string() } else { "male".to_string() },
         });
     }
 
@@ -1625,10 +1636,20 @@ pub fn export_dubbed_video(
     let out_file = if let Some(p) = output_path {
         PathBuf::from(p)
     } else {
+        // v0.9.10 (PO): gom THÀNH PHẨM lồng tiếng vào cùng thư mục với video tải
+        // về — "chỗ nào thì tìm thấy chỗ đó", không phải đi săn file rải rác.
         let input = Path::new(&project.input_path);
-        let parent = input.parent().unwrap_or_else(|| Path::new("."));
         let stem = input.file_stem().unwrap_or_default().to_string_lossy();
-        parent.join(format!("{}_dubbed.mp4", stem))
+        let dir = app
+            .map(crate::downloader::get_downloads_dir)
+            .unwrap_or_else(|| {
+                input
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf()
+            });
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join(format!("{}_dubbed.mp4", stem))
     };
 
     // 3. Run master FFmpeg command using -filter_complex_script to avoid Windows command length limits

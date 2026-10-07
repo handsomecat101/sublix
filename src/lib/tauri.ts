@@ -393,6 +393,11 @@ export const sublix = {
     return await invoke<void>("dubbing_open_output_folder", { path });
   },
 
+  /** v0.9.10 (PO): mở thư mục THÀNH PHẨM — nơi chứa cả video tải về lẫn file lồng tiếng. */
+  async openThanhPhamFolder(): Promise<void> {
+    return await invoke<void>("open_thanh_pham_folder");
+  },
+
   async downloaderGetInfo(url: string): Promise<VideoInfo> {
     return await invoke<VideoInfo>("downloader_get_info", { url });
   },
@@ -460,6 +465,8 @@ export interface DubbingSpeaker {
   voice: string;
   pitch: string;
   rate: string;
+  /** v0.9.10: "male" | "female" — để GUI/CLI re-assign voice đúng gender thay vì đoán. */
+  gender?: string;
 }
 
 export interface DubbingSegment {

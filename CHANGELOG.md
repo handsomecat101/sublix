@@ -1,3 +1,36 @@
+## v0.9.10 — 2026-10-07
+### Lồng Tiếng: Fix Multi-Speaker — Dùng Gender Thật + Filter Noise Speaker
+
+**Vấn đề (PO báo cáo):** Video R2nyc_oP9Yk có 1 người nói chính, nhưng test_dubbing_srt.rs cũ ép 6 voice khác nhau theo `idx % 2` (male/female xen kẽ) → sai logic, lãng phí voice, có thể gán nam vào speaker nữ và ngược lại.
+
+**Nguyên nhân gốc:**
+- Code cũ dùng `idx % 2` để đoán male/female thay vì dùng gender thật từ LLM
+- `DubbingSpeaker` struct KHÔNG lưu `gender` field → sau khi tạo project không biết speaker nào nam/nữ
+- Ép voice cho MỌI speaker, kể cả noise speaker (< 3 segments) → lãng phí + sai
+
+**Thay đổi v0.9.10:**
+- **Backend (`dubbing/mod.rs`):** Thêm field `gender: String` vào `DubbingSpeaker` struct (với `#[serde(default)]` để backward compat với project đã lưu); lưu gender khi tạo speaker ở cả `diarize_and_script_via_minimax` (main) lẫn `generate_default_speakers` (fallback).
+- **CLI (`test_dubbing_srt.rs`):** Viết lại logic ép voice theo gender THẬT (`spk.gender`) + filter noise:
+  - Đếm segments per speaker → tìm `main_speaker` (largest)
+  - Speaker nhiễu (`< 3 segments` HOẶC `< 3% tổng`) → gộp vào main, dùng cùng voice (đồng nhất)
+  - Speaker non-noise → gán voice theo gender đúng, duyệt pool **7 nam + 7 nữ** Kokoro
+  - Nếu chỉ 1 speaker non-noise → chỉ assign 1 voice (không ép lung tung)
+- **Frontend (`tauri.ts` + `DubbingStudioView.tsx`):** Update `DubbingSpeaker` interface có optional `gender?`; `handleAddSpeaker` lưu gender khi user thêm vai mới.
+
+**Test (sẽ chạy vòng tiếp theo):**
+- Video multi-speaker (R2nyc_oP9Yk 15:21) — verify mỗi speaker giữ 1 voice consistent
+- Video 1 narrator (test_ai_21m 21:43) — verify chỉ assign 1 voice
+- Video ngắn mới (≤ 5 phút) — nếu có sẵn trong App downloads
+
+**File đã đổi:**
+- `src-tauri/src/dubbing/mod.rs` — thêm `gender` field + lưu khi tạo
+- `src-tauri/examples/test_dubbing_srt.rs` — viết lại logic ép voice
+- `src/lib/tauri.ts` — thêm `gender?` vào `DubbingSpeaker` interface
+- `src/views/DubbingStudioView.tsx` — `handleAddSpeaker` lưu gender
+- `package.json` + `src-tauri/Cargo.toml` — bump version 0.9.9 → 0.9.10
+
+---
+
 # CHANGELOG — Sublix
 
 > Lịch sử phát hành Sublix theo trục thời gian (mới nhất ở trên).
