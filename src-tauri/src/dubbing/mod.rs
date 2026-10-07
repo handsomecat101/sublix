@@ -1380,6 +1380,117 @@ pub fn analyze_and_create_project(
     })
 }
 
+fn render_amix_chunk(
+    ffmpeg_bin: &Path,
+    temp_dir: &Path,
+    inputs: &[(PathBuf, f64)],
+    out_filename: &str,
+    volume: f32,
+    my_gen: u64,
+) -> Result<PathBuf> {
+    let out_path = temp_dir.join(out_filename);
+    let num_inputs = inputs.len();
+
+    if num_inputs == 1 {
+        let (in_path, start_sec) = &inputs[0];
+        let delay_ms = (start_sec * 1000.0).round() as u64;
+        let mut cmd = Command::new(ffmpeg_bin);
+        cmd.arg("-y").arg("-i").arg(in_path);
+        if delay_ms > 0 || (volume - 1.0).abs() > 0.001 {
+            let filter = format!("adelay={delay_ms}|{delay_ms},volume={volume:.2}");
+            cmd.arg("-filter:a").arg(filter);
+        }
+        cmd.arg("-c:a").arg("pcm_s16le").arg(&out_path);
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        let status = run_child_with_cancel(cmd, my_gen)?;
+        if !status.success() {
+            return Err(anyhow::anyhow!("FFmpeg single chunk render failed"));
+        }
+        return Ok(out_path);
+    }
+
+    let mut filter_script = String::new();
+    for (i, (_, start_sec)) in inputs.iter().enumerate() {
+        let delay_ms = (start_sec * 1000.0).round() as u64;
+        filter_script.push_str(&format!("[{i}:a]adelay={delay_ms}|{delay_ms}[a{i}];"));
+    }
+    for i in 0..num_inputs {
+        filter_script.push_str(&format!("[a{i}]"));
+    }
+    filter_script.push_str(&format!("amix=inputs={num_inputs}:normalize=0,volume={volume:.2}[out]"));
+
+    let script_file = temp_dir.join(format!("{out_filename}_filter.txt"));
+    fs::write(&script_file, &filter_script)?;
+
+    let mut cmd = Command::new(ffmpeg_bin);
+    cmd.arg("-y");
+    for (in_path, _) in inputs {
+        cmd.arg("-i").arg(in_path);
+    }
+    cmd.arg("-filter_complex_script").arg(&script_file);
+    cmd.arg("-map").arg("[out]");
+    cmd.arg("-c:a").arg("pcm_s16le");
+    cmd.arg(&out_path);
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = run_child_with_cancel(cmd, my_gen)?;
+    let _ = fs::remove_file(&script_file);
+    if !status.success() {
+        return Err(anyhow::anyhow!("FFmpeg amix chunk render failed"));
+    }
+    Ok(out_path)
+}
+
+fn render_combined_speech_track(
+    ffmpeg_bin: &Path,
+    temp_dir: &Path,
+    speech_inputs: &[(PathBuf, f64)],
+    voice_volume: f32,
+    my_gen: u64,
+) -> Result<PathBuf> {
+    if speech_inputs.is_empty() {
+        return Err(anyhow::anyhow!("Không có câu thoại nào để lồng tiếng"));
+    }
+
+    // If <= 28 inputs, mix directly in 1 chunk
+    if speech_inputs.len() <= 28 {
+        return render_amix_chunk(ffmpeg_bin, temp_dir, speech_inputs, "speech_combined.wav", voice_volume, my_gen);
+    }
+
+    // Chunk into batches of <= 28 inputs to strictly stay below Windows 32KB CMD limit
+    let chunk_size = 28;
+    let mut chunk_wavs = Vec::new();
+
+    for (c_idx, chunk) in speech_inputs.chunks(chunk_size).enumerate() {
+        if is_generation_cancelled(my_gen) {
+            return Err(anyhow::anyhow!("Đã dừng theo yêu cầu của bạn."));
+        }
+        let chunk_name = format!("speech_chunk_{c_idx}.wav");
+        let chunk_wav = render_amix_chunk(ffmpeg_bin, temp_dir, chunk, &chunk_name, 1.0, my_gen)?;
+        chunk_wavs.push(chunk_wav);
+    }
+
+    let mut current_layer = chunk_wavs;
+    let mut layer_idx = 0;
+    while current_layer.len() > 28 {
+        let mut next_layer = Vec::new();
+        for (c_idx, chunk) in current_layer.chunks(28).enumerate() {
+            let chunk_items: Vec<(PathBuf, f64)> = chunk.iter().map(|p| (p.clone(), 0.0)).collect();
+            let chunk_name = format!("speech_layer_{layer_idx}_{c_idx}.wav");
+            let merged = render_amix_chunk(ffmpeg_bin, temp_dir, &chunk_items, &chunk_name, 1.0, my_gen)?;
+            next_layer.push(merged);
+        }
+        current_layer = next_layer;
+        layer_idx += 1;
+    }
+
+    let final_chunk_items: Vec<(PathBuf, f64)> = current_layer.iter().map(|p| (p.clone(), 0.0)).collect();
+    render_amix_chunk(ffmpeg_bin, temp_dir, &final_chunk_items, "speech_combined.wav", voice_volume, my_gen)
+}
+
 /// Render all dubbed audio segments, time-stretch if needed, and export final video
 pub fn export_dubbed_video(
     app: Option<&AppHandle>,
@@ -1598,39 +1709,24 @@ pub fn export_dubbed_video(
         return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
     }
 
-    emit("remuxing", 75.0, "Đang ghép audio lồng tiếng & nhạc nền vào video...", 0, 100);
-
-    // 2. Mix speech segments at their start times
-    let mut mix_filter = String::new();
-
-    for (idx, (_, start_sec)) in speech_inputs.iter().enumerate() {
-        let input_idx = idx + 1; // 0 is original media file
-        let delay_ms = (start_sec * 1000.0).round() as u64;
-        mix_filter.push_str(&format!(
-            "[{}:a]adelay={}|{}[a{}];",
-            input_idx, delay_ms, delay_ms, input_idx
-        ));
-    }
-
-    let num_speech = speech_inputs.len();
-    let bgm_input_ref = if isolated_bgm_path.is_some() {
-        format!("[{}:a]", num_speech + 1)
+    // 2. Pre-render all speech inputs into a single combined track via chunked amix
+    // BUG-HOTFIX (445 segs): Windows CreateProcessW has a 32,767 character limit.
+    // Pre-rendering combined speech avoids passing hundreds of `-i` flags to FFmpeg remux.
+    let speech_track_opt = if !speech_inputs.is_empty() {
+        emit("remuxing", 70.0, "Đang trộn các đoạn thoại thành luồng lồng tiếng đồng bộ...", 0, 100);
+        let combined = render_combined_speech_track(
+            &ffmpeg_bin,
+            &temp_dir,
+            &speech_inputs,
+            project.voice_volume,
+            my_gen,
+        )?;
+        Some(combined)
     } else {
-        "[0:a]".to_string()
+        None
     };
 
-    if num_speech > 0 {
-        mix_filter.push_str(&build_hierarchical_amix_filter(num_speech, project.voice_volume));
-
-        // Mix background track (either isolated BGM or ducked original) with speech
-        mix_filter.push_str(&format!(
-            "{bgm_src}volume={bgm_vol}[bgm];[bgm][speech]amix=inputs=2:normalize=0[final_audio]",
-            bgm_src = bgm_input_ref,
-            bgm_vol = if isolated_bgm_path.is_some() { 1.0 } else { project.bgm_volume }
-        ));
-    } else {
-        mix_filter.push_str(&format!("{}anull[final_audio]", bgm_input_ref));
-    }
+    emit("remuxing", 80.0, "Đang ghép audio lồng tiếng & nhạc nền vào video...", 0, 100);
 
     // Determine target output file path
     let out_file = if let Some(p) = output_path {
@@ -1652,24 +1748,34 @@ pub fn export_dubbed_video(
         dir.join(format!("{}_dubbed.mp4", stem))
     };
 
-    // 3. Run master FFmpeg command using -filter_complex_script to avoid Windows command length limits
-    let filter_script_path = temp_dir.join("filter_complex.txt");
-    fs::write(&filter_script_path, &mix_filter)
-        .context("Failed to write filter_complex_script")?;
-
+    // 3. Run master FFmpeg command using pre-rendered tracks (at most 3 inputs, < 300 chars CMD)
     let mut remux = Command::new(&ffmpeg_bin);
     remux.arg("-y");
     remux.arg("-i").arg(&project.input_path); // Input 0
 
-    // Add all speech segment inputs
-    for (audio_path, _) in &speech_inputs {
-        remux.arg("-i").arg(audio_path);
-    }
+    let mix_filter = match (&speech_track_opt, &isolated_bgm_path) {
+        (Some(speech_wav), Some(bgm_file)) => {
+            remux.arg("-i").arg(speech_wav); // Input 1
+            remux.arg("-i").arg(bgm_file);   // Input 2
+            "[2:a]volume=1.0[bgm];[bgm][1:a]amix=inputs=2:normalize=0[final_audio]".to_string()
+        }
+        (Some(speech_wav), None) => {
+            remux.arg("-i").arg(speech_wav); // Input 1
+            let bgm_vol = project.bgm_volume;
+            format!("[0:a]volume={bgm_vol}[bgm];[bgm][1:a]amix=inputs=2:normalize=0[final_audio]")
+        }
+        (None, Some(bgm_file)) => {
+            remux.arg("-i").arg(bgm_file);   // Input 1
+            "[1:a]volume=1.0[final_audio]".to_string()
+        }
+        (None, None) => {
+            "[0:a]anull[final_audio]".to_string()
+        }
+    };
 
-    // Add isolated BGM track if present
-    if let Some(ref bgm_file) = isolated_bgm_path {
-        remux.arg("-i").arg(bgm_file);
-    }
+    let filter_script_path = temp_dir.join("filter_complex.txt");
+    fs::write(&filter_script_path, &mix_filter)
+        .context("Failed to write filter_complex_script")?;
 
     remux
         .arg("-filter_complex_script")
@@ -1872,6 +1978,47 @@ mod tests {
         let gen2 = start_new_generation();
         assert!(is_generation_cancelled(gen1), "Old generation must stay cancelled!");
         assert!(!is_generation_cancelled(gen2), "New generation must not be cancelled!");
+    }
+
+    #[test]
+    fn test_render_combined_speech_track_large_segments() {
+        let temp_dir = std::env::temp_dir().join(format!("sublix_test_large_{}", gen_unique_id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let ffmpeg = find_ffmpeg();
+        if !ffmpeg.exists() {
+            println!("FFmpeg not found, skipping large segments test");
+            return;
+        }
+
+        // Generate a tiny 0.05s sine/silence wav as the sample audio
+        let sample_wav = temp_dir.join("sample.wav");
+        let mut gen_cmd = Command::new(&ffmpeg);
+        gen_cmd.args([
+            "-y", "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
+            "-t", "0.05", "-c:a", "pcm_s16le",
+        ]);
+        gen_cmd.arg(&sample_wav);
+        #[cfg(windows)]
+        gen_cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let gen_st = gen_cmd.status();
+        if gen_st.map(|s| s.success()).unwrap_or(false) && sample_wav.exists() {
+            // Build 100 segments (to thoroughly test chunking without taking too much CPU time in unit test)
+            let mut inputs = Vec::new();
+            for i in 0..100 {
+                inputs.push((sample_wav.clone(), i as f64 * 0.1));
+            }
+
+            let my_gen = start_new_generation();
+            let res = render_combined_speech_track(&ffmpeg, &temp_dir, &inputs, 1.0, my_gen);
+            assert!(res.is_ok(), "render_combined_speech_track failed: {:?}", res.err());
+            let out_wav = res.unwrap();
+            assert!(out_wav.exists(), "Output combined speech WAV must exist!");
+            assert!(std::fs::metadata(&out_wav).unwrap().len() > 100, "WAV must have content");
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

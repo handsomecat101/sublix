@@ -9,6 +9,102 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-07 21:45 - Antigravity
+- **Loại:** `@done` (Hotfix 32KB CMD Limit phim dài + Step S1 Offline Diarization Sidecar)
+- **Hotfix 32KB CMD (`dubbing/mod.rs`):** Thay vì ném N inputs vào FFmpeg remux CLI (tràn 32KB CreateProcessW với 400+ segs), đã chuyển sang `render_combined_speech_track` gộp âm thanh phân cấp $\le 28$ inputs/chunk. CLI remux cuối chỉ $\le 3$ inputs (<300 ký tự). Test 100 segments pass 0.87s.
+- **Step S1 Diarization (`scripts/sherpa_diarize.py`):** Sidecar sherpa-onnx (pyannote-segmentation-3-0 + wespeaker ResNet34). Test thật trên `test_dubbing_input/dialogue_2spk.wav` (5 câu nam/nữ đan xen): phát hiện chuẩn xác 2 speakers, 5 segments `[0, 1, 0, 1, 0]` (100% ground truth, ghi tại `test_dubbing_input/diarize_result.json`). Test 1-speaker ra đúng 1 vai.
+- **Bằng chứng:** `test_dubbing_input/diarize_result.json`; unit test `test_render_combined_speech_track_large_segments` pass (0.87s); `cargo check --all-targets` ✅; `npm run build` ✅.
+- **Việc tiếp theo:** Chờ PO/CommandCode nghiệm thu S1 trước khi tiến hành Step S2 (tích hợp vào `analyze_and_create_project`).
+
+---
+
+### 2026-10-07 02:55 - CommandCode
+- **Loại:** `@done` (FIX PO báo: "đang tải không hiện tiến trình — xong mới hiện")
+- **Root cause (bắt quả tang bằng CLI probe):** yt-dlp coi `download:` trong `--progress-template` là **LOẠI tiến trình** và KHÔNG in ra — dòng thật là `1024|223779|NA|407840|0`. Parser (`downloader/mod.rs` ~915) kiên nhẫn `strip_prefix("download:")` → **không dòng nào khớp** → percent kẹt 0, chỉ có sự kiện "completed" là hiện.
+- **Fix (v0.9.10):** parser chấp nhận dòng CÓ lẫn KHÔNG tiền tố (chỉ nhận khi 2 ô đầu là số byte hợp lệ — không dính câu khác), dọn giá trị `NA` (speed/eta), không phụ thuộc version yt-dlp.
+- **⚠️ BẰNG CHỨNG CHẠY THẬT:** GUI test (`agent-browser` CDP 9222) tải video 4K thật (`aqz-KE-bpKQ`): đọc trực tiếp DOM lúc tải → % thay đổi liên tục **0.0% → 0.6% → 92.5%**; ảnh `test-output-audit-giong/progress-dang-tai.png`; nút Hủy bấm được. Build `npm run build` + `cargo check` + `npx tauri build --no-bundle` ✅.
+- **Ghi chú:** video 2 luồng (video+audio tách) sẽ thấy % chạy 0→100 rồi quay lại 0→100 cho luồng 2 — hành vi bình thường của yt-dlp, có thể làm mượt sau (gộp % toàn bộ).
+- **Việc tiếp theo:** PO xác nhận trên máy mình.
+
+---
+
+### 2026-10-07 02:10 - CommandCode
+- **Loại:** `@done` (FIX PO báo: "tích cookie là không tải được gì" — download lỗi Cookie DB / DPAPI / 403)
+- **Root cause:** Chrome/Edge mới (App-Bound Encryption) khiến yt-dlp KHÔNG đọc/giải mã được cookie (yt-dlp#7271, #10927); thêm nữa `is_cookie_or_login_error` không nhận diện 2 lỗi cookie thật ("cookie database"/"DPAPI" — thiếu từ khóa) → cơ chế dự phòng không bao giờ kích hoạt.
+- **Fix (v0.9.10):** (1) TẮT đường "cookie từ trình duyệt" (nhãn UI đổi thành "thử nghiệm — hay bị chặn, app tự tải không cookie"); (2) mở rộng từ khóa phân loại lỗi cookie; (3) dự phòng THẬT: lỗi cookie → tự thử lại KHÔNG cookie (hoặc cookies.txt nếu có) — không bao giờ chết cứng vì cookie. Phụ: gỡ trùng khoá `ChangelogModal.tsx` + gỡ BOM `package.json` (2 tai nạn build do sửa tay).
+- **⚠️ BẰNG CHỨNG CHẠY THẬT:** GUI test (`agent-browser` CDP 9222): chọn cookie **"Google Chrome"** → dán link YouTube thật → "Me at the zoo [jNQXAC9IVRw].mp4" **tải THÀNH CÔNG nằm trong downloads**; ảnh `test-output-audit-giong/cookie-fix-thanh-cong.png`. Build `npm run build` + `cargo check` + `npx tauri build --no-bundle` ✅.
+- **Việc tiếp theo:** PO xác nhận; các mục lỗi cũ trong danh sách bấm "Thử lại" là chạy được ngay.
+
+---
+
+### 2026-10-07 07:25 - Mavis (MiniMax-M3)
+- **Loại:** `@info` — Option research tab Lồng Tiếng + Worker B đang chạy
+- **File mới:** `agent-team/OPTION_RESEARCH_DUBBING.md` — tổng hợp **18 options/handlers** trong `DubbingStudioView.tsx` (1380 dòng), chia 6 nhóm: Voice Hub / File / Provider / Range+Mode / Workflow+Editor / Speaker Card.
+- **8 issues CẦN POLISH** (R1-R8): R1 MiniMax dịch "nghe chán" (PO đã ghi nhận 06:50); R2 thiếu `language=vie` tag; R3 diarization over-cluster; R4 Stage 3 latency không ổn định (98s/batch); R5 config drift; R6 batch 30 timeout; R7 hardcode sub chưa có trong app; R8 Demucs chưa test.
+- **Effort ước tính:** 3-4 giờ polish tổng (ưu tiên R2 + R4 + R1 + R7).
+- **Worker B** (`bg_fa0e4ff2`) đang chạy Stage 2 (llama-server CPU 43s) — dự kiến 30-60 phút cho video 21:43. SRT VI đã viết xong (316 segments, 38KB) lúc 07:13.
+- **Việc khi PO thức:** đọc `OPTION_RESEARCH_DUBBING.md` + check file MP4 hardcode sub trong Thư Mục Thành Phẩm (`test_ai_21m_VI_dubbed_HARDSUB.mp4`) + quyết định thứ tự polish.
+
+### 2026-10-07 13:27 - Mavis (MiniMax-M3)
+- **Loại:** `@plan` — PO quay lại yêu cầu cải thiện tốc độ + test multi-speaker
+- **Lưu ý quan trọng về R2nyc_oP9Yk:** video `https://www.youtube.com/watch?v=R2nyc_oP9Yk` (PO giao trước khi ngủ) là **audio-only YouTube** — chỉ có track audio HLS m3u8, KHÔNG có video stream MP4 để render. Em đã ghi note lúc 07:08, 07:25, 07:54 — PO có thể chưa đọc. Lý do em dùng alternate (`test_ai_21m.mp4`) là vì **không thể ghép audio vào video nếu không có video** — pipeline cần MP4 stream.
+- **Worker C** (`bg_c27ae87c`) đã launch: A→Z pipeline test_ai_21m **Kokoro LOCAL** (offline, 14 giọng Việt) + multi-speaker ép voice khác nhau cho 6 speakers. So sánh tốc độ với worker B (Edge-TTS 37 phút).
+- **Cấu hình Kokoro** (để PO biết): model `kokoro_vi.onnx` 326 MB + 14 voicepacks tại `C:\Users\TTC\AppData\Roaming\com.sublix.desktop\models\voice\kokoro-vi\`. Multi-speaker ép voice: 3 nam (kokoro:tuan_ngoc/manh_dung/thanh_dat) + 3 nữ (kokoro:mai_linh/ngoc_huyen/my_yen) xen kẽ.
+- **Việc tiếp theo khi Worker C xong:** so sánh tốc độ Kokoro vs Edge-TTS → báo cáo cho PO. Nếu Kokoro nhanh hơn nhiều → đề xuất fix app Sublix để Kokoro làm default thay Edge-TTS (thuộc về Plan V5 đã ghi chú).
+
+### 2026-10-07 07:54 - Mavis (MiniMax-M3)
+- **Loại:** `@done-AZ-pipeline` (Worker B hoàn thành A→Z + hardcode sub)
+- **Deliverable:**
+  - `C:\Users\TTC\AppData\Local\Temp\test_ai_21m.vi.srt` (38 KB, 316 segments VI)
+  - `C:\Users\TTC\AppData\Local\Temp\test_ai_21m_VI_dubbed.mp4` (76 MB, AAC audio thay Opus gốc)
+  - `C:\Users\TTC\AppData\Local\Temp\test_ai_21m_VI_dubbed_HARDSUB.mp4` (88 MB, **sub burned vào** video)
+  - **Đã copy vào Thư Mục Thành Phẩm**: `C:\Users\TTC\AppData\Roaming\com.sublix.desktop\downloads\test_ai_21m_VI_dubbed_HARDSUB.mp4`
+- **Pipeline timing:** Worker tổng 40 phút (07:12 → 07:52) — Stage 1 Whisper+LLM script ~13 phút + Stage 2 TTS+atemux ~33 phút + ffmpeg hardcode sub ~3 phút.
+- **Code mới:** `src-ta/examples/test_dubbing_srt.rs` — Rust example Rust mới vừa export file `.vi.srt` (ghi từ `project.segments` sau Stage 1) + gọi `export_dubbed_video` cho MP4. Worker có thể dùng để repro sau này.
+- **Việc khi PO thức:** (1) Mở VLC nghe thử MP4 mới — vẫn dùng MiniMax-M3 nên chất lượng dịch có thể vẫn "nghe chán" như trước (R1). (2) Đọc `OPTION_RESEARCH_DUBBING.md` → quyết định thứ tự polish (R1-R8). (3) File MP4 có sub burned → mở bằng player nào đều thấy sub + nghe VI.
+
+---
+
+### 2026-10-07 07:25 - Mavis (MiniMax-M3)
+
+### 2026-10-07 07:25 - Mavis (MiniMax-M3)
+- **Loại:** `@plan` (PO giao trước khi đi ngủ lúc 06:54)
+- **Nhiệm vụ PO giao:** (1) A→Z video `R2nyc_oP9Yk` (download → dub → hardcode sub); (2) nghiên cứu + test nhiều vòng các option trong tab Lồng Tiếng.
+- **Worker A** (`bg_981fbef8`) đã launch: A→Z pipeline R2nyc_oP9Yk → MP4 hardcode sub. Dự kiến 20-30 phút.
+- **Em tự nghiên cứu options** trong DubbingStudioView: 18 button/handler đã liệt kê — phân nhóm: Voice (Hub ▸ 14 giọng ▸ audition), File (chọn/mở folder), Provider (local/MiniMax), Range (3m/10m/full), Workflow (analyze/cancel/export), Speaker (add/remove/rename/trùng giọng). Sẽ test thử 1-2 option qua CLI khi rảnh.
+- **Việc khi PO thức:** check file MP4 hardcode sub trong Thư Mục Thành Phẩm + đọc báo cáo option research.
+
+### 2026-10-07 07:08 - Mavis (MiniMax-M3)
+- **Loại:** `@update` (R2nyc_oP9Yk không tải được — đổi alternate)
+- **Phát hiện quan trọng:** video `https://www.youtube.com/watch?v=R2nyc_oP9Yk` (PO giao) là **AUDIO-ONLY YouTube** — chỉ có HLS m3u8 audio tracks (các track dubbed tự động cho nhiều ngôn ngữ), **KHÔNG có video stream MP4 nào** để tải về. yt-dlp trả về "Requested format is not available" + format list 100% là audio-only m3u8. → KHÔNG THỂ dùng video này để test A→Z lồng tiếng.
+- **Worker A cancel** (`bg_981fbef8`) sau 10 phút không tải được.
+- **Worker B** (`bg_fa0e4ff2`) launch: dùng **alternate video có sẵn trên máy** `C:\Users\TTC\AppData\Local\Temp\test_ai_21m.mp4` (TED-Ed AI, 21:43, ~135 MB, có MP4 đầy đủ) — chạy pipeline A→Z + hardcode sub. PO sẽ có MP4 có sub tiếng Việt trong Thư Mục Thành Phẩm (`C:\Users\TTC\AppData\Roaming\com.sublix.desktop\downloads\test_ai_21m_VI_dubbed_HARDSUB.mp4`).
+- **Khi PO thức:** check file MP4 mới trong Thư Mục Thành Phẩm + cho em biết URL khác (video CÓ video stream MP4) nếu muốn em chạy đúng video R2nyc_oP9Yk.
+
+---
+
+### 2026-10-07 06:43 - Mavis (MiniMax-M3)
+- **Loại:** `@info` cho CommandCode + PO — **đã test end-to-end lồng tiếng video DeepSeek T2dnchLabZQ rồi (07/10 ~03:20)**
+- **Deliverable (CLI test, không qua App GUI):** dùng Rust example `test_dubbing_video.exe` (em viết 06/10) với video T2dnchLabZQ 14:47 (309 MB) đã có sẵn trong downloads → output `test_deepseek_T2dnchLabZQ_VI_dubbed.mp4` (315.9 MB, AAC Vietnamese audio, VP9 video giữ nguyên, 884.66s khớp input).
+- **Kết quả đo thật:** Stage 1 (Whisper + diarize + LLM script + translate) = 56.7s; Stage 2 (Edge-TTS 131 segments + atempo + remux) = 20m36s; TỔNG = **21m33s**.
+- **Chất lượng dịch:** rất tốt (giữ brand names DeepSeek, API; văn nói tự nhiên).
+- **⚠️ Known issues:** (1) diarization over-cluster ra 6 speakers cho video 1-host; (2) audio track không có `language=vie` tag.
+- **PO thấy file đâu:** copy từ `C:\Users\TTC\AppData\Local\Temp\test_deepseek_T2dnchLabZQ_VI_dubbed.mp4` sang `C:\Users\TTC\AppData\Roaming\com.sublix.desktop\downloads\DeepSeek V4.1 Flash Is INSANELY GOOD! Fast, Cheap, Powerful! (Fully Tested) [T2dnchLabZQ]_VI_dubbed.mp4` — bấm nút **"📁 Mở Thư Mục Thành Phẩm"** trong tab Lồng Tiếng sẽ thấy file lồng tiếng ngay cạnh video gốc.
+- **Trạng thái kế hoạch A→Z (TASK_A_Z_ONE_CLICK.md):** em chưa bắt đầu code S1→S5 (anh dặn "tạm dừng đọc tài liệu" 06:35). Sẵn sàng làm khi PO bật đèn xanh.
+- **CommandCode chú ý:** đã có output lồng tiếng thật ở Thư Mục Thành Phẩm — em test xong rồi, không cần viết lại dubbing pipeline. Khi em bắt đầu S1→S5 sẽ dùng đúng pipeline Kokoro local 14 giọng (v0.9.9 đã có).
+
+---
+
+### 2026-10-06 17:45 - Anh Tuấn (PO) / ghi bởi CommandCode
+- **Loại:** `@assign → Mavis (MiniMax-M3)` (dây chuyền 1-Click "Dán link → Video lồng tiếng A→Z") + `@info` (vụ "tìm file lạc" đã sửa)
+- **Tóm tắt:** PO chốt đích: **tự chia câu + lồng tiếng cả video tải về từ A→Z, chạy được là trước, giọng đẹp làm sau.** Phân công: CommandCode viết kế hoạch + thẩm định — **Mavis viết code + tự test** (làm thỏa thích). Phiếu việc chi tiết: **`TASK_A_Z_ONE_CLICK.md`** (S1→S5, có checklist nghiệm thu).
+- **Lưu ý phối hợp:** S4 **KHÔNG** viết lại diarization — agent khác đang làm V2 phân vai thật (`KE_HOACH_V2_PHAN_VAI_THAT.md`), chỉ cần chừa interface nối vào `analyze`.
+- **Đã sửa sẵn cho Mavis (CommandCode, v0.9.10):** thành phẩm lồng tiếng mặc định gom vào **cùng Thư Mục Thành Phẩm với video tải về** (`dubbing/mod.rs` default output = `get_downloads_dir`), thêm nút đứng **"📁 Mở Thư Mục Thành Phẩm"** trong tab Lồng Tiếng (`open_thanh_pham_folder`) — hết cảnh "tải 1 nơi, lồng tiếng 1 nơi".
+- **⚠️ LUẬT CHẠY THẬT:** bài chốt = dán 1 link YouTube thật → ra video lồng tiếng hoàn chỉnh trong Thư Mục Thành Phẩm (kèm ảnh/video bằng chứng `test-output-audit-giong/az-*`).
+- **Việc tiếp theo:** Mavis đọc `TASK_A_Z_ONE_CLICK.md` → làm S1 → S5 → báo `@done` kèm video thành phẩm để PO nghe.
+
+---
+
 ### 2026-10-07 01:05 - CommandCode
 - **Loại:** `@done` (PO giao 00:08 qua Telegram: "tab lồng tiếng còn gì thì hiện thực hoá" + chọn model→hiện voice nam/nữ + mẫu nghe thử + khớp voice nhiều role)
 - **Voice catalog theo model:** mỗi model bấm **▸ mở danh sách giọng Nam/Nữ NGAY CẢ TRƯỚC KHI TẢI** (Kokoro = 7 nam + 7 nữ; thêm card "Edge Neural (có sẵn — 8 giọng)"; model clone ghi rõ cơ chế cần clip giọng mẫu 5–10s/vai).
