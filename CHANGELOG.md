@@ -1,4 +1,25 @@
 
+## v0.11.27 — 2026-10-09
+### Sublix Studio: Housekeeping (ROUND-6 R6-09)
+
+**Vấn đề (CommandCode verify R6-09):**
+
+1. **`AGENT_CHAT.md:53` còn khoe "Build release `sublix.exe` cho Desktop"** — vi phạm BUG-H07 (KHÔNG `cargo build --release`).
+2. **Bảng trượt AGENT_CHAT đang 11 tin** > giới hạn 5-8 → cần prune.
+3. **Hardcode path test `dubbing/mod.rs:2555, :2586`** — test phụ thuộc file cục bộ `H:\AI Project\sublix\test_media\Greetings and introductions. A1 [2TxVyxrOp0s].mp4` không có trên máy khác → `cargo test` fail.
+
+**Fix v0.11.27:**
+
+- **AGENT_CHAT.md:53:** Sửa "Build release `sublix.exe` cho Desktop" → "version bump toàn diện" (bỏ khoe release).
+- **Prune bảng trượt:** 5 tin cũ (2026-10-08: 03:55, 03:28, 03:15, 02:25, 00:45) → chuyển sang `ARCHIVE/AGENT_CHAT_ARCHIVE.md`. File chính giữ 6-7 tin mới nhất.
+- **Test hardcode path:** Thêm `#[ignore = "R6-09: hardcode test path cục bộ — chạy explicit bằng `cargo test test_real_dubbing_analysis -- --ignored`"]`. Test này KHÔNG chạy mặc định trong `cargo test`.
+
+**File đã đổi:** `agent-team/AGENT_CHAT.md`, `agent-team/ARCHIVE/AGENT_CHAT_ARCHIVE.md`, `src-tauri/src/dubbing/mod.rs`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Kết thúc Round 6:** 9 mục R6-01..R6-09 đã xử lý xong. Tổng 8 commits v0.11.21 → v0.11.27.
+
+---
+
 ## v0.11.26 — 2026-10-09
 ### Sublix Studio: Lưu target_lang Khi Đổi Tại Studio (ROUND-6 R6-08)
 

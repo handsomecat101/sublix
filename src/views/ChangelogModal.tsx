@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.27",
+    date: "09/10/2026",
+    title: "Sublix Studio: Housekeeping (R6-09)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Housekeeping",
+        icon: "🧹",
+        items: [
+          "Sửa AGENT_CHAT.md:53 'Build release sublix.exe' → 'version bump toàn diện' (loại bỏ khoe release vi phạm BUG-H07).",
+          "Prune bảng trượt: 5 tin cũ (03:55, 03:28, 03:15, 02:25, 00:45) → chuyển ARCHIVE. File chính giữ 6-7 tin mới nhất.",
+          "Test hardcode path (dubbing/mod.rs:2555) thêm #[ignore] — không chạy mặc định trong cargo test.",
+          "Kết thúc Round 6: 9 mục R6-01..R6-09 đã xử lý xong, 8 commits v0.11.21 → v0.11.27.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.26",
     date: "09/10/2026",
     title: "Sublix Studio: Lưu target_lang Khi Đổi Tại Studio (R6-08)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

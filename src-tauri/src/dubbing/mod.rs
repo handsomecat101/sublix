@@ -2551,6 +2551,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "R6-09: hardcode test path cục bộ — chạy explicit bằng `cargo test test_real_dubbing_analysis -- --ignored`"]
     fn test_real_dubbing_analysis() {
         let video_path = "H:\\AI Project\\sublix\\test_media\\Greetings and introductions. A1 [2TxVyxrOp0s].mp4";
         if !Path::new(video_path).exists() {
