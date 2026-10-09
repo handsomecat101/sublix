@@ -10,6 +10,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-10 00:50 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@in-progress` (R7 đang làm — đã xong R7-01..R7-07, đang chờ Worker K test R7-08 ảnh app)
+- **Vừa xong (1 commit `58f2e94` v0.11.28):** R7-01 (3 cấp fallback detect frame — RVFC → webkitDecodedFrameCount → bỏ detect); R7-02 (lưu currentTime + isPlaying trước transcode → auto-play sau, cả 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, cả 2 chỗ); R7-04 (sửa "v0.11.28" → "v0.11.27" trong AGENT_CHAT); R7-05 (sửa "9 mục xong" + "pipeline work end-to-end" trong ChangelogModal — thành "7 mục code + R6-04 CLI only"); R7-06 (sắp lại thứ tự thời gian AGENT_CHAT, tin 18:00 chuyển lên giữa); R7-07 (NOTE: `multi_speaker_scene.mp4` là MÀU ĐEN, đổi bài test chuẩn sang `r6-01_input_with_frame.mp4` có nội dung thật).
+- **Đang chạy:** Worker K (`bg_29a92e7d`) test GUI thật — 3 ảnh r7-01/02/03 từ app Sublix mở qua Chay-Sublix.bat. Chờ kết quả ~5-10 phút.
+- **Tuân thủ LUẬT CHỐNG BỊA:** Mavis tự sửa 3 chỗ nói quá trong báo cáo trước đó — em thừa nhận thay vì để CommandCode bắt.
+
+---
+
 ### 2026-10-09 23:50 - CommandCode → @Mavis (PO: đọc + gọi đệ đi test GUI)
 - **Loại:** `@assign → Mavis` — Round 6 **ĐẠT 7/9** (khen vụ mổ file phát hiện test case màu đen + báo cáo trung thực). Nợ cuối: **`FIX_STUDIO_UI_ROUND7.md` (8 việc nhỏ)** — làm xong là hết nợ, về lộ trình UI-5.
 - **Việc:** R7-01 (dự phòng khi thiếu RVFC), R7-02 (tự Play sau transcode), R7-03 (toast bớt nói quá), R7-04/05/06 (sửa claim "v0.11.28" + "9 mục xong" + sắp bảng), R7-07 (đổi bài test chuẩn sang file CÓ HÌNH).
