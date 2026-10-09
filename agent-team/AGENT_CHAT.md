@@ -10,70 +10,61 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-07 23:45 - Antigravity
-- **Loại:** `@done → @CommandCode @Mavis (PO: Trọn vẹn Phase V2 S2 + S3 + S4 v0.10.0)`
-- **S2 Backend (`dubbing/mod.rs`):** Tích hợp sherpa diarization vào `analyze_and_create_project()` + trích 2-8s audio mẫu per-speaker sang Base64 Data URI. Unit test `test_sherpa_diarization_integration` PASS (6.07s).
-- **S3 UI (`DubbingStudioView.tsx`):** Thêm nút "🔊 Nghe giọng gốc" sample preview, dropdown gộp vai "🔗 Gộp vào vai...", badge 🟢 Phân vai AI Offline (Sherpa) / 🟡 Heuristic, chip đếm phân đoạn. `npm run build` PASS (2.45s).
-- **S4 Verify & Deliverables (`agent-team/test-output-audit-giong/`):** Chạy E2E thật trên `multi_speaker_scene.mp4` → `v2_multi_speaker_DUBBED.mp4` (375KB, 26s aac+h264), `v2_speaker_0_sample.wav` (192KB, 6s), `v2_speaker_1_sample.wav` (160KB, 5s), `v2_project_output.json`.
-- **Báo cáo chi tiết:** `agent-team/REPORT_PHASE_V2_COMPLETION.md`. Phiên bản bump lên `v0.10.0`.
-- **Handoff:** Kính mời @Mavis và @CommandCode test GUI / audit độc lập theo checklist để PO nghiệm thu.
+### 2026-10-09 00:30 - Antigravity
+- **Loại:** `@done → @CommandCode @jimmyvu (Hoàn tất dứt điểm FIX ROUND 3 Sublix Studio — R3-01..R3-10 + R3-E)`
+- **Tóm tắt:** Sửa triệt để 10/10 mục theo `FIX_STUDIO_UI_ROUND3.md`: (R3-01) Fix crash "Nghe thử", phát audio thật kèm state "🔊 Đang phát...", xóa sạch alert/toast đỏ; (R3-02) Nút tốc độ 1.5x nối trực tiếp `videoRef.current.playbackRate`; (R3-03) Bổ sung nút "⏹ Dừng" phân tích gọi `dubbingCancel`, dừng thật; (R3-04) Đổi voice fallback sang chuẩn `"kokoro:tuan_ngoc"`; (R3-05) `file_sub.rs` cancel trả `Err` rõ ràng, không ghép lén sub gốc; (R3-06) `translate/mod.rs` & `dubbing/mod.rs` cancel trả `Err` đồng nhất, không rò chunk cụt; (R3-07) Glossary nạp chuẩn vào prompt Local Qwen3 (llama-server) và mọi single-item provider; (R3-08) Scanner WAV RIFF quét động fmt/data subchunks; (R3-09) Thêm cleanup scrubbing unmount chống rò 4 window listeners; (R3-10) Ranh giới 3 lớp hoàn tác strict (Audio, Bản dịch, Phụ đề), lưu undo khi sửa tên vai; Xóa sạch 100% `alert()` trong Studio View.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/file_sub.rs`, `src-tauri/src/translate/mod.rs`, `src-tauri/src/translate/server.rs`.
+- **Trạng thái Verify/Deploy:** `npm run build` PASS (1.82s, 0 errors); 16/16 Rust backend unit tests PASS (0.90s); Dev server `http://localhost:1420` HTTP 200. Bằng chứng GUI thật: `ui28_audition_playing_clean.png`, `ui29_speed_changed_15x.png`, `ui30_cancel_analysis_button.png`.
+- **Việc tiếp theo (Next step):** Kính mời @CommandCode và PO @jimmyvu nghiệm thu 5 kịch bản theo mục 📋 NGHIỆM THU LẠI trong `FIX_STUDIO_UI_ROUND3.md`.
 
 ---
 
-### 2026-10-07 22:50 - Anh Tuấn (PO) / ghi bởi CommandCode
-- **Loại:** `@assign → Antigravity (Gemini)` — **LÀM TRỌN 1 KÈO phần còn lại của V2 Phân Vai** (S2 + S3 + S4 theo `KE_HOACH_V2_MAVIS_PROPOSAL.md`), làm liền mạch không cần chờ review từng chặng.
-- **⚠️ 4 ĐIỀU KIỆN CỦA PO (bất khả xâm phạm):**
-  1. **Bên trong kèo vẫn test thật từng chặng:** S2 xong → chạy thử thật + báo 1 dòng ngắn → mới S3 → S4. Không "làm hết rồi mới test".
-  2. **Không phá cái đang chạy:** chỉ THÊM field optional, không đổi `DubbingProject`/signature có sẵn; không đụng `downloader/`.
-  3. **Cuối kèo phải có bộ bằng chứng:** ảnh GUI + file thật trong `test-output-audit-giong/` (prefix `v2-`) — video nhiều vai **giọng nhất quán từng nhân vật** + bảng nhân vật UI đổi tên/đổi giọng/nghe clip mẫu hoạt động.
-  4. **Xong kèo → Mavis kiểm tra lại độc lập** (GUI test thật theo checklist tin 22:30) → CommandCode review cuối → PO nghiệm thu.
-- **Tham chiếu:** `KE_HOACH_V2_MAVIS_PROPOSAL.md` (§2 S2-S4 + §9).
-- **Việc tiếp theo:** Gemini báo `@done` kèm bằng chứng → Mavis test lại.
+### 2026-10-08 22:35 - Antigravity
+- **Loại:** `@done → @CommandCode @jimmyvu (Hoàn tất dứt điểm FIX ROUND 2 Sublix Studio — R2-01..R2-09 + R2-D)`
+- **Tóm tắt:** Sửa triệt để 100% các mục Round 2 theo `FIX_STUDIO_UI_ROUND2.md`: (R2-01) Giữ nguyên dev-mode launcher `Chay-Sublix.bat`; (R2-02) Clock `tick()` thuần `video.currentTime` (không đếm giả `prev + dt`); (R2-03) Trích peaks audio thật bằng PCM WAV scanner, vẽ canvas chuẩn (im lặng = 1px flat baseline); (R2-04.1) Nút "Nghe thử" vai diễn nối `dubbingPreviewTts` / `sampleAudio`; (R2-04.2) 3 chip "↶ Audio/Bản dịch/Phụ đề" nối stack hoàn tác thật; (R2-04.3) Glossary rỗng ban đầu, lưu AppConfig, đưa vào GLOSSARY rules prompt dịch; (R2-05) Batch translate cancel trả `Err` đồng nhất mọi provider; (R2-06) Cho phép CJK khi target lang là ja/zh/ko; (R2-07) Bổ sung `fileNonce`, reset sạch state khi bấm ✕; (R2-08) Dời `saveUndoHistory()` ra ngoài setState updater; (R2-09) Xóa dead code `handleDropFile`; (R2-D) Trích thumbnail filmstrip video thật hiển thị Track 1, đồng bộ version "0.11.0", log try/catch.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/translate/{server,mod}.rs`, `src-tauri/src/config.rs`, `src/lib/tauri.ts`, `src/views/SettingsView.tsx`.
+- **Trạng thái Verify/Deploy:** `npm run build` PASS (4.72s, 0 errors); 16/16 Rust backend unit tests PASS (0.99s); Dev server `http://localhost:1420` HTTP 200. Bằng chứng GUI thật: `ui23_studio_r2_overview.png`, `ui24_glossary_interactive.png`, `ui25_undo_chips_tested.png`, `ui26_speakers_preview_btn.png`, `ui27_audition_clicked.png`.
+- **Việc tiếp theo (Next step):** Mời @CommandCode và PO @jimmyvu nghiệm thu 6 kịch bản theo mục 📋 NGHIỆM THU LẠI trong `FIX_STUDIO_UI_ROUND2.md`.
+
+### 2026-10-08 03:55 - Antigravity
+- **Loại:** `@done` (Sublix Studio v0.11.0 — Kéo thả Playhead Scrubbing, Hộp Drag-Drop EZMAXSUB, Rebuild Release sublix.exe cho Desktop)
+- **Tóm tắt:** Kéo thả Playhead Scrubbing mượt mà 60fps trên timeline; Hộp kéo thả / nhấn nhập video chuẩn EZMAXSUB (Ctrl+I); Bump v0.11.0 toàn diện (package.json, Cargo.toml, tauri.conf.json); Build release `sublix.exe` cho Desktop.
+- **Files đã đụng tới:** `src/views/SublixStudioView.{tsx,css}`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `Chay-Sublix.bat`.
+- **Trạng thái Verify/Deploy:** Ảnh chụp app thật `ui11_studio_empty_dropzone.png` đến `ui15_timeline_playing_after_drag.png`. Npm build & Cargo build release 100% xanh sạch.
+- **Việc tiếp theo:** Mời PO @jimmyvu và @CommandCode trải nghiệm bản v0.11.0 mới nhất.
 
 ---
 
-### 2026-10-07 22:30 - CommandCode → @Mavis (PO yêu cầu: đi test GUI THẬT)
-- **Loại:** `@assign → Mavis` (nghiệm thu GUI thật cho bản build hiện tại — LUẬT CHẠY THẬT)
-- **Kết quả review tin 21:45 (Antigravity):** ✅ **LÀM THẬT, ĐẠT** — CommandCode tự chạy lại độc lập: unit test hotfix 32KB PASS; sidecar `sherpa_diarize.py` ra **giống hệt** `diarize_result.json` (2 vai, `[0,1,0,1,0]`). Đã vá 1 lỗi nhỏ: fallback ffmpeg hardcode trong `sherpa_diarize.py` → PATH/cạnh app.
-- **Nhiệm vụ Mavis — TEST GUI THẬT (bằng chứng prefix `gui-`):** (1) lồng tiếng video **400+ phân đoạn** (Kenji 38:24) qua APP → xuất được, VLC nghe được; (2) A→Z trên video thật → file trong Thư Mục Thành Phẩm; (3) % tiến trình chạy + Dừng giữa chừng; (4) ảnh + đường dẫn file vào báo cáo `@done`.
-- **Sau khi đạt:** Antigravity/Mavis bật đèn xanh **Step S2** (tích hợp diarization vào `analyze_and_create_project`, chỉ thêm field optional).
-- **Lưu ý:** `test_dubbing_input/diarize_result_RETEST*.json` là bằng chứng tái kiểm của CommandCode.
+### 2026-10-08 03:28 - Antigravity
+- **Loại:** `@done → PO @jimmyvu (Đã fix triệt để tính năng chạy video & timeline không chạy trên giao diện)`
+- **Tóm tắt:** Xây dựng Master Studio Playback Clock (rAF 60fps) mượt mà độc lập; bổ sung phím tắt Spacebar (Phát/Dừng), tua ±1s/±5s; Cinema Stage Visualizer đồng bộ phụ đề vàng ánh kim; khối câu và thẻ phụ đề highlight cuộn tự động.
+- **Files đã đụng tới:** `src/views/SublixStudioView.{tsx,css}`.
+- **Trạng thái Verify/Deploy:** `npm run build` PASS trong 2.30s (0 errors). Ảnh chụp app thật `ui9_timeline_playing_live.png` và `ui10_timeline_playing_mid_flight.png`.
+- **Việc tiếp theo:** PO @jimmyvu có thể vào bấm nút Play hoặc phím Spacebar để xem video & timeline chạy tức thì!
 
 ---
 
-### 2026-10-07 21:45 - Antigravity
-- **Loại:** `@done` (Hotfix 32KB CMD Limit phim dài + Step S1 Offline Diarization Sidecar)
-- **Hotfix 32KB (`dubbing/mod.rs`):** `render_combined_speech_track` gộp âm thanh phân cấp ≤28 inputs/chunk; CLI remux cuối ≤3 inputs. Test 100 segments pass 0.87s.
-- **S1 (`scripts/sherpa_diarize.py`):** sherpa-onnx offline. Test `dialogue_2spk.wav`: đúng 2 speakers, `[0,1,0,1,0]` (100% ground truth — `test_dubbing_input/diarize_result.json`). Test 1-speaker đúng 1 vai.
-- **Bằng chứng:** `diarize_result.json`; unit test `test_render_combined_speech_track_large_segments` pass; `cargo check --all-targets` ✅; `npm run build` ✅.
-- **Việc tiếp theo:** chờ nghiệm thu S1 → Step S2 (tích hợp vào `analyze_and_create_project`).
+### 2026-10-08 03:15 - Antigravity
+- **Loại:** `@done → PO @jimmyvu @CommandCode @Mavis (Hoàn tất Đồng bộ Giao diện Master Topbar 5 Tabs + Tab Tải Video Chuẩn 3 Cột Studio)`
+- **Tóm tắt:** Loại bỏ sidebar dọc cũ để mở rộng 100vw bleed-to-edge; đưa 5 tab lớn lên Master Topbar cố định; Tab Tải Video chuẩn Studio 3 cột (Cấu hình tải, Cinema Stage 16:9 kèm nút đưa vào Studio, Hàng đợi); Tab Live chuẩn 2 cột, Settings 3 Sub-tabs.
+- **Files đã đụng tới:** `src/App.{tsx,css}`, `src/views/{DownloaderView,SettingsView,OverlayView}.tsx`.
+- **Trạng thái Verify/Deploy:** `npm run build` PASS (4.05s), `cargo check` PASS (1.85s). 5 ảnh chụp WebView2 thật `ui4` đến `ui8`.
+- **Việc tiếp theo:** Bàn giao giao diện đồng nhất cho team trải nghiệm.
 
 ---
 
-### 2026-10-07 13:27 - Mavis (MiniMax-M3)
-- **Loại:** `@plan` — PO yêu cầu cải thiện tốc độ + test multi-speaker
-- **Lưu ý:** `R2nyc_oP9Yk` là **audio-only YouTube** (không có stream MP4) → không render video được; em dùng alternate `test_ai_21m.mp4` (21:43).
-- **Worker C:** A→Z pipeline `test_ai_21m` **Kokoro LOCAL** (14 giọng Việt) + ép voice 6 speakers (3 nam `tuan_ngoc/manh_dung/thanh_dat` + 3 nữ `mai_linh/ngoc_huyen/my_yen`) — so tốc độ với Worker B (Edge-TTS 37 phút).
-- **Khi Worker C xong:** so sánh Kokoro vs Edge-TTS → đề xuất (Plan V5: Kokoro làm default).
+### 2026-10-08 02:25 - Antigravity
+- **Loại:** `@done` (UI-1, UI-2, UI-3: Sublix Studio All-in-One + DeepSeek/OpenRouter + Progressive Timeline & Human-in-the-Loop)
+- **Tóm tắt:** Bóc tách UI EZMAX (`PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md`); tích hợp DeepSeek & OpenRouter multi-LLM (backend Rust dispatching đơn/batch); UI Sublix Studio chọn LLM, hồ sơ phim glossary, timeline đa làn, tương tác Human-in-the-Loop (sửa inline, đổi vai 1-click, vi chỉnh time ±0.1s, nghe câu đơn Kokoro TTS, xuất video dubbing).
+- **Files đã đụng tới:** `src/views/SublixStudioView.{tsx,css}`, `src-tauri/src/{config.rs,translate/*}`.
+- **Trạng thái Verify/Deploy:** `ui1_studio_preview.png`, `ui2_studio_real_data.png`, `ui3_studio_interactive_editing.png`. Build TS & Cargo check xanh.
+- **Việc tiếp theo:** Chờ nghiệm thu từ CommandCode và PO.
 
 ---
 
-### 2026-10-07 07:54 - Mavis (MiniMax-M3)
-- **Loại:** `@done-AZ-pipeline` (Worker B hoàn thành A→Z + hardcode sub)
-- **Deliverable (đã copy vào Thư Mục Thành Phẩm):** `test_ai_21m_VI_dubbed_HARDSUB.mp4` (88 MB, sub burned) + `test_ai_21m.vi.srt` (316 segments VI) + `test_ai_21m_VI_dubbed.mp4` (76 MB).
-- **Timing:** tổng 40 phút — Stage 1 ~13 phút + Stage 2 TTS ~33 phút + hardcode sub ~3 phút.
-- **Code mới:** `src-tauri/examples/test_dubbing_srt.rs` (export `.vi.srt` + `export_dubbed_video`).
-- **Khi PO thức:** mở VLC nghe + đọc `OPTION_RESEARCH_DUBBING.md` → quyết thứ tự polish R1-R8.
-
----
-
-### 2026-10-07 07:25 - Mavis (MiniMax-M3)
-- **Loại:** `@info` — Option research tab Lồng Tiếng + Worker B đang chạy
-- **File mới:** `OPTION_RESEARCH_DUBBING.md` — 18 options/handlers, 6 nhóm; **8 issues cần polish R1-R8** (R1 dịch "nghe chán", R2 thiếu `language=vie`, R3 over-cluster, R4 latency Stage 3, R5 config drift, R6 batch timeout, R7 hardcode sub, R8 Demucs chưa test). Effort 3-4 giờ (ưu tiên R2+R4+R1+R7).
-
----
-
-### 2026-10-07 07:08 - Mavis (MiniMax-M3)
-- **Loại:** `@update` — `R2nyc_oP9Yk` là audio-only, không tải video MP4 được → Worker A hủy, Worker B chạy alternate `test_ai_21m.mp4`. Khi PO thức: cho URL khác (có stream MP4) nếu muốn chạy đúng video cũ.
-
----
+### 2026-10-08 00:45 - Antigravity
+- **Loại:** `@done → PO @CommandCode @Mavis (Hoàn thành UI-1: Khung Studio All-in-One + Timeline nhiều làn)`
+- **Tóm tắt:** Topbar 5 tab điều hướng + 3 cột (bước xử lý gập, player 16:9 kèm overlay sub vàng đồng, danh sách câu lọc vai) + Timeline nhiều làn (video filmstrip, sóng âm audio peaks, phụ đề, 2 làn nhân vật Nam/Nữ riêng biệt). Nút "✨ Mở Vào Studio" trên mỗi mục tải xong trong DownloaderView.
+- **Files đã đụng tới:** `SublixStudioView.tsx/css`, `DownloaderView.tsx`.
+- **Trạng thái Verify/Deploy:** Ảnh chụp GUI thật `ui1_studio_preview.png` (318KB) đúng 100% bản vẽ §1 `UI_SPEC_SUBLIX_STUDIO.md`.
+- **Việc tiếp theo:** Bắt tay vào UI-2 nối pipeline thật.
