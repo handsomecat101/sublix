@@ -222,7 +222,10 @@ export default function SublixStudioView({
 
   // Timeline (P5)
   const [batchMode, setBatchMode] = useState<boolean>(false);
-  const [zoomLevel, setZoomLevel] = useState<number>(30); // seconds visible
+  // v0.11.3: zoom semantic đổi từ "số giây hiển thị" → "% viewport" (100% = full video fit viewport).
+  // Đúng chuẩn Premiere/DaVinci: zoom out max = toàn cảnh video, zoom in = frame lớn.
+  // Mốc tick tự co giãn (1s/5s/30s/1min/5min...) theo pxPerSec, không cố định 5s nữa.
+  const [zoomLevel, setZoomLevel] = useState<number>(100); // % viewport (100 = full video)
   const [magnetSnap, setMagnetSnap] = useState<boolean>(true);
   const [linkTracks, setLinkTracks] = useState<boolean>(true);
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -616,9 +619,21 @@ export default function SublixStudioView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isActive]);
 
-  // Zoom calculation: pixels per second
-  const pxPerSec = Math.max(10, 1200 / Math.max(5, zoomLevel));
-  const timelineWidth = Math.max(1200, Math.round(mediaDuration * pxPerSec));
+  // v0.11.3: Zoom = % viewport. 100% = full video fit viewport ~1200px.
+  // Ví dụ Kenji 38:24 = 2304s: zoom 100% → 0.52 px/s; zoom 1000% → 5.2 px/s.
+  const TIMELINE_VIEWPORT_WIDTH = 1200;
+  const pxPerSec = (TIMELINE_VIEWPORT_WIDTH * (zoomLevel / 100)) / Math.max(1, mediaDuration);
+  const timelineWidth = Math.max(TIMELINE_VIEWPORT_WIDTH, Math.round(mediaDuration * pxPerSec));
+
+  // v0.11.3: chọn tick interval đẹp (~100px giữa 2 tick) theo zoom hiện tại.
+  // Trả về số giây giữa 2 mốc (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200).
+  const chooseTickInterval = (pps: number): number => {
+    const targetPx = 100;
+    const rawSec = targetPx / Math.max(0.001, pps);
+    const steps = [0.1, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200];
+    return steps.find((s) => s >= rawSec) ?? 3600;
+  };
+  const tickIntervalSec = chooseTickInterval(pxPerSec);
   const timelineWidthRef = useRef<number>(timelineWidth);
   timelineWidthRef.current = timelineWidth;
 
@@ -1003,8 +1018,8 @@ export default function SublixStudioView({
   };
 
   const handleFitTimeline = () => {
-    // Fit full media duration into view
-    setZoomLevel(Math.max(10, Math.ceil(mediaDuration)));
+    // v0.11.3: Fit full media duration into view = zoom 100% (full video fit viewport)
+    setZoomLevel(100);
   };
 
   const handleUpdateSegmentSpeaker = (segId: number, newSpeakerId: string) => {
@@ -2773,8 +2788,8 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-btn-subtle-sm"
-              onClick={() => setZoomLevel(Math.max(5, Math.round(zoomLevel / 1.5)))}
-              title="Zoom out — xem nhiều giây hơn trong cùng chiều rộng"
+              onClick={() => setZoomLevel(Math.max(100, Math.round(zoomLevel / 1.5)))}
+              title="Zoom out (×0.67) — xem thêm toàn cảnh video"
               style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               −
@@ -2782,8 +2797,8 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-btn-subtle-sm"
-              onClick={() => setZoomLevel(30)}
-              title="Reset zoom về mặc định (30s hiển thị)"
+              onClick={() => setZoomLevel(100)}
+              title="Reset về 100% = full video fit viewport (chuẩn Premiere)"
               style={{ fontSize: 10, padding: "0 4px", cursor: "pointer" }}
             >
               ⟲
@@ -2791,8 +2806,8 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-btn-subtle-sm"
-              onClick={() => setZoomLevel(Math.min(600, Math.round(zoomLevel * 1.5)))}
-              title="Zoom in — xem ít giây hơn (timeline frame lớn hơn)"
+              onClick={() => setZoomLevel(Math.min(10000, Math.round(zoomLevel * 1.5)))}
+              title="Zoom in (×1.5) — frame lớn, tick 1s/5s chi tiết"
               style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               +
@@ -2800,14 +2815,15 @@ export default function SublixStudioView({
             <input
               type="range"
               className="studio-timeline-zoom-slider"
-              min={5}
-              max={300}
-              value={Math.min(600, Math.max(5, zoomLevel))}
+              min={100}
+              max={10000}
+              step={50}
+              value={Math.min(10000, Math.max(100, zoomLevel))}
               onChange={(e) => setZoomLevel(Number(e.target.value))}
               style={{ width: 90 }}
             />
             <span style={{ minWidth: 56, textAlign: "right" }}>
-              {zoomLevel}s hiển thị
+              {zoomLevel}% viewport
             </span>
           </div>
         </div>
@@ -2883,8 +2899,8 @@ export default function SublixStudioView({
               onClick={handleTimelineClick}
               title="Bấm giữ và kéo rê để chạy video theo mốc thời gian"
             >
-              {Array.from({ length: Math.ceil(mediaDuration / 5) + 1 }).map((_, i) => {
-                const t = i * 5;
+              {Array.from({ length: Math.ceil(mediaDuration / tickIntervalSec) + 1 }).map((_, i) => {
+                const t = i * tickIntervalSec;
                 if (t > mediaDuration + 2) return null;
                 return (
                   <div

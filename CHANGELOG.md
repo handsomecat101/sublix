@@ -1,3 +1,32 @@
+## v0.11.3 — 2026-10-09
+### Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)
+
+**PO phàn nàn (2026-10-09):** "cái timeline hiện tại quá vớ vẩn, thay vì zoom ra thời gian theo cả video theo kiểu premier hay các trình dựng video khác, nó lại chạy kiểu zoom max ra 300s, với các mốc thời gian ko hiểu sao lại tính là 5s 1 lần".
+
+**Vấn đề v0.11.2:** Zoom semantic sai — dùng "số giây visible" (5-300s) thay vì "% viewport". Mốc tick cứng `i*5` không scale theo zoom.
+
+**Fix v0.11.3 (đúng chuẩn Premiere/DaVinci):**
+- **Semantic zoom:** `zoomLevel` giờ là **% viewport** (100 = full video fit ~1200px, 1000 = zoom 10×, 10000 = zoom 100×). Default 100% — mở video thấy ngay toàn cảnh.
+- **Mốc tick tự co giãn** theo `pxPerSec` qua hàm `chooseTickInterval`:
+  - `pxPerSec ≥ 100` → tick 0.1s/0.5s/1s (zoom in cực mạnh)
+  - `pxPerSec ~ 10-100` → tick 2s/5s/10s/15s
+  - `pxPerSec ~ 1-10` → tick 30s/1min/2min
+  - `pxPerSec ~ 0.1-1` → tick 5min/10min/30min
+  - `pxPerSec < 0.1` → tick 1h/2h (full video ngắn fit viewport)
+- **Công thức:** `pxPerSec = (1200 * zoomLevel/100) / mediaDuration`. Tick mỗi ~100px.
+- **Ví dụ thực tế:**
+  - Kenji 38:24 (2304s), zoom 100% → 0.52 px/s → tick mỗi **5 phút** (0:00, 5:00, 10:00, ..., 35:00)
+  - Kenji 38:24, zoom 500% → 2.6 px/s → tick mỗi **30 giây**
+  - Kenji 38:24, zoom 5000% → 26 px/s → tick mỗi **5 giây**
+  - Kenji 38:24, zoom 10000% → 52 px/s → tick mỗi **1-2 giây**
+- **Nút bấm mới:** − (zoom out ×0.67, min 100%) / ⟲ (reset 100%) / + (zoom in ×1.5, max 10000%)
+- **Slider:** 100% → 10000%, step 50, hiển thị "{N}% viewport" (trước "{N}s hiển thị")
+- **`handleFitTimeline()`** giờ chỉ `setZoomLevel(100)` thay vì `Math.ceil(mediaDuration)`
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.2 — 2026-10-09
 ### Sublix Studio: Timeline Zoom In/Out (nút bấm + slider + reset)
 

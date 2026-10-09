@@ -23,6 +23,25 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.3",
+    date: "09/10/2026",
+    title: "Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "🎚",
+        items: [
+          "PO phàn nàn: 'timeline zoom max 300s quá vớ vẩn, mốc 5s cố định không hiểu'. Sai chuẩn Premiere/DaVinci.",
+          "Fix: Đổi semantic zoomLevel từ 'số giây hiển thị' (5-300s) sang '% viewport' (100% = full video fit, 1000% = zoom 10×, max 10000% = zoom 100×).",
+          "Mốc tick tự co giãn theo pxPerSec qua hàm chooseTickInterval: 1s/5s/15s/30s/1min/5min/30min/1h/2h tùy theo zoom. Không còn cứng 5s.",
+          "Ví dụ Kenji 38:24: zoom 100% → tick mỗi 5 phút (0:00, 5:00, 10:00, ..., 35:00); zoom 5000% → tick mỗi 5 giây.",
+          "Nút bấm: −/⟲/+ với step ×0.67/reset 100%/×1.5. Slider 100%→10000% step 50. Hiển thị '{N}% viewport'.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.2",
     date: "09/10/2026",
     title: "Sublix Studio: Timeline Zoom In/Out + Reset",
