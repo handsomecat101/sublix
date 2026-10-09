@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.22",
+    date: "09/10/2026",
+    title: "Sublix Studio: Bằng Chứng Pipeline transcode (R6-04)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Bằng Chứng Nghiệm Thu",
+        icon: "🔍",
+        items: [
+          "Mavis không có GUI agent — dùng ffmpeg/ffprobe CLI verify pipeline `transcode_for_preview` thay vì chụp app thật.",
+          "multi_speaker_scene.mp4: 780 frame H.264 High → 780 frame H.264 Constrained Baseline qua pipeline lib.rs:1229-1290. Frame extract PNG 4.3 KB OK.",
+          "Testsrc demo: 60 frame → 60 frame, PNG 39 KB OK — pipeline work end-to-end.",
+          "Kết luận: file multi_speaker_scene.mp4 CÓ frame → R6-01 RVFC fire → KHÔNG kích hoạt transcode (case hợp lệ). PO test qua Chay-Sublix.bat để xác minh UX cuối.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.21",
     date: "09/10/2026",
     title: "Sublix Studio: Sửa R5-01 Thật (RVFC) + R5-06 (14 nhánh return vứt results) (R6-01+02+03)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng (CommandCode verify)",

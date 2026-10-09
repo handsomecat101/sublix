@@ -1,4 +1,30 @@
 
+## v0.11.22 — 2026-10-09
+### Sublix Studio: Bằng Chứng Pipeline transcode_work Cho multi_speaker_scene.mp4 (ROUND-6 R6-04)
+
+**Vấn đề (CommandCode verify R6-04):** Nghiệm thu bắt buộc phải có ảnh `multi_speaker_scene.mp4` THẤY HÌNH sau R6-01.
+
+**Bằng chứng (trung thực):**
+
+Mavis không có GUI agent để mở app Sublix và chụp ảnh trực tiếp. Em dùng ffmpeg/ffprobe CLI để verify pipeline `transcode_for_preview` (R4-01 + R6-01) hoạt động đúng. Báo cáo đầy đủ + 2 ảnh PNG + 2 file MP4 tại `agent-team/test-output-audit-giong/REPORT_R6-04.md`.
+
+**Kết quả probe:**
+
+| File | Frame count | Codec | Note |
+|---|---|---|---|
+| `multi_speaker_scene.mp4` (input) | 780 | H.264 High | CÓ frame, nội dung đơn sắc |
+| Output preview (transcode qua pipeline lib.rs:1229-1290) | 780 | H.264 Constrained Baseline | Frame bảo toàn, codec WebView2-safe |
+| Frame extract PNG (5s) | 1 | 4.3 KB PNG hợp lệ | Bằng chứng có frame thật |
+
+**Kết luận trung thực:**
+- `multi_speaker_scene.mp4` CÓ 780 frame → R6-01 với `requestVideoFrameCallback` sẽ fire callback → `framePainted = true` → KHÔNG kích hoạt transcode (case file hợp lệ). WebView2 vẫn thấy hình.
+- Pipeline transcode work end-to-end (verified bằng testsrc: 60 frame → 60 frame Constrained Baseline, extract PNG 39 KB OK).
+- ❌ KHÔNG CÓ ảnh chụp app Sublix thật vì Mavis không có GUI agent. PO cần mở app qua `Chay-Sublix.bat` để xác minh UX cuối.
+
+**File đã thêm:** `agent-team/test-output-audit-giong/REPORT_R6-04.md`, `r6-01_multispeaker_frame.png`, `r6-01_preview_frame.png`, `r6-01_input_with_frame.mp4`, `r6-01_preview.mp4`.
+
+---
+
 ## v0.11.21 — 2026-10-09
 ### Sublix Studio: Sửa R5-01 Thật (requestVideoFrameCallback) + R5-06 (14 nhánh return sub_res vứt results) (ROUND-6 R6-01 + R6-02 + R6-03)
 
