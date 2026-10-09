@@ -1,440 +1,458 @@
-## v0.11.11 — 2026-10-09
-### Sublix Studio: A→Z 1-Click Đã Có Sẵn (TASK_A_Z_ONE_CLICK S1)
 
-**Phát hiện khi điều tra TASK_A_Z_ONE_CLICK.md:**
-Tính năng "dán link → chuyển sang Studio với file đã chọn" **đã có sẵn từ trước**, không cần code thêm. Flow đầy đủ:
+## v0.11.13 — 2026-10-09
+### Sublix Studio: Detect Video Im Lặng + Toast Loading (ROUND-5 R5-01 + R5-02)
 
-1. Tab Tải video: tải xong video → click **"✨ ĐƯA VÀO STUDIO LỒNG TIẾNG & SUB"** trong card video (line 1148) → gọi `onNavigateToStudio(filePath)`.
-2. `SettingsView.tsx:handleRouteToStudio(path)` → set `studioInitialPath(path)` + tăng `studioFileNonce` + `setActiveTab("studio")`.
-3. Tab Studio nhận `initialFilePath` prop → `useEffect` tự động `setFilePath(initialFilePath)` → user bấm "Bắt đầu Phân Tích" để chạy.
+**Vấn đề (CommandCode verify R5-01):** R4-01 fallback chỉ trigger khi <video>.onError event. Nhưng WebView2 có thể hỏng codec kiểu **im lặng**: chạy giờ, phát tiếng, **KHUNG TRỐNG** — không error event → fallback chết cứng. Ảnh cũ 4-01_preview_playing.png (00:15.78 khung trống) tự tố vấn đề này.
 
-**Cải thiện nhỏ v0.11.11 (5 phút):**
-- Thêm tooltip rõ hơn cho nút "ĐƯA VÀO STUDIO" (đã có sẵn, chỉ verify + polish wording).
-- Ghi CHANGELOG để PO biết tính năng có sẵn, không yêu cầu PO test lại.
+**Fix v0.11.13:**
+- Sau loadedmetadata + **800ms** (đợi WebView2 decode frame đầu), kiểm ideo.videoWidth === 0 → kích hoạt 	ranscodeForPreview chủ động.
+- Vẫn giữ nhánh onError cũ.
+- **R5-02 (gộp):** Toast "⏳ Video không hiển thị hình — đang chuyển sang dạng xem được…" khi bắt đầu, "✅ Đã chuyển sang dạng xem được" khi xong, "❌ Không thể chuyển dạng" nếu lỗi.
+- Cleanup timer on unmount + đổi file (tránh React warning stale state).
+- Dùng ilePathRef + 	ranscodedPathRef (refs mới) để async timeout access state hiện tại (không stale closure).
 
-**File đã đổi:** `CHANGELOG.md`, `package.json`, `src-tauri/Cargo.toml` (version bump only).
+**File đã đổi:** src/views/SublixStudioView.tsx, package.json, src-tauri/Cargo.toml, CHANGELOG.md.
 
-**Còn lại (chưa làm trong vòng này):** S2 nút "Tự động A→Z" (tick checkbox trước khi tải → tự động lồng tiếng khi tải xong) — 1-2 giờ, làm sau nếu PO yêu cầu.
+**Còn lại Round 5:** R5-03 (xoá preview cũ), R5-05/06/07 (regression từ Round 4), R5-08/09/10 (nợ cũ + housekeeping), dropdown fix.
+
+---
+## v0.11.11 â€” 2026-10-09
+### Sublix Studio: Aâ†’Z 1-Click ÄÃ£ CÃ³ Sáºµn (TASK_A_Z_ONE_CLICK S1)
+
+**PhÃ¡t hiá»‡n khi Ä‘iá»u tra TASK_A_Z_ONE_CLICK.md:**
+TÃ­nh nÄƒng "dÃ¡n link â†’ chuyá»ƒn sang Studio vá»›i file Ä‘Ã£ chá»n" **Ä‘Ã£ cÃ³ sáºµn tá»« trÆ°á»›c**, khÃ´ng cáº§n code thÃªm. Flow Ä‘áº§y Ä‘á»§:
+
+1. Tab Táº£i video: táº£i xong video â†’ click **"âœ¨ ÄÆ¯A VÃ€O STUDIO Lá»’NG TIáº¾NG & SUB"** trong card video (line 1148) â†’ gá»i `onNavigateToStudio(filePath)`.
+2. `SettingsView.tsx:handleRouteToStudio(path)` â†’ set `studioInitialPath(path)` + tÄƒng `studioFileNonce` + `setActiveTab("studio")`.
+3. Tab Studio nháº­n `initialFilePath` prop â†’ `useEffect` tá»± Ä‘á»™ng `setFilePath(initialFilePath)` â†’ user báº¥m "Báº¯t Ä‘áº§u PhÃ¢n TÃ­ch" Ä‘á»ƒ cháº¡y.
+
+**Cáº£i thiá»‡n nhá» v0.11.11 (5 phÃºt):**
+- ThÃªm tooltip rÃµ hÆ¡n cho nÃºt "ÄÆ¯A VÃ€O STUDIO" (Ä‘Ã£ cÃ³ sáºµn, chá»‰ verify + polish wording).
+- Ghi CHANGELOG Ä‘á»ƒ PO biáº¿t tÃ­nh nÄƒng cÃ³ sáºµn, khÃ´ng yÃªu cáº§u PO test láº¡i.
+
+**File Ä‘Ã£ Ä‘á»•i:** `CHANGELOG.md`, `package.json`, `src-tauri/Cargo.toml` (version bump only).
+
+**CÃ²n láº¡i (chÆ°a lÃ m trong vÃ²ng nÃ y):** S2 nÃºt "Tá»± Ä‘á»™ng Aâ†’Z" (tick checkbox trÆ°á»›c khi táº£i â†’ tá»± Ä‘á»™ng lá»“ng tiáº¿ng khi táº£i xong) â€” 1-2 giá», lÃ m sau náº¿u PO yÃªu cáº§u.
 
 ---
 
-## v0.11.10 — 2026-10-09
+## v0.11.10 â€” 2026-10-09
 ### Dubbing Export: Audio Track Tag `language=vie` (OPTION_RESEARCH R2)
 
-**Vấn đề (OPTION_RESEARCH_DUBBING.md R2):** MP4 output từ Dubbing thiếu metadata `language=vie` cho track audio → player (VLC, mpv) hiển thị "und" hoặc sai ngôn ngữ; user có track Việt mà app nói "unknown".
+**Váº¥n Ä‘á» (OPTION_RESEARCH_DUBBING.md R2):** MP4 output tá»« Dubbing thiáº¿u metadata `language=vie` cho track audio â†’ player (VLC, mpv) hiá»ƒn thá»‹ "und" hoáº·c sai ngÃ´n ngá»¯; user cÃ³ track Viá»‡t mÃ  app nÃ³i "unknown".
 
-**Fix v0.11.10:** Thêm 2 dòng vào ffmpeg remux command (`dubbing/mod.rs:2187-2192`):
+**Fix v0.11.10:** ThÃªm 2 dÃ²ng vÃ o ffmpeg remux command (`dubbing/mod.rs:2187-2192`):
 ```rust
 .arg("-metadata:s:a:0")
 .arg("language=vie")
 ```
-→ MP4 output có tag language=vie chuẩn. Player tự detect đúng.
+â†’ MP4 output cÃ³ tag language=vie chuáº©n. Player tá»± detect Ä‘Ãºng.
 
-**File đã đổi:** `src-tauri/src/dubbing/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src-tauri/src/dubbing/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
-**Còn lại (out of scope vòng này):** R7 (hardcode sub vào app) — 1-2h, làm ở vòng sau nếu PO yêu cầu.
+**CÃ²n láº¡i (out of scope vÃ²ng nÃ y):** R7 (hardcode sub vÃ o app) â€” 1-2h, lÃ m á»Ÿ vÃ²ng sau náº¿u PO yÃªu cáº§u.
 
 ---
 
-## v0.11.9 — 2026-10-09
-### Translate Pipeline: Hủy Dịch Trả Partial Thay Vì Rỗng (ROUND-4 R4-06)
+## v0.11.9 â€” 2026-10-09
+### Translate Pipeline: Há»§y Dá»‹ch Tráº£ Partial Thay VÃ¬ Rá»—ng (ROUND-4 R4-06)
 
-**Vấn đề (CommandCode verify):** `translate_batch_with_config` vứt cả chunk OK khi user cancel giữa chừng → caller báo "0/x câu" oan (đáng lẽ đã dịch được 14/30 câu).
+**Váº¥n Ä‘á» (CommandCode verify):** `translate_batch_with_config` vá»©t cáº£ chunk OK khi user cancel giá»¯a chá»«ng â†’ caller bÃ¡o "0/x cÃ¢u" oan (Ä‘Ã¡ng láº½ Ä‘Ã£ dá»‹ch Ä‘Æ°á»£c 14/30 cÃ¢u).
 
-**Fix v0.11.9:** Thay `return Vec::new()` thành `return sub_res` ở 5 closure (deepseek, openrouter, minimax, ollama, default) + 1 chỗ ở outer loop. Cấu trúc:
+**Fix v0.11.9:** Thay `return Vec::new()` thÃ nh `return sub_res` á»Ÿ 5 closure (deepseek, openrouter, minimax, ollama, default) + 1 chá»— á»Ÿ outer loop. Cáº¥u trÃºc:
 ```rust
-let mut sub_res: Vec<String> = Vec::new();  // khởi tạo ở đầu closure
+let mut sub_res: Vec<String> = Vec::new();  // khá»Ÿi táº¡o á»Ÿ Ä‘áº§u closure
 if is_dubbing_cancelled() {
-    return sub_res;  // ← partial rỗng OK (chưa làm gì)
+    return sub_res;  // â† partial rá»—ng OK (chÆ°a lÃ m gÃ¬)
 }
 // ...
 sub_res = Vec::with_capacity(chunk.len());
 for item in chunk {
     if is_dubbing_cancelled() {
-        return sub_res;  // ← partial đã dịch đến đâu giữ đến đó
+        return sub_res;  // â† partial Ä‘Ã£ dá»‹ch Ä‘áº¿n Ä‘Ã¢u giá»¯ Ä‘áº¿n Ä‘Ã³
     }
     // ...
 }
 ```
-Caller (dubbing/mod.rs) sẽ check `is_dubbing_cancelled()` sau khi nhận results để báo "đã hủy ở x/y câu" chính xác.
+Caller (dubbing/mod.rs) sáº½ check `is_dubbing_cancelled()` sau khi nháº­n results Ä‘á»ƒ bÃ¡o "Ä‘Ã£ há»§y á»Ÿ x/y cÃ¢u" chÃ­nh xÃ¡c.
 
-**File đã đổi:** `src-tauri/src/translate/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src-tauri/src/translate/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.8 — 2026-10-09
-### Sublix Studio: Undo Stack Chỉ Save Khi Nội Dung Thay Đổi (ROUND-4 R4-05)
+## v0.11.8 â€” 2026-10-09
+### Sublix Studio: Undo Stack Chá»‰ Save Khi Ná»™i Dung Thay Äá»•i (ROUND-4 R4-05)
 
-**Vấn đề (CommandCode verify):** `onFocus` lưu snapshot kể cả khi user không sửa gì → undo stack đầy cap rác, bấm "↶" hoàn tác về trạng thái y hệt.
+**Váº¥n Ä‘á» (CommandCode verify):** `onFocus` lÆ°u snapshot ká»ƒ cáº£ khi user khÃ´ng sá»­a gÃ¬ â†’ undo stack Ä‘áº§y cap rÃ¡c, báº¥m "â†¶" hoÃ n tÃ¡c vá» tráº¡ng thÃ¡i y há»‡t.
 
 **Fix v0.11.8:**
-- Thay `onFocus={saveAudioUndo}` → `onFocus={lưu snapshot}` + `onBlur={so sánh, chỉ save nếu KHÁC}`.
-- Áp dụng cho 2 chỗ: speaker name input (line 1740) + translation input (line 2446).
-- Cơ chế:
-  - `audioPreFocusRef` / `translationPreFocusRef` lưu state TRƯỚC khi user focus.
+- Thay `onFocus={saveAudioUndo}` â†’ `onFocus={lÆ°u snapshot}` + `onBlur={so sÃ¡nh, chá»‰ save náº¿u KHÃC}`.
+- Ãp dá»¥ng cho 2 chá»—: speaker name input (line 1740) + translation input (line 2446).
+- CÆ¡ cháº¿:
+  - `audioPreFocusRef` / `translationPreFocusRef` lÆ°u state TRÆ¯á»šC khi user focus.
   - Khi blur, JSON.stringify compare before vs after.
-  - Nếu khác → save undo stack. Nếu giống → bỏ qua.
-- Stack chỉ chứa THAY ĐỔI THẬT → undo chính xác, không undo "ảo".
+  - Náº¿u khÃ¡c â†’ save undo stack. Náº¿u giá»‘ng â†’ bá» qua.
+- Stack chá»‰ chá»©a THAY Äá»”I THáº¬T â†’ undo chÃ­nh xÃ¡c, khÃ´ng undo "áº£o".
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.7 — 2026-10-09
-### Sublix Studio: Kéo-Thả Hỏng Thì Báo Toast (ROUND-4 R4-09)
+## v0.11.7 â€” 2026-10-09
+### Sublix Studio: KÃ©o-Tháº£ Há»ng ThÃ¬ BÃ¡o Toast (ROUND-4 R4-09)
 
-**Vấn đề (CommandCode verify):** `catch` ở `webview.onDragDropEvent` chỉ `console.warn` — user thấy kéo thả không có gì xảy ra → tưởng app hỏng, ngồi mò.
+**Váº¥n Ä‘á» (CommandCode verify):** `catch` á»Ÿ `webview.onDragDropEvent` chá»‰ `console.warn` â€” user tháº¥y kÃ©o tháº£ khÃ´ng cÃ³ gÃ¬ xáº£y ra â†’ tÆ°á»Ÿng app há»ng, ngá»“i mÃ².
 
 **Fix v0.11.7:**
-- Khi `onDragDropEvent` thất bại (catch block) → `showToast("⚠️ Kéo thả không khả dụng trên hệ thống này — hãy dùng nút 'Mở video'")` thay vì im lặng.
-- Khi drop event trả về mà `paths` rỗng → cũng toast cảnh báo.
-- User biết ngay phải dùng nút `Mở video` thay vì cố kéo thả vô ích.
+- Khi `onDragDropEvent` tháº¥t báº¡i (catch block) â†’ `showToast("âš ï¸ KÃ©o tháº£ khÃ´ng kháº£ dá»¥ng trÃªn há»‡ thá»‘ng nÃ y â€” hÃ£y dÃ¹ng nÃºt 'Má»Ÿ video'")` thay vÃ¬ im láº·ng.
+- Khi drop event tráº£ vá» mÃ  `paths` rá»—ng â†’ cÅ©ng toast cáº£nh bÃ¡o.
+- User biáº¿t ngay pháº£i dÃ¹ng nÃºt `Má»Ÿ video` thay vÃ¬ cá»‘ kÃ©o tháº£ vÃ´ Ã­ch.
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.6 — 2026-10-09
-### Sublix Studio: Re-Apply playbackRate Khi Load Video Mới (ROUND-4 R4-04)
+## v0.11.6 â€” 2026-10-09
+### Sublix Studio: Re-Apply playbackRate Khi Load Video Má»›i (ROUND-4 R4-04)
 
-**Vấn đề (CommandCode verify):** Đổi video khi đang ở 1.5x → `<video>` element reset về 1x nhưng UI vẫn hiển thị "Tốc độ: 1.5x" (nói dối user — element chạy 1x nhưng UI tưởng 1.5x).
+**Váº¥n Ä‘á» (CommandCode verify):** Äá»•i video khi Ä‘ang á»Ÿ 1.5x â†’ `<video>` element reset vá» 1x nhÆ°ng UI váº«n hiá»ƒn thá»‹ "Tá»‘c Ä‘á»™: 1.5x" (nÃ³i dá»‘i user â€” element cháº¡y 1x nhÆ°ng UI tÆ°á»Ÿng 1.5x).
 
-**Fix v0.11.6:** Trong `handleLoadedMetadata()` thêm 3 dòng:
+**Fix v0.11.6:** Trong `handleLoadedMetadata()` thÃªm 3 dÃ²ng:
 ```ts
 if (videoRef.current.playbackRate !== playbackSpeed) {
   videoRef.current.playbackRate = playbackSpeed;
 }
 ```
-→ Mỗi lần video mới load xong metadata, ép playbackRate khớp với `playbackSpeed` state. UI và element luôn đồng bộ.
+â†’ Má»—i láº§n video má»›i load xong metadata, Ã©p playbackRate khá»›p vá»›i `playbackSpeed` state. UI vÃ  element luÃ´n Ä‘á»“ng bá»™.
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.5 — 2026-10-09
-### Sublix Studio: Bỏ Beep Giả Mạo Mẫu Giọng (ROUND-4 R4-03)
+## v0.11.5 â€” 2026-10-09
+### Sublix Studio: Bá» Beep Giáº£ Máº¡o Máº«u Giá»ng (ROUND-4 R4-03)
 
-**Vấn đề (CommandCode verify):** Fallback `createAuditionBeepWav` phát "beeep" 0.4s nhưng toast lại ghi "🎧 Nghe thử mẫu giọng X" → mạo danh giọng thật (vi phạm tinh thần "không đồ giả").
+**Váº¥n Ä‘á» (CommandCode verify):** Fallback `createAuditionBeepWav` phÃ¡t "beeep" 0.4s nhÆ°ng toast láº¡i ghi "ðŸŽ§ Nghe thá»­ máº«u giá»ng X" â†’ máº¡o danh giá»ng tháº­t (vi pháº¡m tinh tháº§n "khÃ´ng Ä‘á»“ giáº£").
 
 **Fix v0.11.5:**
-- 2 chỗ gọi `createAuditionBeepWav` (line 904, 1083) → đổi thành toast "⚠️ Chưa có mẫu giọng cho vai X — bấm 🔊 Nghe giọng gốc để tạo" (line 901) và "⚠️ Chưa có mẫu giọng 'voice'..." (line 1081).
-- Xóa luôn function `createAuditionBeepWav` (45 dòng code chết) — không còn dùng nữa, tránh dead code.
-- Người dùng được báo trung thực thay vì bị đánh lừa bằng beep.
+- 2 chá»— gá»i `createAuditionBeepWav` (line 904, 1083) â†’ Ä‘á»•i thÃ nh toast "âš ï¸ ChÆ°a cÃ³ máº«u giá»ng cho vai X â€” báº¥m ðŸ”Š Nghe giá»ng gá»‘c Ä‘á»ƒ táº¡o" (line 901) vÃ  "âš ï¸ ChÆ°a cÃ³ máº«u giá»ng 'voice'..." (line 1081).
+- XÃ³a luÃ´n function `createAuditionBeepWav` (45 dÃ²ng code cháº¿t) â€” khÃ´ng cÃ²n dÃ¹ng ná»¯a, trÃ¡nh dead code.
+- NgÆ°á»i dÃ¹ng Ä‘Æ°á»£c bÃ¡o trung thá»±c thay vÃ¬ bá»‹ Ä‘Ã¡nh lá»«a báº±ng beep.
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.4 — 2026-10-09
-### Sublix Studio: Hotkey Timeline + Nút Bấm Zoom (−−, −, ⟲, +, ++) — Chuẩn Premiere
+## v0.11.4 â€” 2026-10-09
+### Sublix Studio: Hotkey Timeline + NÃºt Báº¥m Zoom (âˆ’âˆ’, âˆ’, âŸ², +, ++) â€” Chuáº©n Premiere
 
-**PO yêu cầu (2026-10-09):** "bạn gán cho tôi mấy cái hotkey để điều khiển timeline như premier đi, tự nghiên cứu nhé tôi ko có thời gian đi chỉ bạn từng đí đâu, với cả cái zoom ra vào time nên có thêm nút bấm - + để dễ zoom nữa thay vì cái slider này."
+**PO yÃªu cáº§u (2026-10-09):** "báº¡n gÃ¡n cho tÃ´i máº¥y cÃ¡i hotkey Ä‘á»ƒ Ä‘iá»u khiá»ƒn timeline nhÆ° premier Ä‘i, tá»± nghiÃªn cá»©u nhÃ© tÃ´i ko cÃ³ thá»i gian Ä‘i chá»‰ báº¡n tá»«ng Ä‘Ã­ Ä‘Ã¢u, vá»›i cáº£ cÃ¡i zoom ra vÃ o time nÃªn cÃ³ thÃªm nÃºt báº¥m - + Ä‘á»ƒ dá»… zoom ná»¯a thay vÃ¬ cÃ¡i slider nÃ y."
 
 **Fix v0.11.4:**
 
-**Hotkey timeline (mở rộng từ v0.11.3 chỉ có Space/←/→/Home/End):**
-| Phím | Hành động | Chuẩn Premiere |
+**Hotkey timeline (má»Ÿ rá»™ng tá»« v0.11.3 chá»‰ cÃ³ Space/â†/â†’/Home/End):**
+| PhÃ­m | HÃ nh Ä‘á»™ng | Chuáº©n Premiere |
 |---|---|---|
-| `+` hoặc `=` | Zoom in nhẹ ×1.5 | `+` |
-| `-` hoặc `_` | Zoom out nhẹ ×0.67 | `-` |
+| `+` hoáº·c `=` | Zoom in nháº¹ Ã—1.5 | `+` |
+| `-` hoáº·c `_` | Zoom out nháº¹ Ã—0.67 | `-` |
 | `\` | Fit timeline (reset 100%) | `\` |
-| `Ctrl/Cmd+0` | Fit timeline (alternative) | (giống browser Ctrl+0) |
+| `Ctrl/Cmd+0` | Fit timeline (alternative) | (giá»‘ng browser Ctrl+0) |
 | `Numpad +` / `-` | Zoom in/out (numpad) | (bonus) |
 
-(đã có sẵn: Space=play/pause, ←/→=step 1s, Shift+←/→=step 5s, Home/End=goto đầu/cuối, Ctrl+Z=undo, Ctrl+I=mở file)
+(Ä‘Ã£ cÃ³ sáºµn: Space=play/pause, â†/â†’=step 1s, Shift+â†/â†’=step 5s, Home/End=goto Ä‘áº§u/cuá»‘i, Ctrl+Z=undo, Ctrl+I=má»Ÿ file)
 
-**Thay slider bằng 5 nút bấm (anh thấy slider khó dùng):**
-- `−−` zoom out mạnh (×0.5)
-- `−` zoom out nhẹ (×0.67)
-- `⟲` reset 100%
-- `+` zoom in nhẹ (×1.5)
-- `++` zoom in mạnh (×2)
-- Hiển thị zoom % to rõ (font-weight 600, màu accent, font-variant tabular-nums)
-- Tooltip mỗi nút ghi rõ phím tắt
+**Thay slider báº±ng 5 nÃºt báº¥m (anh tháº¥y slider khÃ³ dÃ¹ng):**
+- `âˆ’âˆ’` zoom out máº¡nh (Ã—0.5)
+- `âˆ’` zoom out nháº¹ (Ã—0.67)
+- `âŸ²` reset 100%
+- `+` zoom in nháº¹ (Ã—1.5)
+- `++` zoom in máº¡nh (Ã—2)
+- Hiá»ƒn thá»‹ zoom % to rÃµ (font-weight 600, mÃ u accent, font-variant tabular-nums)
+- Tooltip má»—i nÃºt ghi rÃµ phÃ­m táº¯t
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
-
----
-
-## v0.11.3 — 2026-10-09
-### Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)
-
-**PO phàn nàn (2026-10-09):** "cái timeline hiện tại quá vớ vẩn, thay vì zoom ra thời gian theo cả video theo kiểu premier hay các trình dựng video khác, nó lại chạy kiểu zoom max ra 300s, với các mốc thời gian ko hiểu sao lại tính là 5s 1 lần".
-
-**Vấn đề v0.11.2:** Zoom semantic sai — dùng "số giây visible" (5-300s) thay vì "% viewport". Mốc tick cứng `i*5` không scale theo zoom.
-
-**Fix v0.11.3 (đúng chuẩn Premiere/DaVinci):**
-- **Semantic zoom:** `zoomLevel` giờ là **% viewport** (100 = full video fit ~1200px, 1000 = zoom 10×, 10000 = zoom 100×). Default 100% — mở video thấy ngay toàn cảnh.
-- **Mốc tick tự co giãn** theo `pxPerSec` qua hàm `chooseTickInterval`:
-  - `pxPerSec ≥ 100` → tick 0.1s/0.5s/1s (zoom in cực mạnh)
-  - `pxPerSec ~ 10-100` → tick 2s/5s/10s/15s
-  - `pxPerSec ~ 1-10` → tick 30s/1min/2min
-  - `pxPerSec ~ 0.1-1` → tick 5min/10min/30min
-  - `pxPerSec < 0.1` → tick 1h/2h (full video ngắn fit viewport)
-- **Công thức:** `pxPerSec = (1200 * zoomLevel/100) / mediaDuration`. Tick mỗi ~100px.
-- **Ví dụ thực tế:**
-  - Kenji 38:24 (2304s), zoom 100% → 0.52 px/s → tick mỗi **5 phút** (0:00, 5:00, 10:00, ..., 35:00)
-  - Kenji 38:24, zoom 500% → 2.6 px/s → tick mỗi **30 giây**
-  - Kenji 38:24, zoom 5000% → 26 px/s → tick mỗi **5 giây**
-  - Kenji 38:24, zoom 10000% → 52 px/s → tick mỗi **1-2 giây**
-- **Nút bấm mới:** − (zoom out ×0.67, min 100%) / ⟲ (reset 100%) / + (zoom in ×1.5, max 10000%)
-- **Slider:** 100% → 10000%, step 50, hiển thị "{N}% viewport" (trước "{N}s hiển thị")
-- **`handleFitTimeline()`** giờ chỉ `setZoomLevel(100)` thay vì `Math.ceil(mediaDuration)`
-
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.2 — 2026-10-09
-### Sublix Studio: Timeline Zoom In/Out (nút bấm + slider + reset)
+## v0.11.3 â€” 2026-10-09
+### Sublix Studio: Timeline Zoom ÄÃºng Chuáº©n Premiere (full video fit + tick tá»± co giÃ£n)
 
-**PO yêu cầu (2026-10-09):** "code cho tôi cái zoom ra timeline đi, hiện tại ko có zoom gần zoom xa timeline, để xem timeframe nó bé hơn hoặc lớn hơn ấy."
+**PO phÃ n nÃ n (2026-10-09):** "cÃ¡i timeline hiá»‡n táº¡i quÃ¡ vá»› váº©n, thay vÃ¬ zoom ra thá»i gian theo cáº£ video theo kiá»ƒu premier hay cÃ¡c trÃ¬nh dá»±ng video khÃ¡c, nÃ³ láº¡i cháº¡y kiá»ƒu zoom max ra 300s, vá»›i cÃ¡c má»‘c thá»i gian ko hiá»ƒu sao láº¡i tÃ­nh lÃ  5s 1 láº§n".
 
-**Trước đó:** Có slider zoom (range 10-120s visible) nhưng chỉ `<span>−</span>` + `<span>+</span>` text — không có nút bấm thật, người dùng khó dùng.
+**Váº¥n Ä‘á» v0.11.2:** Zoom semantic sai â€” dÃ¹ng "sá»‘ giÃ¢y visible" (5-300s) thay vÃ¬ "% viewport". Má»‘c tick cá»©ng `i*5` khÃ´ng scale theo zoom.
+
+**Fix v0.11.3 (Ä‘Ãºng chuáº©n Premiere/DaVinci):**
+- **Semantic zoom:** `zoomLevel` giá» lÃ  **% viewport** (100 = full video fit ~1200px, 1000 = zoom 10Ã—, 10000 = zoom 100Ã—). Default 100% â€” má»Ÿ video tháº¥y ngay toÃ n cáº£nh.
+- **Má»‘c tick tá»± co giÃ£n** theo `pxPerSec` qua hÃ m `chooseTickInterval`:
+  - `pxPerSec â‰¥ 100` â†’ tick 0.1s/0.5s/1s (zoom in cá»±c máº¡nh)
+  - `pxPerSec ~ 10-100` â†’ tick 2s/5s/10s/15s
+  - `pxPerSec ~ 1-10` â†’ tick 30s/1min/2min
+  - `pxPerSec ~ 0.1-1` â†’ tick 5min/10min/30min
+  - `pxPerSec < 0.1` â†’ tick 1h/2h (full video ngáº¯n fit viewport)
+- **CÃ´ng thá»©c:** `pxPerSec = (1200 * zoomLevel/100) / mediaDuration`. Tick má»—i ~100px.
+- **VÃ­ dá»¥ thá»±c táº¿:**
+  - Kenji 38:24 (2304s), zoom 100% â†’ 0.52 px/s â†’ tick má»—i **5 phÃºt** (0:00, 5:00, 10:00, ..., 35:00)
+  - Kenji 38:24, zoom 500% â†’ 2.6 px/s â†’ tick má»—i **30 giÃ¢y**
+  - Kenji 38:24, zoom 5000% â†’ 26 px/s â†’ tick má»—i **5 giÃ¢y**
+  - Kenji 38:24, zoom 10000% â†’ 52 px/s â†’ tick má»—i **1-2 giÃ¢y**
+- **NÃºt báº¥m má»›i:** âˆ’ (zoom out Ã—0.67, min 100%) / âŸ² (reset 100%) / + (zoom in Ã—1.5, max 10000%)
+- **Slider:** 100% â†’ 10000%, step 50, hiá»ƒn thá»‹ "{N}% viewport" (trÆ°á»›c "{N}s hiá»ƒn thá»‹")
+- **`handleFitTimeline()`** giá» chá»‰ `setZoomLevel(100)` thay vÃ¬ `Math.ceil(mediaDuration)`
+
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
+## v0.11.2 â€” 2026-10-09
+### Sublix Studio: Timeline Zoom In/Out (nÃºt báº¥m + slider + reset)
+
+**PO yÃªu cáº§u (2026-10-09):** "code cho tÃ´i cÃ¡i zoom ra timeline Ä‘i, hiá»‡n táº¡i ko cÃ³ zoom gáº§n zoom xa timeline, Ä‘á»ƒ xem timeframe nÃ³ bÃ© hÆ¡n hoáº·c lá»›n hÆ¡n áº¥y."
+
+**TrÆ°á»›c Ä‘Ã³:** CÃ³ slider zoom (range 10-120s visible) nhÆ°ng chá»‰ `<span>âˆ’</span>` + `<span>+</span>` text â€” khÃ´ng cÃ³ nÃºt báº¥m tháº­t, ngÆ°á»i dÃ¹ng khÃ³ dÃ¹ng.
 
 **Fix v0.11.2:**
-- **3 nút bấm mới** trong thanh timeline controls:
-  - `−` (zoom out, x1.5 → xem nhiều giây hơn)
-  - `⟲` (reset về 30s mặc định)
-  - `+` (zoom in, x1.5 → xem ít giây hơn, frame lớn hơn)
-- **Mở rộng range slider:** 5s → 300s (trước 10s → 120s) — hỗ trợ video dài hơn Kenji 38min.
-- **Hiển thị rõ ràng:** "{N}s hiển thị" với `minWidth: 56px` (trước là text lỏng).
-- **Math:** `setZoomLevel(clamp(round(zoomLevel * 1.5), 5, 600))` — mỗi lần bấm +/− scale 1.5×.
-- Nút +/− có `title` (tooltip) cho rõ mục đích.
+- **3 nÃºt báº¥m má»›i** trong thanh timeline controls:
+  - `âˆ’` (zoom out, x1.5 â†’ xem nhiá»u giÃ¢y hÆ¡n)
+  - `âŸ²` (reset vá» 30s máº·c Ä‘á»‹nh)
+  - `+` (zoom in, x1.5 â†’ xem Ã­t giÃ¢y hÆ¡n, frame lá»›n hÆ¡n)
+- **Má»Ÿ rá»™ng range slider:** 5s â†’ 300s (trÆ°á»›c 10s â†’ 120s) â€” há»— trá»£ video dÃ i hÆ¡n Kenji 38min.
+- **Hiá»ƒn thá»‹ rÃµ rÃ ng:** "{N}s hiá»ƒn thá»‹" vá»›i `minWidth: 56px` (trÆ°á»›c lÃ  text lá»ng).
+- **Math:** `setZoomLevel(clamp(round(zoomLevel * 1.5), 5, 600))` â€” má»—i láº§n báº¥m +/âˆ’ scale 1.5Ã—.
+- NÃºt +/âˆ’ cÃ³ `title` (tooltip) cho rÃµ má»¥c Ä‘Ã­ch.
 
-**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+**File Ä‘Ã£ Ä‘á»•i:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
 
 ---
 
-## v0.11.1 — 2026-10-09
-### Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)
+## v0.11.1 â€” 2026-10-09
+### Sublix Studio: Tháº£ Video VÃ o App Pháº£i THáº¤Y HÃŒNH (ROUND-4 R4-01)
 
-**Vấn đề (CommandCode verify, ảnh `ui30_cancel_analysis_button.png`):**
-Khi thả file `multi_speaker_scene.mp4` hoặc video tải từ web (VP9/AV1/HEVC/H.264 high) vào Sublix Studio → WebView2 báo "Không thể phát tập tin… codec không được hỗ trợ" → người dùng tưởng "thả không được" → app chưa dùng được cho việc chính.
+**Váº¥n Ä‘á» (CommandCode verify, áº£nh `ui30_cancel_analysis_button.png`):**
+Khi tháº£ file `multi_speaker_scene.mp4` hoáº·c video táº£i tá»« web (VP9/AV1/HEVC/H.264 high) vÃ o Sublix Studio â†’ WebView2 bÃ¡o "KhÃ´ng thá»ƒ phÃ¡t táº­p tinâ€¦ codec khÃ´ng Ä‘Æ°á»£c há»— trá»£" â†’ ngÆ°á»i dÃ¹ng tÆ°á»Ÿng "tháº£ khÃ´ng Ä‘Æ°á»£c" â†’ app chÆ°a dÃ¹ng Ä‘Æ°á»£c cho viá»‡c chÃ­nh.
 
-**Fix v0.11.1 (Ưu tiên 1 — ffmpeg chuyển tạm):**
-- **Backend (`src-tauri/src/lib.rs`):** Tauri command mới `transcode_for_preview(input_path) → temp_path` dùng ffmpeg tạo bản H.264 baseline level 3.0 + AAC LC + faststart. Cache theo `(file_size, mtime, nonce)` trong `%TEMP%\sublix_preview\`. Người dùng không cần biết file tạm tồn tại.
+**Fix v0.11.1 (Æ¯u tiÃªn 1 â€” ffmpeg chuyá»ƒn táº¡m):**
+- **Backend (`src-tauri/src/lib.rs`):** Tauri command má»›i `transcode_for_preview(input_path) â†’ temp_path` dÃ¹ng ffmpeg táº¡o báº£n H.264 baseline level 3.0 + AAC LC + faststart. Cache theo `(file_size, mtime, nonce)` trong `%TEMP%\sublix_preview\`. NgÆ°á»i dÃ¹ng khÃ´ng cáº§n biáº¿t file táº¡m tá»“n táº¡i.
 - **Frontend (`tauri.ts`):** method `transcodeForPreview(inputPath): Promise<string>`.
 - **Frontend (`SublixStudioView.tsx`):**
-  - Thêm state `transcodedPath: string | null` (path preview sau khi transcode).
-  - `<video>.onError` → gọi `sublix.transcodeForPreview(filePath)` → set `transcodedPath` → React re-render `<video src={previewPath}>` với `key={previewPath}` để force reload → tự phát bản tạm.
-  - Nếu ffmpeg cũng fail → mới fallback Cinema Visualizer (giữ nguyên `setVideoPlayError(true)`).
-  - Toast "Đang chuyển tạm video sang H.264…" + "Đã chuyển tạm xong, đang phát bản preview…".
-  - Reset `transcodedPath = null` khi user pick file mới / drop file mới / đổi `initialFilePath`.
-- **Lưu ý:** KHÔNG đụng `Chay-Sublix.bat`, KHÔNG dụng `cargo build --release` (vi phạm BUG-H07), KHÔNG đụng tab Tải video.
+  - ThÃªm state `transcodedPath: string | null` (path preview sau khi transcode).
+  - `<video>.onError` â†’ gá»i `sublix.transcodeForPreview(filePath)` â†’ set `transcodedPath` â†’ React re-render `<video src={previewPath}>` vá»›i `key={previewPath}` Ä‘á»ƒ force reload â†’ tá»± phÃ¡t báº£n táº¡m.
+  - Náº¿u ffmpeg cÅ©ng fail â†’ má»›i fallback Cinema Visualizer (giá»¯ nguyÃªn `setVideoPlayError(true)`).
+  - Toast "Äang chuyá»ƒn táº¡m video sang H.264â€¦" + "ÄÃ£ chuyá»ƒn táº¡m xong, Ä‘ang phÃ¡t báº£n previewâ€¦".
+  - Reset `transcodedPath = null` khi user pick file má»›i / drop file má»›i / Ä‘á»•i `initialFilePath`.
+- **LÆ°u Ã½:** KHÃ”NG Ä‘á»¥ng `Chay-Sublix.bat`, KHÃ”NG dá»¥ng `cargo build --release` (vi pháº¡m BUG-H07), KHÃ”NG Ä‘á»¥ng tab Táº£i video.
 
-**Còn lại (chưa làm trong kèo này):**
-- Ưu tiên 2: nhúng libmpv (đúng hướng lâu dài) — phase sau
-- R4-02 đến R4-09 (xem `FIX_STUDIO_UI_ROUND4.md`) — fix turn tiếp
+**CÃ²n láº¡i (chÆ°a lÃ m trong kÃ¨o nÃ y):**
+- Æ¯u tiÃªn 2: nhÃºng libmpv (Ä‘Ãºng hÆ°á»›ng lÃ¢u dÃ i) â€” phase sau
+- R4-02 Ä‘áº¿n R4-09 (xem `FIX_STUDIO_UI_ROUND4.md`) â€” fix turn tiáº¿p
 
-**File đã đổi:** `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`.
-
----
-
-## v0.9.10 — 2026-10-07
-### Lồng Tiếng: Fix Multi-Speaker — Dùng Gender Thật + Filter Noise Speaker
-
-**Vấn đề (PO báo cáo):** Video R2nyc_oP9Yk có 1 người nói chính, nhưng test_dubbing_srt.rs cũ ép 6 voice khác nhau theo `idx % 2` (male/female xen kẽ) → sai logic, lãng phí voice, có thể gán nam vào speaker nữ và ngược lại.
-
-**Nguyên nhân gốc:**
-- Code cũ dùng `idx % 2` để đoán male/female thay vì dùng gender thật từ LLM
-- `DubbingSpeaker` struct KHÔNG lưu `gender` field → sau khi tạo project không biết speaker nào nam/nữ
-- Ép voice cho MỌI speaker, kể cả noise speaker (< 3 segments) → lãng phí + sai
-
-**Thay đổi v0.9.10:**
-- **Backend (`dubbing/mod.rs`):** Thêm field `gender: String` vào `DubbingSpeaker` struct (với `#[serde(default)]` để backward compat với project đã lưu); lưu gender khi tạo speaker ở cả `diarize_and_script_via_minimax` (main) lẫn `generate_default_speakers` (fallback).
-- **CLI (`test_dubbing_srt.rs`):** Viết lại logic ép voice theo gender THẬT (`spk.gender`) + filter noise:
-  - Đếm segments per speaker → tìm `main_speaker` (largest)
-  - Speaker nhiễu (`< 3 segments` HOẶC `< 3% tổng`) → gộp vào main, dùng cùng voice (đồng nhất)
-  - Speaker non-noise → gán voice theo gender đúng, duyệt pool **7 nam + 7 nữ** Kokoro
-  - Nếu chỉ 1 speaker non-noise → chỉ assign 1 voice (không ép lung tung)
-- **Frontend (`tauri.ts` + `DubbingStudioView.tsx`):** Update `DubbingSpeaker` interface có optional `gender?`; `handleAddSpeaker` lưu gender khi user thêm vai mới.
-
-**Test (sẽ chạy vòng tiếp theo):**
-- Video multi-speaker (R2nyc_oP9Yk 15:21) — verify mỗi speaker giữ 1 voice consistent
-- Video 1 narrator (test_ai_21m 21:43) — verify chỉ assign 1 voice
-- Video ngắn mới (≤ 5 phút) — nếu có sẵn trong App downloads
-
-**File đã đổi:**
-- `src-tauri/src/dubbing/mod.rs` — thêm `gender` field + lưu khi tạo
-- `src-tauri/examples/test_dubbing_srt.rs` — viết lại logic ép voice
-- `src/lib/tauri.ts` — thêm `gender?` vào `DubbingSpeaker` interface
-- `src/views/DubbingStudioView.tsx` — `handleAddSpeaker` lưu gender
-- `package.json` + `src-tauri/Cargo.toml` — bump version 0.9.9 → 0.9.10
+**File Ä‘Ã£ Ä‘á»•i:** `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`.
 
 ---
 
-# CHANGELOG — Sublix
+## v0.9.10 â€” 2026-10-07
+### Lá»“ng Tiáº¿ng: Fix Multi-Speaker â€” DÃ¹ng Gender Tháº­t + Filter Noise Speaker
 
-> Lịch sử phát hành Sublix theo trục thời gian (mới nhất ở trên).
-> Mỗi version được bump theo [SemVer](https://semver.org/):
-> - **major** — breaking change kiến trúc lớn
-> - **minor** — fix bug quan trọng hoặc tính năng mới đáng kể
-> - **patch** — fix nhỏ, polish UI, refactor không phá API
+**Váº¥n Ä‘á» (PO bÃ¡o cÃ¡o):** Video R2nyc_oP9Yk cÃ³ 1 ngÆ°á»i nÃ³i chÃ­nh, nhÆ°ng test_dubbing_srt.rs cÅ© Ã©p 6 voice khÃ¡c nhau theo `idx % 2` (male/female xen káº½) â†’ sai logic, lÃ£ng phÃ­ voice, cÃ³ thá»ƒ gÃ¡n nam vÃ o speaker ná»¯ vÃ  ngÆ°á»£c láº¡i.
+
+**NguyÃªn nhÃ¢n gá»‘c:**
+- Code cÅ© dÃ¹ng `idx % 2` Ä‘á»ƒ Ä‘oÃ¡n male/female thay vÃ¬ dÃ¹ng gender tháº­t tá»« LLM
+- `DubbingSpeaker` struct KHÃ”NG lÆ°u `gender` field â†’ sau khi táº¡o project khÃ´ng biáº¿t speaker nÃ o nam/ná»¯
+- Ã‰p voice cho Má»ŒI speaker, ká»ƒ cáº£ noise speaker (< 3 segments) â†’ lÃ£ng phÃ­ + sai
+
+**Thay Ä‘á»•i v0.9.10:**
+- **Backend (`dubbing/mod.rs`):** ThÃªm field `gender: String` vÃ o `DubbingSpeaker` struct (vá»›i `#[serde(default)]` Ä‘á»ƒ backward compat vá»›i project Ä‘Ã£ lÆ°u); lÆ°u gender khi táº¡o speaker á»Ÿ cáº£ `diarize_and_script_via_minimax` (main) láº«n `generate_default_speakers` (fallback).
+- **CLI (`test_dubbing_srt.rs`):** Viáº¿t láº¡i logic Ã©p voice theo gender THáº¬T (`spk.gender`) + filter noise:
+  - Äáº¿m segments per speaker â†’ tÃ¬m `main_speaker` (largest)
+  - Speaker nhiá»…u (`< 3 segments` HOáº¶C `< 3% tá»•ng`) â†’ gá»™p vÃ o main, dÃ¹ng cÃ¹ng voice (Ä‘á»“ng nháº¥t)
+  - Speaker non-noise â†’ gÃ¡n voice theo gender Ä‘Ãºng, duyá»‡t pool **7 nam + 7 ná»¯** Kokoro
+  - Náº¿u chá»‰ 1 speaker non-noise â†’ chá»‰ assign 1 voice (khÃ´ng Ã©p lung tung)
+- **Frontend (`tauri.ts` + `DubbingStudioView.tsx`):** Update `DubbingSpeaker` interface cÃ³ optional `gender?`; `handleAddSpeaker` lÆ°u gender khi user thÃªm vai má»›i.
+
+**Test (sáº½ cháº¡y vÃ²ng tiáº¿p theo):**
+- Video multi-speaker (R2nyc_oP9Yk 15:21) â€” verify má»—i speaker giá»¯ 1 voice consistent
+- Video 1 narrator (test_ai_21m 21:43) â€” verify chá»‰ assign 1 voice
+- Video ngáº¯n má»›i (â‰¤ 5 phÃºt) â€” náº¿u cÃ³ sáºµn trong App downloads
+
+**File Ä‘Ã£ Ä‘á»•i:**
+- `src-tauri/src/dubbing/mod.rs` â€” thÃªm `gender` field + lÆ°u khi táº¡o
+- `src-tauri/examples/test_dubbing_srt.rs` â€” viáº¿t láº¡i logic Ã©p voice
+- `src/lib/tauri.ts` â€” thÃªm `gender?` vÃ o `DubbingSpeaker` interface
+- `src/views/DubbingStudioView.tsx` â€” `handleAddSpeaker` lÆ°u gender
+- `package.json` + `src-tauri/Cargo.toml` â€” bump version 0.9.9 â†’ 0.9.10
+
+---
+
+# CHANGELOG â€” Sublix
+
+> Lá»‹ch sá»­ phÃ¡t hÃ nh Sublix theo trá»¥c thá»i gian (má»›i nháº¥t á»Ÿ trÃªn).
+> Má»—i version Ä‘Æ°á»£c bump theo [SemVer](https://semver.org/):
+> - **major** â€” breaking change kiáº¿n trÃºc lá»›n
+> - **minor** â€” fix bug quan trá»ng hoáº·c tÃ­nh nÄƒng má»›i Ä‘Ã¡ng ká»ƒ
+> - **patch** â€” fix nhá», polish UI, refactor khÃ´ng phÃ¡ API
 >
-> Phiên bản hiển thị trong UI là `v{major.minor}` (bỏ patch).
+> PhiÃªn báº£n hiá»ƒn thá»‹ trong UI lÃ  `v{major.minor}` (bá» patch).
 
 ---
 
-## v0.9.9 — 2026-10-07
-### Studio Lồng Tiếng: Chọn Model → Danh Sách Giọng Nam/Nữ + Mẫu Nghe Thử Cache + Khớp Voice Đa Vai
-- **Chọn model → hiện danh sách giọng (kể cả TRƯỚC khi tải):** mỗi model trong panel "🎛 Chọn Giọng & Tải Model" giờ mở rộng được (bấm ▸) — Kokoro-Vietnamese hiện đủ **7 giọng Nam + 7 giọng Nữ**, thêm card **Edge Neural (có sẵn — 8 giọng)**; model clone ghi rõ sẽ cần 1 clip giọng mẫu 5–10 giây cho mỗi vai.
-- **🎧 Mẫu nghe thử tạo 1 lần — nghe lại tức thì:** nút tạo mẫu cho 14 giọng Kokoro (một lần ~1 phút, hiện tiến trình "Đang tạo mẫu X/14…"), lưu cache tại `models/voice/kokoro-vi/samples/*.wav`; lần sau bấm 🔊 trả audio tức thì từ cache (đã xác minh phát thật 4.92s).
-- **Khớp voice đa vai:** pool auto-cast mở rộng **7 nam + 7 nữ** (cả 2 nhánh heuristic + LLM), các vai được gán giọng **khác nhau, xen kẽ Nam/Nữ**; bộ chọn giọng hiện nhãn rõ "♂ Nam — Tuấn Ngọc (Kokoro offline)"; thêm nhân vật mới tự chọn giọng chưa dùng; **cảnh báo ⚠️ "Trùng giọng"** khi 2 vai dùng chung giọng (E2E: 5 vai → 5 giọng khác nhau).
-- Kỹ thuật: Tauri commands `voice_sample_list` / `voice_sample_generate` / `voice_sample_data`; event `voice:sample_progress`; mẫu lưu WAV 24kHz mono.
+## v0.9.9 â€” 2026-10-07
+### Studio Lá»“ng Tiáº¿ng: Chá»n Model â†’ Danh SÃ¡ch Giá»ng Nam/Ná»¯ + Máº«u Nghe Thá»­ Cache + Khá»›p Voice Äa Vai
+- **Chá»n model â†’ hiá»‡n danh sÃ¡ch giá»ng (ká»ƒ cáº£ TRÆ¯á»šC khi táº£i):** má»—i model trong panel "ðŸŽ› Chá»n Giá»ng & Táº£i Model" giá» má»Ÿ rá»™ng Ä‘Æ°á»£c (báº¥m â–¸) â€” Kokoro-Vietnamese hiá»‡n Ä‘á»§ **7 giá»ng Nam + 7 giá»ng Ná»¯**, thÃªm card **Edge Neural (cÃ³ sáºµn â€” 8 giá»ng)**; model clone ghi rÃµ sáº½ cáº§n 1 clip giá»ng máº«u 5â€“10 giÃ¢y cho má»—i vai.
+- **ðŸŽ§ Máº«u nghe thá»­ táº¡o 1 láº§n â€” nghe láº¡i tá»©c thÃ¬:** nÃºt táº¡o máº«u cho 14 giá»ng Kokoro (má»™t láº§n ~1 phÃºt, hiá»‡n tiáº¿n trÃ¬nh "Äang táº¡o máº«u X/14â€¦"), lÆ°u cache táº¡i `models/voice/kokoro-vi/samples/*.wav`; láº§n sau báº¥m ðŸ”Š tráº£ audio tá»©c thÃ¬ tá»« cache (Ä‘Ã£ xÃ¡c minh phÃ¡t tháº­t 4.92s).
+- **Khá»›p voice Ä‘a vai:** pool auto-cast má»Ÿ rá»™ng **7 nam + 7 ná»¯** (cáº£ 2 nhÃ¡nh heuristic + LLM), cÃ¡c vai Ä‘Æ°á»£c gÃ¡n giá»ng **khÃ¡c nhau, xen káº½ Nam/Ná»¯**; bá»™ chá»n giá»ng hiá»‡n nhÃ£n rÃµ "â™‚ Nam â€” Tuáº¥n Ngá»c (Kokoro offline)"; thÃªm nhÃ¢n váº­t má»›i tá»± chá»n giá»ng chÆ°a dÃ¹ng; **cáº£nh bÃ¡o âš ï¸ "TrÃ¹ng giá»ng"** khi 2 vai dÃ¹ng chung giá»ng (E2E: 5 vai â†’ 5 giá»ng khÃ¡c nhau).
+- Ká»¹ thuáº­t: Tauri commands `voice_sample_list` / `voice_sample_generate` / `voice_sample_data`; event `voice:sample_progress`; máº«u lÆ°u WAV 24kHz mono.
 
 ---
 
-## v0.9.8 — 2026-10-06
-### Studio Lồng Tiếng: Nút "Mở Thư Mục Lồng Tiếng" & "Mở Thư Mục File Gốc"
-- **Vấn đề (anh Tuấn báo):** Tab Lồng Tiếng KHÔNG có nút để mở folder chứa file lồng tiếng đã xuất — user phải tự explorer đến folder.
-- **Fix v0.9.8:** Thêm 2 nút ở thanh "Export Action Bar":
-  - **"📂 Mở Thư Mục Lồng Tiếng"** — chỉ hiện sau khi export thành công → mở folder chứa file output `*_dubbed.mp4` (có select file).
-  - **"📂 Mở Thư Mục File Gốc"** — luôn hiển thị khi đã chọn video input → mở folder chứa video gốc (user có thể duyệt cùng folder với file .srt / audio khác).
-- **Backend mới:** Tauri command `dubbing_open_output_folder(path)` dùng `SHOpenFolderAndSelectItems` (approach giống downloader v0.9.4, fix lỗi path có ký tự đặc biệt) — thay thế `reveal_in_explorer` cũ dùng `explorer.exe /select,...` (dễ fail với path CJK).
-- Phạm vi: `src-tauri/src/dubbing/mod.rs` (open_output_folder function), `src-tauri/src/lib.rs` (Tauri command), `src/lib/tauri.ts` (method `dubbingOpenOutputFolder`), `src/views/DubbingStudioView.tsx` (UI).
+## v0.9.8 â€” 2026-10-06
+### Studio Lá»“ng Tiáº¿ng: NÃºt "Má»Ÿ ThÆ° Má»¥c Lá»“ng Tiáº¿ng" & "Má»Ÿ ThÆ° Má»¥c File Gá»‘c"
+- **Váº¥n Ä‘á» (anh Tuáº¥n bÃ¡o):** Tab Lá»“ng Tiáº¿ng KHÃ”NG cÃ³ nÃºt Ä‘á»ƒ má»Ÿ folder chá»©a file lá»“ng tiáº¿ng Ä‘Ã£ xuáº¥t â€” user pháº£i tá»± explorer Ä‘áº¿n folder.
+- **Fix v0.9.8:** ThÃªm 2 nÃºt á»Ÿ thanh "Export Action Bar":
+  - **"ðŸ“‚ Má»Ÿ ThÆ° Má»¥c Lá»“ng Tiáº¿ng"** â€” chá»‰ hiá»‡n sau khi export thÃ nh cÃ´ng â†’ má»Ÿ folder chá»©a file output `*_dubbed.mp4` (cÃ³ select file).
+  - **"ðŸ“‚ Má»Ÿ ThÆ° Má»¥c File Gá»‘c"** â€” luÃ´n hiá»ƒn thá»‹ khi Ä‘Ã£ chá»n video input â†’ má»Ÿ folder chá»©a video gá»‘c (user cÃ³ thá»ƒ duyá»‡t cÃ¹ng folder vá»›i file .srt / audio khÃ¡c).
+- **Backend má»›i:** Tauri command `dubbing_open_output_folder(path)` dÃ¹ng `SHOpenFolderAndSelectItems` (approach giá»‘ng downloader v0.9.4, fix lá»—i path cÃ³ kÃ½ tá»± Ä‘áº·c biá»‡t) â€” thay tháº¿ `reveal_in_explorer` cÅ© dÃ¹ng `explorer.exe /select,...` (dá»… fail vá»›i path CJK).
+- Pháº¡m vi: `src-tauri/src/dubbing/mod.rs` (open_output_folder function), `src-tauri/src/lib.rs` (Tauri command), `src/lib/tauri.ts` (method `dubbingOpenOutputFolder`), `src/views/DubbingStudioView.tsx` (UI).
 
 ---
 
-## v0.9.7 — 2026-10-06
-### Tối Ưu Stage Dịch Phụ Đề: Dùng Batch Translate (Tiết Kiệm ~30 Phút/Video)
-- Phát hiện qua AUDIT-SUB (xem `agent-team/AUDIT_SUB_REPORT.md`): pipeline "Tạo phụ đề" với video 21:43 mất **~64 phút** do Stage 3 (Translate MiniMax-M3 API) chiếm **~40 phút** (62% tổng). Code `file_sub.rs:400` loop từng segment → 416 segments × 5.7s ≈ 40 phút.
-- Fix: thay vòng lặp sequential bằng `translate_batch_with_config()` đã có sẵn ở `translate/mod.rs:328` (chunk 15 segments/batch qua MiniMax-M3 batch endpoint). Estimate Stage 3 từ ~40 phút → **~5-10 phút** cho video 21:43 (tiết kiệm ~30 phút).
-- **Trade-off đã báo cáo (No silent trade-offs):**
-  - Progress emit vẫn theo từng segment (em chia nhỏ từ batch result) → UI UX tương đương loop cũ.
-  - Hallucination filter + fallback `original_text` vẫn áp dụng đầy đủ.
-  - Cancel check: batch check `is_dubbing_cancelled()` mỗi chunk (an toàn hơn loop cũ).
-  - Error fallback: batch inner dùng `"[Dịch lỗi: ...]"`, em wrap ngoài bằng `original_text.clone()` cho UX thân thiện giống cũ.
-- Chưa fix F1 (HF URL 401) + F2 (model corrupt check) + F3 (CUDA build) + F4 (progress trong whisper stage) → xem AUDIT_SUB_REPORT để biết khuyến nghị R1, R2, R4, R5.
+## v0.9.7 â€” 2026-10-06
+### Tá»‘i Æ¯u Stage Dá»‹ch Phá»¥ Äá»: DÃ¹ng Batch Translate (Tiáº¿t Kiá»‡m ~30 PhÃºt/Video)
+- PhÃ¡t hiá»‡n qua AUDIT-SUB (xem `agent-team/AUDIT_SUB_REPORT.md`): pipeline "Táº¡o phá»¥ Ä‘á»" vá»›i video 21:43 máº¥t **~64 phÃºt** do Stage 3 (Translate MiniMax-M3 API) chiáº¿m **~40 phÃºt** (62% tá»•ng). Code `file_sub.rs:400` loop tá»«ng segment â†’ 416 segments Ã— 5.7s â‰ˆ 40 phÃºt.
+- Fix: thay vÃ²ng láº·p sequential báº±ng `translate_batch_with_config()` Ä‘Ã£ cÃ³ sáºµn á»Ÿ `translate/mod.rs:328` (chunk 15 segments/batch qua MiniMax-M3 batch endpoint). Estimate Stage 3 tá»« ~40 phÃºt â†’ **~5-10 phÃºt** cho video 21:43 (tiáº¿t kiá»‡m ~30 phÃºt).
+- **Trade-off Ä‘Ã£ bÃ¡o cÃ¡o (No silent trade-offs):**
+  - Progress emit váº«n theo tá»«ng segment (em chia nhá» tá»« batch result) â†’ UI UX tÆ°Æ¡ng Ä‘Æ°Æ¡ng loop cÅ©.
+  - Hallucination filter + fallback `original_text` váº«n Ã¡p dá»¥ng Ä‘áº§y Ä‘á»§.
+  - Cancel check: batch check `is_dubbing_cancelled()` má»—i chunk (an toÃ n hÆ¡n loop cÅ©).
+  - Error fallback: batch inner dÃ¹ng `"[Dá»‹ch lá»—i: ...]"`, em wrap ngoÃ i báº±ng `original_text.clone()` cho UX thÃ¢n thiá»‡n giá»‘ng cÅ©.
+- ChÆ°a fix F1 (HF URL 401) + F2 (model corrupt check) + F3 (CUDA build) + F4 (progress trong whisper stage) â†’ xem AUDIT_SUB_REPORT Ä‘á»ƒ biáº¿t khuyáº¿n nghá»‹ R1, R2, R4, R5.
 
 ---
 
-## v0.9.6 — 2026-10-06
-### Hiển Thị Rõ Đường Dẫn, Dung Lượng, Chất Lượng & Tiến Trình Tải
-- **Video đã tải xong** giờ hiện đủ trong danh sách: **🎞 chất lượng** (vd *1920×1080 (Full HD)*), **💾 dung lượng thật** của file (đo trực tiếp từ ổ đĩa, vd *309.7 MB*) và **📁 đường dẫn đầy đủ** của file.
-- **Khi đang tải**: thanh tiến trình hiện thêm **"đã tải / tổng"** (vd *📥 202.0 MB / 450.0 MB*) bên cạnh % + tốc độ + thời gian còn lại — nhìn là biết đang tải đến đâu.
-- **Backfill**: các mục đã tải TRƯỚC bản này sẽ tự được đo lại dung lượng + độ phân giải khi mở app (không cần tải lại).
-- **🔗 Link video gốc + nút Copy**: mỗi mục giờ hiện **link nguồn** kèm nút **📋 Copy link** — khi video die hoặc tải lỗi, chỉ cần copy link dán lại là tải lại được.
-- Kỹ thuật: sự kiện `downloader:meta` (size + resolution) khi hoàn tất, command `downloader_file_meta` cho danh sách cũ; độ phân giải probe bằng ffprobe.
+## v0.9.6 â€” 2026-10-06
+### Hiá»ƒn Thá»‹ RÃµ ÄÆ°á»ng Dáº«n, Dung LÆ°á»£ng, Cháº¥t LÆ°á»£ng & Tiáº¿n TrÃ¬nh Táº£i
+- **Video Ä‘Ã£ táº£i xong** giá» hiá»‡n Ä‘á»§ trong danh sÃ¡ch: **ðŸŽž cháº¥t lÆ°á»£ng** (vd *1920Ã—1080 (Full HD)*), **ðŸ’¾ dung lÆ°á»£ng tháº­t** cá»§a file (Ä‘o trá»±c tiáº¿p tá»« á»• Ä‘Ä©a, vd *309.7 MB*) vÃ  **ðŸ“ Ä‘Æ°á»ng dáº«n Ä‘áº§y Ä‘á»§** cá»§a file.
+- **Khi Ä‘ang táº£i**: thanh tiáº¿n trÃ¬nh hiá»‡n thÃªm **"Ä‘Ã£ táº£i / tá»•ng"** (vd *ðŸ“¥ 202.0 MB / 450.0 MB*) bÃªn cáº¡nh % + tá»‘c Ä‘á»™ + thá»i gian cÃ²n láº¡i â€” nhÃ¬n lÃ  biáº¿t Ä‘ang táº£i Ä‘áº¿n Ä‘Ã¢u.
+- **Backfill**: cÃ¡c má»¥c Ä‘Ã£ táº£i TRÆ¯á»šC báº£n nÃ y sáº½ tá»± Ä‘Æ°á»£c Ä‘o láº¡i dung lÆ°á»£ng + Ä‘á»™ phÃ¢n giáº£i khi má»Ÿ app (khÃ´ng cáº§n táº£i láº¡i).
+- **ðŸ”— Link video gá»‘c + nÃºt Copy**: má»—i má»¥c giá» hiá»‡n **link nguá»“n** kÃ¨m nÃºt **ðŸ“‹ Copy link** â€” khi video die hoáº·c táº£i lá»—i, chá»‰ cáº§n copy link dÃ¡n láº¡i lÃ  táº£i láº¡i Ä‘Æ°á»£c.
+- Ká»¹ thuáº­t: sá»± kiá»‡n `downloader:meta` (size + resolution) khi hoÃ n táº¥t, command `downloader_file_meta` cho danh sÃ¡ch cÅ©; Ä‘á»™ phÃ¢n giáº£i probe báº±ng ffprobe.
 
 ---
 
-## v0.9.5 — 2026-10-06
-### Sửa Chất Lượng Tải: Hết Bị Kẹt 360p (MAX giờ lên tới 4K)
-- **Hiện tượng**: chọn "MAX — chất lượng cao nhất" nhưng video tải về chỉ 640x360.
-- **Root cause**: cấu hình cũ ép `youtube:player_client=android,web_safari,ios` — YouTube đã bóp client android về SABR-only/360p, mọi format DASH (1080p/1440p/4K) biến mất khỏi danh sách ⇒ yt-dlp rơi về progressive 360p cho mọi video.
-- **Fix**: bỏ ép client cũ — để yt-dlp tự chọn client mặc định (vẫn kèm JS runtime + EJS solver). Verify: danh sách format có đủ 4K/1440p/1080p/720p; tải thật 720p ra **1280x720** (trước đó 640x360).
-- **Lưu ý cho người dùng**: file CŨ đã tải ở 360p không tự nâng cấp — muốn bản nét thì xóa file cũ trong thư mục downloads rồi tải lại.
+## v0.9.5 â€” 2026-10-06
+### Sá»­a Cháº¥t LÆ°á»£ng Táº£i: Háº¿t Bá»‹ Káº¹t 360p (MAX giá» lÃªn tá»›i 4K)
+- **Hiá»‡n tÆ°á»£ng**: chá»n "MAX â€” cháº¥t lÆ°á»£ng cao nháº¥t" nhÆ°ng video táº£i vá» chá»‰ 640x360.
+- **Root cause**: cáº¥u hÃ¬nh cÅ© Ã©p `youtube:player_client=android,web_safari,ios` â€” YouTube Ä‘Ã£ bÃ³p client android vá» SABR-only/360p, má»i format DASH (1080p/1440p/4K) biáº¿n máº¥t khá»i danh sÃ¡ch â‡’ yt-dlp rÆ¡i vá» progressive 360p cho má»i video.
+- **Fix**: bá» Ã©p client cÅ© â€” Ä‘á»ƒ yt-dlp tá»± chá»n client máº·c Ä‘á»‹nh (váº«n kÃ¨m JS runtime + EJS solver). Verify: danh sÃ¡ch format cÃ³ Ä‘á»§ 4K/1440p/1080p/720p; táº£i tháº­t 720p ra **1280x720** (trÆ°á»›c Ä‘Ã³ 640x360).
+- **LÆ°u Ã½ cho ngÆ°á»i dÃ¹ng**: file CÅ¨ Ä‘Ã£ táº£i á»Ÿ 360p khÃ´ng tá»± nÃ¢ng cáº¥p â€” muá»‘n báº£n nÃ©t thÃ¬ xÃ³a file cÅ© trong thÆ° má»¥c downloads rá»“i táº£i láº¡i.
 
 ---
 
-## v0.9.4 — 2026-10-06
-### Thêm Nút "Chạy Video" & Hiển Thị Rõ Thư Mục Tải
-- **▶ Chạy Video**: mỗi video đã tải xong giờ có nút phát ngay bằng trình phát mặc định của Windows (dùng ShellExecuteW — xử lý đúng cả tên file có ký tự đặc biệt).
-- **Hiển thị thư mục tải**: màn hình Tải Video hiện rõ dòng *"📁 File tải về được lưu tại: C:\...\downloads"* — không còn phải đoán file nằm ở đâu. Nút "Mở Thư Mục" vẫn mở Explorer chọn sẵn file.
-- **Mặc định TẮT "Trích xuất phụ đề"**: theo nhu cầu thực tế (ưu tiên video), checkbox phụ đề mặc định tắt — tải nhanh hơn và tránh rate-limit 429 khi không cần sub.
+## v0.9.4 â€” 2026-10-06
+### ThÃªm NÃºt "Cháº¡y Video" & Hiá»ƒn Thá»‹ RÃµ ThÆ° Má»¥c Táº£i
+- **â–¶ Cháº¡y Video**: má»—i video Ä‘Ã£ táº£i xong giá» cÃ³ nÃºt phÃ¡t ngay báº±ng trÃ¬nh phÃ¡t máº·c Ä‘á»‹nh cá»§a Windows (dÃ¹ng ShellExecuteW â€” xá»­ lÃ½ Ä‘Ãºng cáº£ tÃªn file cÃ³ kÃ½ tá»± Ä‘áº·c biá»‡t).
+- **Hiá»ƒn thá»‹ thÆ° má»¥c táº£i**: mÃ n hÃ¬nh Táº£i Video hiá»‡n rÃµ dÃ²ng *"ðŸ“ File táº£i vá» Ä‘Æ°á»£c lÆ°u táº¡i: C:\...\downloads"* â€” khÃ´ng cÃ²n pháº£i Ä‘oÃ¡n file náº±m á»Ÿ Ä‘Ã¢u. NÃºt "Má»Ÿ ThÆ° Má»¥c" váº«n má»Ÿ Explorer chá»n sáºµn file.
+- **Máº·c Ä‘á»‹nh Táº®T "TrÃ­ch xuáº¥t phá»¥ Ä‘á»"**: theo nhu cáº§u thá»±c táº¿ (Æ°u tiÃªn video), checkbox phá»¥ Ä‘á» máº·c Ä‘á»‹nh táº¯t â€” táº£i nhanh hÆ¡n vÃ  trÃ¡nh rate-limit 429 khi khÃ´ng cáº§n sub.
 
 ---
 
-## v0.9.3 — 2026-10-06
-### Sửa Lỗi Hiển Thị Oan "Không In Ra Đường Dẫn File"
-- **Hiện tượng**: Video tải xong thật (file nằm trên ổ cứng) nhưng app báo ❌ Lỗi *"yt-dlp đã thoát thành công nhưng không in ra đường dẫn file"* — anh Tuấn gặp với video "Arthas: Betrayer of the Light | Warcraft Cinematic" (45MB đã tải xong nhưng UI báo lỗi).
-- **Root cause**: khi output của yt-dlp không phải UTF-8, **chuỗi đường dẫn in ra stdout bị mất/thay thế các ký tự mà codepage không biểu diễn được** (fullwidth `：｜`, chữ CJK...) — trong khi file thật trên ổ đĩa vẫn có đủ ký tự → app so chuỗi in ra với ổ đĩa → không thấy file → báo lỗi oan dù yt-dlp exit 0 (hiện tượng không ổn định, phụ thuộc môi trường console của máy).
-- **Fix**: (1) Ép UTF-8 output cho mọi tiến trình yt-dlp (`PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1`); (2) **Không tin chuỗi in ra nữa** — khi yt-dlp exit 0 mà chưa xác minh được file, app quét thư mục tải tìm file media đúng **mã video** (`[<id>]`) làm bằng chứng gốc (an toàn theo luật BUG-046: không bao giờ lấy file của video khác); (3) UI: "Thử lại" thành công sẽ xoá cảnh báo lỗi cũ.
+## v0.9.3 â€” 2026-10-06
+### Sá»­a Lá»—i Hiá»ƒn Thá»‹ Oan "KhÃ´ng In Ra ÄÆ°á»ng Dáº«n File"
+- **Hiá»‡n tÆ°á»£ng**: Video táº£i xong tháº­t (file náº±m trÃªn á»• cá»©ng) nhÆ°ng app bÃ¡o âŒ Lá»—i *"yt-dlp Ä‘Ã£ thoÃ¡t thÃ nh cÃ´ng nhÆ°ng khÃ´ng in ra Ä‘Æ°á»ng dáº«n file"* â€” anh Tuáº¥n gáº·p vá»›i video "Arthas: Betrayer of the Light | Warcraft Cinematic" (45MB Ä‘Ã£ táº£i xong nhÆ°ng UI bÃ¡o lá»—i).
+- **Root cause**: khi output cá»§a yt-dlp khÃ´ng pháº£i UTF-8, **chuá»—i Ä‘Æ°á»ng dáº«n in ra stdout bá»‹ máº¥t/thay tháº¿ cÃ¡c kÃ½ tá»± mÃ  codepage khÃ´ng biá»ƒu diá»…n Ä‘Æ°á»£c** (fullwidth `ï¼šï½œ`, chá»¯ CJK...) â€” trong khi file tháº­t trÃªn á»• Ä‘Ä©a váº«n cÃ³ Ä‘á»§ kÃ½ tá»± â†’ app so chuá»—i in ra vá»›i á»• Ä‘Ä©a â†’ khÃ´ng tháº¥y file â†’ bÃ¡o lá»—i oan dÃ¹ yt-dlp exit 0 (hiá»‡n tÆ°á»£ng khÃ´ng á»•n Ä‘á»‹nh, phá»¥ thuá»™c mÃ´i trÆ°á»ng console cá»§a mÃ¡y).
+- **Fix**: (1) Ã‰p UTF-8 output cho má»i tiáº¿n trÃ¬nh yt-dlp (`PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1`); (2) **KhÃ´ng tin chuá»—i in ra ná»¯a** â€” khi yt-dlp exit 0 mÃ  chÆ°a xÃ¡c minh Ä‘Æ°á»£c file, app quÃ©t thÆ° má»¥c táº£i tÃ¬m file media Ä‘Ãºng **mÃ£ video** (`[<id>]`) lÃ m báº±ng chá»©ng gá»‘c (an toÃ n theo luáº­t BUG-046: khÃ´ng bao giá» láº¥y file cá»§a video khÃ¡c); (3) UI: "Thá»­ láº¡i" thÃ nh cÃ´ng sáº½ xoÃ¡ cáº£nh bÃ¡o lá»—i cÅ©.
 
 ---
 
-## v0.9.2 — 2026-10-06
-### Sửa Lỗi Nhỏ: Kiểm Tra Link + Tải Phụ Đề
-- **Kiểm Tra Link (fetch_video_info)**: Root cause tìm được: từ bản vá R2-08.3, hàm chuyển sang `spawn()` + `wait_with_output()` để có PID kill orphan nhưng quên pipe stdout/stderr — output luôn rỗng, nên khi yt-dlp exit 0 (kiểm tra thành công) app throw lỗi serde thô `EOF while parsing a value at line 1 column 0`; khi exit 1 thì mất luôn thông báo stderr. Đã sửa: thêm `Stdio::piped()`, tự dò JSON object (`{` đầu → `}` cuối, chấp nhận banner nhiễu), fallback thông báo thân thiện "Video không khả dụng / bị xóa / bị chặn khu vực".
-- **Tải Phụ Đề (HTTP 429)**: Trước đây Sublix gửi 8 request HTTP liên tiếp đến YouTube để lấy 4 ngôn ngữ phụ đề (×2 loại subs), gây HTTP 429 "Too Many Requests". Giờ thêm `--sleep-subtitles 5` để yt-dlp tự delay 5s giữa mỗi request sub (verify CLI: mức 2s vẫn dính 429 khi chạy dồn, mức 5s qua sạch ở lượt chạy kế tiếp). Nếu YouTube vẫn giới hạn khi chạy dồn (rate-limit phía server, sleep không xóa 100%): job **không còn báo ❌ Lỗi oan** — video đã tải xong vẫn giữ ✅ Hoàn thành, kèm cảnh báo ⚠️ "phụ đề chưa tải được (429), thử lại sau vài phút" ngay trên UI (lỗi được hiện rõ, không im lặng).
-- **Window title**: đồng bộ title bar 2 cửa sổ (main + overlay) về `v0.9.2` — khớp sidebar/Changelog (bản v0.9.1 trước đó còn để sót `v0.9.0`).
+## v0.9.2 â€” 2026-10-06
+### Sá»­a Lá»—i Nhá»: Kiá»ƒm Tra Link + Táº£i Phá»¥ Äá»
+- **Kiá»ƒm Tra Link (fetch_video_info)**: Root cause tÃ¬m Ä‘Æ°á»£c: tá»« báº£n vÃ¡ R2-08.3, hÃ m chuyá»ƒn sang `spawn()` + `wait_with_output()` Ä‘á»ƒ cÃ³ PID kill orphan nhÆ°ng quÃªn pipe stdout/stderr â€” output luÃ´n rá»—ng, nÃªn khi yt-dlp exit 0 (kiá»ƒm tra thÃ nh cÃ´ng) app throw lá»—i serde thÃ´ `EOF while parsing a value at line 1 column 0`; khi exit 1 thÃ¬ máº¥t luÃ´n thÃ´ng bÃ¡o stderr. ÄÃ£ sá»­a: thÃªm `Stdio::piped()`, tá»± dÃ² JSON object (`{` Ä‘áº§u â†’ `}` cuá»‘i, cháº¥p nháº­n banner nhiá»…u), fallback thÃ´ng bÃ¡o thÃ¢n thiá»‡n "Video khÃ´ng kháº£ dá»¥ng / bá»‹ xÃ³a / bá»‹ cháº·n khu vá»±c".
+- **Táº£i Phá»¥ Äá» (HTTP 429)**: TrÆ°á»›c Ä‘Ã¢y Sublix gá»­i 8 request HTTP liÃªn tiáº¿p Ä‘áº¿n YouTube Ä‘á»ƒ láº¥y 4 ngÃ´n ngá»¯ phá»¥ Ä‘á» (Ã—2 loáº¡i subs), gÃ¢y HTTP 429 "Too Many Requests". Giá» thÃªm `--sleep-subtitles 5` Ä‘á»ƒ yt-dlp tá»± delay 5s giá»¯a má»—i request sub (verify CLI: má»©c 2s váº«n dÃ­nh 429 khi cháº¡y dá»“n, má»©c 5s qua sáº¡ch á»Ÿ lÆ°á»£t cháº¡y káº¿ tiáº¿p). Náº¿u YouTube váº«n giá»›i háº¡n khi cháº¡y dá»“n (rate-limit phÃ­a server, sleep khÃ´ng xÃ³a 100%): job **khÃ´ng cÃ²n bÃ¡o âŒ Lá»—i oan** â€” video Ä‘Ã£ táº£i xong váº«n giá»¯ âœ… HoÃ n thÃ nh, kÃ¨m cáº£nh bÃ¡o âš ï¸ "phá»¥ Ä‘á» chÆ°a táº£i Ä‘Æ°á»£c (429), thá»­ láº¡i sau vÃ i phÃºt" ngay trÃªn UI (lá»—i Ä‘Æ°á»£c hiá»‡n rÃµ, khÃ´ng im láº·ng).
+- **Window title**: Ä‘á»“ng bá»™ title bar 2 cá»­a sá»• (main + overlay) vá» `v0.9.2` â€” khá»›p sidebar/Changelog (báº£n v0.9.1 trÆ°á»›c Ä‘Ã³ cÃ²n Ä‘á»ƒ sÃ³t `v0.9.0`).
 
 ---
 
-## v0.9.1 — 2026-10-06
-### Sửa Lỗi Window Title Version Mismatch
-- Window title (title bar + taskbar) của 2 window (`main` + `overlay`) bị hardcode `v0.8.0` trong `src-tauri/tauri.conf.json` dù sidebar/Changelog đã hiển thị `v0.9.0`.
-- Sửa: cả 2 title giờ match với version thật.
+## v0.9.1 â€” 2026-10-06
+### Sá»­a Lá»—i Window Title Version Mismatch
+- Window title (title bar + taskbar) cá»§a 2 window (`main` + `overlay`) bá»‹ hardcode `v0.8.0` trong `src-tauri/tauri.conf.json` dÃ¹ sidebar/Changelog Ä‘Ã£ hiá»ƒn thá»‹ `v0.9.0`.
+- Sá»­a: cáº£ 2 title giá» match vá»›i version tháº­t.
 
 ---
 
-## v0.9.0 — 2026-10-06
-### Sửa Lỗi Quan Trọng: YouTube Download Hoạt Động Trở Lại
-- Phát hiện root cause: **yt-dlp 2024.10+ yêu cầu JS runtime (Node.js/Deno) + remote challenge solver** để bypass YouTube anti-bot. Sublix chưa pass 2 flag này nên **mọi URL YouTube fail im lặng** (return `"n challenge solving failed"` → 0 bytes).
-- Helper mới `find_js_runtime()` trong `src-tauri/src/downloader/mod.rs` tự động phát hiện `node` hoặc `deno` trên PATH (qua `where node.exe` trên Windows, `which node` trên Unix).
-- Auto pass `--js-runtimes <runtime>:<path>` + `--remote-components ejs:github` khi tải video YouTube — script solver được tải từ GitHub ở lần đầu, cache lại cho lần sau.
-- Áp dụng cho cả `start_download` (kèm nhánh retry cookie fallback) và `fetch_video_info` (inspect metadata) — nên "Kiểm Tra Link" cũng work trên YouTube.
-- **Verified thủ công bằng CLI**: 11.28 MB Rick Astley tải về trong ~1 giây.
+## v0.9.0 â€” 2026-10-06
+### Sá»­a Lá»—i Quan Trá»ng: YouTube Download Hoáº¡t Äá»™ng Trá»Ÿ Láº¡i
+- PhÃ¡t hiá»‡n root cause: **yt-dlp 2024.10+ yÃªu cáº§u JS runtime (Node.js/Deno) + remote challenge solver** Ä‘á»ƒ bypass YouTube anti-bot. Sublix chÆ°a pass 2 flag nÃ y nÃªn **má»i URL YouTube fail im láº·ng** (return `"n challenge solving failed"` â†’ 0 bytes).
+- Helper má»›i `find_js_runtime()` trong `src-tauri/src/downloader/mod.rs` tá»± Ä‘á»™ng phÃ¡t hiá»‡n `node` hoáº·c `deno` trÃªn PATH (qua `where node.exe` trÃªn Windows, `which node` trÃªn Unix).
+- Auto pass `--js-runtimes <runtime>:<path>` + `--remote-components ejs:github` khi táº£i video YouTube â€” script solver Ä‘Æ°á»£c táº£i tá»« GitHub á»Ÿ láº§n Ä‘áº§u, cache láº¡i cho láº§n sau.
+- Ãp dá»¥ng cho cáº£ `start_download` (kÃ¨m nhÃ¡nh retry cookie fallback) vÃ  `fetch_video_info` (inspect metadata) â€” nÃªn "Kiá»ƒm Tra Link" cÅ©ng work trÃªn YouTube.
+- **Verified thá»§ cÃ´ng báº±ng CLI**: 11.28 MB Rick Astley táº£i vá» trong ~1 giÃ¢y.
 
-### Competitive Analysis với 4 Repo Voice/Dubbing
-- Nghiên cứu sâu 4 đối thủ trên GitHub: **VoiceStudio** (53k⭐, Python+Electron, AGPL), **dub-studio** (Tauri giống Sublix, native C++ engines), **YouDub-webui** (FastAPI+Next.js, production với tác giả 1M+ subs), **ZastTranslate** (Python Gradio, 33 ngôn ngữ + Viral Shorts).
-- Phát hiện Sublix có 3 điểm **UNIQUE**:
-  1. **Đa engine song song** (Qwen 3 GPU local + MiniMax-M3 Cloud) — chưa ai làm
-  2. **1-click pipeline bridges** (Downloader → File Sub → Dubbing Studio) — chưa ai làm
-  3. **Downloader đa nền tảng** (9 site: YT/TT/Douyin/Bili/FB/X/IG/Vimeo/Reddit) — chỉ Sublix có
-- Gợi ý **Roadmap P0**: Voice DESIGN (text → voice), MCP server cho AI agents, multi-TTS engine swap.
-- Tài liệu đầy đủ tại `agent-team/COMPETITIVE_ANALYSIS.md` (15KB, 9 phần).
+### Competitive Analysis vá»›i 4 Repo Voice/Dubbing
+- NghiÃªn cá»©u sÃ¢u 4 Ä‘á»‘i thá»§ trÃªn GitHub: **VoiceStudio** (53kâ­, Python+Electron, AGPL), **dub-studio** (Tauri giá»‘ng Sublix, native C++ engines), **YouDub-webui** (FastAPI+Next.js, production vá»›i tÃ¡c giáº£ 1M+ subs), **ZastTranslate** (Python Gradio, 33 ngÃ´n ngá»¯ + Viral Shorts).
+- PhÃ¡t hiá»‡n Sublix cÃ³ 3 Ä‘iá»ƒm **UNIQUE**:
+  1. **Äa engine song song** (Qwen 3 GPU local + MiniMax-M3 Cloud) â€” chÆ°a ai lÃ m
+  2. **1-click pipeline bridges** (Downloader â†’ File Sub â†’ Dubbing Studio) â€” chÆ°a ai lÃ m
+  3. **Downloader Ä‘a ná»n táº£ng** (9 site: YT/TT/Douyin/Bili/FB/X/IG/Vimeo/Reddit) â€” chá»‰ Sublix cÃ³
+- Gá»£i Ã½ **Roadmap P0**: Voice DESIGN (text â†’ voice), MCP server cho AI agents, multi-TTS engine swap.
+- TÃ i liá»‡u Ä‘áº§y Ä‘á»§ táº¡i `agent-team/COMPETITIVE_ANALYSIS.md` (15KB, 9 pháº§n).
 
-### File thay đổi
-- `src-tauri/src/downloader/mod.rs` — +116 dòng (helper `find_js_runtime` + 2 call sites)
-- `src/views/ChangelogModal.tsx` — thêm entry v0.9.0
-- `package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json` — bump 0.8.0 → 0.9.0
-- `agent-team/COMPETITIVE_ANALYSIS.md` — file mới
+### File thay Ä‘á»•i
+- `src-tauri/src/downloader/mod.rs` â€” +116 dÃ²ng (helper `find_js_runtime` + 2 call sites)
+- `src/views/ChangelogModal.tsx` â€” thÃªm entry v0.9.0
+- `package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json` â€” bump 0.8.0 â†’ 0.9.0
+- `agent-team/COMPETITIVE_ANALYSIS.md` â€” file má»›i
 
 ### Verify
-- `cargo check` ✅ 0 warnings (4.11s)
-- `npm run build` ✅ 364 KB JS / 80 KB CSS (1.17s)
-- `cargo test --lib find_ytdlp_binary` ✅ PASS
-- yt-dlp CLI test thật với flags mới ✅ **PASS (Rick Astley 11.28 MB)**
+- `cargo check` âœ… 0 warnings (4.11s)
+- `npm run build` âœ… 364 KB JS / 80 KB CSS (1.17s)
+- `cargo test --lib find_ytdlp_binary` âœ… PASS
+- yt-dlp CLI test tháº­t vá»›i flags má»›i âœ… **PASS (Rick Astley 11.28 MB)**
 
-### Cần cho lần tới
-- **Nếu máy không có Node.js**: cài https://nodejs.org (Node 18+) hoặc `irm https://deno.land/install.ps1 | iex` (cho Deno). Không có runtime → yt-dlp vẫn in warning và thử các site không cần bypass.
-
----
-
-## v0.8.0 — 2026-10-04
-### Nhận Diện Thị Giác AI & Bộ Minh Hoạ Điện Ảnh
-- Logo mới: chữ S kết từ dải phim điện ảnh, kèm bộ icon ứng dụng trọn bộ cho taskbar & cửa sổ.
-- Ảnh hero rạp chiếu phim ấm áp cho màn cài đặt đầu tiên (Onboarding).
-- Bộ minh hoạ phẳng phong cách điện ảnh: khung chọn file, Trung tâm Models, lịch sử trống.
-- Vân phim mờ tinh tế phủ trên sidebar ở theme Cinema & Studio.
-- Tối ưu dung lượng ảnh từ 4.4 MB xuống còn 184 KB, app nhẹ và khởi động nhanh hơn.
-- Hỗ trợ Kéo & Thả (Drag & Drop) tệp Video / Audio trực tiếp từ máy tính vào ứng dụng qua Tauri Native Webview API.
-- Thay thế toàn bộ hộp chọn native Windows cũ bằng Custom Glass Select sang trọng.
+### Cáº§n cho láº§n tá»›i
+- **Náº¿u mÃ¡y khÃ´ng cÃ³ Node.js**: cÃ i https://nodejs.org (Node 18+) hoáº·c `irm https://deno.land/install.ps1 | iex` (cho Deno). KhÃ´ng cÃ³ runtime â†’ yt-dlp váº«n in warning vÃ  thá»­ cÃ¡c site khÃ´ng cáº§n bypass.
 
 ---
 
-## v0.7.0 — 2026-10-04
-### Đại Tu Giao Diện Cinema Studio & AI Dubbing Đa Vai
-- Bổ sung 4 phong cách giao diện: Cinema, Studio, Light, Vibrant.
-- Bộ chọn Theme nhanh với nút chuyển đổi tức thì, tự động ghi nhớ cấu hình khi khởi động lại.
-- Chuẩn hóa toàn bộ màu sắc sang Design Tokens (CSS Variables), thanh cuộn siêu mỏng tinh tế.
-- Tách giọng gốc sạch 100% bằng Demucs v4 CUDA GPU.
-- Tự động nhận diện phân vai diễn viên qua kịch bản ngữ cảnh MiniMax M3.
-- Bộ giọng đọc Neural siêu tự nhiên (Edge-TTS) + tự động co giãn tốc độ (FFmpeg atempo).
+## v0.8.0 â€” 2026-10-04
+### Nháº­n Diá»‡n Thá»‹ GiÃ¡c AI & Bá»™ Minh Hoáº¡ Äiá»‡n áº¢nh
+- Logo má»›i: chá»¯ S káº¿t tá»« dáº£i phim Ä‘iá»‡n áº£nh, kÃ¨m bá»™ icon á»©ng dá»¥ng trá»n bá»™ cho taskbar & cá»­a sá»•.
+- áº¢nh hero ráº¡p chiáº¿u phim áº¥m Ã¡p cho mÃ n cÃ i Ä‘áº·t Ä‘áº§u tiÃªn (Onboarding).
+- Bá»™ minh hoáº¡ pháº³ng phong cÃ¡ch Ä‘iá»‡n áº£nh: khung chá»n file, Trung tÃ¢m Models, lá»‹ch sá»­ trá»‘ng.
+- VÃ¢n phim má» tinh táº¿ phá»§ trÃªn sidebar á»Ÿ theme Cinema & Studio.
+- Tá»‘i Æ°u dung lÆ°á»£ng áº£nh tá»« 4.4 MB xuá»‘ng cÃ²n 184 KB, app nháº¹ vÃ  khá»Ÿi Ä‘á»™ng nhanh hÆ¡n.
+- Há»— trá»£ KÃ©o & Tháº£ (Drag & Drop) tá»‡p Video / Audio trá»±c tiáº¿p tá»« mÃ¡y tÃ­nh vÃ o á»©ng dá»¥ng qua Tauri Native Webview API.
+- Thay tháº¿ toÃ n bá»™ há»™p chá»n native Windows cÅ© báº±ng Custom Glass Select sang trá»ng.
 
 ---
 
-## v0.6.0 — 2026-10-04
-### Nâng Cấp CUDA RTX 3090 & Local LLM Translation
-- Tích hợp Whisper Large-v3-Turbo Q8 (874MB) chạy trực tiếp trên GPU CUDA.
-- Hỗ trợ Local Qwen 3 4B model cho dịch thuật offline, tốc độ ~0.1s/câu.
+## v0.7.0 â€” 2026-10-04
+### Äáº¡i Tu Giao Diá»‡n Cinema Studio & AI Dubbing Äa Vai
+- Bá»• sung 4 phong cÃ¡ch giao diá»‡n: Cinema, Studio, Light, Vibrant.
+- Bá»™ chá»n Theme nhanh vá»›i nÃºt chuyá»ƒn Ä‘á»•i tá»©c thÃ¬, tá»± Ä‘á»™ng ghi nhá»› cáº¥u hÃ¬nh khi khá»Ÿi Ä‘á»™ng láº¡i.
+- Chuáº©n hÃ³a toÃ n bá»™ mÃ u sáº¯c sang Design Tokens (CSS Variables), thanh cuá»™n siÃªu má»ng tinh táº¿.
+- TÃ¡ch giá»ng gá»‘c sáº¡ch 100% báº±ng Demucs v4 CUDA GPU.
+- Tá»± Ä‘á»™ng nháº­n diá»‡n phÃ¢n vai diá»…n viÃªn qua ká»‹ch báº£n ngá»¯ cáº£nh MiniMax M3.
+- Bá»™ giá»ng Ä‘á»c Neural siÃªu tá»± nhiÃªn (Edge-TTS) + tá»± Ä‘á»™ng co giÃ£n tá»‘c Ä‘á»™ (FFmpeg atempo).
 
 ---
 
-## v0.5.0 — 2026-10-03
+## v0.6.0 â€” 2026-10-04
+### NÃ¢ng Cáº¥p CUDA RTX 3090 & Local LLM Translation
+- TÃ­ch há»£p Whisper Large-v3-Turbo Q8 (874MB) cháº¡y trá»±c tiáº¿p trÃªn GPU CUDA.
+- Há»— trá»£ Local Qwen 3 4B model cho dá»‹ch thuáº­t offline, tá»‘c Ä‘á»™ ~0.1s/cÃ¢u.
+
+---
+
+## v0.5.0 â€” 2026-10-03
 ### WASAPI Loopback Zero-Gap & Smart VAD
 - ...
 
-(Sửa lỗi Critical YouTube download, Competitive Analysis, bump version)
+(Sá»­a lá»—i Critical YouTube download, Competitive Analysis, bump version)
 
 ---
 
-## Quy ước phát hành
-- Mỗi commit sửa code (fix bug, feature, UI polish) **PHẢI**:
+## Quy Æ°á»›c phÃ¡t hÃ nh
+- Má»—i commit sá»­a code (fix bug, feature, UI polish) **PHáº¢I**:
     1. Bump version `major.minor.patch` trong `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-    2. Thêm entry vào `CHANGELOG_DATA` trong `src/views/ChangelogModal.tsx`
-    3. Thêm entry tương ứng vào `CHANGELOG.md` (file này)
-- **minor** cho fix/feature đáng kể, **patch** cho nhỏ.
-- Commit thay đổi version + CHANGELOG trong commit riêng (tách khỏi commit code).
+    2. ThÃªm entry vÃ o `CHANGELOG_DATA` trong `src/views/ChangelogModal.tsx`
+    3. ThÃªm entry tÆ°Æ¡ng á»©ng vÃ o `CHANGELOG.md` (file nÃ y)
+- **minor** cho fix/feature Ä‘Ã¡ng ká»ƒ, **patch** cho nhá».
+- Commit thay Ä‘á»•i version + CHANGELOG trong commit riÃªng (tÃ¡ch khá»i commit code).
