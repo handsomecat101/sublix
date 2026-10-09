@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
@@ -172,6 +173,12 @@ pub struct DubbingSegment {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilmstripThumb {
+    pub time_sec: f64,
+    pub data_uri: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DubbingProject {
     pub input_path: String,
     pub media_duration_sec: f64,
@@ -186,6 +193,10 @@ pub struct DubbingProject {
     /// v0.10.0: "sherpa" | "heuristic" | "minimax"
     #[serde(default)]
     pub diarization_engine: Option<String>,
+    #[serde(default)]
+    pub peaks: Option<Vec<f32>>,
+    #[serde(default)]
+    pub filmstrip_thumbs: Option<Vec<FilmstripThumb>>,
 }
 
 fn default_dubbing_mode() -> String {
@@ -317,9 +328,13 @@ pub fn sherpa_model_dir() -> PathBuf {
     if p.exists() {
         return p;
     }
-    let dev = PathBuf::from(r"H:\AI Project\sublix\src-tauri\models\voice\sherpa-diarization");
-    if dev.exists() {
-        return dev;
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            let next_to_exe = parent.join("models").join("voice").join("sherpa-diarization");
+            if next_to_exe.exists() {
+                return next_to_exe;
+            }
+        }
     }
     p
 }
@@ -433,6 +448,158 @@ pub fn extract_speaker_sample_clip(
     let bytes = fs::read(out_wav)?;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:audio/wav;base64,{b64}"))
+}
+
+/// Extract normalized audio peaks (0.0 to 1.0) from a 16kHz 16-bit mono PCM wav file.
+/// Silence is strictly 0.0 (flat line).
+/// R3-08: Parses RIFF chunk hierarchy dynamically to locate the "data" subchunk.
+pub fn extract_audio_peaks(wav_path: &Path, num_peaks: usize) -> Result<Vec<f32>> {
+    let mut file = fs::File::open(wav_path)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+
+    if buf.len() < 12 || &buf[0..4] != b"RIFF" || &buf[8..12] != b"WAVE" {
+        return Ok(Vec::new());
+    }
+
+    // Traverse RIFF subchunks to locate "data" chunk
+    let mut pos = 12;
+    let mut data_start = None;
+    let mut data_len = 0;
+
+    while pos + 8 <= buf.len() {
+        let chunk_id = &buf[pos..pos + 4];
+        let chunk_size = u32::from_le_bytes(buf[pos + 4..pos + 8].try_into().unwrap_or([0; 4])) as usize;
+        pos += 8;
+
+        if chunk_id == b"data" {
+            data_start = Some(pos);
+            data_len = chunk_size.min(buf.len().saturating_sub(pos));
+            break;
+        }
+
+        pos = pos.saturating_add(chunk_size);
+        if chunk_size % 2 != 0 {
+            pos = pos.saturating_add(1);
+        }
+    }
+
+    let (start, len) = match data_start {
+        Some(s) => (s, data_len),
+        None => {
+            // Fallback for standard 44-byte header
+            if buf.len() > 44 {
+                (44, buf.len() - 44)
+            } else {
+                return Ok(Vec::new());
+            }
+        }
+    };
+
+    let pcm_bytes = &buf[start..start + len];
+    let sample_count = pcm_bytes.len() / 2;
+    if sample_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let peaks_count = num_peaks.clamp(50, 1000);
+    let chunk_size = (sample_count / peaks_count).max(1);
+    let mut peaks = Vec::with_capacity(peaks_count);
+
+    for chunk_idx in 0..peaks_count {
+        let start_sample = chunk_idx * chunk_size;
+        let end_sample = (start_sample + chunk_size).min(sample_count);
+        if start_sample >= sample_count {
+            peaks.push(0.0);
+            continue;
+        }
+
+        let mut max_amp = 0i16;
+        for s in start_sample..end_sample {
+            let byte_idx = s * 2;
+            if byte_idx + 1 < pcm_bytes.len() {
+                let sample = i16::from_le_bytes([pcm_bytes[byte_idx], pcm_bytes[byte_idx + 1]]);
+                let abs_sample = sample.saturating_abs();
+                if abs_sample > max_amp {
+                    max_amp = abs_sample;
+                }
+            }
+        }
+
+        let normalized = (max_amp as f32) / 32768.0;
+        if normalized < 0.015 {
+            peaks.push(0.0);
+        } else {
+            peaks.push(normalized);
+        }
+    }
+
+    Ok(peaks)
+}
+
+/// Extract video thumbnail frames across the media duration as base64 JPEG data URIs
+pub fn extract_filmstrip_thumbnails(
+    ffmpeg_bin: &Path,
+    video_path: &Path,
+    duration_sec: f64,
+    count: usize,
+    my_gen: u64,
+) -> Result<Vec<FilmstripThumb>> {
+    if duration_sec <= 0.0 || count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let temp_dir = std::env::temp_dir().join(format!("sublix_thumbs_{}", gen_unique_id()));
+    let _ = fs::create_dir_all(&temp_dir);
+
+    let num_thumbs = count.clamp(4, 16);
+    let interval = (duration_sec / num_thumbs as f64).max(1.0);
+
+    let out_pattern = temp_dir.join("thumb_%03d.jpg");
+    let mut cmd = Command::new(ffmpeg_bin);
+    cmd.arg("-y")
+        .arg("-i")
+        .arg(video_path)
+        .arg("-vf")
+        .arg(format!("fps=1/{interval:.3},scale=120:68:force_original_aspect_ratio=decrease"))
+        .arg("-q:v")
+        .arg("5")
+        .arg(&out_pattern);
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = run_child_with_cancel(cmd, my_gen)?;
+    if !status.success() {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Ok(Vec::new());
+    }
+
+    let mut thumbs = Vec::new();
+    if let Ok(entries) = fs::read_dir(&temp_dir) {
+        let mut jpgs: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jpg"))
+            .collect();
+        jpgs.sort_by_key(|e| e.path());
+
+        for (idx, entry) in jpgs.into_iter().enumerate() {
+            if idx >= num_thumbs {
+                break;
+            }
+            if let Ok(bytes) = fs::read(entry.path()) {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                let time_sec = idx as f64 * interval;
+                thumbs.push(FilmstripThumb {
+                    time_sec,
+                    data_uri: format!("data:image/jpeg;base64,{b64}"),
+                });
+            }
+        }
+    }
+
+    let _ = fs::remove_dir_all(&temp_dir);
+    Ok(thumbs)
 }
 
 /// Synthesize with the local Kokoro-Vietnamese ONNX model (offline).
@@ -1526,6 +1693,18 @@ pub fn analyze_and_create_project(
                 &cfg,
             );
 
+            if is_generation_cancelled(my_gen) || is_dubbing_cancelled() {
+                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+            }
+
+            if translated_batch.len() < texts_to_translate.len() {
+                return Err(anyhow::anyhow!(
+                    "Tiến trình lồng tiếng / dịch thoại đã bị hủy hoặc chưa hoàn tất (nhận {}/{} câu).",
+                    translated_batch.len(),
+                    texts_to_translate.len()
+                ));
+            }
+
             for (offset, trans) in translated_batch.into_iter().enumerate() {
                 let target_idx = chunk_start + offset;
                 if target_idx < parsed_segments.len() {
@@ -1563,6 +1742,9 @@ pub fn analyze_and_create_project(
         }
     }
 
+    // 4c. Extract real audio waveform peaks from temp_wav
+    let peaks = extract_audio_peaks(&temp_wav, 400).ok();
+
     let _ = fs::remove_file(&temp_wav);
 
     if is_generation_cancelled(my_gen) {
@@ -1574,6 +1756,9 @@ pub fn analyze_and_create_project(
     } else {
         parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0)
     };
+
+    // 4d. Extract video filmstrip thumbnail frames
+    let filmstrip_thumbs = extract_filmstrip_thumbnails(&ffmpeg_bin, input, media_duration, 10, my_gen).ok();
 
     emit("done", 100.0, "Phân vai & Kịch bản lồng tiếng hoàn tất!", total, total);
 
@@ -1587,6 +1772,8 @@ pub fn analyze_and_create_project(
         dubbing_mode: "ducking".to_string(),
         time_limit_sec,
         diarization_engine: Some(diarization_engine_used),
+        peaks,
+        filmstrip_thumbs,
     })
 }
 
@@ -1999,7 +2186,11 @@ pub fn export_dubbed_video(
         .arg("-c:a")
         .arg("aac")
         .arg("-b:a")
-        .arg("192k");
+        .arg("192k")
+        // R2: tag audio track language=vie để player (VLC, mpv) hiển thị
+        // đúng ngôn ngữ + tự chọn track tiếng Việt khi user đổi audio.
+        .arg("-metadata:s:a:0")
+        .arg("language=vie");
 
     if let Some(limit) = project.time_limit_sec {
         if limit > 0.0 {

@@ -1,3 +1,21 @@
+## v0.11.10 — 2026-10-09
+### Dubbing Export: Audio Track Tag `language=vie` (OPTION_RESEARCH R2)
+
+**Vấn đề (OPTION_RESEARCH_DUBBING.md R2):** MP4 output từ Dubbing thiếu metadata `language=vie` cho track audio → player (VLC, mpv) hiển thị "und" hoặc sai ngôn ngữ; user có track Việt mà app nói "unknown".
+
+**Fix v0.11.10:** Thêm 2 dòng vào ffmpeg remux command (`dubbing/mod.rs:2187-2192`):
+```rust
+.arg("-metadata:s:a:0")
+.arg("language=vie")
+```
+→ MP4 output có tag language=vie chuẩn. Player tự detect đúng.
+
+**File đã đổi:** `src-tauri/src/dubbing/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+**Còn lại (out of scope vòng này):** R7 (hardcode sub vào app) — 1-2h, làm ở vòng sau nếu PO yêu cầu.
+
+---
+
 ## v0.11.9 — 2026-10-09
 ### Translate Pipeline: Hủy Dịch Trả Partial Thay Vì Rỗng (ROUND-4 R4-06)
 
