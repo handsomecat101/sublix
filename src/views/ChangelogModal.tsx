@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.17",
+    date: "09/10/2026",
+    title: "Sublix Studio: Hủy Lồng Tiếng Báo Rõ '(nhận x/y câu)' (R5-07)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi UX",
+        icon: "🛑",
+        items: [
+          "Bug: bấm Hủy giữa batch dịch → app báo 'Đã dừng tiến trình theo yêu cầu' mà KHÔNG kèm x/y → user không biết đã dịch được bao nhiêu.",
+          "Fix: bổ sung '(nhận x/y câu)' ở 2 nhánh cancel trong vòng lặp dịch (dubbing/mod.rs:1667 và :1696).",
+          "Đồng bộ với nhánh 1700 (thiếu câu) đã có sẵn format này.",
+          "Bonus: R5-06 verify pass — R4-06 đã fix đầy đủ 5 nhánh cancel trong translate/mod.rs, caller dubbing/mod.rs:1700 đã check x/y. Không có bug R5-06 thực sự.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.16",
     date: "09/10/2026",
     title: "Sublix Studio: Undo Bản Dịch + Audio Đúng Chiều (R5-05)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",

@@ -1,4 +1,23 @@
 
+## v0.11.17 — 2026-10-09
+### Sublix Studio: Hủy Lồng Tiếng Báo Rõ "(nhận x/y câu)" (ROUND-5 R5-07)
+
+**Vấn đề (CommandCode verify R5-07):** Khi user bấm Hủy giữa chừng batch dịch, app báo `"Đã dừng tiến trình theo yêu cầu của bạn."` — KHÔNG kèm `x/y câu` → user không biết đã dịch được bao nhiêu trước khi hủy. Nhánh `translated_batch.len() < texts_to_translate.len()` ở line 1700-1706 thì CÓ kèm `(nhận x/y câu)` — không đồng nhất.
+
+**Fix v0.11.17:** Bổ sung `(nhận x/y câu)` ở 2 nhánh cancel trong vòng lặp dịch (dubbing/mod.rs):
+- Line 1667-1669 (cancel giữa 2 chunk, trước khi gọi `translate_batch_with_config`): `(nhận {chunk_start}/{total} câu)`.
+- Line 1696-1698 (cancel ngay sau khi nhận batch từ translator): `(nhận {chunk_start + translated_batch.len()}/{total} câu)`.
+
+Đồng bộ với nhánh line 1700-1706 (thiếu câu) đã có sẵn format này.
+
+**File đã đổi:** `src-tauri/src/dubbing/mod.rs`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Ghi chú R5-06 (verified pass):** R5-06 "hủy dịch vứt results" — em đã verify lại `translate_batch_with_config` (translate/mod.rs:340-530). R4-06 đã fix đầy đủ 5 nhánh cancel (deepseek/openrouter/minimax/ollama/default): mọi `return sub_res;` đều từ closure `match` arm → caller line 526 `results.extend(chunk_res)` extend OK → outer loop line 350-358 `return results;` (partial) đúng. Caller dubbing/mod.rs:1700-1706 cũng đã check `translated_batch.len() < texts_to_translate.len()` → trả Err có `(nhận x/y câu)`. **Không cần sửa thêm** — đã pass, không có bug R5-06.
+
+**Còn lại Round 5:** R5-08 (WAV scanner parse fmt chunk — R4-07 nợ cũ), R5-09 (postcss.config.cjs), R5-10 (AGENT_CHAT cleanup + language=vie hardcode).
+
+---
+
 ## v0.11.16 — 2026-10-09
 ### Sublix Studio: Undo Bản Dịch + Audio Đúng Chiều (ROUND-5 R5-05)
 

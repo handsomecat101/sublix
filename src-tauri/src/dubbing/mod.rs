@@ -1665,7 +1665,10 @@ pub fn analyze_and_create_project(
         let batch_size = 15;
         for chunk_start in (0..total).step_by(batch_size) {
             if is_generation_cancelled(my_gen) {
-                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+                return Err(anyhow::anyhow!(
+                    "Đã dừng tiến trình theo yêu cầu của bạn (nhận {}/{} câu).",
+                    chunk_start, total
+                ));
             }
 
             let chunk_end = (chunk_start + batch_size).min(total);
@@ -1694,7 +1697,11 @@ pub fn analyze_and_create_project(
             );
 
             if is_generation_cancelled(my_gen) || is_dubbing_cancelled() {
-                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+                return Err(anyhow::anyhow!(
+                    "Đã dừng tiến trình theo yêu cầu của bạn (nhận {}/{} câu).",
+                    chunk_start + translated_batch.len(),
+                    total
+                ));
             }
 
             if translated_batch.len() < texts_to_translate.len() {
