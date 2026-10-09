@@ -105,3 +105,4 @@ test_media/
 test-output-*/
 .commandcode/
 
+.tmp-encoding-fix/
