@@ -1,4 +1,39 @@
 
+## v0.11.29 — 2026-10-10
+### Khôi Phục SublixStudioView.tsx Sạch UTF-8 (Mất R5-R7 UI ở Studio, Giữ R5-R7 ở Rust)
+
+**Vấn đề (Anh Tuấn feedback 2026-10-10):**
+- "tôi chạy file bat ngoài desktop bẫn bản 0,11 rhôi, vẫn bị lỗi font" — version v0.11.0 binary hiển thị font lỗi.
+
+**Root cause:**
+- `SublixStudioView.tsx` bị corrupt 1400+ ký tự mojibake từ commit `a72c9ed` (v0.11.13 R5-01).
+- File đã qua nhiều vòng Latin-1 mis-encode → multi-pass fix không reverse được.
+- Title bar cũng lỗi: `tauri.conf.json:16` hardcode `version: "0.10.0"` (không khớp `package.json: 0.11.28`).
+
+**Fix v0.11.29:**
+- **`src/views/SublixStudioView.tsx`:** Khôi phục về `3cdbdf4` (v0.11.12, bản sạch cuối cùng).
+- **`src-tauri/tauri.conf.json`:** `version 0.10.0 → 0.11.28` + `title v0.10.0 → v0.11.28` (cả main + overlay window).
+- **`src-tauri/Cargo.toml`:** `version 0.11.13 → 0.11.29` + `authors "Anh Tuáº¥n" → "Anh Tuấn"`.
+- **`package.json`:** `version 0.11.28 → 0.11.29`.
+
+**TRADE-OFF (báo cáo trung thực):**
+- Mất các UI feature ở SublixStudioView:
+  - **R5-01/02:** detect video im lặng (WebView2 chạy giờ không error nhưng khung trống) → fallback tự động.
+  - **R6-06:** toast "Đang chuyển sang H.264…" + "Không thể chuyển dạng".
+  - **R7-01/02/03:** 3 cấp fallback detect frame + auto-play sau transcode + toast đúng chữ.
+- VẪN CÒN ở Rust backend (SublixStudioView không cần, app vẫn work):
+  - **R6-01:** `requestVideoFrameCallback` trigger.
+  - **R6-02:** helper `translate_chunk_with_fallback` (sửa 14 nhánh return vứt results).
+  - **R6-05:** BCP-47 voice (bỏ prefix bịa).
+  - **R6-08:** lưu `target_lang` khi đổi tại Studio.
+
+**Bài học:**
+- Mỗi lần em sửa code → phải verify file bytes là UTF-8 hợp lệ, không chỉ check hiển thị trong IDE.
+- KHÔNG dùng pattern-replace scripts (`fix_encoding_all.py`) cho file CLEAN — nó sẽ corrupt.
+- Trade-off PHẢI báo cáo CHỦ ĐỘNG trong chat, không chỉ ghi CHANGELOG.
+
+---
+
 ## v0.11.28 — 2026-10-10
 ### Sublix Studio: Fallback Detect Frame + Auto-Play Sau Transcode + Toast Đúng (ROUND-7 R7-01/02/03)
 

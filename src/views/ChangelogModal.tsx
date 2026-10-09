@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.29",
+    date: "10/10/2026",
+    title: "Khôi Phục SublixStudioView.tsx Sạch UTF-8 (Trade-off: Mất R5-R7 UI ở Studio)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nghiêm Trọng",
+        icon: "🎨",
+        items: [
+          "SublixStudioView.tsx bị corrupt 1400+ ký tự mojibake từ commit a72c9ed (v0.11.13 R5-01). Đa-pass Latin-1→UTF-8 không sửa được do file đã bị double-encode.",
+          "Khôi phục về 3cdbdf4 (v0.11.12, bản sạch cuối cùng).",
+          "TRADE-OFF: Mất R5-01/02 (detect video im lặng UI), R6-06 toast onError UI, R7-01/02/03 fallback detect UI ở SublixStudioView. R5/R6/R7 vẫn còn ở Rust backend (translate/mod.rs, dubbing/mod.rs).",
+          "tauri.conf.json: version 0.10.0 → 0.11.28 (title bar đồng bộ với package.json).",
+          "Cargo.toml: version 0.11.13 → 0.11.29, sửa author 'Anh Tuáº¥n' → 'Anh Tuấn'.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.28",
     date: "10/10/2026",
     title: "Sublix Studio: Fallback Detect Frame + Auto-Play + Toast Đúng (R7-01/02/03)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",
