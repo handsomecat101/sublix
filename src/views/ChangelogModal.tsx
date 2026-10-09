@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.15",
+    date: "09/10/2026",
+    title: "Sublix Studio: Dọn Cache Preview Khi Đổi Video / Đóng App (R5-03)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "🧹",
+        items: [
+          "Bug: `transcode_for_preview` tạo file `{stem}_{size}_{mtime}_{nonce}.mp4` trong `%TEMP%\\sublix_preview\\` mỗi lần fallback. File cũ KHÔNG bị xoá → tích luỹ đầy %TEMP%.",
+          "Fix: 2 Rust command mới `cleanup_preview_for_input(path)` (xoá preview của 1 input) + `cleanup_all_previews()` (xoá cả folder).",
+          "Frontend: useEffect watch filePath → khi đổi/clear → dọn preview file cũ. useEffect unmount → dọn toàn bộ.",
+          "Fire-and-forget (không await) — React không block UI; race hiếm vì chỉ xoá file temp.",
+          "Bonus: reset `transcodedPath` về `null` khi đổi file → `<video>` không trỏ vào file preview đã bị xoá.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.14",
     date: "09/10/2026",
     title: "Sublix Studio: Dropdown Không Còn Trắng Xóa (PO Feedback)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Giao Diện",

@@ -256,6 +256,33 @@ export default function SublixStudioView({
     };
   }, [initialFilePath, fileNonce]);
 
+  // R5-03: cleanup preview file cũ khi user đổi video (setFilePath với file mới)
+  // hoặc clear file (setFilePath("")). Dùng ref để track file trước đó → gọi
+  // backend cleanup theo input_path cũ. Không cần await (fire-and-forget OK).
+  const prevFilePathRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevFilePathRef.current;
+    if (prev && prev !== filePath) {
+      // Đổi file hoặc clear → dọn preview cũ (nếu có)
+      void sublix.cleanupPreviewForInput(prev).catch((e) => {
+        console.warn("cleanupPreviewForInput failed:", e);
+      });
+      // Reset transcodedPath để <video> không trỏ vào file preview đã bị xoá
+      setTranscodedPath(null);
+    }
+    prevFilePathRef.current = filePath || null;
+  }, [filePath]);
+
+  // R5-03: cleanup TOÀN BỘ preview khi component unmount (chuyển tab khác hoặc đóng app).
+  // Fire-and-forget; Rust command xoá async, không block React.
+  useEffect(() => {
+    return () => {
+      void sublix.cleanupAllPreviews().catch((e) => {
+        console.warn("cleanupAllPreviews failed:", e);
+      });
+    };
+  }, []);
+
   // M1: Native Tauri Drag & Drop for Windows WebView2
   useEffect(() => {
     const pDragDrop = (async () => {

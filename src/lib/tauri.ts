@@ -316,6 +316,23 @@ export const sublix = {
     return await invoke<string>("transcode_for_preview", { inputPath });
   },
 
+  /**
+   * v0.11.15 ROUND-5 R5-03: Xoá tất cả preview file của 1 input trong
+   * `%TEMP%\sublix_preview\` (match theo stem + size + mtime). Trả về số file đã xoá.
+   * Gọi khi user đổi video hoặc clear file để tránh tích luỹ đầy %TEMP%.
+   */
+  async cleanupPreviewForInput(inputPath: string): Promise<number> {
+    return await invoke<number>("cleanup_preview_for_input", { inputPath });
+  },
+
+  /**
+   * v0.11.15 ROUND-5 R5-03: Xoá TOÀN BỘ folder `%TEMP%\sublix_preview\`. Gọi khi
+   * app đóng hoặc user bấm nút "Dọn cache preview".
+   */
+  async cleanupAllPreviews(): Promise<number> {
+    return await invoke<number>("cleanup_all_previews");
+  },
+
   async generateFileSubtitles(opts: {
     inputPath: string;
     sourceLang?: string;

@@ -165,6 +165,8 @@ pub fn run() {
             open_thanh_pham_folder,
             downloader_file_meta,
             transcode_for_preview,
+            cleanup_preview_for_input,
+            cleanup_all_previews,
             downloader_check_disk,
             downloader_file_exists
         ])
@@ -1294,6 +1296,76 @@ fn transcode_for_preview(input_path: String) -> Result<String, String> {
         .to_str()
         .map(|s| s.to_string())
         .ok_or_else(|| "non-utf8 path".to_string())
+}
+
+/// ROUND-5 R5-03: Xoá tất cả preview file của 1 input trong `%TEMP%\sublix_preview\`.
+/// Match theo pattern `{stem}_{size}_{mtime}_*.mp4` để không nhầm với file preview
+/// của video khác cùng folder. Trả về số file đã xoá (0 nếu không có gì).
+#[tauri::command]
+fn cleanup_preview_for_input(input_path: String) -> Result<usize, String> {
+    use std::time::UNIX_EPOCH;
+
+    let src = std::path::Path::new(&input_path);
+    let meta = match std::fs::metadata(src) {
+        Ok(m) => m,
+        Err(_) => return Ok(0), // input không tồn tại → không có gì để xoá
+    };
+    let size = meta.len();
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let stem = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview")
+        .chars()
+        .take(32)
+        .collect::<String>();
+
+    let out_dir = std::env::temp_dir().join("sublix_preview");
+    if !out_dir.exists() {
+        return Ok(0);
+    }
+    let prefix = format!("{stem}_{size}_{mtime}_");
+    let mut removed = 0usize;
+    let entries = std::fs::read_dir(&out_dir).map_err(|e| format!("read_dir: {e:#}"))?;
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with(&prefix) && name.ends_with(".mp4") {
+                if std::fs::remove_file(&p).is_ok() {
+                    removed += 1;
+                }
+            }
+        }
+    }
+    Ok(removed)
+}
+
+/// ROUND-5 R5-03: Xoá TOÀN BỘ folder `%TEMP%\sublix_preview\` (gọi khi app đóng
+/// hoặc user muốn dọn dẹp thủ công). Trả về số file đã xoá.
+#[tauri::command]
+fn cleanup_all_previews() -> Result<usize, String> {
+    let out_dir = std::env::temp_dir().join("sublix_preview");
+    if !out_dir.exists() {
+        return Ok(0);
+    }
+    let mut removed = 0usize;
+    let entries = match std::fs::read_dir(&out_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(0),
+    };
+    for entry in entries.flatten() {
+        if std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    // Thử xoá luôn folder nếu rỗng
+    let _ = std::fs::remove_dir(&out_dir);
+    Ok(removed)
 }
 
 

@@ -10,6 +10,13 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-09 12:20 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@in-progress` (Loop Round 5 — `FIX_STUDIO_UI_ROUND5.md` — PO yêu cầu "làm theo tài liệu + test kiểu bình thường")
+- **Vừa xong (3 commits):** v0.11.13 (R5-01+R5-02 detect video im lặng + toast, `a72c9ed`); v0.11.14 (dropdown không trắng xóa theo feedback PO, `3dd41c2`); v0.11.15 (R5-03 cleanup preview file cũ — `cleanup_preview_for_input` + `cleanup_all_previews` + useEffect đổi file/unmount — đang build Rust verify register command, sẽ commit sau).
+- **Còn lại Round 5:** R5-05/06/07 (regression từ Round 4), R5-08/09/10 (nợ cũ + housekeeping) — ưu tiên R5-06 (hủy dịch partial vẫn rò `Vec::new()` ở 1-2 nhánh) và R5-05 (undo push snapshot sai thứ tự).
+- **Lưu ý:** Gemini/Antigravity đang đại tu UI (DownloaderView, SettingsView, SublixStudioView, icons.tsx) — em commit tách bạch, không đụng file của họ.
+- **Worker K (R2nyc test 7/7 PASS):** Video nấu ăn 921s, 6 speakers, 170 segments VI, ảnh `studio_r2nyc_*.png` trong `agent-team/test-output-audit-giong/`.
+
 ### 2026-10-09 18:00 - Mavis (MiniMax-M3) → @CommandCode
 - **Loại:** `@done` (Loop tự động cải thiện 8 vòng — PO yêu cầu "chạy nhiều vòng tự động") — **v0.11.5 → v0.11.12**
 - **Tóm tắt:** 7 commits liên tiếp theo `FIX_STUDIO_UI_ROUND4.md` + `OPTION_RESEARCH_DUBBING.md`: R4-03 (bỏ beep giả), R4-04 (playbackRate re-apply), R4-05 (undo stack chỉ save khi đổi), R4-06 (hủy dịch partial), R4-09 (kéo thả fail toast), R2 (audio language=vie), R4-08 (archive tin cũ).

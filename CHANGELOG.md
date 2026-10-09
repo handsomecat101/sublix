@@ -1,4 +1,26 @@
 
+## v0.11.15 — 2026-10-09
+### Sublix Studio: Cleanup Preview File Cũ Khi Đổi Video / Đóng App (ROUND-5 R5-03)
+
+**Vấn đề (CommandCode verify R5-03):** `transcode_for_preview` (R4-01) tạo file trong `%TEMP%\sublix_preview\{stem}_{size}_{mtime}_{nonce}.mp4`. Mỗi lần fallback (WebView2 hỏng codec hoặc video im lặng R5-01) → 1 file mới với `nonce` = nanosecond timestamp → file cũ KHÔNG bị xoá. Mỗi lần đổi video → thêm 1 file tích luỹ. App chạy lâu → `%TEMP%` đầy dần → user phải tự dọn.
+
+**Fix v0.11.15:**
+- **Backend (lib.rs):** thêm 2 Tauri command mới:
+  - `cleanup_preview_for_input(input_path)` — xoá tất cả file preview của 1 input (match pattern `{stem}_{size}_{mtime}_*.mp4`). Trả về số file đã xoá.
+  - `cleanup_all_previews()` — xoá TOÀN BỘ folder `%TEMP%\sublix_preview\`. Gọi khi app đóng.
+- **Frontend (tauri.ts):** thêm 2 wrapper `sublix.cleanupPreviewForInput(path)` + `sublix.cleanupAllPreviews()`.
+- **SublixStudioView.tsx:**
+  - useEffect watch `filePath` → khi đổi video (setFilePath với file mới) hoặc clear (setFilePath("")) → fire-and-forget gọi `cleanupPreviewForInput(oldPath)`. Đồng thời reset `transcodedPath` về `null` để `<video>` không trỏ vào file preview đã bị xoá.
+  - useEffect cleanup on unmount (chuyển tab Studio ↔ Dubbing hoặc đóng app) → fire-and-forget gọi `cleanupAllPreviews()`.
+
+**Trade-off (R5 ⚠️):** Fire-and-forget (không await) — React không block UI, nhưng nếu Rust cleanup chậm + user chuyển tab nhanh thì có thể có race. Tuy nhiên cleanup chỉ xoá file temp, an toàn, không ảnh hưởng UX.
+
+**File đã đổi:** `src-tauri/src/lib.rs`, `src/views/SublixStudioView.tsx`, `src/lib/tauri.ts`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Còn lại Round 5:** R5-05/06/07 (regression từ Round 4), R5-08/09/10 (nợ cũ + housekeeping).
+
+---
+
 ## v0.11.14 — 2026-10-09
 ### Sublix Studio: Dropdown Không Còn Trắng Xóa (PO yêu cầu)
 
