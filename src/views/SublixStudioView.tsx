@@ -612,6 +612,21 @@ export default function SublixStudioView({
       } else if (e.code === "End") {
         e.preventDefault();
         handleSeek(mediaDurationRef.current);
+      } else if (e.key === "+" || e.key === "=" || e.code === "NumpadAdd" ||
+                 ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "="))) {
+        // v0.11.4: Zoom in (chuẩn Premiere). Tránh trùng với Ctrl+= (zoom browser).
+        if (!(e.ctrlKey || e.metaKey) || e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          setZoomLevel((z) => Math.min(10000, Math.round(z * 1.5)));
+        }
+      } else if (e.key === "-" || e.key === "_" || e.code === "NumpadSubtract" ||
+                 ((e.ctrlKey || e.metaKey) && e.key === "-")) {
+        e.preventDefault();
+        setZoomLevel((z) => Math.max(100, Math.round(z / 1.5)));
+      } else if (e.key === "\\" || ((e.ctrlKey || e.metaKey) && e.key === "0")) {
+        // v0.11.4: Fit timeline to viewport (100%) — chuẩn Premiere "\"
+        e.preventDefault();
+        setZoomLevel(100);
       }
     };
 
@@ -2788,9 +2803,18 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-btn-subtle-sm"
-              onClick={() => setZoomLevel(Math.max(100, Math.round(zoomLevel / 1.5)))}
-              title="Zoom out (×0.67) — xem thêm toàn cảnh video"
-              style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
+              onClick={() => setZoomLevel((z) => Math.max(100, Math.round(z / 2)))}
+              title="Zoom out mạnh (×0.5) — xem toàn cảnh video. Phím tắt: −"
+              style={{ fontSize: 12, fontWeight: 700, padding: "0 6px", cursor: "pointer" }}
+            >
+              −−
+            </button>
+            <button
+              type="button"
+              className="studio-btn-subtle-sm"
+              onClick={() => setZoomLevel((z) => Math.max(100, Math.round(z / 1.5)))}
+              title="Zoom out nhẹ (×0.67). Phím tắt: −"
+              style={{ fontSize: 16, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               −
             </button>
@@ -2798,32 +2822,41 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel(100)}
-              title="Reset về 100% = full video fit viewport (chuẩn Premiere)"
-              style={{ fontSize: 10, padding: "0 4px", cursor: "pointer" }}
+              title="Reset về 100% = full video fit viewport. Phím tắt: \\"
+              style={{ fontSize: 11, padding: "0 5px", cursor: "pointer" }}
             >
               ⟲
             </button>
             <button
               type="button"
               className="studio-btn-subtle-sm"
-              onClick={() => setZoomLevel(Math.min(10000, Math.round(zoomLevel * 1.5)))}
-              title="Zoom in (×1.5) — frame lớn, tick 1s/5s chi tiết"
-              style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
+              onClick={() => setZoomLevel((z) => Math.min(10000, Math.round(z * 1.5)))}
+              title="Zoom in nhẹ (×1.5). Phím tắt: +"
+              style={{ fontSize: 16, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               +
             </button>
-            <input
-              type="range"
-              className="studio-timeline-zoom-slider"
-              min={100}
-              max={10000}
-              step={50}
-              value={Math.min(10000, Math.max(100, zoomLevel))}
-              onChange={(e) => setZoomLevel(Number(e.target.value))}
-              style={{ width: 90 }}
-            />
-            <span style={{ minWidth: 56, textAlign: "right" }}>
-              {zoomLevel}% viewport
+            <button
+              type="button"
+              className="studio-btn-subtle-sm"
+              onClick={() => setZoomLevel((z) => Math.min(10000, Math.round(z * 2)))}
+              title="Zoom in mạnh (×2) — frame cực lớn, tick 0.1s. Phím tắt: +"
+              style={{ fontSize: 12, fontWeight: 700, padding: "0 6px", cursor: "pointer" }}
+            >
+              ++
+            </button>
+            <span
+              style={{
+                minWidth: 56,
+                textAlign: "right",
+                fontWeight: 600,
+                fontSize: 12,
+                color: "var(--studio-accent, #5b9dff)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+              title="Zoom hiện tại (% viewport — 100% = full video fit)"
+            >
+              {zoomLevel}%
             </span>
           </div>
         </div>

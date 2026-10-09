@@ -23,6 +23,25 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.4",
+    date: "09/10/2026",
+    title: "Sublix Studio: Hotkey Timeline + 5 Nút Bấm Zoom (Chuẩn Premiere)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tính Năng Mới",
+        icon: "⌨️",
+        items: [
+          "PO yêu cầu: 'gán hotkey điều khiển timeline như premier, tự nghiên cứu'. Slider zoom khó dùng → thay bằng nút bấm.",
+          "Hotkey mới: + / = (zoom in nhẹ ×1.5), - / _ (zoom out nhẹ ×0.67), \\ (fit timeline 100% — chuẩn Premiere), Ctrl/Cmd+0 (alternative fit), Numpad +/- (bonus).",
+          "Đã có sẵn (giữ nguyên): Space (play/pause), ←/→ (step 1s), Shift+←/→ (step 5s), Home/End (goto đầu/cuối), Ctrl+Z (undo), Ctrl+I (mở file).",
+          "Thay slider bằng 5 nút bấm: −− (×0.5) / − (×0.67) / ⟲ (reset 100%) / + (×1.5) / ++ (×2). Mỗi nút có tooltip ghi phím tắt tương ứng.",
+          "Hiển thị zoom % to rõ (font-weight 600, màu accent, tabular-nums) — dễ đọc hơn slider nằm ngang.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.3",
     date: "09/10/2026",
     title: "Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)",

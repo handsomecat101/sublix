@@ -1,3 +1,34 @@
+## v0.11.4 — 2026-10-09
+### Sublix Studio: Hotkey Timeline + Nút Bấm Zoom (−−, −, ⟲, +, ++) — Chuẩn Premiere
+
+**PO yêu cầu (2026-10-09):** "bạn gán cho tôi mấy cái hotkey để điều khiển timeline như premier đi, tự nghiên cứu nhé tôi ko có thời gian đi chỉ bạn từng đí đâu, với cả cái zoom ra vào time nên có thêm nút bấm - + để dễ zoom nữa thay vì cái slider này."
+
+**Fix v0.11.4:**
+
+**Hotkey timeline (mở rộng từ v0.11.3 chỉ có Space/←/→/Home/End):**
+| Phím | Hành động | Chuẩn Premiere |
+|---|---|---|
+| `+` hoặc `=` | Zoom in nhẹ ×1.5 | `+` |
+| `-` hoặc `_` | Zoom out nhẹ ×0.67 | `-` |
+| `\` | Fit timeline (reset 100%) | `\` |
+| `Ctrl/Cmd+0` | Fit timeline (alternative) | (giống browser Ctrl+0) |
+| `Numpad +` / `-` | Zoom in/out (numpad) | (bonus) |
+
+(đã có sẵn: Space=play/pause, ←/→=step 1s, Shift+←/→=step 5s, Home/End=goto đầu/cuối, Ctrl+Z=undo, Ctrl+I=mở file)
+
+**Thay slider bằng 5 nút bấm (anh thấy slider khó dùng):**
+- `−−` zoom out mạnh (×0.5)
+- `−` zoom out nhẹ (×0.67)
+- `⟲` reset 100%
+- `+` zoom in nhẹ (×1.5)
+- `++` zoom in mạnh (×2)
+- Hiển thị zoom % to rõ (font-weight 600, màu accent, font-variant tabular-nums)
+- Tooltip mỗi nút ghi rõ phím tắt
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.3 — 2026-10-09
 ### Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)
 
