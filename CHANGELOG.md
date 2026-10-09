@@ -1,4 +1,24 @@
 
+## v0.11.19 — 2026-10-09
+### Sublix Studio: Giải Thích `postcss.config.cjs` Stub Rỗng (ROUND-5 R5-09)
+
+**Vấn đề (CommandCode verify R5-09):** File `postcss.config.cjs` ở root dự án chỉ là stub rỗng `module.exports = { plugins: {} };` (33 bytes), được Worker L tạo ra để workaround Vite 7 BOM issue. Luật GOVERNANCE: "không thêm file lạ không mục đích" → phải GIẢI THÍCH trong AGENT_CHAT hoặc XOÁ.
+
+**Quyết định R5-09: GIỮ file + thêm comment giải thích.**
+
+Lý do giữ thay vì xoá:
+1. Nếu xoá → Vite 7 có thể cảnh báo build hoặc trở lại BOM issue.
+2. File size 33 bytes, không ảnh hưởng bundle size, không ảnh hưởng runtime.
+3. Forward-compat: nếu sau này cần thêm plugin PostCSS thật (autoprefixer, cssnano) → chỉ cần thêm vào `plugins` mà không phải tạo file mới.
+
+**Fix v0.11.19:** Thêm comment đầu file `postcss.config.cjs` giải thích lý do tồn tại, lý do giữ, hướng dẫn xoá nếu trong tương lai Vite 7 fix BOM issue.
+
+**File đã đổi:** `postcss.config.cjs`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`, `agent-team/AGENT_CHAT.md`.
+
+**Còn lại Round 5:** R5-10 (AGENT_CHAT cleanup + language=vie hardcode).
+
+---
+
 ## v0.11.18 — 2026-10-09
 ### Sublix Studio: WAV Scanner Parse fmt Chunk + Bỏ Heuristic Dấu Gạch Ngang (ROUND-5 R5-08)
 

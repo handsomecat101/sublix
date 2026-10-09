@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.19",
+    date: "09/10/2026",
+    title: "Sublix Studio: Giải Thích postcss.config.cjs Stub Rỗng (R5-09)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Housekeeping",
+        icon: "📝",
+        items: [
+          "File `postcss.config.cjs` ở root dự án là stub rỗng 33 bytes, do Worker L tạo để workaround Vite 7 BOM issue.",
+          "Quyết định: GIỮ file + thêm comment đầu file giải thích lý do tồn tại, lý do giữ, hướng dẫn xoá trong tương lai.",
+          "Lý do giữ: xoá có thể khiến Vite 7 trở lại BOM issue hoặc cảnh báo build; file size 33 bytes, không ảnh hưởng bundle; forward-compat nếu sau này thêm plugin PostCSS.",
+          "Trong tương lai nếu Vite 7 sửa BOM issue → có thể xoá + test build xem có warning không.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.18",
     date: "09/10/2026",
     title: "Sublix Studio: WAV Scanner Parse fmt Chunk (stereo/24-bit/float) (R5-08)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Kỹ Thuật (R4-07 nợ cũ)",
