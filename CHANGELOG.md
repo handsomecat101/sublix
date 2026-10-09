@@ -1,3 +1,29 @@
+## v0.11.9 — 2026-10-09
+### Translate Pipeline: Hủy Dịch Trả Partial Thay Vì Rỗng (ROUND-4 R4-06)
+
+**Vấn đề (CommandCode verify):** `translate_batch_with_config` vứt cả chunk OK khi user cancel giữa chừng → caller báo "0/x câu" oan (đáng lẽ đã dịch được 14/30 câu).
+
+**Fix v0.11.9:** Thay `return Vec::new()` thành `return sub_res` ở 5 closure (deepseek, openrouter, minimax, ollama, default) + 1 chỗ ở outer loop. Cấu trúc:
+```rust
+let mut sub_res: Vec<String> = Vec::new();  // khởi tạo ở đầu closure
+if is_dubbing_cancelled() {
+    return sub_res;  // ← partial rỗng OK (chưa làm gì)
+}
+// ...
+sub_res = Vec::with_capacity(chunk.len());
+for item in chunk {
+    if is_dubbing_cancelled() {
+        return sub_res;  // ← partial đã dịch đến đâu giữ đến đó
+    }
+    // ...
+}
+```
+Caller (dubbing/mod.rs) sẽ check `is_dubbing_cancelled()` sau khi nhận results để báo "đã hủy ở x/y câu" chính xác.
+
+**File đã đổi:** `src-tauri/src/translate/mod.rs`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.8 — 2026-10-09
 ### Sublix Studio: Undo Stack Chỉ Save Khi Nội Dung Thay Đổi (ROUND-4 R4-05)
 
