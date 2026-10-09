@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.25",
+    date: "09/10/2026",
+    title: "Sublix Studio: Sửa Comment Giả + Dọn Orphan Preview (R6-07)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🧹",
+        items: [
+          "Sửa comment giả ở lib.rs:1220-1231 (nói 'cache by size+mtime' nhưng thực tế nonce = nanosecond → file mới mỗi lần, KHÔNG cache).",
+          "Fix cleanup_preview_for_input: nếu input đã xoá, vẫn dọn orphan theo stem pattern (trước return Ok(0) sớm → orphan tích luỹ).",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.24",
     date: "09/10/2026",
     title: "Sublix Studio: onError Cũ Thêm Toast User-Facing (R6-06)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi UX",

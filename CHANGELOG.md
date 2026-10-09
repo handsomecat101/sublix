@@ -1,4 +1,21 @@
 
+## v0.11.25 — 2026-10-09
+### Sublix Studio: Sửa Comment Giả + Dọn Orphan (ROUND-6 R6-07)
+
+**Vấn đề (CommandCode verify R6-07):**
+
+1. **Comment giả ở `lib.rs:1220-1223, 1231`:** Nói "Output is overwritten on each call (cache by input file size + mtime)" — SAI. Thực tế: mỗi lần gọi tạo file MỚI với `nonce` = nanosecond timestamp. KHÔNG overwrite, KHÔNG cache.
+2. **`cleanup_preview_for_input` không dọn orphan:** Nếu input đã xoá → return `Ok(0)` sớm → preview files cũ của input đó vẫn nằm trong `%TEMP%\sublix_preview\` mãi mãi → tích luỹ.
+
+**Fix v0.11.25:**
+
+- **Comment (`lib.rs:1220-1231`):** Sửa thành "Each call creates a NEW file `{stem}_{size}_{mtime}_{nonce}.mp4` — NOT a cache, NOT overwritten. Frontend MUST call `cleanup_preview_for_input` (R5-03) otherwise preview files accumulate in %TEMP%."
+- **`cleanup_preview_for_input`:** Nếu input đã xoá, vẫn dọn theo `stem_*` pattern (bất kỳ size/mtime cũ). Trước: return Ok(0) sớm. Sau: match `name.starts_with("{stem}_")` (mọi size/mtime) → xoá.
+
+**File đã đổi:** `src-tauri/src/lib.rs`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+---
+
 ## v0.11.24 — 2026-10-09
 ### Sublix Studio: onError Cũ Thêm Toast User-Facing (ROUND-6 R6-06)
 

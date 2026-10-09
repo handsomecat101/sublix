@@ -1219,8 +1219,11 @@ fn downloader_file_exists(path: String) -> bool {
 
 /// v0.11.1: ROUND-4 R4-01 — Transcode a video to H.264/AAC baseline profile
 /// for WebView2 preview (it can't decode VP9/AV1/hevc natively). Returns the
-/// path to the temp preview file. Output is overwritten on each call (cache by
-/// input file size + mtime). Frontend calls this on `<video>.onerror`.
+/// path to the temp preview file. Each call creates a NEW file in
+/// `%TEMP%\sublix_preview\{stem}_{size}_{mtime}_{nonce}.mp4` where `nonce` is
+/// nanosecond timestamp — NOT a cache, NOT overwritten. Frontend MUST call
+/// `cleanup_preview_for_input` (R5-03) when user changes the input file or
+/// unmounts the Studio tab, otherwise preview files accumulate in %TEMP%.
 #[tauri::command]
 fn transcode_for_preview(input_path: String) -> Result<String, String> {
     use std::process::Command;
@@ -1228,7 +1231,8 @@ fn transcode_for_preview(input_path: String) -> Result<String, String> {
 
     let ffmpeg = crate::dubbing::find_ffmpeg();
 
-    // Cache key: source file size + mtime + a stable prefix per process
+    // Filename: {stem}_{size}_{mtime}_{nonce}.mp4 — nonce makes each call unique,
+    // so identical input produces different files (no cache, no overwrite).
     let src = std::path::Path::new(&input_path);
     if !src.exists() {
         return Err(format!("Input file not found: {input_path}"));
@@ -1306,17 +1310,6 @@ fn cleanup_preview_for_input(input_path: String) -> Result<usize, String> {
     use std::time::UNIX_EPOCH;
 
     let src = std::path::Path::new(&input_path);
-    let meta = match std::fs::metadata(src) {
-        Ok(m) => m,
-        Err(_) => return Ok(0), // input không tồn tại → không có gì để xoá
-    };
-    let size = meta.len();
-    let mtime = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
     let stem = src
         .file_stem()
         .and_then(|s| s.to_str())
@@ -1329,16 +1322,39 @@ fn cleanup_preview_for_input(input_path: String) -> Result<usize, String> {
     if !out_dir.exists() {
         return Ok(0);
     }
-    let prefix = format!("{stem}_{size}_{mtime}_");
+    // R6-07: nếu input đã xoá, vẫn dọn orphan theo stem (input từng tồn tại → có
+    // preview files cũ trong folder). Trước đây return Ok(0) sớm → orphan tích luỹ.
+    // Build prefix: nếu input còn → cụ thể size+mtime; nếu input mất → chỉ theo stem
+    // (match mọi size/mtime cũ).
+    let specific_prefix: Option<String> = match std::fs::metadata(src) {
+        Ok(m) => {
+            let size = m.len();
+            let mtime = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            Some(format!("{stem}_{size}_{mtime}_"))
+        }
+        Err(_) => None, // input đã xoá → match chỉ theo stem
+    };
+    let stem_prefix = format!("{stem}_");
+
     let mut removed = 0usize;
     let entries = std::fs::read_dir(&out_dir).map_err(|e| format!("read_dir: {e:#}"))?;
     for entry in entries.flatten() {
         let p = entry.path();
         if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with(&prefix) && name.ends_with(".mp4") {
-                if std::fs::remove_file(&p).is_ok() {
-                    removed += 1;
-                }
+            if !name.ends_with(".mp4") {
+                continue;
+            }
+            let matches = match &specific_prefix {
+                Some(prefix) => name.starts_with(prefix.as_str()),
+                None => name.starts_with(&stem_prefix),
+            };
+            if matches && std::fs::remove_file(&p).is_ok() {
+                removed += 1;
             }
         }
     }
