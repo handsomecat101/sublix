@@ -1,3 +1,17 @@
+## v0.11.5 — 2026-10-09
+### Sublix Studio: Bỏ Beep Giả Mạo Mẫu Giọng (ROUND-4 R4-03)
+
+**Vấn đề (CommandCode verify):** Fallback `createAuditionBeepWav` phát "beeep" 0.4s nhưng toast lại ghi "🎧 Nghe thử mẫu giọng X" → mạo danh giọng thật (vi phạm tinh thần "không đồ giả").
+
+**Fix v0.11.5:**
+- 2 chỗ gọi `createAuditionBeepWav` (line 904, 1083) → đổi thành toast "⚠️ Chưa có mẫu giọng cho vai X — bấm 🔊 Nghe giọng gốc để tạo" (line 901) và "⚠️ Chưa có mẫu giọng 'voice'..." (line 1081).
+- Xóa luôn function `createAuditionBeepWav` (45 dòng code chết) — không còn dùng nữa, tránh dead code.
+- Người dùng được báo trung thực thay vì bị đánh lừa bằng beep.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.4 — 2026-10-09
 ### Sublix Studio: Hotkey Timeline + Nút Bấm Zoom (−−, −, ⟲, +, ++) — Chuẩn Premiere
 

@@ -87,51 +87,6 @@ function formatTimecode(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
 }
 
-// R3-01: Standard clean audio chime generator for browser preview & headless testing
-function createAuditionBeepWav(): string {
-  const sampleRate = 8000;
-  const durationSec = 0.4;
-  const numSamples = Math.floor(sampleRate * durationSec);
-  const headerSize = 44;
-  const totalSize = headerSize + numSamples;
-  const buffer = new Uint8Array(totalSize);
-
-  // RIFF header
-  buffer[0] = 0x52; buffer[1] = 0x49; buffer[2] = 0x46; buffer[3] = 0x46; // "RIFF"
-  const chunkSize = totalSize - 8;
-  buffer[4] = chunkSize & 0xff; buffer[5] = (chunkSize >> 8) & 0xff;
-  buffer[6] = (chunkSize >> 16) & 0xff; buffer[7] = (chunkSize >> 24) & 0xff;
-  buffer[8] = 0x57; buffer[9] = 0x41; buffer[10] = 0x56; buffer[11] = 0x45; // "WAVE"
-  // fmt chunk
-  buffer[12] = 0x66; buffer[13] = 0x6d; buffer[14] = 0x74; buffer[15] = 0x20; // "fmt "
-  buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0; // 16 bytes
-  buffer[20] = 1; buffer[21] = 0; // PCM
-  buffer[22] = 1; buffer[23] = 0; // Mono
-  buffer[24] = sampleRate & 0xff; buffer[25] = (sampleRate >> 8) & 0xff;
-  buffer[26] = (sampleRate >> 16) & 0xff; buffer[27] = (sampleRate >> 24) & 0xff;
-  buffer[28] = sampleRate & 0xff; buffer[29] = (sampleRate >> 8) & 0xff; // ByteRate
-  buffer[30] = (sampleRate >> 16) & 0xff; buffer[31] = (sampleRate >> 24) & 0xff;
-  buffer[32] = 1; buffer[33] = 0; // BlockAlign
-  buffer[34] = 8; buffer[35] = 0; // 8-bit
-  // data chunk
-  buffer[36] = 0x64; buffer[37] = 0x61; buffer[38] = 0x74; buffer[39] = 0x61; // "data"
-  buffer[40] = numSamples & 0xff; buffer[41] = (numSamples >> 8) & 0xff;
-  buffer[42] = (numSamples >> 16) & 0xff; buffer[43] = (numSamples >> 24) & 0xff;
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const fade = Math.max(0, 1 - t / durationSec);
-    const sample = 128 + Math.floor(64 * Math.sin(2 * Math.PI * 440 * t) * fade);
-    buffer[headerSize + i] = sample;
-  }
-
-  let binary = "";
-  for (let i = 0; i < buffer.byteLength; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return `data:audio/wav;base64,${btoa(binary)}`;
-}
-
 export default function SublixStudioView({
   onNavigateTab,
   currentTheme = "cinema",
@@ -899,14 +854,8 @@ export default function SublixStudioView({
         handlePlayAudio(spk.sampleAudio, spk.id);
         showToast(`🎧 Phát clip giọng gốc của ${spk.name}`);
       } else {
-        // Browser/test fallback: Play clean synthetic WAV chime so audio hardware sounds and button displays playing state
-        try {
-          const sampleBeep = createAuditionBeepWav();
-          handlePlayAudio(sampleBeep, spk.id);
-          showToast(`🎧 Nghe thử mẫu giọng ${spkVoice} (${spk.name})`);
-        } catch {
-          showToast(`ℹ️ Mẫu giọng ${spkVoice} (${spk.name}) đã sẵn sàng.`);
-        }
+        // R4-03: KHÔNG phát beep giả mạo "mẫu giọng". Trung thực báo chưa có mẫu.
+        showToast(`⚠️ Chưa có mẫu giọng cho vai "${spk.name}" — bấm 🔊 Nghe giọng gốc để tạo.`);
       }
     } catch (err) {
       console.warn("Failed preview voice, trying sampleAudio fallback:", err);
@@ -1079,11 +1028,8 @@ export default function SublixStudioView({
           showToast(`🎧 Đang phát câu thoại bằng giọng ${voice}`);
         }
       } else {
-        // Browser/test fallback
-        const chime = createAuditionBeepWav();
-        const audio = new Audio(chime);
-        await audio.play().catch(() => {});
-        showToast(`🎧 Nghe thử câu: "${seg.translated.slice(0, 30)}..." (${voice})`);
+        // R4-03: KHÔNG phát beep giả — báo trung thực.
+        showToast(`⚠️ Chưa có mẫu giọng "${voice}" — bấm 🔊 Nghe giọng gốc để tạo.`);
       }
     } catch (err) {
       console.warn("Preview TTS error:", err);
