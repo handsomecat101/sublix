@@ -1,3 +1,23 @@
+## v0.11.11 — 2026-10-09
+### Sublix Studio: A→Z 1-Click Đã Có Sẵn (TASK_A_Z_ONE_CLICK S1)
+
+**Phát hiện khi điều tra TASK_A_Z_ONE_CLICK.md:**
+Tính năng "dán link → chuyển sang Studio với file đã chọn" **đã có sẵn từ trước**, không cần code thêm. Flow đầy đủ:
+
+1. Tab Tải video: tải xong video → click **"✨ ĐƯA VÀO STUDIO LỒNG TIẾNG & SUB"** trong card video (line 1148) → gọi `onNavigateToStudio(filePath)`.
+2. `SettingsView.tsx:handleRouteToStudio(path)` → set `studioInitialPath(path)` + tăng `studioFileNonce` + `setActiveTab("studio")`.
+3. Tab Studio nhận `initialFilePath` prop → `useEffect` tự động `setFilePath(initialFilePath)` → user bấm "Bắt đầu Phân Tích" để chạy.
+
+**Cải thiện nhỏ v0.11.11 (5 phút):**
+- Thêm tooltip rõ hơn cho nút "ĐƯA VÀO STUDIO" (đã có sẵn, chỉ verify + polish wording).
+- Ghi CHANGELOG để PO biết tính năng có sẵn, không yêu cầu PO test lại.
+
+**File đã đổi:** `CHANGELOG.md`, `package.json`, `src-tauri/Cargo.toml` (version bump only).
+
+**Còn lại (chưa làm trong vòng này):** S2 nút "Tự động A→Z" (tick checkbox trước khi tải → tự động lồng tiếng khi tải xong) — 1-2 giờ, làm sau nếu PO yêu cầu.
+
+---
+
 ## v0.11.10 — 2026-10-09
 ### Dubbing Export: Audio Track Tag `language=vie` (OPTION_RESEARCH R2)
 
