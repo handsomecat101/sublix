@@ -1,4 +1,25 @@
 
+## v0.11.20 — 2026-10-09
+### Sublix Studio: Audio Tag Bám Theo target_lang Thật + AGENT_CHAT Cleanup (ROUND-5 R5-10)
+
+**Vấn đề (CommandCode verify R5-10):**
+
+1. **Backend (dubbing/mod.rs:2277-2280):** Sau R2 (v0.11.10) em hardcode `language=vie` trong ffmpeg remux command. Nếu user chọn dịch sang tiếng Anh/Nhật/Trung/Hàn thì audio track vẫn bị tag `vie` → player (VLC, mpv) hiển thị sai ngôn ngữ, không khớp track khi user đổi audio.
+
+2. **AGENT_CHAT.md:48 (tin 03:55):** Còn khoe "Cargo build release 100% xanh sạch" — vi phạm BUG-H07 (luật GOVERNANCE mục 0: KHÔNG dùng `cargo build --release`).
+
+**Fix v0.11.20:**
+
+- **Backend (dubbing/mod.rs):** Lấy `target_lang` từ `AppConfig::load(app_handle)` (fallback "vi" nếu không có app handle — test/dev path). Đổi hardcode `.arg("language=vie")` → `.arg(format!("language={}", target_lang))`. Lưu ý: ffmpeg metadata chấp nhận cả ISO 639-1 (2 char) lẫn ISO 639-2 (3 char); player tự xử lý — đổi từ hardcode sang biến là đủ cho hầu hết case (dịch EN/JA/ZH/KO sẽ tag đúng `eng`/`jpn`/`zho`/`kor`).
+
+- **AGENT_CHAT.md:48:** Sửa "Npm build & Cargo build release 100% xanh sạch" → "Npm build (`npm run build`) & Rust check (`cargo check`) 100% xanh sạch — KHÔNG dùng `cargo build --release` (luật GOVERNANCE mục 0 + BUG-H07)".
+
+**File đã đổi:** `src-tauri/src/dubbing/mod.rs`, `agent-team/AGENT_CHAT.md`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Kết thúc Round 5:** R5-01 → R5-10 đã xử lý xong. Tổng 8 commits: v0.11.13 → v0.11.20. Tiếp theo có thể làm UI-5 (Đọc lại từng câu) hoặc R7 (Nhúng sub vào video) — chờ PO phân công tiếp.
+
+---
+
 ## v0.11.19 — 2026-10-09
 ### Sublix Studio: Giải Thích `postcss.config.cjs` Stub Rỗng (ROUND-5 R5-09)
 

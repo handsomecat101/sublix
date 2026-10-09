@@ -1983,6 +1983,16 @@ pub fn export_dubbed_video(
 ) -> Result<String> {
     let my_gen = start_new_generation();
 
+    // R5-10: tag audio track language theo target_lang thật (không hardcode "vie").
+    // Lấy từ AppConfig nếu có app handle; fallback "vi" nếu không (test/dev path).
+    // Lưu ý: ffmpeg metadata chấp nhận cả ISO 639-1 (2 char) lẫn ISO 639-2 (3 char);
+    // player (VLC, mpv) tự xử lý — đổi từ hardcode "vie" sang biến là đủ cho hầu hết case.
+    let target_lang = if let Some(a) = app {
+        crate::config::AppConfig::load(a).target_lang
+    } else {
+        "vi".to_string()
+    };
+
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
         if let Some(a) = app {
             let _ = a.emit(
@@ -2274,10 +2284,11 @@ pub fn export_dubbed_video(
         .arg("aac")
         .arg("-b:a")
         .arg("192k")
-        // R2: tag audio track language=vie để player (VLC, mpv) hiển thị
-        // đúng ngôn ngữ + tự chọn track tiếng Việt khi user đổi audio.
+        // R5-10: tag audio track language theo target_lang thật (bám theo ngôn ngữ
+        // đích của dự án), thay vì hardcode "vie" như trước. Player (VLC, mpv) sẽ
+        // hiển thị đúng ngôn ngữ + tự chọn track khi user đổi audio.
         .arg("-metadata:s:a:0")
-        .arg("language=vie");
+        .arg(format!("language={}", target_lang));
 
     if let Some(limit) = project.time_limit_sec {
         if limit > 0.0 {

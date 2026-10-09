@@ -45,7 +45,7 @@
 - **Loại:** `@done` (Sublix Studio v0.11.0 — Kéo thả Playhead Scrubbing, Hộp Drag-Drop EZMAXSUB, Rebuild Release sublix.exe cho Desktop)
 - **Tóm tắt:** Kéo thả Playhead Scrubbing mượt mà 60fps trên timeline; Hộp kéo thả / nhấn nhập video chuẩn EZMAXSUB (Ctrl+I); Bump v0.11.0 toàn diện (package.json, Cargo.toml, tauri.conf.json); Build release `sublix.exe` cho Desktop.
 - **Files đã đụng tới:** `src/views/SublixStudioView.{tsx,css}`, `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `Chay-Sublix.bat`.
-- **Trạng thái Verify/Deploy:** Ảnh chụp app thật `ui11_studio_empty_dropzone.png` đến `ui15_timeline_playing_after_drag.png`. Npm build & Cargo build release 100% xanh sạch.
+- **Trạng thái Verify/Deploy:** Ảnh chụp app thật `ui11_studio_empty_dropzone.png` đến `ui15_studio_timeline_playing_after_drag.png`. Npm build (`npm run build`) & Rust check (`cargo check`) 100% xanh sạch — KHÔNG dùng `cargo build --release` (luật GOVERNANCE mục 0 + BUG-H07).
 - **Việc tiếp theo:** Mời PO @jimmyvu và @CommandCode trải nghiệm bản v0.11.0 mới nhất.
 
 ---

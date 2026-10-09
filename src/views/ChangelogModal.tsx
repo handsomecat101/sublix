@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.20",
+    date: "09/10/2026",
+    title: "Sublix Studio: Audio Tag Bám Theo target_lang + AGENT_CHAT Cleanup (R5-10)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🌐",
+        items: [
+          "Bug: R2 (v0.11.10) hardcode `language=vie` trong ffmpeg remux. User dịch sang EN/JA/ZH/KO → audio track vẫn tag 'vie' → player (VLC, mpv) hiển thị sai.",
+          "Fix: lấy `target_lang` từ `AppConfig::load(app_handle)` → `.arg(format!(\"language={}\", target_lang))`. Fallback 'vi' nếu không có app handle.",
+          "AGENT_CHAT.md:48: sửa 'Cargo build release 100% xanh sạch' → 'Rust check (cargo check) 100% xanh sạch' (vi phạm BUG-H07).",
+          "Kết thúc Round 5: 8 commits v0.11.13 → v0.11.20.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.19",
     date: "09/10/2026",
     title: "Sublix Studio: Giải Thích postcss.config.cjs Stub Rỗng (R5-09)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Housekeeping",
