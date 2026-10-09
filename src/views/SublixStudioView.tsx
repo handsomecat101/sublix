@@ -370,8 +370,31 @@ export default function SublixStudioView({
     ]);
   };
 
+  // R4-05: chỉ save translation undo khi giá trị thay đổi (onFocus + onBlur)
+  const translationPreFocusRef = useRef<{ id: number; translated: string }[] | null>(null);
+  const saveTranslationUndoIfChanged = () => {
+    const before = translationPreFocusRef.current;
+    translationPreFocusRef.current = null;
+    if (!before) return;
+    const after = segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated }));
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+    if (changed) saveTranslationUndo();
+  };
+
   const saveAudioUndo = () => {
     setUndoAudioStack((prev) => [...prev.slice(-19), speakersRef.current]);
+  };
+
+  // R4-05: chỉ save undo khi nội dung THẬT SỰ thay đổi.
+  // Lưu snapshot trước khi user focus vào input; nếu blur với cùng giá trị → bỏ qua.
+  const audioPreFocusRef = useRef<SpeakerItem[] | null>(null);
+  const saveAudioUndoIfChanged = () => {
+    const before = audioPreFocusRef.current;
+    audioPreFocusRef.current = null;
+    if (!before) return;
+    const after = speakersRef.current;
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+    if (changed) saveAudioUndo();
   };
 
   const saveUndoHistory = () => {
@@ -1737,7 +1760,8 @@ export default function SublixStudioView({
                             type="text"
                             className="studio-speaker-name-input"
                             value={spk.name}
-                            onFocus={() => saveAudioUndo()}
+                            onFocus={() => { audioPreFocusRef.current = speakersRef.current; }}
+                            onBlur={() => saveAudioUndoIfChanged()}
                             onChange={(e) => {
                               const val = e.target.value;
                               setSpeakers((prev) =>
@@ -2430,7 +2454,13 @@ export default function SublixStudioView({
                       marginTop: 4,
                     }}
                     value={seg.translated}
-                    onFocus={() => saveTranslationUndo()}
+                    onFocus={() => {
+                      translationPreFocusRef.current = segmentsRef.current.map((s) => ({
+                        id: s.id,
+                        translated: s.translated,
+                      }));
+                    }}
+                    onBlur={() => saveTranslationUndoIfChanged()}
                     onChange={(e) => {
                       const updated = segments.map((s) =>
                         s.id === seg.id ? { ...s, translated: e.target.value } : s

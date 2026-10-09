@@ -1,3 +1,21 @@
+## v0.11.8 — 2026-10-09
+### Sublix Studio: Undo Stack Chỉ Save Khi Nội Dung Thay Đổi (ROUND-4 R4-05)
+
+**Vấn đề (CommandCode verify):** `onFocus` lưu snapshot kể cả khi user không sửa gì → undo stack đầy cap rác, bấm "↶" hoàn tác về trạng thái y hệt.
+
+**Fix v0.11.8:**
+- Thay `onFocus={saveAudioUndo}` → `onFocus={lưu snapshot}` + `onBlur={so sánh, chỉ save nếu KHÁC}`.
+- Áp dụng cho 2 chỗ: speaker name input (line 1740) + translation input (line 2446).
+- Cơ chế:
+  - `audioPreFocusRef` / `translationPreFocusRef` lưu state TRƯỚC khi user focus.
+  - Khi blur, JSON.stringify compare before vs after.
+  - Nếu khác → save undo stack. Nếu giống → bỏ qua.
+- Stack chỉ chứa THAY ĐỔI THẬT → undo chính xác, không undo "ảo".
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.7 — 2026-10-09
 ### Sublix Studio: Kéo-Thả Hỏng Thì Báo Toast (ROUND-4 R4-09)
 
