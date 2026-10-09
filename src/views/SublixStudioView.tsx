@@ -259,13 +259,18 @@ export default function SublixStudioView({
               setFileName(name);
               setVideoPlayError(false);
               handleSeek(0);
+            } else {
+              // R4-09: kéo thả nhưng không có path → báo user (không ngậm tăm)
+              showToast("⚠️ Kéo thả không khả dụng — hãy dùng nút 'Mở video' để chọn file.");
             }
           } else {
             setIsDraggingFile(false);
           }
         });
       } catch (err) {
+        // R4-09: kéo thả fail hoàn toàn → toast cho user biết, không im lặng
         console.warn("Tauri drag-drop in SublixStudioView failed:", err);
+        showToast("⚠️ Kéo thả không khả dụng trên hệ thống này — hãy dùng nút 'Mở video'.");
         return () => {};
       }
     })();

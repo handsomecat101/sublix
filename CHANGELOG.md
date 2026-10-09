@@ -1,3 +1,17 @@
+## v0.11.7 — 2026-10-09
+### Sublix Studio: Kéo-Thả Hỏng Thì Báo Toast (ROUND-4 R4-09)
+
+**Vấn đề (CommandCode verify):** `catch` ở `webview.onDragDropEvent` chỉ `console.warn` — user thấy kéo thả không có gì xảy ra → tưởng app hỏng, ngồi mò.
+
+**Fix v0.11.7:**
+- Khi `onDragDropEvent` thất bại (catch block) → `showToast("⚠️ Kéo thả không khả dụng trên hệ thống này — hãy dùng nút 'Mở video'")` thay vì im lặng.
+- Khi drop event trả về mà `paths` rỗng → cũng toast cảnh báo.
+- User biết ngay phải dùng nút `Mở video` thay vì cố kéo thả vô ích.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.6 — 2026-10-09
 ### Sublix Studio: Re-Apply playbackRate Khi Load Video Mới (ROUND-4 R4-04)
 
