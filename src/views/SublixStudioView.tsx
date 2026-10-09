@@ -1157,13 +1157,20 @@ export default function SublixStudioView({
   const handlePreviewSegmentTts = async (seg: SubtitleItem) => {
     const spk = speakers.find((s) => s.id === seg.speakerId);
     const rawVoice = spk?.voice || "kokoro:tuan_ngoc";
-    // R5-08: chuẩn hóa theo danh sách engine — bỏ heuristic `rawVoice.includes("-")` quá rộng.
-    // Edge voice "vi-female-1" có "-" nhưng KHÔNG có prefix; minimax/clone/azure chưa hỗ trợ nhưng
-    // forward-compat. Nếu đã có prefix hợp lệ → giữ nguyên; ngược lại mặc định Kokoro local.
-    const ENGINE_PREFIXES = ["kokoro:", "edge:", "minimax:", "azure:", "google:", "clone:"];
-    const voice = ENGINE_PREFIXES.some((p) => rawVoice.startsWith(p))
-      ? rawVoice
-      : `kokoro:${rawVoice}`;
+    // R6-05: chuẩn hóa voice id theo contract THẬT của backend `synthesize_speech` (dubbing/mod.rs:922-929).
+    // Backend CHỈ parse prefix `kokoro:` → Kokoro local; MỌI THỨ KHÁC → Edge-TTS raw.
+    // Vì vậy KHÔNG ĐƯỢC bịa thêm prefix `edge:` / `minimax:` / `azure:` / `google:` / `clone:` vì
+    // backend không parse → Edge-TTS sẽ thử dùng raw làm voice name (fail).
+    // Logic đúng:
+    //   1. Đã có `kokoro:` → Kokoro local, giữ nguyên.
+    //   2. Match BCP-47 (vd "vi-VN-HoaiMyNeural", "en-US-AriaNeural", "ja-JP-NanamiNeural") → Edge raw, giữ nguyên.
+    //   3. Ngược lại → mặc định `kokoro:` (giả định là tên Kokoro viết tắt, vd "tuan_ngoc").
+    const KOKORO_PREFIX = "kokoro:";
+    // BCP-47: lang (2-3 chữ thường) + optional region (2 chữ hoa) + optional sub-tags (vd "-HoaiMyNeural")
+    const BCP47_PATTERN = /^[a-z]{2,3}(-[A-Z]{2})?(-[a-zA-Z0-9-]+)*$/;
+    const isKokoroPrefixed = rawVoice.startsWith(KOKORO_PREFIX);
+    const isBcp47Voice = BCP47_PATTERN.test(rawVoice);
+    const voice = isKokoroPrefixed || isBcp47Voice ? rawVoice : `kokoro:${rawVoice}`;
 
     setPreviewingSegId(seg.id);
     try {

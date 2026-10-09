@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.23",
+    date: "09/10/2026",
+    title: "Sublix Studio: Chuẩn Hóa Edge Voice Theo BCP-47 — Bỏ Prefix Bịa (R6-05)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "🎙️",
+        items: [
+          "R5-08 em BỊA: thêm danh sách prefix ['edge:', 'minimax:', 'azure:', 'google:', 'clone:'] — nhưng backend `synthesize_speech` CHỈ parse 'kokoro:'. Voice Edge 'vi-VN-HoaiMyNeural' bị thêm 'kokoro:' → nghe giọng sai.",
+          "Fix: bỏ danh sách prefix bịa. Logic mới bám contract backend thật: có 'kokoro:' → Kokoro; match BCP-47 (vi-VN-*, en-US-*, ja-JP-*) → Edge raw; ngược lại → mặc định 'kokoro:'. Regex: /^[a-z]{2,3}(-[A-Z]{2})?(-[a-zA-Z0-9-]+)*$/.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.22",
     date: "09/10/2026",
     title: "Sublix Studio: Bằng Chứng Pipeline transcode (R6-04)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Bằng Chứng Nghiệm Thu",

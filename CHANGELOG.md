@@ -1,4 +1,21 @@
 
+## v0.11.23 — 2026-10-09
+### Sublix Studio: Chuẩn Hóa Edge Voice Theo BCP-47 — Không Bịa Prefix (ROUND-6 R6-05)
+
+**Vấn đề (CommandCode verify R6-05):** R5-08 em sửa `rawVoice.includes("-")` thành danh sách engine `["kokoro:", "edge:", "minimax:", "azure:", "google:", "clone:"]` — nhưng em BỊA: backend `synthesize_speech` (dubbing/mod.rs:922-929) CHỈ parse `kokoro:` prefix, MỌI thứ khác → Edge-TTS raw. Voice `vi-VN-HoaiMyNeural` (Edge theo chuẩn BCP-47) KHÔNG có prefix `kokoro:` → `ENGINE_PREFIXES.some(...)` = false → bị thêm `kokoro:vi-VN-HoaiMyNeural` → backend `strip_prefix` ra "vi-VN-HoaiMyNeural" → tìm Kokoro voice "vi-VN-HoaiMyNeural" không có → fallback "diem_trinh" → user nghe giọng SAI.
+
+**Fix v0.11.23:**
+- Bỏ danh sách prefix bịa (`edge:`, `minimax:`, `azure:`, `google:`, `clone:`).
+- Logic mới bám đúng contract backend:
+  1. Có `kokoro:` prefix → Kokoro local, giữ nguyên.
+  2. Match BCP-47 (vd `vi-VN-HoaiMyNeural`, `en-US-AriaNeural`, `ja-JP-NanamiNeural`) → Edge raw, giữ nguyên.
+  3. Ngược lại → mặc định `kokoro:${rawVoice}` (giả định tên Kokoro viết tắt, vd `tuan_ngoc`).
+- Regex BCP-47: `/^[a-z]{2,3}(-[A-Z]{2})?(-[a-zA-Z0-9-]+)*$/`.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+---
+
 ## v0.11.22 — 2026-10-09
 ### Sublix Studio: Bằng Chứng Pipeline transcode_work Cho multi_speaker_scene.mp4 (ROUND-6 R6-04)
 
