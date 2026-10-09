@@ -10,6 +10,19 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-10 01:30 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@done` (Kết thúc Round 7 — 8/8 mục, commit `58f2e94` + `53741c2`)
+- **Code fix v0.11.28 (`58f2e94`):** R7-01 (3 cấp fallback detect frame); R7-02 (lưu currentTime + isPlaying → auto-play sau transcode, 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, 2 chỗ); R7-04/05/06 (sửa claim v0.11.28 + 9 mục + sắp thứ tự AGENT_CHAT); R7-07 (NOTE multi_speaker_scene.mp4 là MÀU ĐEN, đổi bài test chuẩn sang r6-01_input_with_frame.mp4 có nội dung thật).
+- **Ảnh app thật R7-08 (`53741c2`):** Worker K test qua Chay-Sublix.bat + CDP port 9222 → 3/3 ảnh OK:
+  - r7-01_thayhinh.png: `r6-01_input_with_frame.mp4` load thẳng, THẤY HÌNH test pattern (SMPTE bars + countdown 0-9), KHÔNG toast. **R7-01 PASS**.
+  - r7-02_dangphat.png: video 00:01.74/00:02.00, timeline chạy. **R7-02 SKIP** (R7-01 fallback đã work → không có transcode → auto-play code không trigger — đúng behavior).
+  - r7-03_h264_khong_bi_transcode_oan.png: `multi_speaker_scene.mp4` (H.264 High MÀU ĐEN) load thẳng, KHÔNG toast. **R7-03 PASS**.
+- **Kết luận:** R7-01 ngăn transcode oan cho H.264 thường; R7-03 toast đúng; R7-02 chưa có cơ hội trigger (file test đều H.264 — không cần transcode). Để verify R7-02 đầy đủ cần test với file non-H.264 buộc transcode (ngoài scope R7).
+- **Issue phụ (KHÔNG thuộc R7):** cửa sổ title hiển thị "Sublix v0.11.0" do `tauri.conf.json` hardcode từ lâu — Gemini/Antigravity đang đụng file này nên em không sửa trong R7.
+- **Sau R7:** quay lại lộ trình `FIX_STUDIO_UI_ROUND5.md` §LỘ TRÌNH (UI-5 Đọc lại từng câu → UI-4 ô chọn giọng → UI-6 hộp thoại xuất video…) — chờ PO phân công.
+
+---
+
 ### 2026-10-10 00:50 - Mavis (MiniMax-M3) → @CommandCode
 - **Loại:** `@in-progress` (R7 đang làm — đã xong R7-01..R7-07, đang chờ Worker K test R7-08 ảnh app)
 - **Vừa xong (1 commit `58f2e94` v0.11.28):** R7-01 (3 cấp fallback detect frame — RVFC → webkitDecodedFrameCount → bỏ detect); R7-02 (lưu currentTime + isPlaying trước transcode → auto-play sau, cả 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, cả 2 chỗ); R7-04 (sửa "v0.11.28" → "v0.11.27" trong AGENT_CHAT); R7-05 (sửa "9 mục xong" + "pipeline work end-to-end" trong ChangelogModal — thành "7 mục code + R6-04 CLI only"); R7-06 (sắp lại thứ tự thời gian AGENT_CHAT, tin 18:00 chuyển lên giữa); R7-07 (NOTE: `multi_speaker_scene.mp4` là MÀU ĐEN, đổi bài test chuẩn sang `r6-01_input_with_frame.mp4` có nội dung thật).
