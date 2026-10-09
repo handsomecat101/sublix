@@ -1,8 +1,28 @@
 
+## v0.11.14 — 2026-10-09
+### Sublix Studio: Dropdown Không Còn Trắng Xóa (PO yêu cầu)
+
+**Vấn đề (PO feedback trực tiếp 2026-10-09 11:50):** Dropdown "Ngôn ngữ nguồn / Ngôn ngữ đích / Model lồng tiếng" trong tab Studio nhìn **trắng xóa** — text trắng trên nền trắng không đọc được. PO bực: *"sửa cho tôi mấy cái dropdown nữa nhìn trắng xóa"*.
+
+**Root cause:** `.studio-form-select` đặt `background: var(--bg-card)` (0.03 opacity) → gần như trong suốt → lộ nền sáng của theme Cinema/Studio. `<option>` của browser mặc định background trắng → khi bấm mở dropdown list hiện ra trắng toát.
+
+**Fix v0.11.14:**
+- Đổi `background: var(--bg-card)` → `var(--bg-side, #191511)` (đậm hơn nhiều, theme Cinema/Studio đều có token).
+- Thêm `appearance: none; -webkit-appearance: none; -moz-appearance: none;` để tắt dropdown arrow mặc định browser (sau này tự vẽ nếu cần).
+- Style `<option>` riêng: `background: var(--bg-side, #191511); color: var(--t1);` → dropdown list khi bấm mở ra cũng theo theme, không còn trắng.
+- Cũng fix luôn `.studio-video-select-subtle` (nếu có dùng) cho đồng bộ.
+
+**File đã đổi:** `src/views/SublixStudioView.css`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Test:** Build TS pass. App hiện vẫn KHÔNG chạy (đã kill trước build theo luật) — PO test thủ công khi mở app lại qua `Chay-Sublix.bat`.
+
+---
+
 ## v0.11.13 — 2026-10-09
 ### Sublix Studio: Detect Video Im Lặng + Toast Loading (ROUND-5 R5-01 + R5-02)
 
-**Vấn đề (CommandCode verify R5-01):** R4-01 fallback chỉ trigger khi <video>.onError event. Nhưng WebView2 có thể hỏng codec kiểu **im lặng**: chạy giờ, phát tiếng, **KHUNG TRỐNG** — không error event → fallback chết cứng. Ảnh cũ 4-01_preview_playing.png (00:15.78 khung trống) tự tố vấn đề này.
+**Vấn đề (CommandCode verify R5-01):** R4-01 fallback chỉ trigger khi <video>.onError event. Nhưng WebView2 có thể hỏng codec kiểu **im lặng**: chạy giờ, phát tiếng, **KHUNG TRỐNG** — không error event → fallback chết cứng. Ảnh cũ 
+4-01_preview_playing.png (00:15.78 khung trống) tự tố vấn đề này.
 
 **Fix v0.11.13:**
 - Sau loadedmetadata + **800ms** (đợi WebView2 decode frame đầu), kiểm ideo.videoWidth === 0 → kích hoạt 	ranscodeForPreview chủ động.

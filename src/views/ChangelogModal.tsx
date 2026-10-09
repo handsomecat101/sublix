@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.14",
+    date: "09/10/2026",
+    title: "Sublix Studio: Dropdown Không Còn Trắng Xóa (PO Feedback)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Giao Diện",
+        icon: "🎨",
+        items: [
+          "PO phàn nàn trực tiếp: 'dropdown nhìn trắng xóa, text trắng trên nền trắng không đọc được' — quá khó chịu.",
+          "Root cause: `.studio-form-select` đặt `background: var(--bg-card)` (0.03 opacity) → gần như trong suốt → lộ nền sáng theme Cinema/Studio.",
+          "Fix: đổi background sang `var(--bg-side, #191511)` (đậm hơn nhiều, theme Cinema/Studio đều có token).",
+          "Thêm `appearance: none` (Chrome/Safari/Firefox) để tắt arrow mặc định browser — sau này tự vẽ nếu cần.",
+          "Style `<option>` riêng theo theme (background + color từ CSS variable) → dropdown list khi bấm mở cũng theo theme, không còn trắng toát.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.4",
     date: "09/10/2026",
     title: "Sublix Studio: Hotkey Timeline + 5 Nút Bấm Zoom (Chuẩn Premiere)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Tính Năng Mới",
