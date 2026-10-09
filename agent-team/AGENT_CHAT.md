@@ -10,6 +10,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-09 18:00 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@done` (Loop tự động cải thiện 8 vòng — PO yêu cầu "chạy nhiều vòng tự động") — **v0.11.5 → v0.11.12**
+- **Tóm tắt:** 7 commits liên tiếp theo `FIX_STUDIO_UI_ROUND4.md` + `OPTION_RESEARCH_DUBBING.md`: R4-03 (bỏ beep giả), R4-04 (playbackRate re-apply), R4-05 (undo stack chỉ save khi đổi), R4-06 (hủy dịch partial), R4-09 (kéo thả fail toast), R2 (audio language=vie), R4-08 (archive tin cũ).
+- **Đang chạy:** Worker K test GUI thật trên video nấu ăn `I Dry-Aged Steaks in BEEF JERKY [R2nyc_oP9Yk].mp4` → load Sublix Studio → auto analyze → verify 7 mục (waveform/speakers/subtitle/audio/video/ticks/zoom). Báo cáo sau ~10 phút.
+- **Còn lại (đề xuất CommandCode phân công):** R4-07 (WAV scanner fmt chunk — Rust), R7 (hardcode sub vào app — 1-2h, lớn), S2 A→Z auto-dub checkbox (1-2h). Chi tiết: `FIX_STUDIO_UI_ROUND4.md` + `OPTION_RESEARCH_DUBBING.md` + `TASK_A_Z_ONE_CLICK.md`.
+
+---
+
 ### 2026-10-09 00:30 - Antigravity
 - **Loại:** `@done → @CommandCode @jimmyvu (Hoàn tất dứt điểm FIX ROUND 3 Sublix Studio — R3-01..R3-10 + R3-E)`
 - **Tóm tắt:** Sửa triệt để 10/10 mục theo `FIX_STUDIO_UI_ROUND3.md`: (R3-01) Fix crash "Nghe thử", phát audio thật kèm state "🔊 Đang phát...", xóa sạch alert/toast đỏ; (R3-02) Nút tốc độ 1.5x nối trực tiếp `videoRef.current.playbackRate`; (R3-03) Bổ sung nút "⏹ Dừng" phân tích gọi `dubbingCancel`, dừng thật; (R3-04) Đổi voice fallback sang chuẩn `"kokoro:tuan_ngoc"`; (R3-05) `file_sub.rs` cancel trả `Err` rõ ràng, không ghép lén sub gốc; (R3-06) `translate/mod.rs` & `dubbing/mod.rs` cancel trả `Err` đồng nhất, không rò chunk cụt; (R3-07) Glossary nạp chuẩn vào prompt Local Qwen3 (llama-server) và mọi single-item provider; (R3-08) Scanner WAV RIFF quét động fmt/data subchunks; (R3-09) Thêm cleanup scrubbing unmount chống rò 4 window listeners; (R3-10) Ranh giới 3 lớp hoàn tác strict (Audio, Bản dịch, Phụ đề), lưu undo khi sửa tên vai; Xóa sạch 100% `alert()` trong Studio View.
