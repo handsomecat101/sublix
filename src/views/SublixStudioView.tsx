@@ -375,32 +375,65 @@ export default function SublixStudioView({
       if (videoRef.current.playbackRate !== playbackSpeed) {
         videoRef.current.playbackRate = playbackSpeed;
       }
-      // R5-01: sau 800ms kiá»ƒm videoWidth â€” náº¿u 0 â†’ video im láº·ng (codec há»ng
-      // kiá»ƒu WebView2 im láº·ng), chá»§ Ä‘á»™ng chuyá»ƒn táº¡m báº±ng transcodeForPreview.
+      // R6-01: detect video im lặng THẬT — dùng requestVideoFrameCallback (Chromium/WebView2)
+      // để đợi frame đầu tiên được PAINT. Nếu sau 1.2s vẫn không có frame nào (framePainted = false)
+      // HOẶC videoWidth === 0 → kích hoạt transcode fallback.
+      // (R5-01 cũ chỉ check videoWidth=0 — không đủ vì nhiều codec hỏng vẫn có videoWidth > 0 nhưng không paint frame)
       if (loadedMetadataTimerRef.current !== null) {
         clearTimeout(loadedMetadataTimerRef.current);
       }
+      let framePainted = false;
+      let rvfcHandle: number | null = null;
+      const v = videoRef.current;
+      // Try requestVideoFrameCallback (Chromium ≥83, WebView2 OK)
+      type VfcCapable = HTMLVideoElement & {
+        requestVideoFrameCallback?: (cb: () => void) => number;
+        cancelVideoFrameCallback?: (h: number) => void;
+        webkitDecodedFrameCount?: number;
+      };
+      const vc = v as VfcCapable | null;
+      if (vc && typeof vc.requestVideoFrameCallback === "function") {
+        rvfcHandle = vc.requestVideoFrameCallback(() => {
+          framePainted = true;
+        });
+      }
       loadedMetadataTimerRef.current = window.setTimeout(() => {
-        const v = videoRef.current;
-        if (v && v.videoWidth === 0 && !transcodedPathRef.current && filePathRef.current) {
-          console.warn(
-            "R5-01: videoWidth=0 sau loadedmetadata + 800ms â€” video im láº·ng, kÃ­ch hoáº¡t transcode fallback."
-          );
-          showToast("â³ Video khÃ´ng hiá»ƒn thá»‹ hÃ¬nh â€” Ä‘ang chuyá»ƒn sang dáº¡ng xem Ä‘Æ°á»£câ€¦");
+        const cur = videoRef.current as VfcCapable | null;
+        const stillNoFrame = !framePainted;
+        const stillNoDim = cur && cur.videoWidth === 0;
+        // Cleanup RVFC nếu có
+        if (cur && rvfcHandle !== null && typeof cur.cancelVideoFrameCallback === "function") {
+          try {
+            cur.cancelVideoFrameCallback(rvfcHandle);
+          } catch (e) {
+            // ignore
+          }
+        }
+        if (
+          cur &&
+          (stillNoFrame || stillNoDim) &&
+          !transcodedPathRef.current &&
+          filePathRef.current
+        ) {
+          const reason = stillNoFrame
+            ? "frame callback không fire sau 1.2s (codec hỏng kiểu im lặng)"
+            : "videoWidth = 0 (không decode được)";
+          console.warn(`R6-01: ${reason} — kích hoạt transcode fallback.`);
+          showToast("⏳ Video không hiển thị hình — đang chuyển sang dạng xem được…");
           void (async () => {
             try {
               const previewPath = await sublix.transcodeForPreview(filePathRef.current!);
               if (previewPath) {
                 setTranscodedPath(previewPath);
-                showToast("âœ… ÄÃ£ chuyá»ƒn sang dáº¡ng xem Ä‘Æ°á»£c, Ä‘ang phÃ¡t previewâ€¦");
+                showToast("✅ Đã chuyển sang dạng xem được, đang phát preview…");
               }
             } catch (err) {
-              console.error("R5-01 transcode fallback failed:", err);
-              showToast(`âŒ KhÃ´ng thá»ƒ chuyá»ƒn dáº¡ng: ${(err as Error)?.message ?? err}`);
+              console.error("R6-01 transcode fallback failed:", err);
+              showToast(`❌ Không thể chuyển dạng: ${(err as Error)?.message ?? err}`);
             }
           })();
         }
-      }, 800);
+      }, 1200);
     }
   };
 

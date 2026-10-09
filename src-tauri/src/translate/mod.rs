@@ -330,6 +330,57 @@ pub fn translate_text_with_config(
     }
 }
 
+/// R6-02: Helper chung cho mọi provider — gọi batch API, nếu lỗi/cancel → fallback
+/// single-item, break loop thay vì `return sub_res` (BUG-M2: `return` trong match arm
+/// return từ outer function `translate_batch_with_config` → vứt `results` chunk OK trước).
+/// `break` chỉ thoát for loop → `sub_res` (partial hoặc rỗng) trả về từ arm → caller
+/// `results.extend(chunk_res)` chạy đúng → giữ partial.
+fn translate_chunk_with_fallback<F>(
+    chunk: &[String],
+    source: &str,
+    target: &str,
+    model: TranslationModelVariant,
+    pref: EnginePreference,
+    cfg: &crate::config::AppConfig,
+    provider_label: &str,
+    batch_call: F,
+) -> Vec<String>
+where
+    F: FnOnce() -> anyhow::Result<Vec<String>>,
+{
+    match batch_call() {
+        Ok(res) => res,
+        Err(e) => {
+            if crate::dubbing::is_dubbing_cancelled() {
+                warn!("🛑 {} batch cancelled: {e:#}", provider_label);
+                return Vec::new();
+            }
+            warn!(
+                "Batch translation via {} failed: {e:#}, falling back to single items",
+                provider_label
+            );
+            let mut sub_res: Vec<String> = Vec::with_capacity(chunk.len());
+            for item in chunk {
+                if crate::dubbing::is_dubbing_cancelled() {
+                    warn!("🛑 Sub-item translation cancelled");
+                    break;
+                }
+                match translate_text_with_config(item, source, target, model, pref, cfg) {
+                    Ok(t) => sub_res.push(t),
+                    Err(err) => {
+                        if crate::dubbing::is_dubbing_cancelled() {
+                            break;
+                        }
+                        warn!("Single translation failed for '{item}': {err:#}");
+                        sub_res.push(format!("[Dịch lỗi: {}]", item));
+                    }
+                }
+            }
+            sub_res
+        }
+    }
+}
+
 /// Translate a batch of texts using active provider, chunking into sub-batches of 15 items.
 pub fn translate_batch_with_config(
     items: &[String],
@@ -359,168 +410,101 @@ pub fn translate_batch_with_config(
         }
 
         let chunk_res = match cfg.translation_provider.to_lowercase().as_str() {
-            "deepseek" => {
-                match server::translate_batch_via_deepseek(chunk, source, target, &cfg.deepseek_api_key, &cfg.deepseek_model, &cfg.glossary) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        let mut sub_res: Vec<String> = Vec::new();
-                        if crate::dubbing::is_dubbing_cancelled() {
-                            // R4-06: trả partial thay vì rỗng
-                            warn!("🛑 DeepSeek batch cancelled: {e:#}");
-                            return sub_res;
-                        }
-                        warn!("Batch translation via DeepSeek failed: {e:#}, falling back to single items");
-                        sub_res = Vec::with_capacity(chunk.len());
-                        for item in chunk {
-                            if crate::dubbing::is_dubbing_cancelled() {
-                                // R4-06: trả partial thay vì rỗng
-                                warn!("🛑 Sub-item translation cancelled");
-                                return sub_res;
-                            }
-                            match translate_text_with_config(item, source, target, model, pref, cfg) {
-                                Ok(t) => sub_res.push(t),
-                                Err(err) => {
-                                    if crate::dubbing::is_dubbing_cancelled() {
-                                        // R4-06: trả partial thay vì rỗng
-                                        return sub_res;
-                                    }
-                                    warn!("Single translation failed for '{item}': {err:#}");
-                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
-                                }
-                            }
-                        }
-                        sub_res
-                    }
-                }
-            }
-            "openrouter" => {
-                match server::translate_batch_via_openrouter(chunk, source, target, &cfg.openrouter_api_key, &cfg.openrouter_model, &cfg.glossary) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        let mut sub_res: Vec<String> = Vec::new();
-                        if crate::dubbing::is_dubbing_cancelled() {
-                            // R4-06: trả partial thay vì rỗng
-                            warn!("🛑 OpenRouter batch cancelled: {e:#}");
-                            return sub_res;
-                        }
-                        warn!("Batch translation via OpenRouter failed: {e:#}, falling back to single items");
-                        sub_res = Vec::with_capacity(chunk.len());
-                        for item in chunk {
-                            if crate::dubbing::is_dubbing_cancelled() {
-                                warn!("🛑 Sub-item translation cancelled");
-                                return sub_res;
-                            }
-                            match translate_text_with_config(item, source, target, model, pref, cfg) {
-                                Ok(t) => sub_res.push(t),
-                                Err(err) => {
-                                    if crate::dubbing::is_dubbing_cancelled() {
-                                        return sub_res;
-                                    }
-                                    warn!("Single translation failed for '{item}': {err:#}");
-                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
-                                }
-                            }
-                        }
-                        sub_res
-                    }
-                }
-            }
-            "minimax" => {
-                match server::translate_batch_via_minimax(chunk, source, target, &cfg.minimax_api_key, &cfg.minimax_model, &cfg.glossary) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        let mut sub_res: Vec<String> = Vec::new();
-                        if crate::dubbing::is_dubbing_cancelled() {
-                            // R4-06: trả partial thay vì rỗng
-                            warn!("🛑 MiniMax batch cancelled: {e:#}");
-                            return sub_res;
-                        }
-                        warn!("Batch translation via MiniMax failed: {e:#}, falling back to single items");
-                        sub_res = Vec::with_capacity(chunk.len());
-                        for item in chunk {
-                            if crate::dubbing::is_dubbing_cancelled() {
-                                warn!("🛑 Sub-item translation cancelled");
-                                return sub_res;
-                            }
-                            match translate_text_with_config(item, source, target, model, pref, cfg) {
-                                Ok(t) => sub_res.push(t),
-                                Err(err) => {
-                                    if crate::dubbing::is_dubbing_cancelled() {
-                                        return sub_res;
-                                    }
-                                    warn!("Single translation failed for '{item}': {err:#}");
-                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
-                                }
-                            }
-                        }
-                        sub_res
-                    }
-                }
-            }
-            "ollama" => {
-                match server::translate_batch_via_ollama(chunk, source, target, &cfg.ollama_url, &cfg.ollama_model, &cfg.glossary) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        let mut sub_res: Vec<String> = Vec::new();
-                        if crate::dubbing::is_dubbing_cancelled() {
-                            // R4-06: trả partial thay vì rỗng
-                            warn!("🛑 Ollama batch cancelled: {e:#}");
-                            return sub_res;
-                        }
-                        warn!("Batch translation via Ollama failed: {e:#}, falling back to single items");
-                        sub_res = Vec::with_capacity(chunk.len());
-                        for item in chunk {
-                            if crate::dubbing::is_dubbing_cancelled() {
-                                warn!("🛑 Sub-item translation cancelled");
-                                return sub_res;
-                            }
-                            match translate_text_with_config(item, source, target, model, pref, cfg) {
-                                Ok(t) => sub_res.push(t),
-                                Err(err) => {
-                                    if crate::dubbing::is_dubbing_cancelled() {
-                                        return sub_res;
-                                    }
-                                    warn!("Single translation failed for '{item}': {err:#}");
-                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
-                                }
-                            }
-                        }
-                        sub_res
-                    }
-                }
-            }
-            _ => {
-                match server::translate_batch_via_server(chunk, source, target, model, pref, &cfg.glossary) {
-                    Ok(res) => res,
-                    Err(e) => {
-                        let mut sub_res: Vec<String> = Vec::new();
-                        if crate::dubbing::is_dubbing_cancelled() {
-                            // R4-06: trả partial thay vì rỗng
-                            warn!("🛑 Local llama-server batch cancelled: {e:#}");
-                            return sub_res;
-                        }
-                        warn!("Batch translation via local llama-server failed: {e:#}, falling back to single items");
-                        sub_res = Vec::with_capacity(chunk.len());
-                        for item in chunk {
-                            if crate::dubbing::is_dubbing_cancelled() {
-                                warn!("🛑 Sub-item translation cancelled");
-                                return sub_res;
-                            }
-                            match translate_text_with_config(item, source, target, model, pref, cfg) {
-                                Ok(t) => sub_res.push(t),
-                                Err(err) => {
-                                    if crate::dubbing::is_dubbing_cancelled() {
-                                        return sub_res;
-                                    }
-                                    warn!("Single translation failed for '{item}': {err:#}");
-                                    sub_res.push(format!("[Dịch lỗi: {}]", item));
-                                }
-                            }
-                        }
-                        sub_res
-                    }
-                }
-            }
+            "deepseek" => translate_chunk_with_fallback(
+                chunk,
+                source,
+                target,
+                model,
+                pref,
+                cfg,
+                "DeepSeek",
+                || {
+                    server::translate_batch_via_deepseek(
+                        chunk,
+                        source,
+                        target,
+                        &cfg.deepseek_api_key,
+                        &cfg.deepseek_model,
+                        &cfg.glossary,
+                    )
+                },
+            ),
+            "openrouter" => translate_chunk_with_fallback(
+                chunk,
+                source,
+                target,
+                model,
+                pref,
+                cfg,
+                "OpenRouter",
+                || {
+                    server::translate_batch_via_openrouter(
+                        chunk,
+                        source,
+                        target,
+                        &cfg.openrouter_api_key,
+                        &cfg.openrouter_model,
+                        &cfg.glossary,
+                    )
+                },
+            ),
+            "minimax" => translate_chunk_with_fallback(
+                chunk,
+                source,
+                target,
+                model,
+                pref,
+                cfg,
+                "MiniMax",
+                || {
+                    server::translate_batch_via_minimax(
+                        chunk,
+                        source,
+                        target,
+                        &cfg.minimax_api_key,
+                        &cfg.minimax_model,
+                        &cfg.glossary,
+                    )
+                },
+            ),
+            "ollama" => translate_chunk_with_fallback(
+                chunk,
+                source,
+                target,
+                model,
+                pref,
+                cfg,
+                "Ollama",
+                || {
+                    server::translate_batch_via_ollama(
+                        chunk,
+                        source,
+                        target,
+                        &cfg.ollama_url,
+                        &cfg.ollama_model,
+                        &cfg.glossary,
+                    )
+                },
+            ),
+            _ => translate_chunk_with_fallback(
+                chunk,
+                source,
+                target,
+                model,
+                pref,
+                cfg,
+                "Local llama-server",
+                || {
+                    server::translate_batch_via_server(
+                        chunk,
+                        source,
+                        target,
+                        model,
+                        pref,
+                        &cfg.glossary,
+                    )
+                },
+            ),
         };
 
         results.extend(chunk_res);

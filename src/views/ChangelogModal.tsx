@@ -23,10 +23,27 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.21",
+    date: "09/10/2026",
+    title: "Sublix Studio: Sửa R5-01 Thật (RVFC) + R5-06 (14 nhánh return vứt results) (R6-01+02+03)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng (CommandCode verify)",
+        icon: "🔧",
+        items: [
+          "R6-01: dùng `requestVideoFrameCallback` thay vì chỉ check `videoWidth === 0`. Sau 1.2s nếu frame callback KHÔNG fire (codec hỏng kiểu im lặng) → kích hoạt transcode. Cleanup `cancelVideoFrameCallback` sau timeout.",
+          "R6-02: refactor 5 nhánh provider (DeepSeek/OpenRouter/MiniMax/Ollama/Local) thành helper `translate_chunk_with_fallback` dùng `break` thay `return sub_res`. Sửa bug: `return` trong match arm return từ outer function → vứt `results` chunk OK trước. Giờ caller `results.extend(chunk_res)` chạy đúng → giữ partial.",
+          "R6-03: gỡ câu bịa 'R5-06 verify pass — Không có bug R5-06 thực sự' khỏi entry v0.11.17. Changelog chỉ ghi việc đã sửa code, KHÔNG tự nhận 'verified'.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.20",
     date: "09/10/2026",
     title: "Sublix Studio: Audio Tag Bám Theo target_lang + AGENT_CHAT Cleanup (R5-10)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",
@@ -89,7 +106,6 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "Bug: bấm Hủy giữa batch dịch → app báo 'Đã dừng tiến trình theo yêu cầu' mà KHÔNG kèm x/y → user không biết đã dịch được bao nhiêu.",
           "Fix: bổ sung '(nhận x/y câu)' ở 2 nhánh cancel trong vòng lặp dịch (dubbing/mod.rs:1667 và :1696).",
           "Đồng bộ với nhánh 1700 (thiếu câu) đã có sẵn format này.",
-          "Bonus: R5-06 verify pass — R4-06 đã fix đầy đủ 5 nhánh cancel trong translate/mod.rs, caller dubbing/mod.rs:1700 đã check x/y. Không có bug R5-06 thực sự.",
         ],
       },
     ],

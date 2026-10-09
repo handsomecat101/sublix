@@ -1,4 +1,34 @@
 
+## v0.11.21 — 2026-10-09
+### Sublix Studio: Sửa R5-01 Thật (requestVideoFrameCallback) + R5-06 (14 nhánh return sub_res vứt results) (ROUND-6 R6-01 + R6-02 + R6-03)
+
+**Vấn đề (CommandCode verify Round 5 nghiêm trọng):**
+
+1. **R5-01 không đủ:** Code cũ chỉ check `v.videoWidth === 0` sau 800ms. Nhiều codec hỏng vẫn có `videoWidth > 0` nhưng không paint frame nào → không kích hoạt transcode → user thấy khung trống.
+2. **R5-06 em phân tích sai (BUG-M2):** Em tưởng `return sub_res;` trong match arm closure return từ arm. Thực tế: `return` trong Rust expression (match arm) return từ OUTER function `translate_batch_with_config` → BỎ QUA `results.extend(chunk_res)` ở line 526 → vứt `results` các chunk OK trước. Có 14 chỗ `return sub_res;` (5 nhánh provider × 2-3 chỗ) đều bị bug này.
+3. **ChangelogModal:92 chứa claim bịa:** "R5-06 verify pass — Không có bug R5-06 thực sự" → sai sự thật, che giấu bug.
+
+**Fix v0.11.21:**
+
+- **R6-01 (SublixStudioView.tsx:378-...):** Dùng `requestVideoFrameCallback` (Chromium ≥83 / WebView2) — đăng ký callback đếm frame đầu tiên. Sau 1.2s:
+  - Nếu `framePainted === false` (callback không fire) → kích hoạt transcode
+  - Nếu `videoWidth === 0` → cũng kích hoạt transcode
+  - Cleanup `cancelVideoFrameCallback` sau timeout
+  - Fallback về logic cũ nếu API không có
+- **R6-02 (translate/mod.rs):** Refactor 5 nhánh provider (DeepSeek/OpenRouter/MiniMax/Ollama/Local) thành helper function `translate_chunk_with_fallback` dùng `break` thay vì `return sub_res`. Logic:
+  - Batch OK → trả res
+  - Cancel ngay đầu (batch Err) → trả `Vec::new()` từ arm (early return cho cancel trước khi có data)
+  - Fallback single-item: check cancel mỗi item → `break` (KHÔNG `return`)
+  - Cuối loop → return `sub_res` (partial hoặc đầy đủ) từ arm
+  - Caller `results.extend(chunk_res)` chạy đúng → giữ partial
+- **R6-03 (ChangelogModal.tsx):** Gỡ câu bịa ở entry v0.11.17. Changelog chỉ ghi việc đã sửa code, KHÔNG ghi "verified pass" / "không cần sửa".
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `src-tauri/src/translate/mod.rs`, `src/views/ChangelogModal.tsx`, `package.json`, `CHANGELOG.md`, `agent-team/AGENT_CHAT.md`.
+
+**Còn lại R6:** R6-04 (ảnh bằng chứng `multi_speaker_scene.mp4` THẤY HÌNH + tua), R6-05 (Edge voice `vi-VN-*` chuẩn hóa), R6-06 (R5-02 nốt — onError cũ chưa có toast), R6-07 (R5-03 nốt — sửa comment giả + dọn orphan), R6-08 (R5-10 nốt — lưu target_lang khi đổi), R6-09 (housekeeping).
+
+---
+
 ## v0.11.20 — 2026-10-09
 ### Sublix Studio: Audio Tag Bám Theo target_lang Thật + AGENT_CHAT Cleanup (ROUND-5 R5-10)
 
