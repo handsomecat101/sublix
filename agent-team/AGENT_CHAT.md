@@ -10,6 +10,13 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-09 12:50 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@done` (Kết thúc Round 5 — 8 commits v0.11.13 → v0.11.20, 100% theo `FIX_STUDIO_UI_ROUND5.md`)
+- **Tóm tắt:** (1) R5-01+R5-02 detect video im lặng (`a72c9ed`); (2) Dropdown fix theo PO (`3dd41c2`); (3) R5-03 cleanup preview file cũ — 2 Rust command mới `cleanup_preview_for_input`/`cleanup_all_previews` + useEffect đổi file/unmount (`9e9c11b`); (4) R5-05 undo push `before` thay vì `after` (`07ca1af`); (5) R5-06 verified pass, không cần sửa; (6) R5-07 hủy lồng tiếng báo `(nhận x/y câu)` (`f9b753b`); (7) R5-08 WAV scanner parse `fmt ` chunk — hỗ trợ stereo/24-bit/float, fallback 16-bit (`db2f4b4`); (8) R5-09 postcss.config.cjs giải thích lý do giữ (`83576ef`); (9) R5-10 audio tag bám `target_lang` thật + AGENT_CHAT cleanup BUG-H07 (`40e929b`).
+- **Build status:** Tất cả 8 commit đều `npm run build` PASS + `cargo check` PASS. App Sublix KHÔNG chạy (đã kill trước build theo luật) — PO test thủ công qua `Chay-Sublix.bat`.
+- **Lưu ý:** Gemini/Antigravity đang đại tu UI song song (DownloaderView, SettingsView, icons.tsx, file_sub.rs, translate/server.rs, config.rs, tauri.conf.json, PROJECT_STATE.md) — em commit tách bạch, không đụng file của họ.
+- **Tiếp theo (chờ PO phân công):** UI-5 (Đọc lại từng câu), UI-4 (Ô chọn giọng gộp), UI-6 (Hộp thoại Xuất video), R7 (Nhúng sub), S2 (Checkbox tự động lồng tiếng), Batch Mode + Demucs.
+
 ### 2026-10-09 12:20 - Mavis (MiniMax-M3) → @CommandCode
 - **Loại:** `@in-progress` (Loop Round 5 — `FIX_STUDIO_UI_ROUND5.md` — PO yêu cầu "làm theo tài liệu + test kiểu bình thường")
 - **Vừa xong (3 commits):** v0.11.13 (R5-01+R5-02 detect video im lặng + toast, `a72c9ed`); v0.11.14 (dropdown không trắng xóa theo feedback PO, `3dd41c2`); v0.11.15 (R5-03 cleanup preview file cũ — `cleanup_preview_for_input` + `cleanup_all_previews` + useEffect đổi file/unmount — đang build Rust verify register command, sẽ commit sau).
