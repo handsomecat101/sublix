@@ -453,6 +453,10 @@ pub fn extract_speaker_sample_clip(
 /// Extract normalized audio peaks (0.0 to 1.0) from a 16kHz 16-bit mono PCM wav file.
 /// Silence is strictly 0.0 (flat line).
 /// R3-08: Parses RIFF chunk hierarchy dynamically to locate the "data" subchunk.
+/// R5-08: Also parses the "fmt " subchunk to get num_channels + bits_per_sample,
+/// so peaks are extracted correctly for stereo / 24-bit / 32-bit-float WAV (not just
+/// the old 16-bit-mono assumption). Falls back to old behaviour if fmt is missing
+/// or has an unsupported format.
 pub fn extract_audio_peaks(wav_path: &Path, num_peaks: usize) -> Result<Vec<f32>> {
     let mut file = fs::File::open(wav_path)?;
     let mut buf = Vec::new();
@@ -462,15 +466,25 @@ pub fn extract_audio_peaks(wav_path: &Path, num_peaks: usize) -> Result<Vec<f32>
         return Ok(Vec::new());
     }
 
-    // Traverse RIFF subchunks to locate "data" chunk
+    // Traverse RIFF subchunks. R5-08: also capture "fmt " to learn channels + bit depth.
     let mut pos = 12;
     let mut data_start = None;
     let mut data_len = 0;
+    let mut fmt_channels: u16 = 1;
+    let mut fmt_bits: u16 = 16;
+    let mut fmt_format: u16 = 1; // 1 = PCM, 3 = IEEE float
 
     while pos + 8 <= buf.len() {
         let chunk_id = &buf[pos..pos + 4];
         let chunk_size = u32::from_le_bytes(buf[pos + 4..pos + 8].try_into().unwrap_or([0; 4])) as usize;
         pos += 8;
+
+        if chunk_id == b"fmt " && chunk_size >= 16 && pos + 16 <= buf.len() {
+            // WAVEFORMATEX: audio_format(2) + channels(2) + sample_rate(4) + byte_rate(4) + block_align(2) + bits_per_sample(2)
+            fmt_format = u16::from_le_bytes([buf[pos], buf[pos + 1]]);
+            fmt_channels = u16::from_le_bytes([buf[pos + 2], buf[pos + 3]]).max(1);
+            fmt_bits = u16::from_le_bytes([buf[pos + 14], buf[pos + 15]]);
+        }
 
         if chunk_id == b"data" {
             data_start = Some(pos);
@@ -497,40 +511,106 @@ pub fn extract_audio_peaks(wav_path: &Path, num_peaks: usize) -> Result<Vec<f32>
     };
 
     let pcm_bytes = &buf[start..start + len];
-    let sample_count = pcm_bytes.len() / 2;
-    if sample_count == 0 {
+
+    // R5-08: support 16-bit PCM (most common), 24-bit PCM, 32-bit PCM/float, 8-bit PCM.
+    // Stereo: take max(|L|, |R|) per frame.
+    let channels = fmt_channels.clamp(1, 2) as usize;
+    let (bytes_per_sample, decode_sample) = match (fmt_format, fmt_bits) {
+        (1, 16) => (2usize, "pcm16"),
+        (1, 24) => (3usize, "pcm24"),
+        (1, 32) => (4usize, "pcm32"),
+        (3, 32) => (4usize, "float32"),
+        (1, 8) => (1usize, "pcm8"),
+        _ => (2usize, "pcm16"), // unsupported → assume 16-bit (R3-08 fallback)
+    };
+
+    let frame_bytes = bytes_per_sample * channels;
+    if frame_bytes == 0 {
+        return Ok(Vec::new());
+    }
+    let frame_count = pcm_bytes.len() / frame_bytes;
+    if frame_count == 0 {
         return Ok(Vec::new());
     }
 
     let peaks_count = num_peaks.clamp(50, 1000);
-    let chunk_size = (sample_count / peaks_count).max(1);
+    let chunk_size = (frame_count / peaks_count).max(1);
     let mut peaks = Vec::with_capacity(peaks_count);
 
+    let decode_frame_peak = |frame_byte_start: usize| -> f32 {
+        let mut max_abs = 0.0f32;
+        for ch in 0..channels {
+            let b = frame_byte_start + ch * bytes_per_sample;
+            if b + bytes_per_sample > pcm_bytes.len() {
+                continue;
+            }
+            let abs_val: f32 = match decode_sample {
+                "pcm16" => {
+                    let s = i16::from_le_bytes([pcm_bytes[b], pcm_bytes[b + 1]]);
+                    (s as f32).abs() / 32768.0
+                }
+                "pcm24" => {
+                    // 24-bit signed little-endian → i32
+                    let b0 = pcm_bytes[b] as i32;
+                    let b1 = pcm_bytes[b + 1] as i32;
+                    let b2 = pcm_bytes[b + 2] as i32;
+                    let raw = (b2 << 16) | (b1 << 8) | b0;
+                    // Sign-extend from 24-bit
+                    let signed = if raw & 0x800000 != 0 { raw | !0xFFFFFF } else { raw };
+                    (signed as f32).abs() / 8388608.0
+                }
+                "pcm32" => {
+                    let s = i32::from_le_bytes([
+                        pcm_bytes[b],
+                        pcm_bytes[b + 1],
+                        pcm_bytes[b + 2],
+                        pcm_bytes[b + 3],
+                    ]);
+                    (s as f32).abs() / 2147483648.0
+                }
+                "float32" => {
+                    let s = f32::from_le_bytes([
+                        pcm_bytes[b],
+                        pcm_bytes[b + 1],
+                        pcm_bytes[b + 2],
+                        pcm_bytes[b + 3],
+                    ]);
+                    s.abs()
+                }
+                "pcm8" => {
+                    // 8-bit WAV is UNSIGNED (0..255, 128 = silence)
+                    let s = (pcm_bytes[b] as i16) - 128;
+                    (s as f32).abs() / 128.0
+                }
+                _ => 0.0,
+            };
+            if abs_val > max_abs {
+                max_abs = abs_val;
+            }
+        }
+        max_abs
+    };
+
     for chunk_idx in 0..peaks_count {
-        let start_sample = chunk_idx * chunk_size;
-        let end_sample = (start_sample + chunk_size).min(sample_count);
-        if start_sample >= sample_count {
+        let start_frame = chunk_idx * chunk_size;
+        let end_frame = (start_frame + chunk_size).min(frame_count);
+        if start_frame >= frame_count {
             peaks.push(0.0);
             continue;
         }
 
-        let mut max_amp = 0i16;
-        for s in start_sample..end_sample {
-            let byte_idx = s * 2;
-            if byte_idx + 1 < pcm_bytes.len() {
-                let sample = i16::from_le_bytes([pcm_bytes[byte_idx], pcm_bytes[byte_idx + 1]]);
-                let abs_sample = sample.saturating_abs();
-                if abs_sample > max_amp {
-                    max_amp = abs_sample;
-                }
+        let mut max_peak = 0.0f32;
+        for f in start_frame..end_frame {
+            let p = decode_frame_peak(f * frame_bytes);
+            if p > max_peak {
+                max_peak = p;
             }
         }
 
-        let normalized = (max_amp as f32) / 32768.0;
-        if normalized < 0.015 {
+        if max_peak < 0.015 {
             peaks.push(0.0);
         } else {
-            peaks.push(normalized);
+            peaks.push(max_peak);
         }
     }
 

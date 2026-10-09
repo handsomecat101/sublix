@@ -1,4 +1,31 @@
 
+## v0.11.18 — 2026-10-09
+### Sublix Studio: WAV Scanner Parse fmt Chunk + Bỏ Heuristic Dấu Gạch Ngang (ROUND-5 R5-08)
+
+**Vấn đề (CommandCode verify R5-08, nợ cũ R4-07):**
+
+1. **Backend (dubbing/mod.rs:455-538):** `extract_audio_peaks` chỉ assume 16-bit mono — `pcm_bytes.len() / 2` lấy sample count, mỗi sample 2 byte. Nếu WAV là **stereo / 24-bit / 32-bit float** (Kokoro, ffmpeg remux, một số recording app) → parse sai → waveform vẽ lệch hoặc im lặng oan.
+2. **Frontend (SublixStudioView.tsx:1128):** Heuristic `rawVoice.startsWith("kokoro:") || rawVoice.includes("-")` quá rộng — bắt nhầm voice Edge ("vi-female-1" có "-") nhưng giữ nguyên, đồng thời forward-compat kém: nếu sau này thêm engine "minimax:" / "clone:" / "azure:" → heuristic vẫn add "kokoro:" → sai engine.
+
+**Fix v0.11.18:**
+
+- **Backend (dubbing/mod.rs):** Parse chunk `fmt ` (WAVEFORMATEX 16 bytes) để lấy `audio_format` (1=PCM, 3=float), `num_channels` (1=mono, 2=stereo), `bits_per_sample` (8/16/24/32). Hỗ trợ:
+  - 16-bit PCM (mono + stereo) — phổ biến nhất
+  - 24-bit PCM — ffmpeg remux thường dùng
+  - 32-bit PCM int — Pro audio
+  - 32-bit IEEE float — Kokoro internal
+  - 8-bit PCM unsigned (128 = silence)
+  - Stereo: lấy max(|L|, |R|) cho mỗi frame
+  - Fallback 16-bit mono nếu format không hỗ trợ (backward-compat R3-08).
+
+- **Frontend (SublixStudioView.tsx:1128):** Thay heuristic bằng danh sách engine rõ ràng: `["kokoro:", "edge:", "minimax:", "azure:", "google:", "clone:"]`. Nếu voice bắt đầu bằng 1 trong các prefix → giữ nguyên; ngược lại → mặc định `kokoro:`. Forward-compat engine mới dễ thêm.
+
+**File đã đổi:** `src-tauri/src/dubbing/mod.rs`, `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Còn lại Round 5:** R5-09 (postcss.config.cjs), R5-10 (AGENT_CHAT cleanup + language=vie hardcode).
+
+---
+
 ## v0.11.17 — 2026-10-09
 ### Sublix Studio: Hủy Lồng Tiếng Báo Rõ "(nhận x/y câu)" (ROUND-5 R5-07)
 

@@ -1124,8 +1124,11 @@ export default function SublixStudioView({
   const handlePreviewSegmentTts = async (seg: SubtitleItem) => {
     const spk = speakers.find((s) => s.id === seg.speakerId);
     const rawVoice = spk?.voice || "kokoro:tuan_ngoc";
-    // R3-04: ensure kokoro: prefix is present for local voices
-    const voice = rawVoice.startsWith("kokoro:") || rawVoice.includes("-")
+    // R5-08: chuẩn hóa theo danh sách engine — bỏ heuristic `rawVoice.includes("-")` quá rộng.
+    // Edge voice "vi-female-1" có "-" nhưng KHÔNG có prefix; minimax/clone/azure chưa hỗ trợ nhưng
+    // forward-compat. Nếu đã có prefix hợp lệ → giữ nguyên; ngược lại mặc định Kokoro local.
+    const ENGINE_PREFIXES = ["kokoro:", "edge:", "minimax:", "azure:", "google:", "clone:"];
+    const voice = ENGINE_PREFIXES.some((p) => rawVoice.startsWith(p))
       ? rawVoice
       : `kokoro:${rawVoice}`;
 

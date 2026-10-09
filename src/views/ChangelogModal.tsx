@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.18",
+    date: "09/10/2026",
+    title: "Sublix Studio: WAV Scanner Parse fmt Chunk (stereo/24-bit/float) (R5-08)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Kỹ Thuật (R4-07 nợ cũ)",
+        icon: "🎵",
+        items: [
+          "Bug: extract_audio_peaks chỉ assume 16-bit mono → sai khi WAV là stereo / 24-bit / 32-bit float (Kokoro internal, ffmpeg remux, Pro audio) → waveform vẽ lệch hoặc im lặng oan.",
+          "Fix: parse chunk `fmt ` (WAVEFORMATEX 16 bytes) để lấy audio_format + num_channels + bits_per_sample. Hỗ trợ PCM 16/24/32, IEEE float 32, 8-bit unsigned.",
+          "Stereo: lấy max(|L|, |R|) cho mỗi frame. Fallback 16-bit mono nếu format không hỗ trợ (backward-compat).",
+          "Bonus: bỏ heuristic `rawVoice.includes('-')` ở SublixStudioView.tsx:1128 — thay bằng danh sách engine rõ ràng ['kokoro:', 'edge:', 'minimax:', 'azure:', 'google:', 'clone:']. Forward-compat dễ thêm engine mới.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.17",
     date: "09/10/2026",
     title: "Sublix Studio: Hủy Lồng Tiếng Báo Rõ '(nhận x/y câu)' (R5-07)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi UX",
