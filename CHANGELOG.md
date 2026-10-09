@@ -1,4 +1,28 @@
 
+## v0.11.28 — 2026-10-10
+### Sublix Studio: Fallback Detect Frame + Auto-Play Sau Transcode + Toast Đúng (ROUND-7 R7-01/02/03)
+
+**Vấn đề (CommandCode verify R7-01/02/03):**
+
+1. **R7-01 — Thiếu fallback khi trình duyệt KHÔNG có RVFC:** Code cũ chỉ thử `requestVideoFrameCallback`. Nếu không có (Safari cũ, một số WebView build) → `framePainted` luôn `false` → kích hoạt transcode OAN mọi video (kể cả video H.264 thường vẫn hoạt động bình thường). `webkitDecodedFrameCount` đã khai báo trong type nhưng bỏ không dùng.
+2. **R7-02 — Sau transcode KHÔNG tự phát tiếp:** User thấy "đứng hình" sau khi transcode xong → phải bấm Play lại.
+3. **R7-03 — Toast nói quá:** `"✅ Đã chuyển sang dạng xem được, đang phát preview…"` — thực tế chỉ chờ bấm Play, vi phạm tinh thần LUẬT CHỐNG BỊA.
+
+**Fix v0.11.28:**
+
+- **R7-01 (SublixStudioView.tsx:385-450):** 3 cấp fallback detect frame:
+  - Cấp 1: `requestVideoFrameCallback` (giữ nguyên).
+  - Cấp 2: `webkitDecodedFrameCount` — sample 2 lần cách 500ms, nếu tăng → có frame.
+  - Cấp 3: không có gì → `framePainted = true` luôn (giả định OK, không transcode oan).
+- **R7-02 (cả 2 nhánh RVFC + onError):** Lưu `currentTime` + `isPlaying` TRƯỚC khi gọi `transcodeForPreview`. Sau khi `setTranscodedPath` → setTimeout 250ms → `v2.currentTime = resumeTime` (nếu > 0) + `v2.play()` nếu `wasPlaying`.
+- **R7-03 (cả 2 chỗ):** Đổi toast `"✅ Đã chuyển sang dạng xem được, đang phát preview…"` → `"✅ Đã chuyển sang dạng xem được"` (bỏ "đang phát" nói quá).
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Còn lại R7:** R7-04/05/06 (sửa claim "v0.11.28" + "9 mục xong" + sắp bảng — đã sửa trong commit này), R7-07 (đổi bài test chuẩn — đã sửa REPORT_R6-04.md), R7-08 (ảnh app thật qua Worker K — sẽ làm sau).
+
+---
+
 ## v0.11.27 — 2026-10-09
 ### Sublix Studio: Housekeeping (ROUND-6 R6-09)
 

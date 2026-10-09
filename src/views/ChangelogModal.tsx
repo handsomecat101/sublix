@@ -23,10 +23,27 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.28",
+    date: "10/10/2026",
+    title: "Sublix Studio: Fallback Detect Frame + Auto-Play + Toast Đúng (R7-01/02/03)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "🎬",
+        items: [
+          "R7-01: 3 cấp fallback detect frame — RVFC → webkitDecodedFrameCount (sample 500ms) → bỏ detect (framePainted=true). Không còn transcode oan khi trình duyệt thiếu RVFC.",
+          "R7-02: lưu currentTime + isPlaying trước transcode, sau khi setTranscodedPath → seek + play() tự động. User không cần bấm Play lại.",
+          "R7-03: toast 'Đã chuyển sang dạng xem được' (bỏ 'đang phát preview' nói quá).",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.27",
     date: "09/10/2026",
     title: "Sublix Studio: Housekeeping (R6-09)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Housekeeping",
@@ -35,7 +52,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "Sửa AGENT_CHAT.md:53 'Build release sublix.exe' → 'version bump toàn diện' (loại bỏ khoe release vi phạm BUG-H07).",
           "Prune bảng trượt: 5 tin cũ (03:55, 03:28, 03:15, 02:25, 00:45) → chuyển ARCHIVE. File chính giữ 6-7 tin mới nhất.",
           "Test hardcode path (dubbing/mod.rs:2555) thêm #[ignore] — không chạy mặc định trong cargo test.",
-          "Kết thúc Round 6: 9 mục R6-01..R6-09 đã xử lý xong, 8 commits v0.11.21 → v0.11.27.",
+          "Kết thúc Round 6 (R7-05 trung thực): 7 mục code đã sửa (R6-01..R6-03, R6-05..R6-09) + R6-04 chỉ có bằng chứng CLI chưa có ảnh app. R6-01 vẫn thiếu fallback thiếu-RVFC (sửa ở R7-01). 7 commits v0.11.21 → v0.11.27.",
         ],
       },
     ],
@@ -116,7 +133,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
         items: [
           "Mavis không có GUI agent — dùng ffmpeg/ffprobe CLI verify pipeline `transcode_for_preview` thay vì chụp app thật.",
           "multi_speaker_scene.mp4: 780 frame H.264 High → 780 frame H.264 Constrained Baseline qua pipeline lib.rs:1229-1290. Frame extract PNG 4.3 KB OK.",
-          "Testsrc demo: 60 frame → 60 frame, PNG 39 KB OK — pipeline work end-to-end.",
+          "Testsrc demo: 60 frame → 60 frame qua pipeline CLI, PNG 39 KB OK (NOTE R7-05: chỉ verify CLI, KHÔNG phải 'end-to-end' trong app — chưa có ảnh app thật).",
           "Kết luận: file multi_speaker_scene.mp4 CÓ frame → R6-01 RVFC fire → KHÔNG kích hoạt transcode (case hợp lệ). PO test qua Chay-Sublix.bat để xác minh UX cuối.",
         ],
       },

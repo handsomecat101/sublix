@@ -384,8 +384,13 @@ export default function SublixStudioView({
       }
       let framePainted = false;
       let rvfcHandle: number | null = null;
+      let wdkcInitial: number | null = null;
+      let wdkcHandle: number | null = null;
       const v = videoRef.current;
-      // Try requestVideoFrameCallback (Chromium ≥83, WebView2 OK)
+      // R7-01: 3 cấp fallback cho detect frame — không để thiếu RVFC → transcode oan mọi video.
+      // Cấp 1: requestVideoFrameCallback (Chromium ≥83, WebView2 OK).
+      // Cấp 2: webkitDecodedFrameCount (một số WebKit build cũ).
+      // Cấp 3: không có gì → bỏ detect (framePainted = true để KHÔNG transcode oan).
       type VfcCapable = HTMLVideoElement & {
         requestVideoFrameCallback?: (cb: () => void) => number;
         cancelVideoFrameCallback?: (h: number) => void;
@@ -393,9 +398,23 @@ export default function SublixStudioView({
       };
       const vc = v as VfcCapable | null;
       if (vc && typeof vc.requestVideoFrameCallback === "function") {
+        // Cấp 1: RVFC
         rvfcHandle = vc.requestVideoFrameCallback(() => {
           framePainted = true;
         });
+      } else if (vc && typeof vc.webkitDecodedFrameCount === "number") {
+        // Cấp 2: sample webkitDecodedFrameCount
+        wdkcInitial = vc.webkitDecodedFrameCount;
+        wdkcHandle = window.setTimeout(() => {
+          const cur = vc as VfcCapable;
+          const curCount = cur.webkitDecodedFrameCount;
+          if (typeof curCount === "number" && typeof wdkcInitial === "number" && curCount > wdkcInitial) {
+            framePainted = true;
+          }
+        }, 500);
+      } else {
+        // Cấp 3: không có cách nào detect → giả định OK để không transcode oan
+        framePainted = true;
       }
       loadedMetadataTimerRef.current = window.setTimeout(() => {
         const cur = videoRef.current as VfcCapable | null;
@@ -409,6 +428,11 @@ export default function SublixStudioView({
             // ignore
           }
         }
+        // Cleanup sample timer
+        if (wdkcHandle !== null) {
+          clearTimeout(wdkcHandle);
+          wdkcHandle = null;
+        }
         if (
           cur &&
           (stillNoFrame || stillNoDim) &&
@@ -420,12 +444,32 @@ export default function SublixStudioView({
             : "videoWidth = 0 (không decode được)";
           console.warn(`R6-01: ${reason} — kích hoạt transcode fallback.`);
           showToast("⏳ Video không hiển thị hình — đang chuyển sang dạng xem được…");
+          // R7-02: lưu currentTime + isPlaying TRƯỚC khi swap src để resume sau transcode
+          const resumeTime = cur.currentTime;
+          const wasPlaying = !cur.paused;
           void (async () => {
             try {
               const previewPath = await sublix.transcodeForPreview(filePathRef.current!);
               if (previewPath) {
                 setTranscodedPath(previewPath);
-                showToast("✅ Đã chuyển sang dạng xem được, đang phát preview…");
+                // R7-02: sau khi <video> src đổi sang preview, React sẽ remount. Đợi frame tiếp theo
+                // rồi gọi play() + seek về currentTime cũ nếu có thể.
+                setTimeout(() => {
+                  const v2 = videoRef.current;
+                  if (!v2) return;
+                  if (resumeTime > 0 && Number.isFinite(resumeTime)) {
+                    try {
+                      v2.currentTime = Math.max(0, Math.min(resumeTime, (v2.duration || resumeTime) - 0.1));
+                    } catch (e) {
+                      // ignore
+                    }
+                  }
+                  if (wasPlaying) {
+                    v2.play().catch((e) => console.warn("R7-02: play() failed:", e));
+                  }
+                }, 250);
+                // R7-03: sửa toast nói quá — chỉ thông báo đã chuyển dạng, không hứa "đang phát"
+                showToast("✅ Đã chuyển sang dạng xem được");
               }
             } catch (err) {
               console.error("R6-01 transcode fallback failed:", err);
@@ -2280,12 +2324,31 @@ export default function SublixStudioView({
                       );
                       // R6-06: thêm toast cho user (trước chỉ console.log, user không biết đang làm gì)
                       showToast("⏳ WebView2 không giải mã được codec — đang chuyển tạm sang H.264…");
+                      // R7-02: lưu currentTime + isPlaying TRƯỚC khi transcode để resume sau
+                      const curV = videoRef.current;
+                      const resumeTime = curV?.currentTime ?? 0;
+                      const wasPlaying = curV ? !curV.paused : false;
                       try {
                         console.log("Äang chuyá»ƒn táº¡m video sang H.264 Ä‘á»ƒ xem Ä‘Æ°á»£c trong Studioâ€¦");
                         const previewPath = await sublix.transcodeForPreview(filePath);
                         setTranscodedPath(previewPath);
-                        console.log("ÄÃ£ chuyá»ƒn táº¡m xong, Ä‘ang phÃ¡t báº£n previewâ€¦");
-                        showToast("✅ Đã chuyển tạm xong, đang phát bản preview…");
+                        // R7-02: đợi React remount video element rồi play() + seek về currentTime cũ
+                        setTimeout(() => {
+                          const v2 = videoRef.current;
+                          if (!v2) return;
+                          if (resumeTime > 0 && Number.isFinite(resumeTime)) {
+                            try {
+                              v2.currentTime = Math.max(0, Math.min(resumeTime, (v2.duration || resumeTime) - 0.1));
+                            } catch (e) {
+                              // ignore
+                            }
+                          }
+                          if (wasPlaying) {
+                            v2.play().catch((e) => console.warn("R7-02: play() failed:", e));
+                          }
+                        }, 250);
+                        // R7-03: sửa toast nói quá — không hứa "đang phát"
+                        showToast("✅ Đã chuyển sang dạng xem được");
                         return;
                       } catch (transcodeErr) {
                         const errMsg = (transcodeErr as Error)?.message ?? String(transcodeErr);

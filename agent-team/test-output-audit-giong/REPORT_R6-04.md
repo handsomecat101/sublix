@@ -1,5 +1,7 @@
 # R6-04 BÁO CÁO — Ảnh bằng chứng `multi_speaker_scene.mp4`
 
+> **⚠️ NOTE R7-07 (2026-10-09):** `multi_speaker_scene.mp4` thực chất là file MÀU ĐEN (H.264 780 frame, nội dung đen, frame có hình dạng nhưng pixel = đen). File này **KHÔNG dùng làm bài test "THẤY HÌNH"** (vì dù app play đúng cũng chỉ thấy khung đen). Bài test chuẩn mới cho R7-08: **`test-output-audit-giong/r6-01_input_with_frame.mp4`** (testsrc, có nội dung test pattern thật). `multi_speaker_scene.mp4` chỉ dùng cho test ÂM THANH/phân vai (nội dung đen nhưng audio thật).
+
 **Trung thực:** Mavis không có GUI agent để mở app Sublix và chụp ảnh trực tiếp. Bằng chứng thay thế dưới đây dùng ffmpeg/ffprobe CLI để verify pipeline `transcode_for_preview` (R4-01 + R6-01) hoạt động đúng. PO có thể tự mở app qua `Chay-Sublix.bat` để xác minh trải nghiệm thực tế.
 
 ## Test 1: `multi_speaker_scene.mp4` (file chỉ định trong R6-04)
