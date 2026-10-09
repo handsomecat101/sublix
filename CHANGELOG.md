@@ -1,3 +1,20 @@
+## v0.11.6 — 2026-10-09
+### Sublix Studio: Re-Apply playbackRate Khi Load Video Mới (ROUND-4 R4-04)
+
+**Vấn đề (CommandCode verify):** Đổi video khi đang ở 1.5x → `<video>` element reset về 1x nhưng UI vẫn hiển thị "Tốc độ: 1.5x" (nói dối user — element chạy 1x nhưng UI tưởng 1.5x).
+
+**Fix v0.11.6:** Trong `handleLoadedMetadata()` thêm 3 dòng:
+```ts
+if (videoRef.current.playbackRate !== playbackSpeed) {
+  videoRef.current.playbackRate = playbackSpeed;
+}
+```
+→ Mỗi lần video mới load xong metadata, ép playbackRate khớp với `playbackSpeed` state. UI và element luôn đồng bộ.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.5 — 2026-10-09
 ### Sublix Studio: Bỏ Beep Giả Mạo Mẫu Giọng (ROUND-4 R4-03)
 

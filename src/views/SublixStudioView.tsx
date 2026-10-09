@@ -317,6 +317,11 @@ export default function SublixStudioView({
         setMediaDuration(dur);
       }
       setVideoPlayError(false);
+      // R4-04: Re-apply playbackRate khi metadata load — tránh bug "đổi video khi
+      // đang 1.5x → element reset về 1x nhưng UI vẫn kêu 1.5x (nói dối)".
+      if (videoRef.current.playbackRate !== playbackSpeed) {
+        videoRef.current.playbackRate = playbackSpeed;
+      }
     }
   };
 
