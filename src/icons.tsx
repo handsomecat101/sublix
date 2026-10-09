@@ -228,3 +228,154 @@ export function IconRotateCw(p: IconProps) {
   );
 }
 
+
+export function IconVolume2(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+    </Svg>
+  );
+}
+
+export function IconSearch(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </Svg>
+  );
+}
+
+export function IconPlus(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </Svg>
+  );
+}
+
+export function IconChevronDown(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polyline points="6 9 12 15 18 9" />
+    </Svg>
+  );
+}
+
+export function IconChevronRight(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polyline points="9 18 15 12 9 6" />
+    </Svg>
+  );
+}
+
+export function IconUser(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </Svg>
+  );
+}
+
+export function IconUndo(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </Svg>
+  );
+}
+
+export function IconSettings(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </Svg>
+  );
+}
+
+export function IconMaximize(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </Svg>
+  );
+}
+
+export function IconMoreHorizontal(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </Svg>
+  );
+}
+
+export function IconScissors(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <line x1="20" y1="4" x2="8.12" y2="15.88" />
+      <line x1="14.47" y1="14.48" x2="20" y2="20" />
+      <line x1="8.12" y1="8.12" x2="12" y2="12" />
+    </Svg>
+  );
+}
+
+export function IconCopy(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </Svg>
+  );
+}
+
+export function IconMagnet(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M6 12a6 6 0 0 1 12 0" />
+      <path d="M6 12v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4" />
+      <path d="M18 12v4a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-4" />
+      <line x1="6" y1="6" x2="6" y2="9" />
+      <line x1="18" y1="6" x2="18" y2="9" />
+    </Svg>
+  );
+}
+
+export function IconLink(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </Svg>
+  );
+}
+
+export function IconBookmark(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </Svg>
+  );
+}
+
+export function IconArrowsHorizontal(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <polyline points="3 8 7 12 3 16" />
+      <polyline points="21 8 17 12 21 16" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+    </Svg>
+  );
+}
