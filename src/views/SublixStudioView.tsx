@@ -2258,19 +2258,27 @@ export default function SublixStudioView({
                       console.warn(
                         "Video element could not decode in WebView2, attempting ffmpeg transcode to H.264/AAC baselineâ€¦"
                       );
+                      // R6-06: thêm toast cho user (trước chỉ console.log, user không biết đang làm gì)
+                      showToast("⏳ WebView2 không giải mã được codec — đang chuyển tạm sang H.264…");
                       try {
                         console.log("Äang chuyá»ƒn táº¡m video sang H.264 Ä‘á»ƒ xem Ä‘Æ°á»£c trong Studioâ€¦");
                         const previewPath = await sublix.transcodeForPreview(filePath);
                         setTranscodedPath(previewPath);
                         console.log("ÄÃ£ chuyá»ƒn táº¡m xong, Ä‘ang phÃ¡t báº£n previewâ€¦");
+                        showToast("✅ Đã chuyển tạm xong, đang phát bản preview…");
                         return;
                       } catch (transcodeErr) {
+                        const errMsg = (transcodeErr as Error)?.message ?? String(transcodeErr);
                         console.error("ffmpeg transcode failed, falling back:", transcodeErr);
-                        console.error(`KhÃ´ng thá»ƒ chuyá»ƒn táº¡m video: ${(transcodeErr as Error)?.message ?? transcodeErr}`);
+                        console.error(`KhÃ´ng thá»ƒ chuyá»ƒn táº¡m video: ${errMsg}`);
+                        // R6-06: báo lỗi cho user thay vì im lặng
+                        showToast(`❌ Không thể chuyển tạm video: ${errMsg}`);
                       }
                     }
                     console.warn("Falling back to Cinema Visualizer.");
                     setVideoPlayError(true);
+                    // R6-06: báo cho user biết app chuyển sang Cinema Visualizer (an toàn nhất)
+                    showToast("ℹ️ Không phát được video — chuyển sang Cinema Visualizer.");
                   }}
                   style={{
                     display: videoPlayError ? "none" : "block",

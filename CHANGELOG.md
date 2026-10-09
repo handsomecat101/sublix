@@ -1,4 +1,19 @@
 
+## v0.11.24 — 2026-10-09
+### Sublix Studio: onError Cũ Thêm Toast User-Facing (ROUND-6 R6-06)
+
+**Vấn đề (CommandCode verify R6-06):** Nhánh `onError` cũ (R4-01) chỉ `console.log/warn/error` — user không biết app đang làm gì khi video không play được. Tưởng app đứng hình.
+
+**Fix v0.11.24:** Thêm 3 toast vào flow onError trong SublixStudioView.tsx:
+- Trước khi gọi `transcodeForPreview`: "⏳ WebView2 không giải mã được codec — đang chuyển tạm sang H.264…"
+- Sau khi transcode thành công: "✅ Đã chuyển tạm xong, đang phát bản preview…"
+- Nếu transcode fail: "❌ Không thể chuyển tạm video: {errMsg}"
+- Nếu fallback Cinema Visualizer: "ℹ️ Không phát được video — chuyển sang Cinema Visualizer."
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+---
+
 ## v0.11.23 — 2026-10-09
 ### Sublix Studio: Chuẩn Hóa Edge Voice Theo BCP-47 — Không Bịa Prefix (ROUND-6 R6-05)
 

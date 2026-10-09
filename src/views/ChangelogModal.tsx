@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.24",
+    date: "09/10/2026",
+    title: "Sublix Studio: onError Cũ Thêm Toast User-Facing (R6-06)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi UX",
+        icon: "🔔",
+        items: [
+          "Bug: nhánh onError cũ (R4-01) chỉ console.log/warn — user không biết app đang làm gì khi video không play được.",
+          "Fix: thêm 3 toast: trước transcode '⏳ WebView2 không giải mã — đang chuyển tạm…', sau thành công '✅ Đã chuyển tạm xong', nếu fail '❌ Không thể chuyển tạm: {err}', nếu fallback Cinema 'ℹ️ Không phát được — Cinema Visualizer'.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.23",
     date: "09/10/2026",
     title: "Sublix Studio: Chuẩn Hóa Edge Voice Theo BCP-47 — Bỏ Prefix Bịa (R6-05)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",
