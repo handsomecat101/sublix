@@ -1703,7 +1703,27 @@ export default function SublixStudioView({
                     <select
                       className="studio-form-select"
                       value={targetLang}
-                      onChange={(e) => setTargetLang(e.target.value)}
+                      onChange={(e) => {
+                        const newLang = e.target.value;
+                        setTargetLang(newLang);
+                        // R6-08: lưu ngay vào AppConfig.target_lang để lần mở app sau
+                        // (và quan trọng hơn: export_dubbed_video ở backend load
+                        // target_lang từ config để tag audio language — nếu không
+                        // lưu, audio vẫn tag theo ngôn ngữ cũ).
+                        void sublix
+                          .getConfig()
+                          .then((cfg) => {
+                            cfg.target_lang = newLang;
+                            return sublix.saveConfig(cfg);
+                          })
+                          .then(() => {
+                            showToast(`✅ Đã lưu ngôn ngữ đích: ${newLang}`);
+                          })
+                          .catch((err) => {
+                            console.warn("R6-08: failed to save target_lang:", err);
+                            showToast(`⚠️ Lưu ngôn ngữ đích thất bại: ${(err as Error)?.message ?? err}`);
+                          });
+                      }}
                     >
                       <option value="vi">Tiáº¿ng Viá»‡t (vi)</option>
                       <option value="en">English (en)</option>

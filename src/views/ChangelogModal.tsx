@@ -23,10 +23,26 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.26",
+    date: "09/10/2026",
+    title: "Sublix Studio: Lưu target_lang Khi Đổi Tại Studio (R6-08)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nhỏ",
+        icon: "💾",
+        items: [
+          "Bug: R5-10 sửa `language={target_lang}` ở backend, nhưng `export_dubbed_video` load target_lang từ AppConfig — không phải từ state Studio. User đổi dropdown → chỉ state local đổi → audio vẫn tag theo ngôn ngữ cũ.",
+          "Fix: onChange dropdown 'Ngôn ngữ đích' gọi `sublix.saveConfig({...cfg, target_lang: newLang})` để persist ngay. Toast xác nhận.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.25",
     date: "09/10/2026",
     title: "Sublix Studio: Sửa Comment Giả + Dọn Orphan Preview (R6-07)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nhỏ",

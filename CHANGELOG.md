@@ -1,4 +1,15 @@
 
+## v0.11.26 — 2026-10-09
+### Sublix Studio: Lưu target_lang Khi Đổi Tại Studio (ROUND-6 R6-08)
+
+**Vấn đề (CommandCode verify R6-08):** R5-10 (v0.11.20) em sửa `language={target_lang}` ở backend, nhưng `export_dubbed_video` (dubbing/mod.rs:1990-1994) load `target_lang` từ `AppConfig::load(app_handle)` — KHÔNG phải từ state `targetLang` của Studio. User đổi "Ngôn ngữ đích" trong Studio → chỉ đổi state local → audio vẫn tag theo ngôn ngữ cũ trong config.
+
+**Fix v0.11.26:** Trong `onChange` của dropdown "Ngôn ngữ đích" (SublixStudioView.tsx:1705), ngoài `setTargetLang(newLang)` còn gọi `sublix.getConfig() → saveConfig({...cfg, target_lang: newLang})` để persist ngay. Toast xác nhận "✅ Đã lưu ngôn ngữ đích: {lang}".
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+---
+
 ## v0.11.25 — 2026-10-09
 ### Sublix Studio: Sửa Comment Giả + Dọn Orphan (ROUND-6 R6-07)
 
