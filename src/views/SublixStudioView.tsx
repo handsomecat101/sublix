@@ -437,14 +437,12 @@ export default function SublixStudioView({
     setUndoStack((prev) => [...prev.slice(-19), segmentsRef.current]);
   };
 
-  const saveTranslationUndo = () => {
-    setUndoTranslationStack((prev) => [
-      ...prev.slice(-19),
-      segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })),
-    ]);
-  };
+  // R5-05: saveTranslationUndo() đã inline vào saveTranslationUndoIfChanged (push `before` thay vì `after`).
+  // Xoá wrapper cũ để tránh TS6133 unused + tránh tái sử dụng sai trong tương lai.
 
   // R4-05: chá»‰ save translation undo khi giÃ¡ trá»‹ thay Ä‘á»•i (onFocus + onBlur)
+  // R5-05: push `before` (TRÆ¯á»šC khi sá»­a) lÃªn stack — báº¥m â†¶ = khÃ´i phá»¥c vá»� tráº¡ng thÃ¡i trÆ°á»›c.
+  // Bug cá»§: gá»i saveTranslationUndo() (push `after`) â†’ báº¥m â†¶ = no-op.
   const translationPreFocusRef = useRef<{ id: number; translated: string }[] | null>(null);
   const saveTranslationUndoIfChanged = () => {
     const before = translationPreFocusRef.current;
@@ -452,7 +450,10 @@ export default function SublixStudioView({
     if (!before) return;
     const after = segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated }));
     const changed = JSON.stringify(before) !== JSON.stringify(after);
-    if (changed) saveTranslationUndo();
+    if (changed) {
+      // Push `before` (snapshot TRÆ¯á»šC khi user sá»­a) thay vÃ¬ `after` â†’ báº¥m â†¶ khÃ´i phá»¥c Ä‘Ãºng.
+      setUndoTranslationStack((prev) => [...prev.slice(-19), before]);
+    }
   };
 
   const saveAudioUndo = () => {
@@ -461,6 +462,7 @@ export default function SublixStudioView({
 
   // R4-05: chá»‰ save undo khi ná»™i dung THáº¬T Sá»° thay Ä‘á»•i.
   // LÆ°u snapshot trÆ°á»›c khi user focus vÃ o input; náº¿u blur vá»›i cÃ¹ng giÃ¡ trá»‹ â†’ bá» qua.
+  // R5-05: push `before` (TRÆ¯á»šC khi sá»­a) lÃªn stack. Bug cá»§: gá»i saveAudioUndo() (push `after`) â†’ no-op.
   const audioPreFocusRef = useRef<SpeakerItem[] | null>(null);
   const saveAudioUndoIfChanged = () => {
     const before = audioPreFocusRef.current;
@@ -468,7 +470,10 @@ export default function SublixStudioView({
     if (!before) return;
     const after = speakersRef.current;
     const changed = JSON.stringify(before) !== JSON.stringify(after);
-    if (changed) saveAudioUndo();
+    if (changed) {
+      // Push `before` (snapshot TRÆ¯á»šC khi user sá»­a) thay vÃ¬ `after` â†’ báº¥m â†¶ khÃ´i phá»¥c Ä‘Ãºng.
+      setUndoAudioStack((prev) => [...prev.slice(-19), before]);
+    }
   };
 
   const saveUndoHistory = () => {

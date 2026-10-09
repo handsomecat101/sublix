@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.16",
+    date: "09/10/2026",
+    title: "Sublix Studio: Undo Bản Dịch + Audio Đúng Chiều (R5-05)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "↶",
+        items: [
+          "Bug: bấm ↶ 'Bản dịch' hoặc 'Audio' → undo bị no-op, không thấy gì thay đổi → tưởng app hỏng.",
+          "Root cause: `saveTranslationUndoIfChanged`/`saveAudioUndoIfChanged` gọi wrapper save undo SAU khi user sửa xong → push `after` lên stack → bấm ↶ = khôi phục về chính giá trị hiện tại (no-op).",
+          "Fix: inline push `before` (snapshot đã capture trong `translationPreFocusRef`/`audioPreFocusRef` ở onFocus) lên `setUndoTranslationStack`/`setUndoAudioStack`.",
+          "Hai chỗ gọi `saveAudioUndo()` khác (đổi voice ở line 1856, thêm speaker ở line 1920) đã push-before đúng (gọi trước `setSpeakers`) nên giữ nguyên.",
+          "Test thủ công: sửa 1 câu dịch, blur, bấm ↶ → câu đó phải trở về giá trị cũ.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.15",
     date: "09/10/2026",
     title: "Sublix Studio: Dọn Cache Preview Khi Đổi Video / Đóng App (R5-03)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",

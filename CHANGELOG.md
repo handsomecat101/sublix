@@ -1,4 +1,26 @@
 
+## v0.11.16 — 2026-10-09
+### Sublix Studio: Undo Bản Dịch + Audio Đúng Chiều (ROUND-5 R5-05)
+
+**Vấn đề (CommandCode verify R5-05):** Bấm ↶ "Bản dịch" hoặc "Audio" → undo bị no-op hoặc lệch — undo về chính trạng thái vừa sửa. Triệu chứng rất khó chịu: user sửa 1 câu, bấm ↶, không thấy gì thay đổi → tưởng app hỏng.
+
+**Root cause:** `saveTranslationUndoIfChanged()` (line 449) và `saveAudioUndoIfChanged()` (line 465) — cả 2 đều gọi `saveTranslationUndo()` / `saveAudioUndo()` SAU khi user sửa xong → push snapshot **SAU** (after) lên stack. Khi user bấm ↶ → `handleUndoTranslation`/`handleUndoAudio` lấy snapshot đỉnh stack (chính là `after` vừa push) → setSegments/setSpeakers về chính giá trị hiện tại → no-op.
+
+Đáng lẽ: push snapshot **TRƯỚC** khi sửa (đã capture trong `translationPreFocusRef`/`audioPreFocusRef` ở onFocus) → undo sẽ khôi phục về giá trị trước khi sửa.
+
+**Fix v0.11.16:**
+- `saveTranslationUndoIfChanged`: thay vì gọi `saveTranslationUndo()` → inline push `before` (snapshot từ `translationPreFocusRef.current`) trực tiếp lên `setUndoTranslationStack`.
+- `saveAudioUndoIfChanged`: tương tự, push `before` từ `audioPreFocusRef.current` lên `setUndoAudioStack`.
+- 2 chỗ gọi `saveAudioUndo()` khác (line 1856 đổi voice, line 1920 thêm speaker) **không cần đổi** — pattern này gọi `saveAudioUndo()` TRƯỚC khi `setSpeakers`, nên `speakersRef.current` tại thời điểm gọi vẫn là BEFORE → push-before đúng rồi.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `CHANGELOG.md`, `src/views/ChangelogModal.tsx`.
+
+**Test:** Build TS pass. PO test thủ công qua `Chay-Sublix.bat` — sửa 1 câu dịch, blur, bấm ↶ "Bản dịch" → câu đó phải trở về giá trị cũ. Tương tự cho ↶ "Audio" (đổi voice 1 nhân vật, blur, bấm ↶ → voice trở về cũ).
+
+**Còn lại Round 5:** R5-06 (hủy dịch partial vẫn rò `Vec::new()` ở 1-2 nhánh), R5-07 (hủy lồng tiếng báo "x/y câu"), R5-08/09/10.
+
+---
+
 ## v0.11.15 — 2026-10-09
 ### Sublix Studio: Cleanup Preview File Cũ Khi Đổi Video / Đóng App (ROUND-5 R5-03)
 
