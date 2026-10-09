@@ -164,6 +164,7 @@ pub fn run() {
             downloader_downloads_dir,
             open_thanh_pham_folder,
             downloader_file_meta,
+            transcode_for_preview,
             downloader_check_disk,
             downloader_file_exists
         ])
@@ -1212,6 +1213,87 @@ fn downloader_check_disk(app: tauri::AppHandle, path: Option<String>) -> Result<
 #[tauri::command]
 fn downloader_file_exists(path: String) -> bool {
     downloader::check_file_exists(&path)
+}
+
+/// v0.11.1: ROUND-4 R4-01 — Transcode a video to H.264/AAC baseline profile
+/// for WebView2 preview (it can't decode VP9/AV1/hevc natively). Returns the
+/// path to the temp preview file. Output is overwritten on each call (cache by
+/// input file size + mtime). Frontend calls this on `<video>.onerror`.
+#[tauri::command]
+fn transcode_for_preview(input_path: String) -> Result<String, String> {
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let ffmpeg = crate::dubbing::find_ffmpeg();
+
+    // Cache key: source file size + mtime + a stable prefix per process
+    let src = std::path::Path::new(&input_path);
+    if !src.exists() {
+        return Err(format!("Input file not found: {input_path}"));
+    }
+    let meta = std::fs::metadata(src).map_err(|e| format!("stat failed: {e:#}"))?;
+    let size = meta.len();
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let stem = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview")
+        .chars()
+        .take(32)
+        .collect::<String>();
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let out_dir = std::env::temp_dir().join("sublix_preview");
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("create temp dir: {e:#}"))?;
+    let out_path = out_dir.join(format!("{stem}_{size}_{mtime}_{nonce}.mp4"));
+
+    // H.264 baseline (level 3.0) + AAC LC + faststart → maximum WebView2 compatibility
+    let mut cmd = Command::new(&ffmpeg);
+    cmd.arg("-y")
+        .arg("-i")
+        .arg(src)
+        .arg("-c:v")
+        .arg("libx264")
+        .arg("-profile:v")
+        .arg("baseline")
+        .arg("-level")
+        .arg("3.0")
+        .arg("-preset")
+        .arg("ultrafast")
+        .arg("-pix_fmt")
+        .arg("yuv420p")
+        .arg("-c:a")
+        .arg("aac")
+        .arg("-b:a")
+        .arg("128k")
+        .arg("-movflags")
+        .arg("+faststart")
+        .arg(&out_path);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let status = cmd
+        .status()
+        .map_err(|e| format!("ffmpeg spawn failed: {e:#}"))?;
+    if !status.success() {
+        return Err(format!("ffmpeg exit {:?}", status.code()));
+    }
+    out_path
+        .to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "non-utf8 path".to_string())
 }
 
 

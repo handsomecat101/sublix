@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.1",
+    date: "09/10/2026",
+    title: "Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Quan Trọng",
+        icon: "🎬",
+        items: [
+          "Bug cũ: Thả video (đặc biệt VP9/AV1/HEVC hoặc H.264 high profile) vào Sublix Studio → WebView2 báo 'codec không được hỗ trợ' → tưởng app hỏng.",
+          "Fix: Khi <video>.onError → tự gọi ffmpeg chuyển tạm sang H.264 baseline + AAC + faststart (cache trong %TEMP%\\sublix_preview\\) rồi phát bản tạm. Người dùng không cần biết.",
+          "Nếu ffmpeg cũng fail → fallback Cinema Visualizer (giữ nguyên behavior cũ).",
+          "UX: Toast 'Đang chuyển tạm video sang H.264…' + 'Đã chuyển tạm xong, đang phát bản preview…' để báo tiến trình.",
+          "Đã verify: <video> có videoWidth > 0, videoHeight > 0, currentTime > 0 sau khi thả file (bằng chứng THẤY HÌNH, không phải chữ lỗi).",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.10.0",
     date: "07/10/2026",
     title: "Phase V2: Phân Vai AI Chuẩn Xác (Sherpa-ONNX) + UI Detect Nhân Vật & Clip Mẫu",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Phân Vai AI Offline (SOTA)",

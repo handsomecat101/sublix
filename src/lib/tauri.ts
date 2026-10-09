@@ -102,12 +102,18 @@ export interface AppConfig {
   overlay_click_through: boolean;
   overlay_bg_opacity?: number;
   overlay_text_color?: string;
-  translation_provider?: "local" | "ollama" | "minimax" | string;
+  translation_provider?: "local" | "ollama" | "minimax" | "deepseek" | "openrouter" | string;
   minimax_api_key?: string;
   minimax_model?: string;
+  deepseek_api_key?: string;
+  deepseek_model?: string;
+  openrouter_api_key?: string;
+  openrouter_model?: string;
   theme?: string;
   ollama_url?: string;
   ollama_model?: string;
+  ytdlp_path?: string;
+  glossary?: string[];
 }
 
 export interface FileSubProgress {
@@ -298,6 +304,16 @@ export const sublix = {
 
   async selectMediaFile(): Promise<string | null> {
     return await invoke<string | null>("select_media_file");
+  },
+
+  /**
+   * v0.11.1 ROUND-4 R4-01: Transcode a video file to H.264 baseline/AAC for
+   * WebView2 preview (it cannot decode VP9/AV1/HEVC natively). Returns the
+   * path to the temp preview file in `%TEMP%\sublix_preview\`. Call this on
+   * `<video>.onerror` to recover from codec-not-supported failures.
+   */
+  async transcodeForPreview(inputPath: string): Promise<string> {
+    return await invoke<string>("transcode_for_preview", { inputPath });
   },
 
   async generateFileSubtitles(opts: {
@@ -493,6 +509,8 @@ export interface DubbingProject {
   time_limit_sec?: number | null;
   /** v0.10.0: "sherpa" | "heuristic" | "minimax" */
   diarization_engine?: "sherpa" | "heuristic" | string;
+  peaks?: number[];
+  filmstrip_thumbs?: Array<{ time_sec: number; data_uri: string }>;
 }
 
 export interface DubbingProgress {

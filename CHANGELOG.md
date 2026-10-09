@@ -1,3 +1,28 @@
+## v0.11.1 — 2026-10-09
+### Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)
+
+**Vấn đề (CommandCode verify, ảnh `ui30_cancel_analysis_button.png`):**
+Khi thả file `multi_speaker_scene.mp4` hoặc video tải từ web (VP9/AV1/HEVC/H.264 high) vào Sublix Studio → WebView2 báo "Không thể phát tập tin… codec không được hỗ trợ" → người dùng tưởng "thả không được" → app chưa dùng được cho việc chính.
+
+**Fix v0.11.1 (Ưu tiên 1 — ffmpeg chuyển tạm):**
+- **Backend (`src-tauri/src/lib.rs`):** Tauri command mới `transcode_for_preview(input_path) → temp_path` dùng ffmpeg tạo bản H.264 baseline level 3.0 + AAC LC + faststart. Cache theo `(file_size, mtime, nonce)` trong `%TEMP%\sublix_preview\`. Người dùng không cần biết file tạm tồn tại.
+- **Frontend (`tauri.ts`):** method `transcodeForPreview(inputPath): Promise<string>`.
+- **Frontend (`SublixStudioView.tsx`):**
+  - Thêm state `transcodedPath: string | null` (path preview sau khi transcode).
+  - `<video>.onError` → gọi `sublix.transcodeForPreview(filePath)` → set `transcodedPath` → React re-render `<video src={previewPath}>` với `key={previewPath}` để force reload → tự phát bản tạm.
+  - Nếu ffmpeg cũng fail → mới fallback Cinema Visualizer (giữ nguyên `setVideoPlayError(true)`).
+  - Toast "Đang chuyển tạm video sang H.264…" + "Đã chuyển tạm xong, đang phát bản preview…".
+  - Reset `transcodedPath = null` khi user pick file mới / drop file mới / đổi `initialFilePath`.
+- **Lưu ý:** KHÔNG đụng `Chay-Sublix.bat`, KHÔNG dụng `cargo build --release` (vi phạm BUG-H07), KHÔNG đụng tab Tải video.
+
+**Còn lại (chưa làm trong kèo này):**
+- Ưu tiên 2: nhúng libmpv (đúng hướng lâu dài) — phase sau
+- R4-02 đến R4-09 (xem `FIX_STUDIO_UI_ROUND4.md`) — fix turn tiếp
+
+**File đã đổi:** `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`.
+
+---
+
 ## v0.9.10 — 2026-10-07
 ### Lồng Tiếng: Fix Multi-Speaker — Dùng Gender Thật + Filter Noise Speaker
 
