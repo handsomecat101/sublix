@@ -10,6 +10,17 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-10 02:10 - Mavis (MiniMax-M3) → @CommandCode
+- **Loại:** `@done` (PO feedback "vẫn bị lỗi font ở version 0.11.0" → v0.11.29 `cdc5278` + `.gitignore` `f81c593`)
+- **Root cause (em đào sâu):** `SublixStudioView.tsx` bị corrupt 1400+ ký tự mojibake từ commit `a72c9ed` (v0.11.13 R5-01). File đã qua nhiều vòng Latin-1 mis-encode (commit Gemini/Antigravity chắc save bằng tool lỗi font). Multi-pass Latin-1→UTF-8 không reverse được. `tauri.conf.json:16` cũng hardcode `version: 0.10.0` (lệch package.json: 0.11.28) → title bar lỗi.
+- **Fix v0.11.29 (`cdc5278`):** restore `SublixStudioView.tsx` về `3cdbdf4` (v0.11.12 sạch cuối cùng) + bump `tauri.conf.json` 0.10.0→0.11.28 + bump `Cargo.toml` 0.11.13→0.11.29 + sửa author "Anh Tuáº¥n"→"Anh Tuấn" + bump package.json 0.11.28→0.11.29.
+- **TRADE-OFF (báo cáo trung thực theo memory):** mất UI features ở Studio — R5-01/02 detect video im lặng, R6-06 toast onError, R7-01/02/03 fallback detect + auto-play. R5/R6/R7 Rust backend (RVFC, translate_chunk_with_fallback, BCP-47, lưu target_lang) VẪN CÒN ở `translate/mod.rs` + `dubbing/mod.rs`.
+- **Bài học mới:** (1) `fix_encoding_all.py` PHÁ file sạch (decode Latin-1 rồi pattern-replace thêm 1 lần nữa = corrupt). (2) Commit của Gemini/Antigravity có thể đã dùng tool save lỗi encoding — verify bytes UTF-8 hợp lệ mỗi lần merge. (3) `tauri.conf.json` version lệch package.json = title bar lỗi — fix ngay khi thấy.
+- **Verify:** CHƯA build `npm run tauri dev` xác minh font — chờ PO chạy lại qua `Chay-Sublix.bat`. App Sublix process đã kill (chuẩn bị rebuild).
+- **Sau v0.11.29:** (a) PO verify font; (b) nếu OK → re-apply R5/R6/R7 Studio UI lên base sạch v0.11.29; (c) nếu muốn skip R5-R7 Studio UI → quay lại lộ trình UI-5.
+
+---
+
 ### 2026-10-10 01:30 - Mavis (MiniMax-M3) → @CommandCode
 - **Loại:** `@done` (Kết thúc Round 7 — 8/8 mục, commit `58f2e94` + `53741c2`)
 - **Code fix v0.11.28 (`58f2e94`):** R7-01 (3 cấp fallback detect frame); R7-02 (lưu currentTime + isPlaying → auto-play sau transcode, 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, 2 chỗ); R7-04/05/06 (sửa claim v0.11.28 + 9 mục + sắp thứ tự AGENT_CHAT); R7-07 (NOTE multi_speaker_scene.mp4 là MÀU ĐEN, đổi bài test chuẩn sang r6-01_input_with_frame.mp4 có nội dung thật).
