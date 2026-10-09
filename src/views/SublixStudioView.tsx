@@ -2770,16 +2770,45 @@ export default function SublixStudioView({
             >
               Tốc độ: {playbackSpeed}x
             </button>
-            <span>–</span>
+            <button
+              type="button"
+              className="studio-btn-subtle-sm"
+              onClick={() => setZoomLevel(Math.max(5, Math.round(zoomLevel / 1.5)))}
+              title="Zoom out — xem nhiều giây hơn trong cùng chiều rộng"
+              style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="studio-btn-subtle-sm"
+              onClick={() => setZoomLevel(30)}
+              title="Reset zoom về mặc định (30s hiển thị)"
+              style={{ fontSize: 10, padding: "0 4px", cursor: "pointer" }}
+            >
+              ⟲
+            </button>
+            <button
+              type="button"
+              className="studio-btn-subtle-sm"
+              onClick={() => setZoomLevel(Math.min(600, Math.round(zoomLevel * 1.5)))}
+              title="Zoom in — xem ít giây hơn (timeline frame lớn hơn)"
+              style={{ fontSize: 14, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
+            >
+              +
+            </button>
             <input
               type="range"
               className="studio-timeline-zoom-slider"
-              min={10}
-              max={120}
-              value={zoomLevel}
+              min={5}
+              max={300}
+              value={Math.min(600, Math.max(5, zoomLevel))}
               onChange={(e) => setZoomLevel(Number(e.target.value))}
+              style={{ width: 90 }}
             />
-            <span>+ ({zoomLevel}s hiển thị)</span>
+            <span style={{ minWidth: 56, textAlign: "right" }}>
+              {zoomLevel}s hiển thị
+            </span>
           </div>
         </div>
 

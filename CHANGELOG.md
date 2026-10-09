@@ -1,3 +1,24 @@
+## v0.11.2 — 2026-10-09
+### Sublix Studio: Timeline Zoom In/Out (nút bấm + slider + reset)
+
+**PO yêu cầu (2026-10-09):** "code cho tôi cái zoom ra timeline đi, hiện tại ko có zoom gần zoom xa timeline, để xem timeframe nó bé hơn hoặc lớn hơn ấy."
+
+**Trước đó:** Có slider zoom (range 10-120s visible) nhưng chỉ `<span>−</span>` + `<span>+</span>` text — không có nút bấm thật, người dùng khó dùng.
+
+**Fix v0.11.2:**
+- **3 nút bấm mới** trong thanh timeline controls:
+  - `−` (zoom out, x1.5 → xem nhiều giây hơn)
+  - `⟲` (reset về 30s mặc định)
+  - `+` (zoom in, x1.5 → xem ít giây hơn, frame lớn hơn)
+- **Mở rộng range slider:** 5s → 300s (trước 10s → 120s) — hỗ trợ video dài hơn Kenji 38min.
+- **Hiển thị rõ ràng:** "{N}s hiển thị" với `minWidth: 56px` (trước là text lỏng).
+- **Math:** `setZoomLevel(clamp(round(zoomLevel * 1.5), 5, 600))` — mỗi lần bấm +/− scale 1.5×.
+- Nút +/− có `title` (tooltip) cho rõ mục đích.
+
+**File đã đổi:** `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`, `CHANGELOG.md`.
+
+---
+
 ## v0.11.1 — 2026-10-09
 ### Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)
 

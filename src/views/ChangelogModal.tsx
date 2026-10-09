@@ -23,6 +23,25 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.2",
+    date: "09/10/2026",
+    title: "Sublix Studio: Timeline Zoom In/Out + Reset",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tính Năng Mới",
+        icon: "🔍",
+        items: [
+          "PO yêu cầu: 'zoom ra timeline đi, hiện tại ko có zoom gần zoom xa'.",
+          "Trước: chỉ có slider zoom (10-120s), không có nút bấm +/−.",
+          "Sau: 3 nút bấm thật trong thanh timeline controls: − (zoom out 1.5×) / ⟲ (reset về 30s mặc định) / + (zoom in 1.5×). Mỗi lần bấm scale timeline 1.5×.",
+          "Mở rộng range slider 5s → 300s (trước 10s → 120s) — hỗ trợ video dài hơn Kenji 38min mà vẫn zoom được.",
+          "Hiển thị rõ '{N}s hiển thị' với minWidth 56px, không bị tràn.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.1",
     date: "09/10/2026",
     title: "Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)",
