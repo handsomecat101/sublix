@@ -1,4 +1,4 @@
-﻿//! SublixStudioView.tsx  All-in-One Multi-track AI Dubbing & Subtitle Studio
+//! SublixStudioView.tsx  All-in-One Multi-track AI Dubbing & Subtitle Studio
 //! Reverse-Engineered from EZMAXSUB (ezmaxsoft.com) benchmark.
 //! Specification: agent-team/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
 
@@ -304,7 +304,7 @@ export default function SublixStudioView({
               handleSeek(0);
             } else {
               // R4-09: ko thả nhưng khng c path → bo user (khng ngậm tăm)
-              showToast("⚠ Ko thả khng khả dụng — hy dng nt 'Mở video' để chn file.");
+              showToast("⚠ Kéo thả không khả dụng — hãy dùng nút 'Mở video' để chọn file.");
             }
           } else {
             setIsDraggingFile(false);
@@ -318,7 +318,15 @@ export default function SublixStudioView({
       }
     })();
 
+    const handlePreventDrag = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("dragover", handlePreventDrag);
+    window.addEventListener("drop", handlePreventDrag);
+
     return () => {
+      window.removeEventListener("dragover", handlePreventDrag);
+      window.removeEventListener("drop", handlePreventDrag);
       pDragDrop.then((u) => {
         if (typeof u === "function") u();
       }).catch((err) => {
@@ -2291,6 +2299,7 @@ export default function SublixStudioView({
             className={`studio-video-stage ${isDraggingFile ? "drag-over" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
           >
             <div
               className={`studio-video-frame ${isDraggingFile ? "drag-over" : ""}`}
@@ -2377,6 +2386,9 @@ export default function SublixStudioView({
                 <div
                   className="studio-dropzone-center-box"
                   onClick={handlePickMediaFile}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
+                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -3104,6 +3116,7 @@ export default function SublixStudioView({
             className={`studio-timeline-tracks-body ${isDraggingPlayhead ? "scrubbing" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
           >
             {/* Playhead Vertical Needle */}
             <div
