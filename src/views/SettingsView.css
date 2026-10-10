@@ -1059,3 +1059,9 @@
   border-color: var(--t1);
   transform: scale(1.15);
 }
+  
+/* STUDIO FULL-BLEED MODE: Studio chiem tron cua so */  
+.hidden-shell { display: none !important; }  
+.studio-fullbleed { position: absolute; inset: 0; z-index: 20; height: 100%; }  
+.app-shell:has(.app-sidebar.hidden-shell) { grid-template-columns: 1fr !important; }  
+.app-shell:has(.app-sidebar.hidden-shell) .app-main { width: 100%; max-width: 100%; }  

@@ -36,7 +36,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "Khôi phục về 3cdbdf4 (v0.11.12, bản sạch cuối cùng).",
           "TRADE-OFF: Mất R5-01/02 (detect video im lặng UI), R6-06 toast onError UI, R7-01/02/03 fallback detect UI ở SublixStudioView. R5/R6/R7 vẫn còn ở Rust backend (translate/mod.rs, dubbing/mod.rs).",
           "tauri.conf.json: version 0.10.0 → 0.11.28 (title bar đồng bộ với package.json).",
-          "Cargo.toml: version 0.11.13 → 0.11.29, sửa author 'Anh Tuáº¥n' → 'Anh Tuấn'.",
+          "Cargo.toml: version 0.11.13 → 0.11.29, sửa author 'Anh Tuấn' → 'Anh Tuấn'.",
         ],
       },
     ],

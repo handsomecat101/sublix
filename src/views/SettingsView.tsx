@@ -22,6 +22,7 @@ import {
 } from "../lib/tauri";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
+import SublixStudioView from "./SublixStudioView";
 import DownloaderView from "./DownloaderView";
 import { ChangelogModal } from "./ChangelogModal";
 import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
@@ -118,7 +119,7 @@ export default function SettingsView() {
   const [transEnginePref, setTransEnginePref] = useState<"auto" | "cpu" | "cuda">("auto");
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
   const [fullConfig, setFullConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<"downloader" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("downloader");
+  const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
   const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
 
@@ -1009,8 +1010,18 @@ export default function SettingsView() {
 
   return (
     <div className="app-shell">
+      {/* STUDIO FULL-BLEED: Studio chiếm trọn cửa sổ — panel trái/tạnh cũ ẩn khi ở Studio */}
+      {activeTab === "studio" && (
+        <div className="studio-fullbleed">
+          <SublixStudioView
+            initialFilePath={pendingDubbingPath}
+            isActive
+            onNavigateTab={(t) => setActiveTab(t)}
+          />
+        </div>
+      )}
       {/* LEFT SIDEBAR */}
-      <aside className="app-sidebar">
+      <aside className="app-sidebar hidden-shell">
         <div className="sidebar-top">
           {/* Brand */}
           <div className="sidebar-brand">
@@ -1048,6 +1059,16 @@ export default function SettingsView() {
 
           {/* Navigation Items */}
           <nav className="sidebar-nav">
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeTab === "studio" ? "active" : ""}`}
+              onClick={() => setActiveTab("studio")}
+            >
+              <IconClapper className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">Studio (Mới)</span>
+              <span style={{ fontSize: 9, background: "#f59e0b", color: "#111", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>MỚI</span>
+            </button>
+
             <button
               type="button"
               className={`sidebar-nav-item ${activeTab === "downloader" ? "active" : ""}`}
@@ -1193,15 +1214,27 @@ export default function SettingsView() {
       {/* RIGHT MAIN WORKSPACE */}
       <main className="app-main">
         {/* Topbar */}
-        <div className="main-topbar">
-          <div className="main-topbar-title">
-            {activeTab === "downloader" && <><IconGlobe size={15} /> Tải Video Đa Nền Tảng (YouTube, TikTok, Douyin, Bilibili, Facebook...)</>}
-            {activeTab === "file_sub" && <><IconFilm size={15} /> Tạo Phụ Đề Cho File Media (Video / Audio)</>}
-            {activeTab === "dubbing" && <><IconClapper size={15} /> Studio Lồng Tiếng AI Đa Vai (Diarization + Neural TTS)</>}
-            {activeTab === "live" && <><IconMic size={15} /> Dịch Phụ Đề Trực Tiếp Thời Gian Thực (Live Stream)</>}
-            {activeTab === "models" && <><IconBox size={15} /> Quản Lý Mô Hình AI & Bộ Cấu Hình Phần Cứng</>}
-            {activeTab === "history" && <><IconClock size={15} /> Lịch Sử Lời Thoại & Xuất File Phụ Đề</>}
-            {activeTab === "overlay" && <><IconPanel size={15} /> Tùy Biến Giao Diện & Kiểu Dáng Cửa Sổ Phụ Đề</>}
+        <div className={`main-topbar ${activeTab === "studio" ? "hidden-shell" : ""}`}>
+          <div className="main-topbar-title" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            {([["studio", "▶ Studio"], ["downloader", "⬇ Tải video"], ["file_sub", "🎬 Tạo phụ đề"], ["dubbing", "🎙 Lồng tiếng"], ["live", "📶 Live"], ["history", "🕘 Lịch sử"], ["models", "⚙ Cài đặt"], ["overlay", "🎨 Kiểu dáng"]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setActiveTab(k)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  background: activeTab === k ? "var(--color-accent, #f59e0b)" : "rgba(120,120,140,0.14)",
+                  color: activeTab === k ? "#111" : "inherit",
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           <div className="main-topbar-actions">

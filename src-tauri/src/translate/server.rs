@@ -460,13 +460,30 @@ fn build_system_prompt_for_http(target: &str) -> String {
         ),
         _ => ("the target language", "Examples:\n- \"こんにちは\" → \"Hello\""),
     };
+    let no_foreign = match target.to_lowercase().as_str() {
+        "ja" | "japanese" | "zh" | "chinese" | "ko" | "korean" => "",
+        _ => " Never output CJK or foreign characters.",
+    };
     format!(
         "You are an expert movie subtitle translator.\n\
-         RULE 1: Output MUST be natural, concise spoken {tgt} ONLY. Never output CJK or foreign characters when translating to {tgt}.\n\
+         RULE 1: Output MUST be natural, concise spoken {tgt} ONLY.{no_foreign}\n\
          RULE 2: Output ONLY the translated subtitle line. No explanations, no quotes, no labels, no <think> tags.\n\
          RULE 3: Keep sentences natural for live movie/video subtitles.\n\
          {examples}",
-        tgt = tgt_name
+        tgt = tgt_name,
+        no_foreign = no_foreign
+    )
+}
+
+/// GLOSSARY block (R2-04.3): giữ đúng tên riêng & cách xưng hô PO ghim trong "hồ sơ phim".
+fn glossary_block(glossary: &[String]) -> String {
+    if glossary.is_empty() {
+        return String::new();
+    }
+    let entries: Vec<String> = glossary.iter().map(|g| format!("- {g}")).collect();
+    format!(
+        "\nGLOSSARY & CHARACTER ADDRESSING RULES (keep names/terms exactly):\n{}",
+        entries.join("\n")
     )
 }
 
@@ -592,6 +609,7 @@ pub fn translate_via_server(
     target: &str,
     model: TranslationModelVariant,
     pref: EnginePreference,
+    glossary: &[String],
 ) -> Result<String> {
     let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
     let mut guard = TRANSLATION_SERVER
@@ -610,7 +628,18 @@ pub fn translate_via_server(
     }
 
     let server = guard.as_ref().expect("translation server just initialized");
-    server.translate(text, source, target)
+    if glossary.is_empty() {
+        server.translate(text, source, target)
+    } else {
+        // Glossary nhúng vào đầu text cho đường local llama-server (system prompt nằm trong TranslationServer).
+        let rules = glossary
+            .iter()
+            .map(|g| format!("- {g}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let enriched = format!("[Terminology rules — keep these names/terms exactly: {rules}]\n{text}");
+        server.translate(&enriched, source, target)
+    }
 }
 
 pub fn translate_batch_via_server(
@@ -619,6 +648,7 @@ pub fn translate_batch_via_server(
     target: &str,
     model: TranslationModelVariant,
     pref: EnginePreference,
+    glossary: &[String],
 ) -> Result<Vec<String>> {
     let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
     let mut guard = TRANSLATION_SERVER
@@ -637,7 +667,20 @@ pub fn translate_batch_via_server(
     }
 
     let server = guard.as_ref().expect("translation server just initialized");
-    server.translate_batch(items, source, target)
+    if glossary.is_empty() {
+        server.translate_batch(items, source, target)
+    } else {
+        let rules = glossary
+            .iter()
+            .map(|g| format!("- {g}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let enriched: Vec<String> = items
+            .iter()
+            .map(|s| format!("[Keep these names/terms exactly: {rules}] {s}"))
+            .collect();
+        server.translate_batch(&enriched, source, target)
+    }
 }
 
 pub fn current_engine() -> Option<Engine> {
@@ -665,14 +708,15 @@ pub fn translate_via_minimax(
     target: &str,
     api_key: &str,
     model: &str,
+    glossary: &[String],
 ) -> Result<String> {
     if api_key.trim().is_empty() {
         return Err(anyhow!("Chưa cài đặt MiniMax API Key. Vui lòng nhập API Key trong tab Cài đặt."));
     }
 
     let context_block = {
-        let q = RECENT_CONTEXT.lock().unwrap();
-        match q.back() {
+        let q = RECENT_CONTEXT.lock().ok();
+        match q.as_ref().and_then(|q| q.back()) {
             Some((prev_src, prev_tgt)) => format!(
                 "\nRecent dialogue context:\n- {src}: \"{prev_src}\" → {tgt}: \"{prev_tgt}\"",
                 src = lang_name(source),
@@ -694,10 +738,11 @@ pub fn translate_via_minimax(
 
     let system_prompt = format!(
         "You are an expert movie scriptwriter and dialogue translator.\n\
-         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs). Never output foreign characters.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
          RULE 2: Output ONLY the translated dialogue line. No explanations, no quotes, no conversational filler.\n\
-         RULE 3: Match the emotional tone and natural speech rhythm of the scene.",
-        tgt = lang_name(target)
+         RULE 3: Match the emotional tone and natural speech rhythm of the scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
     );
 
     let model_name = if model.trim().is_empty() {
@@ -772,6 +817,7 @@ pub fn translate_via_ollama(
     target: &str,
     ollama_url: &str,
     model: &str,
+    glossary: &[String],
 ) -> Result<String> {
     let base_url = if ollama_url.trim().is_empty() {
         "http://localhost:11434"
@@ -780,8 +826,8 @@ pub fn translate_via_ollama(
     };
 
     let context_block = {
-        let q = RECENT_CONTEXT.lock().unwrap();
-        match q.back() {
+        let q = RECENT_CONTEXT.lock().ok();
+        match q.as_ref().and_then(|q| q.back()) {
             Some((prev_src, prev_tgt)) => format!(
                 "\nRecent dialogue context:\n- {src}: \"{prev_src}\" → {tgt}: \"{prev_tgt}\"",
                 src = lang_name(source),
@@ -803,10 +849,11 @@ pub fn translate_via_ollama(
 
     let system_prompt = format!(
         "You are an expert movie scriptwriter and dialogue translator.\n\
-         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs). Never output foreign characters.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
          RULE 2: Output ONLY the translated dialogue line. No explanations, no quotes, no conversational filler.\n\
-         RULE 3: Match the emotional tone and natural speech rhythm of the scene.",
-        tgt = lang_name(target)
+         RULE 3: Match the emotional tone and natural speech rhythm of the scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
     );
 
     let body = serde_json::json!({
@@ -896,6 +943,326 @@ pub fn parse_batch_response(raw: &str, count: usize, target: &str) -> Vec<Option
     results
 }
 
+/// Generic OpenAI-compatible chat endpoint (DeepSeek / OpenRouter) — tái tạo hợp đồng mod.rs.
+fn chat_completion_openai_compatible(
+    endpoint: &str,
+    api_key: &str,
+    model: &str,
+    default_model: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+    timeout_secs: u64,
+    label: &str,
+) -> Result<String> {
+    let model_name = if model.trim().is_empty() {
+        default_model
+    } else {
+        model.trim()
+    };
+    let body = serde_json::json!({
+        "model": model_name,
+        "messages": [
+            { "role": "system", "content": system_prompt },
+            { "role": "user", "content": user_prompt }
+        ],
+        "temperature": 0.2
+    });
+    let client = Client::builder()
+        .timeout(Duration::from_secs(timeout_secs))
+        .build()?;
+    let resp = client
+        .post(endpoint)
+        .header("Authorization", format!("Bearer {}", api_key.trim()))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .with_context(|| format!("HTTP POST to {label} API failed"))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_text = resp.text().unwrap_or_default();
+        return Err(anyhow!("{label} API returned {}: {}", status, err_text));
+    }
+    let chat_resp: ChatResponse = resp
+        .json()
+        .with_context(|| format!("Failed to parse {label} response"))?;
+    Ok(chat_resp
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .unwrap_or_default())
+}
+
+fn translate_via_openai_compatible(
+    endpoint: &str,
+    api_key: &str,
+    model: &str,
+    default_model: &str,
+    text: &str,
+    source: &str,
+    target: &str,
+    glossary: &[String],
+    timeout_secs: u64,
+    label: &str,
+) -> Result<String> {
+    if api_key.trim().is_empty() {
+        return Err(anyhow!(
+            "Chưa cài đặt {label} API Key. Vui lòng nhập API Key trong tab Cài đặt."
+        ));
+    }
+    let context_block = {
+        let q = RECENT_CONTEXT.lock().ok();
+        match q.as_ref().and_then(|q| q.back()) {
+            Some((prev_src, prev_tgt)) => format!(
+                "\nRecent dialogue context:\n- {src}: \"{prev_src}\" → {tgt}: \"{prev_tgt}\"",
+                src = lang_name(source),
+                tgt = lang_name(target),
+                prev_src = prev_src,
+                prev_tgt = prev_tgt
+            ),
+            _ => String::new(),
+        }
+    };
+    let user_prompt = format!(
+        "Translate the following {src} dialogue to natural, lively spoken {tgt}. Output ONLY the {tgt} translation.{ctx}\nDialogue to translate: \"{text}\"",
+        src = lang_name(source),
+        tgt = lang_name(target),
+        ctx = context_block,
+        text = text
+    );
+    let system_prompt = format!(
+        "You are an expert movie scriptwriter and dialogue translator.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
+         RULE 2: Output ONLY the translated dialogue line. No explanations, no quotes, no conversational filler.\n\
+         RULE 3: Match the emotional tone and natural speech rhythm of the scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
+    );
+    let t0 = Instant::now();
+    let raw = chat_completion_openai_compatible(
+        endpoint,
+        api_key,
+        model,
+        default_model,
+        &system_prompt,
+        &user_prompt,
+        timeout_secs,
+        label,
+    )?;
+    let translated = post_process(&raw, target);
+    if !translated.is_empty() {
+        if let Ok(mut q) = RECENT_CONTEXT.lock() {
+            if q.len() >= 2 {
+                q.pop_front();
+            }
+            q.push_back((text.to_string(), translated.clone()));
+        }
+    }
+    info!(
+        "🌐 {label} ({:.2}s, {}→{}): '{}' → '{}'",
+        t0.elapsed().as_secs_f32(),
+        source,
+        target,
+        text,
+        translated
+    );
+    Ok(translated)
+}
+
+fn translate_batch_via_openai_compatible(
+    endpoint: &str,
+    api_key: &str,
+    model: &str,
+    default_model: &str,
+    items: &[String],
+    source: &str,
+    target: &str,
+    glossary: &[String],
+    timeout_secs: u64,
+    label: &str,
+) -> Result<Vec<String>> {
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    if items.len() == 1 {
+        let single = translate_via_openai_compatible(
+            endpoint,
+            api_key,
+            model,
+            default_model,
+            &items[0],
+            source,
+            target,
+            glossary,
+            timeout_secs,
+            label,
+        )?;
+        return Ok(vec![single]);
+    }
+    if api_key.trim().is_empty() {
+        return Err(anyhow!(
+            "Chưa cài đặt {label} API Key. Vui lòng nhập API Key trong tab Cài đặt."
+        ));
+    }
+    let mut user_prompt = format!(
+        "Translate the following {src} dialogue lines into natural, punchy, conversational spoken {tgt} for a theatrical movie dubbing script.\n\
+         IMPORTANT: Output ONLY the translated lines with their index tags [1], [2], etc. No introductory remarks, no quotes, no explanations.\n\n\
+         Lines to translate:\n",
+        src = lang_name(source),
+        tgt = lang_name(target)
+    );
+    for (idx, line) in items.iter().enumerate() {
+        user_prompt.push_str(&format!("[{}] {}\n", idx + 1, line));
+    }
+    let system_prompt = format!(
+        "You are an expert movie scriptwriter and dialogue translator.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
+         RULE 2: Output EXACTLY one line per dialogue with its tag [1], [2] matching the input numbers.\n\
+         RULE 3: Match the emotional tone and natural speech rhythm of each scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
+    );
+    let t0 = Instant::now();
+    let raw = chat_completion_openai_compatible(
+        endpoint,
+        api_key,
+        model,
+        default_model,
+        &system_prompt,
+        &user_prompt,
+        timeout_secs,
+        label,
+    )?;
+    let parsed = parse_batch_response(&raw, items.len(), target);
+    info!(
+        "🌐 {label} Batch ({} lines, {:.2}s)",
+        items.len(),
+        t0.elapsed().as_secs_f32()
+    );
+    let mut final_res = Vec::with_capacity(items.len());
+    for (idx, item) in items.iter().enumerate() {
+        if crate::dubbing::is_dubbing_cancelled() {
+            warn!("🛑 {label} batch loop cancelled");
+            break;
+        }
+        if let Some(ref trans) = parsed[idx] {
+            final_res.push(trans.clone());
+        } else {
+            match translate_via_openai_compatible(
+                endpoint,
+                api_key,
+                model,
+                default_model,
+                item,
+                source,
+                target,
+                glossary,
+                timeout_secs,
+                label,
+            ) {
+                Ok(single) => final_res.push(single),
+                Err(e) => {
+                    warn!("{label} single fallback failed for '{item}': {e:#}");
+                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                }
+            }
+        }
+    }
+    Ok(final_res)
+}
+
+/// Translate via DeepSeek official API (OpenAI-compatible).
+pub fn translate_via_deepseek(
+    text: &str,
+    source: &str,
+    target: &str,
+    api_key: &str,
+    model: &str,
+    glossary: &[String],
+) -> Result<String> {
+    translate_via_openai_compatible(
+        "https://api.deepseek.com/v1/chat/completions",
+        api_key,
+        model,
+        "deepseek-chat",
+        text,
+        source,
+        target,
+        glossary,
+        30,
+        "DeepSeek",
+    )
+}
+
+/// Translate via OpenRouter (OpenAI-compatible, nhiều model).
+pub fn translate_via_openrouter(
+    text: &str,
+    source: &str,
+    target: &str,
+    api_key: &str,
+    model: &str,
+    glossary: &[String],
+) -> Result<String> {
+    translate_via_openai_compatible(
+        "https://openrouter.ai/api/v1/chat/completions",
+        api_key,
+        model,
+        "deepseek/deepseek-chat",
+        text,
+        source,
+        target,
+        glossary,
+        30,
+        "OpenRouter",
+    )
+}
+
+/// Batch translate via DeepSeek official API.
+pub fn translate_batch_via_deepseek(
+    items: &[String],
+    source: &str,
+    target: &str,
+    api_key: &str,
+    model: &str,
+    glossary: &[String],
+) -> Result<Vec<String>> {
+    translate_batch_via_openai_compatible(
+        "https://api.deepseek.com/v1/chat/completions",
+        api_key,
+        model,
+        "deepseek-chat",
+        items,
+        source,
+        target,
+        glossary,
+        60,
+        "DeepSeek",
+    )
+}
+
+/// Batch translate via OpenRouter.
+pub fn translate_batch_via_openrouter(
+    items: &[String],
+    source: &str,
+    target: &str,
+    api_key: &str,
+    model: &str,
+    glossary: &[String],
+) -> Result<Vec<String>> {
+    translate_batch_via_openai_compatible(
+        "https://openrouter.ai/api/v1/chat/completions",
+        api_key,
+        model,
+        "deepseek/deepseek-chat",
+        items,
+        source,
+        target,
+        glossary,
+        60,
+        "OpenRouter",
+    )
+}
+
 /// Translate a batch of dialogue lines via MiniMax Cloud API (15-20x faster than line-by-line)
 pub fn translate_batch_via_minimax(
     items: &[String],
@@ -903,12 +1270,13 @@ pub fn translate_batch_via_minimax(
     target: &str,
     api_key: &str,
     model: &str,
+    glossary: &[String],
 ) -> Result<Vec<String>> {
     if items.is_empty() {
         return Ok(Vec::new());
     }
     if items.len() == 1 {
-        let single = translate_via_minimax(&items[0], source, target, api_key, model)?;
+        let single = translate_via_minimax(&items[0], source, target, api_key, model, glossary)?;
         return Ok(vec![single]);
     }
     if api_key.trim().is_empty() {
@@ -929,10 +1297,11 @@ pub fn translate_batch_via_minimax(
 
     let system_prompt = format!(
         "You are an expert movie scriptwriter and dialogue translator.\n\
-         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs). Never output foreign characters.\n\
+         RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
          RULE 2: Output EXACTLY one line per dialogue with its tag [1], [2] matching the input numbers.\n\
-         RULE 3: Match the emotional tone and natural speech rhythm of each scene.",
-        tgt = lang_name(target)
+         RULE 3: Match the emotional tone and natural speech rhythm of each scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
     );
 
     let model_name = if model.trim().is_empty() { "MiniMax-M3" } else { model.trim() };
@@ -984,7 +1353,7 @@ pub fn translate_batch_via_minimax(
             final_res.push(trans.clone());
         } else {
             // Fallback for missing item
-            match translate_via_minimax(item, source, target, api_key, model) {
+            match translate_via_minimax(item, source, target, api_key, model, glossary) {
                 Ok(single) => final_res.push(single),
                 Err(e) => {
                     warn!("MiniMax single fallback failed for '{item}': {e:#}");
@@ -1004,12 +1373,13 @@ pub fn translate_batch_via_ollama(
     target: &str,
     ollama_url: &str,
     model: &str,
+    glossary: &[String],
 ) -> Result<Vec<String>> {
     if items.is_empty() {
         return Ok(Vec::new());
     }
     if items.len() == 1 {
-        let single = translate_via_ollama(&items[0], source, target, ollama_url, model)?;
+        let single = translate_via_ollama(&items[0], source, target, ollama_url, model, glossary)?;
         return Ok(vec![single]);
     }
 
@@ -1035,8 +1405,9 @@ pub fn translate_batch_via_ollama(
         "You are an expert movie scriptwriter and dialogue translator.\n\
          RULE 1: Output MUST be natural, punchy, spoken {tgt} (like in theatrical movie dubs).\n\
          RULE 2: Output EXACTLY one line per dialogue with its tag [1], [2] matching the input numbers.\n\
-         RULE 3: Match the emotional tone and natural speech rhythm of each scene.",
-        tgt = lang_name(target)
+         RULE 3: Match the emotional tone and natural speech rhythm of each scene.{gl}",
+        tgt = lang_name(target),
+        gl = glossary_block(glossary)
     );
 
     let body = serde_json::json!({
@@ -1083,7 +1454,7 @@ pub fn translate_batch_via_ollama(
         if let Some(ref trans) = parsed[idx] {
             final_res.push(trans.clone());
         } else {
-            match translate_via_ollama(item, source, target, ollama_url, model) {
+            match translate_via_ollama(item, source, target, ollama_url, model, glossary) {
                 Ok(single) => final_res.push(single),
                 Err(e) => {
                     warn!("Ollama single fallback failed for '{item}': {e:#}");

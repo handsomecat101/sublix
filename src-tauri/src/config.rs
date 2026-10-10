@@ -107,6 +107,26 @@ pub struct AppConfig {
     #[serde(default = "default_ollama_model")]
     pub ollama_model: String,
 
+    /// DeepSeek API Key
+    #[serde(default = "default_empty_string")]
+    pub deepseek_api_key: String,
+
+    /// DeepSeek model name (default: "deepseek-chat")
+    #[serde(default = "default_deepseek_model")]
+    pub deepseek_model: String,
+
+    /// OpenRouter API Key
+    #[serde(default = "default_empty_string")]
+    pub openrouter_api_key: String,
+
+    /// OpenRouter model name (default: "deepseek/deepseek-chat")
+    #[serde(default = "default_openrouter_model")]
+    pub openrouter_model: String,
+
+    /// GLOSSARY (hồ sơ phim AI học): mỗi phần tử 1 dòng "gốc => dịch" — tên riêng & cách xưng hô PO ghim.
+    #[serde(default)]
+    pub glossary: Vec<String>,
+
     /// UI theme: "cinema" | "studio" | "light" | "vibrant".
     #[serde(default = "default_theme")]
     pub theme: String,
@@ -180,6 +200,14 @@ fn default_ollama_model() -> String {
     "smtek/qwen3.8-27b:q4_k_m".to_string()
 }
 
+fn default_deepseek_model() -> String {
+    "deepseek-chat".to_string()
+}
+
+fn default_openrouter_model() -> String {
+    "deepseek/deepseek-chat".to_string()
+}
+
 fn default_theme() -> String {
     "cinema".to_string()
 }
@@ -207,6 +235,11 @@ impl Default for AppConfig {
             minimax_model: default_minimax_model(),
             ollama_url: default_ollama_url(),
             ollama_model: default_ollama_model(),
+            deepseek_api_key: default_empty_string(),
+            deepseek_model: default_deepseek_model(),
+            openrouter_api_key: default_empty_string(),
+            openrouter_model: default_openrouter_model(),
+            glossary: Vec::new(),
             theme: default_theme(),
         }
     }
