@@ -41,6 +41,9 @@ pub fn start_new_generation() -> u64 {
 }
 
 pub fn is_generation_cancelled(gen: u64) -> bool {
+    if gen == 0 {
+        return false;
+    }
     let cancelled = CANCELLED_GENERATION.load(Ordering::Relaxed);
     cancelled >= gen
 }
@@ -90,11 +93,15 @@ pub fn run_child_with_cancel(mut cmd: Command, gen: u64) -> Result<std::process:
     }
     let mut child = cmd.spawn().context("Không thể khởi chạy tiến trình con")?;
     let pid = child.id();
-    ACTIVE_CHILD_PID.store(pid, Ordering::SeqCst);
+    if gen > 0 {
+        ACTIVE_CHILD_PID.store(pid, Ordering::SeqCst);
+    }
 
     loop {
         if is_generation_cancelled(gen) {
-            ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+            if gen > 0 {
+                ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+            }
             #[cfg(windows)]
             {
                 let _ = Command::new("taskkill")
@@ -114,14 +121,18 @@ pub fn run_child_with_cancel(mut cmd: Command, gen: u64) -> Result<std::process:
 
         match child.try_wait() {
             Ok(Some(status)) => {
-                ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                if gen > 0 {
+                    ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                }
                 return Ok(status);
             }
             Ok(None) => {
                 std::thread::sleep(std::time::Duration::from_millis(150));
             }
             Err(e) => {
-                ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                if gen > 0 {
+                    ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+                }
                 return Err(anyhow::anyhow!("Lỗi kiểm tra tiến trình con: {}", e));
             }
         }
@@ -327,29 +338,40 @@ const SHERPA_DIARIZE_SCRIPT: &str = include_str!("../../scripts/sherpa_diarize.p
 
 /// Directory holding the Sherpa Diarization artifacts.
 pub fn sherpa_model_dir() -> PathBuf {
-    let p = crate::config::app_base_dir()
-        .join("models")
-        .join("voice")
-        .join("sherpa-diarization");
-    if p.exists() {
-        return p;
+    let base = crate::config::app_base_dir();
+    let candidates = [
+        base.join("models").join("voice").join("sherpa-diarization"),
+        base.join("models").join("voice").join("_sherpa-diarization"),
+        base.join("src-tauri").join("models").join("voice").join("sherpa-diarization"),
+        base.join("src-tauri").join("models").join("voice").join("_sherpa-diarization"),
+    ];
+    for cand in &candidates {
+        if cand.exists() {
+            return cand.clone();
+        }
     }
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(parent) = exe_path.parent() {
-            let next_to_exe = parent.join("models").join("voice").join("sherpa-diarization");
-            if next_to_exe.exists() {
-                return next_to_exe;
+            let p1 = parent.join("models").join("voice").join("sherpa-diarization");
+            if p1.exists() {
+                return p1;
+            }
+            let p2 = parent.join("models").join("voice").join("_sherpa-diarization");
+            if p2.exists() {
+                return p2;
             }
         }
     }
-    p
+    candidates[0].clone()
 }
 
 /// True when the local Sherpa Diarization models are present on disk.
 pub fn sherpa_available() -> bool {
     let dir = sherpa_model_dir();
     (dir.join("sherpa-onnx-pyannote-segmentation-3-0").join("model.onnx").exists()
-        || dir.join("model.onnx").exists())
+        || dir.join("sherpa-onnx-pyannote-segmentation-3-0").join("model.int8.onnx").exists()
+        || dir.join("model.onnx").exists()
+        || dir.join("model.int8.onnx").exists())
         && dir.join("wespeaker_en_voxceleb_resnet34_LM.onnx").exists()
 }
 
@@ -383,7 +405,12 @@ pub struct SherpaDiarizeResult {
     pub segments: Vec<SherpaSegment>,
 }
 
-pub fn run_sherpa_diarization(wav_path: &Path, temp_dir: &Path, my_gen: u64) -> Result<Vec<SherpaSegment>> {
+pub fn run_sherpa_diarization(
+    wav_path: &Path,
+    temp_dir: &Path,
+    my_gen: u64,
+    expected_speakers: Option<usize>,
+) -> Result<Vec<SherpaSegment>> {
     if !sherpa_available() {
         anyhow::bail!("Chưa có model sherpa-diarization offline");
     }
@@ -402,6 +429,12 @@ pub fn run_sherpa_diarization(wav_path: &Path, temp_dir: &Path, my_gen: u64) -> 
         .arg("0.45")
         .arg("--out")
         .arg(&out_json);
+
+    if let Some(n) = expected_speakers {
+        if n > 0 {
+            cmd.arg("--num-speakers").arg(n.to_string());
+        }
+    }
 
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -1135,6 +1168,7 @@ pub fn split_mixed_turn_clause(start_sec: f64, end_sec: f64, text: &str) -> Vec<
 pub fn clean_and_merge_raw_segments(
     raw_segments: Vec<crate::file_sub::SubtitleSegment>,
     src_lang: &str,
+    expected_speakers: Option<usize>,
 ) -> Vec<DubbingSegment> {
     let is_cjk = matches!(src_lang.to_lowercase().as_str(), "ja" | "japanese" | "zh" | "chinese");
 
@@ -1196,7 +1230,8 @@ pub fn clean_and_merge_raw_segments(
         merged.push((start_sec, end_sec, text));
     }
 
-    // 3. Dynamic multi-speaker assignment (up to N distinct speakers)
+    // 3. Dynamic multi-speaker assignment (constrained to expected_speakers)
+    let max_spk = expected_speakers.unwrap_or(2).max(1);
     let mut current_speaker_idx = 0;
     let mut last_end = 0.0;
     let mut segments = Vec::with_capacity(merged.len());
@@ -1206,8 +1241,8 @@ pub fn clean_and_merge_raw_segments(
         let prev_text = segments.last().map(|s: &DubbingSegment| s.original_text.as_str()).unwrap_or("");
         let is_speaker_change = idx > 0 && is_turn_boundary(prev_text, &text, pause);
 
-        if is_speaker_change {
-            current_speaker_idx = (current_speaker_idx + 1) % 6;
+        if is_speaker_change && max_spk > 1 {
+            current_speaker_idx = (current_speaker_idx + 1) % max_spk;
         }
 
         let speaker_id = format!("speaker_{}", current_speaker_idx);
@@ -1275,15 +1310,22 @@ pub fn slugify_speaker(name: &str) -> String {
 }
 
 /// Generate default rich personas for detected speakers across languages
-pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) -> Vec<DubbingSpeaker> {
+pub fn generate_default_speakers(
+    tgt_lang: &str,
+    active_speaker_ids: &[String],
+    expected_speakers: Option<usize>,
+) -> Vec<DubbingSpeaker> {
     let mut unique_ids: Vec<String> = active_speaker_ids.to_vec();
     unique_ids.sort();
     unique_ids.dedup();
 
+    let target_count = expected_speakers.unwrap_or_else(|| unique_ids.len().max(2));
     if unique_ids.is_empty() {
-        unique_ids = vec!["speaker_0".to_string(), "speaker_1".to_string()];
-    } else if unique_ids.len() == 1 {
-        unique_ids.push("speaker_1".to_string());
+        unique_ids = (0..target_count).map(|i| format!("speaker_{i}")).collect();
+    } else if let Some(n) = expected_speakers {
+        if n > 0 && unique_ids.len() > n {
+            unique_ids.truncate(n);
+        }
     }
 
     let mut speakers = Vec::new();
@@ -1292,8 +1334,16 @@ pub fn generate_default_speakers(tgt_lang: &str, active_speaker_ids: &[String]) 
     let rates = ["+0%", "+0%", "-5%", "+5%"];
 
     for (idx, spk_id) in unique_ids.into_iter().enumerate() {
-        let is_male = idx % 2 == 0;
-        let p_idx = (idx / 2) % male_pitches.len();
+        let is_male = if expected_speakers == Some(2) || expected_speakers == Some(1) {
+            true
+        } else {
+            idx % 2 == 0
+        };
+        let p_idx = if is_male && expected_speakers == Some(2) {
+            idx % male_pitches.len()
+        } else {
+            (idx / 2) % male_pitches.len()
+        };
         let r_idx = idx % rates.len();
 
         let (label, voice, pitch, rate) = match tgt_lang {
@@ -1580,6 +1630,7 @@ pub fn analyze_and_create_project(
     target_lang: Option<String>,
     time_limit_sec: Option<f64>,
     start_offset_sec: Option<f64>,
+    expected_speakers: Option<usize>,
 ) -> Result<DubbingProject> {
     let my_gen = start_new_generation();
 
@@ -1729,7 +1780,7 @@ pub fn analyze_and_create_project(
 
     // 3. Clean, filter hallucinations, and merge contiguous dialogue clauses
     emit("diarizing", 35.0, "Đang lọc ảo giác & ghép nối câu thoại hoàn chỉnh...", 0, raw_segments.len());
-    let mut parsed_segments = clean_and_merge_raw_segments(raw_segments, &src_lang);
+    let mut parsed_segments = clean_and_merge_raw_segments(raw_segments, &src_lang, expected_speakers);
 
     if parsed_segments.is_empty() {
         let _ = fs::remove_file(&temp_wav);
@@ -1743,7 +1794,7 @@ pub fn analyze_and_create_project(
     let mut diarization_engine_used = "heuristic".to_string();
     if sherpa_available() {
         emit("diarizing", 38.0, "Đang phân tích âm sắc giọng nói bằng Sherpa AI (Offline)...", 0, total);
-        match run_sherpa_diarization(&temp_wav, &temp_dir, my_gen) {
+        match run_sherpa_diarization(&temp_wav, &temp_dir, my_gen, expected_speakers) {
             Ok(sherpa_segs) if !sherpa_segs.is_empty() => {
                 info!("🎬 Sherpa Diarization returned {} audio speech turns", sherpa_segs.len());
                 for seg in parsed_segments.iter_mut() {
@@ -1760,7 +1811,12 @@ pub fn analyze_and_create_project(
                     }
                     if let Some(spk_num) = best_spk {
                         if max_overlap > 0.05 {
-                            seg.speaker_id = format!("speaker_{spk_num}");
+                            let mapped_num = if let Some(n) = expected_speakers {
+                                if n > 0 { spk_num % n } else { spk_num }
+                            } else {
+                                spk_num
+                            };
+                            seg.speaker_id = format!("speaker_{mapped_num}");
                         }
                     }
                 }
@@ -1807,7 +1863,7 @@ pub fn analyze_and_create_project(
     if !minimax_succeeded {
         // Fallback: Generate dynamic speakers based on detected speaker IDs
         let active_ids: Vec<String> = parsed_segments.iter().map(|s| s.speaker_id.clone()).collect();
-        speakers = generate_default_speakers(&tgt_lang, &active_ids);
+        speakers = generate_default_speakers(&tgt_lang, &active_ids, expected_speakers);
 
         // Batch translation to target language via local engine / fallback
         emit("scripting", 50.0, &format!("Đang biên kịch {} câu thoại sang {}...", total, tgt_lang.to_uppercase()), 0, total);
@@ -2615,8 +2671,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("sublix_test_diarize_{}", gen_unique_id()));
         let _ = fs::create_dir_all(&temp_dir);
 
-        let my_gen = start_new_generation();
-        let res = run_sherpa_diarization(&test_wav, &temp_dir, my_gen);
+        let res = run_sherpa_diarization(&test_wav, &temp_dir, 0, Some(2));
         assert!(res.is_ok(), "run_sherpa_diarization failed: {:?}", res.err());
         let turns = res.unwrap();
         assert!(!turns.is_empty(), "Sherpa turns must not be empty");
@@ -2647,6 +2702,7 @@ mod tests {
             Some("vi".to_string()),
             Some(30.0), // limit to first 30s for fast diagnostics
             None,
+            Some(2),
         );
 
         match project_res {

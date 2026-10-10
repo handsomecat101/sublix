@@ -423,7 +423,8 @@ export const sublix = {
     sourceLang?: string,
     targetLang?: string,
     timeLimitSec?: number,
-    startOffsetSec?: number
+    startOffsetSec?: number,
+    expectedSpeakers?: number
   ): Promise<DubbingProject> {
     return await invoke<DubbingProject>("dubbing_analyze", {
       filePath,
@@ -431,6 +432,7 @@ export const sublix = {
       targetLang,
       timeLimitSec: timeLimitSec && timeLimitSec > 0 ? timeLimitSec : null,
       startOffsetSec: startOffsetSec && startOffsetSec > 0 ? startOffsetSec : null,
+      expectedSpeakers: expectedSpeakers && expectedSpeakers > 0 ? expectedSpeakers : null,
     });
   },
 

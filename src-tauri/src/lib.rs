@@ -1064,6 +1064,7 @@ async fn dubbing_analyze(
     target_lang: Option<String>,
     time_limit_sec: Option<f64>,
     start_offset_sec: Option<f64>,
+    expected_speakers: Option<usize>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
         dubbing::analyze_and_create_project(
@@ -1073,6 +1074,7 @@ async fn dubbing_analyze(
             target_lang,
             time_limit_sec,
             start_offset_sec,
+            expected_speakers,
         )
     })
     .await

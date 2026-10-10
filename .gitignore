@@ -29,7 +29,8 @@ src-tauri/WixTools/
 test_dubbing_input/
 test_sample.wav
 
-# Whisper models (large, can be re-downloaded)
+# Whisper & Voice models (large, can be re-downloaded)
+models/
 models/*.bin
 models/*.gguf
 models/*.ggml

@@ -29,7 +29,6 @@ import {
   IconMic,
   IconClock,
   IconMaximize,
-  IconMoreHorizontal,
   IconScissors,
   IconCopy,
   IconTrash,
@@ -38,6 +37,7 @@ import {
   IconBookmark,
   IconArrowsHorizontal,
   IconX,
+  IconCheck,
 } from "../icons";
 import "./SublixStudioView.css";
 
@@ -173,6 +173,12 @@ export default function SublixStudioView({
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(
     cachedProject?.speakers || []
   );
+  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number>(2); // 2: 2 người (đối thoại), 1: 1 người (độc thoại), 0: tự động
+  const [collapseSpeakerTracks, setCollapseSpeakerTracks] = useState<boolean>(false);
+  const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
+  const [mergeFromSpkId, setMergeFromSpkId] = useState<string>("");
+  const [mergeToSpkId, setMergeToSpkId] = useState<string>("");
+  const [deleteSourceAfterMerge, setDeleteSourceAfterMerge] = useState<boolean>(true);
   const [segments, setSegments] = useState<SubtitleItem[]>(
     cachedProject?.segments || []
   );
@@ -760,6 +766,108 @@ export default function SublixStudioView({
     showToast("↶ Đã hoàn tác phân vai / giọng đọc nhân vật");
   };
 
+  // 1-Click: Gộp nhanh toàn bộ về 2 vai chính (Vai 1 và Vai 2)
+  const handleQuickMergeToTwoRoles = () => {
+    if (speakers.length <= 2) {
+      showToast("ℹ️ Dự án hiện đã có 2 vai diễn hoặc ít hơn.");
+      return;
+    }
+    saveSubtitleUndo();
+    saveAudioUndo();
+
+    const mainRole1 = speakers[0];
+    const mainRole2 = speakers[1];
+    const mainRole1Id = mainRole1.id;
+    const mainRole2Id = mainRole2.id;
+
+    // Lập bản đồ ánh xạ các speaker thừa về 2 role chính:
+    // Chẵn (0, 2, 4...) -> mainRole1Id, Lẻ (1, 3, 5...) -> mainRole2Id
+    const mapping: Record<string, string> = {};
+    speakers.forEach((s, idx) => {
+      mapping[s.id] = idx % 2 === 0 ? mainRole1Id : mainRole2Id;
+    });
+
+    const updatedSegments = segments.map((seg) => {
+      const targetSpkId = mapping[seg.speakerId] || seg.speakerId;
+      return { ...seg, speakerId: targetSpkId };
+    });
+
+    const keptSpeakers: SpeakerItem[] = [
+      { ...mainRole1, count: updatedSegments.filter((s) => s.speakerId === mainRole1Id).length },
+      { ...mainRole2, count: updatedSegments.filter((s) => s.speakerId === mainRole2Id).length },
+    ];
+
+    setSegments(updatedSegments);
+    setSpeakers(keptSpeakers);
+    showToast(`⚡ Đã gộp gọn toàn bộ câu thoại về 2 vai chính: "${mainRole1.name}" và "${mainRole2.name}"!`);
+  };
+
+  // Gộp tuỳ chọn giữa 2 vai (Modal Merge)
+  const handleConfirmMergeSpeakers = () => {
+    if (!mergeFromSpkId || !mergeToSpkId) {
+      showToast("⚠️ Vui lòng chọn cả vai nguồn và vai đích.");
+      return;
+    }
+    if (mergeFromSpkId === mergeToSpkId) {
+      showToast("⚠️ Vai nguồn và vai đích không được trùng nhau.");
+      return;
+    }
+
+    saveSubtitleUndo();
+    saveAudioUndo();
+
+    const fromSpk = speakers.find((s) => s.id === mergeFromSpkId);
+    const toSpk = speakers.find((s) => s.id === mergeToSpkId);
+
+    const updatedSegments = segments.map((seg) => {
+      if (seg.speakerId === mergeFromSpkId) {
+        return { ...seg, speakerId: mergeToSpkId };
+      }
+      return seg;
+    });
+
+    let updatedSpeakers = speakers;
+    if (deleteSourceAfterMerge) {
+      updatedSpeakers = updatedSpeakers.filter((s) => s.id !== mergeFromSpkId);
+    }
+    updatedSpeakers = updatedSpeakers.map((s) => {
+      if (s.id === mergeToSpkId) {
+        return { ...s, count: updatedSegments.filter((seg) => seg.speakerId === s.id).length };
+      }
+      return s;
+    });
+
+    setSegments(updatedSegments);
+    setSpeakers(updatedSpeakers);
+    setShowMergeModal(false);
+    showToast(`🔗 Đã gộp toàn bộ câu thoại từ "${fromSpk?.name || mergeFromSpkId}" vào "${toSpk?.name || mergeToSpkId}"!`);
+  };
+
+  // Xoá vai trực tiếp
+  const handleDeleteSpeaker = (spkId: string) => {
+    if (speakers.length <= 1) {
+      showToast("⚠️ Dự án phải có ít nhất 1 vai diễn.");
+      return;
+    }
+    saveSubtitleUndo();
+    saveAudioUndo();
+
+    const spkToDelete = speakers.find((s) => s.id === spkId);
+    const remainingSpeakers = speakers.filter((s) => s.id !== spkId);
+    const fallbackSpkId = remainingSpeakers[0].id;
+
+    const updatedSegments = segments.map((seg) => {
+      if (seg.speakerId === spkId) {
+        return { ...seg, speakerId: fallbackSpkId };
+      }
+      return seg;
+    });
+
+    setSegments(updatedSegments);
+    setSpeakers(remainingSpeakers);
+    showToast(`🗑️ Đã xoá vai "${spkToDelete?.name || spkId}". Các câu thoại đã chuyển sang "${remainingSpeakers[0].name}".`);
+  };
+
   const handleTogglePlay = () => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phát");
@@ -1170,7 +1278,8 @@ export default function SublixStudioView({
         sttLang === "auto" ? undefined : sttLang,
         undefined, // Chỉ bóc tách sub gốc, không dịch
         durLimit,
-        startOffset
+        startOffset,
+        expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined
       );
 
       if (project) {
@@ -1421,7 +1530,8 @@ export default function SublixStudioView({
         sttLang === "auto" ? undefined : sttLang,
         targetLang,
         durLimit,
-        startOffset
+        startOffset,
+        expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined
       );
 
       if (project) {
@@ -2446,6 +2556,40 @@ export default function SublixStudioView({
 
               {openCard === "dubbing" && (
                 <div className="studio-step-card-content">
+                  {/* ROUND-9: Bộ chọn số lượng người nói dự kiến */}
+                  <div className="studio-speaker-count-selector">
+                    <div className="studio-speaker-count-header">
+                      <span className="studio-speaker-count-title">👥 Số người nói trong video:</span>
+                      <span className="studio-speaker-count-hint">Định hướng AI phân vai chuẩn</span>
+                    </div>
+                    <div className="studio-speaker-count-chips">
+                      <button
+                        type="button"
+                        className={`studio-speaker-count-chip ${expectedSpeakerCount === 1 ? "active" : ""}`}
+                        onClick={() => setExpectedSpeakerCount(1)}
+                        title="1 người độc thoại / thuyết minh (Khóa chính xác 1 vai duy nhất)"
+                      >
+                        👤 1 Người
+                      </button>
+                      <button
+                        type="button"
+                        className={`studio-speaker-count-chip ${expectedSpeakerCount === 2 ? "active" : ""}`}
+                        onClick={() => setExpectedSpeakerCount(2)}
+                        title="2 người đối thoại / podcast / phỏng vấn (Khuyên dùng: Phân đúng 2 vai, không bị rác)"
+                      >
+                        👥 2 Người ⭐
+                      </button>
+                      <button
+                        type="button"
+                        className={`studio-speaker-count-chip ${expectedSpeakerCount === 0 ? "active" : ""}`}
+                        onClick={() => setExpectedSpeakerCount(0)}
+                        title="Để Sherpa AI tự động dò tìm số lượng người nói theo âm học"
+                      >
+                        🤖 Tự động
+                      </button>
+                    </div>
+                  </div>
+
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       type="button"
@@ -2490,6 +2634,61 @@ export default function SublixStudioView({
                       </div>
                     </div>
                   )}
+
+                  {/* ROUND-9: Thanh công cụ quản lý vai diễn (Thêm / Gộp / Về 2 vai) */}
+                  <div className="studio-speaker-tools-bar">
+                    <button
+                      type="button"
+                      className="studio-btn-tool-chip"
+                      onClick={() => {
+                        saveAudioUndo();
+                        const newId = `speaker_${speakers.length}`;
+                        setSpeakers([
+                          ...speakers,
+                          {
+                            id: newId,
+                            name: `Nhân vật ${speakers.length + 1}`,
+                            gender: "male",
+                            color: SPEAKER_COLORS[speakers.length % SPEAKER_COLORS.length],
+                            voice: "kokoro:tuan_ngoc",
+                            count: 0,
+                          },
+                        ]);
+                        showToast("➕ Đã thêm vai diễn mới");
+                      }}
+                      title="Thêm một vai diễn mới vào dự án"
+                    >
+                      <IconPlus size={12} /> Thêm vai
+                    </button>
+
+                    <button
+                      type="button"
+                      className="studio-btn-tool-chip"
+                      onClick={() => {
+                        if (speakers.length < 2) {
+                          showToast("⚠️ Cần ít nhất 2 vai diễn để thực hiện gộp.");
+                          return;
+                        }
+                        setMergeFromSpkId(speakers[speakers.length - 1]?.id || "");
+                        setMergeToSpkId(speakers[0]?.id || "");
+                        setShowMergeModal(true);
+                      }}
+                      title="Gộp các câu thoại từ vai này sang vai khác"
+                    >
+                      <IconLink size={12} /> Gộp vai...
+                    </button>
+
+                    {speakers.length > 2 && (
+                      <button
+                        type="button"
+                        className="studio-btn-tool-chip highlight"
+                        onClick={handleQuickMergeToTwoRoles}
+                        title="⚡ Tự động gộp tất cả các vai phụ (vai 3, 4, 5...) về 2 vai chính (Vai 1 & 2), dọn sạch timeline ngay lập tức"
+                      >
+                        ⚡ Về 2 vai
+                      </button>
+                    )}
+                  </div>
 
                   <div className="studio-speakers-list">
                     {speakers.map((spk, idx) => (
@@ -2555,7 +2754,7 @@ export default function SublixStudioView({
                             {playingAudioSpkId === spk.id ? (
                               <>
                                 <span style={{ color: "#38bdf8", display: "inline-flex" }}>
-                                  <IconVolume2 size={12} />
+                                <IconVolume2 size={12} />
                                 </span>{" "}
                                 Đang pht...
                               </>
@@ -2569,13 +2768,17 @@ export default function SublixStudioView({
                               </>
                             )}
                           </button>
-                          <button
-                            type="button"
-                            className="studio-btn-voice-preview"
-                            style={{ marginLeft: "auto" }}
-                          >
-                            <IconMoreHorizontal size={12} />
-                          </button>
+                          {speakers.length > 1 && (
+                            <button
+                              type="button"
+                              className="studio-btn-voice-preview studio-speaker-remove-btn"
+                              style={{ marginLeft: "auto" }}
+                              onClick={() => handleDeleteSpeaker(spk.id)}
+                              title={`Xoá vai ${spk.name} và chuyển các câu thoại sang vai khác`}
+                            >
+                              <IconTrash size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3813,7 +4016,19 @@ export default function SublixStudioView({
         <div className="studio-timeline-scroll-wrap">
           {/* Left Track Headers (Fixed) */}
           <div className="studio-timeline-track-headers">
-            <div className="studio-timeline-ruler-header-spacer">TRACKS</div>
+            <div className="studio-timeline-ruler-header-spacer">
+              <span>TRACKS</span>
+              {speakers.length > 1 && (
+                <button
+                  type="button"
+                  className={`studio-track-collapse-btn ${collapseSpeakerTracks ? "active" : ""}`}
+                  onClick={() => setCollapseSpeakerTracks(!collapseSpeakerTracks)}
+                  title={collapseSpeakerTracks ? "Mở rộng từng track nhân vật riêng biệt" : "Thu gọn tất cả nhân vật vào 1 track duy nhất"}
+                >
+                  {collapseSpeakerTracks ? "↕ Mở" : "↕ Gọn"}
+                </button>
+              )}
+            </div>
             <div className="studio-track-header-item">
               <div className="studio-track-header-left">
                 <span></span>
@@ -3834,17 +4049,34 @@ export default function SublixStudioView({
             </div>
 
             {/* Dynamic Speaker Tracks */}
-            {speakers.map((spk) => (
-              <div key={spk.id} className="studio-track-header-item">
+            {collapseSpeakerTracks ? (
+              <div className="studio-track-header-item">
                 <div className="studio-track-header-left">
-                  <span
-                    className="studio-track-header-dot"
-                    style={{ background: spk.color }}
-                  />
-                  <span> {spk.name}</span>
+                  <span className="studio-track-header-dot-stack">
+                    {speakers.slice(0, 3).map((s) => (
+                      <span
+                        key={s.id}
+                        className="studio-track-header-dot"
+                        style={{ background: s.color }}
+                      />
+                    ))}
+                  </span>
+                  <span>🎭 VAI DIỄN ({speakers.length})</span>
                 </div>
               </div>
-            ))}
+            ) : (
+              speakers.map((spk) => (
+                <div key={spk.id} className="studio-track-header-item">
+                  <div className="studio-track-header-left">
+                    <span
+                      className="studio-track-header-dot"
+                      style={{ background: spk.color }}
+                    />
+                    <span> {spk.name}</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Right Tracks Body (Horizontal Scroll) */}
@@ -4151,88 +4383,174 @@ export default function SublixStudioView({
             </div>
 
             {/* Track 4..n: Dynamic Speaker Tracks (Progressive Filling per Character) */}
-            {speakers.map((spk) => {
-              const spkSegments = segments.filter((s) => s.speakerId === spk.id);
-
-              return (
-                <div key={spk.id} className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
-                  {/* ROUND-8: Visual Progressive Fill on Voice / Pipeline */}
-                  {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
-                    (() => {
-                      const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
-                      const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
-                      const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
-                      const totalSec = Math.max(0.1, endSec - startSec);
-                      const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
-                      const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
-                      const currentWidthPx = totalWidthPx * (timelineProgress / 100);
-
-                      return (
-                        <div
-                          className="studio-timeline-progress-fill voice"
-                          style={{
-                            left: `${startLeftPx}px`,
-                            width: `${Math.max(12, currentWidthPx)}px`,
-                            opacity: 0.85,
-                          }}
-                        >
-                          <div className="studio-timeline-progress-stripes" />
-                          <div className="studio-timeline-laser-head">
-                            <div className="studio-timeline-laser-badge">
-                              🗣️ {spk.name}: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  )}
-                  {spkSegments.map((seg) => {
-                    const totalDur = Math.max(1, mediaDuration);
-                    const left = (seg.start / totalDur) * timelineWidth + 40;
-                    const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
-                    const isSelected = seg.id === selectedSegId;
+            {collapseSpeakerTracks ? (
+              <div
+                className="studio-track-lane"
+                style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+                onClick={handleTimelineClick}
+              >
+                {/* Visual Progressive Fill on Voice / Pipeline */}
+                {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
+                  (() => {
+                    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+                    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+                    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+                    const totalSec = Math.max(0.1, endSec - startSec);
+                    const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                    const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
+                    const currentWidthPx = totalWidthPx * (timelineProgress / 100);
 
                     return (
                       <div
-                        key={seg.id}
-                        className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                        className="studio-timeline-progress-fill voice"
                         style={{
-                          left: `${left}px`,
-                          width: `${Math.max(50, width)}px`,
-                          background: `${spk.color}55`,
-                          borderColor: spk.color,
+                          left: `${startLeftPx}px`,
+                          width: `${Math.max(12, currentWidthPx)}px`,
+                          opacity: 0.85,
                         }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectSegment(seg);
-                        }}
-                        title={`[${spk.name}] ${seg.translated}`}
                       >
-                        <div
-                          className="studio-timeline-block-handle left"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "start", -0.2);
-                          }}
-                          title="Thu nh/Ko di đầu cu (-0.2s)"
-                        />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                          {seg.translated}
-                        </span>
-                        <div
-                          className="studio-timeline-block-handle right"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "end", 0.2);
-                          }}
-                          title="Thu nh/Ko di cuối cu (+0.2s)"
-                        />
+                        <div className="studio-timeline-progress-stripes" />
+                        <div className="studio-timeline-laser-head">
+                          <div className="studio-timeline-laser-badge">
+                            🗣️ Tất cả vai: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                          </div>
+                        </div>
                       </div>
                     );
-                  })}
-                </div>
-              );
-            })}
+                  })()
+                )}
+                {segments.map((seg) => {
+                  const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
+                  const totalDur = Math.max(1, mediaDuration);
+                  const left = (seg.start / totalDur) * timelineWidth + 40;
+                  const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const isSelected = seg.id === selectedSegId;
+                  const spkColor = spk?.color || "#38bdf8";
+
+                  return (
+                    <div
+                      key={seg.id}
+                      className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                      style={{
+                        left: `${left}px`,
+                        width: `${Math.max(50, width)}px`,
+                        background: `${spkColor}55`,
+                        borderColor: spkColor,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectSegment(seg);
+                      }}
+                      title={`[${spk?.name || "Nhân vật"}] ${seg.translated || seg.original}`}
+                    >
+                      <div
+                        className="studio-timeline-block-handle left"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNudgeSegment(seg.id, "start", -0.2);
+                        }}
+                        title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                      />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
+                        <strong style={{ opacity: 0.9, marginRight: 4 }}>[{spk?.name || "Vai"}]:</strong>
+                        {seg.translated || seg.original}
+                      </span>
+                      <div
+                        className="studio-timeline-block-handle right"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNudgeSegment(seg.id, "end", 0.2);
+                        }}
+                        title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              speakers.map((spk) => {
+                const spkSegments = segments.filter((s) => s.speakerId === spk.id);
+
+                return (
+                  <div key={spk.id} className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
+                    {/* ROUND-8: Visual Progressive Fill on Voice / Pipeline */}
+                    {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
+                      (() => {
+                        const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+                        const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+                        const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+                        const totalSec = Math.max(0.1, endSec - startSec);
+                        const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                        const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
+                        const currentWidthPx = totalWidthPx * (timelineProgress / 100);
+
+                        return (
+                          <div
+                            className="studio-timeline-progress-fill voice"
+                            style={{
+                              left: `${startLeftPx}px`,
+                              width: `${Math.max(12, currentWidthPx)}px`,
+                              opacity: 0.85,
+                            }}
+                          >
+                            <div className="studio-timeline-progress-stripes" />
+                            <div className="studio-timeline-laser-head">
+                              <div className="studio-timeline-laser-badge">
+                                🗣️ {spk.name}: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    )}
+                    {spkSegments.map((seg) => {
+                      const totalDur = Math.max(1, mediaDuration);
+                      const left = (seg.start / totalDur) * timelineWidth + 40;
+                      const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                      const isSelected = seg.id === selectedSegId;
+
+                      return (
+                        <div
+                          key={seg.id}
+                          className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                          style={{
+                            left: `${left}px`,
+                            width: `${Math.max(50, width)}px`,
+                            background: `${spk.color}55`,
+                            borderColor: spk.color,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectSegment(seg);
+                          }}
+                          title={`[${spk.name}] ${seg.translated || seg.original}`}
+                        >
+                          <div
+                            className="studio-timeline-block-handle left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNudgeSegment(seg.id, "start", -0.2);
+                            }}
+                            title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                          />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
+                            {seg.translated || seg.original}
+                          </span>
+                          <div
+                            className="studio-timeline-block-handle right"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNudgeSegment(seg.id, "end", 0.2);
+                            }}
+                            title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </footer>
@@ -4267,6 +4585,95 @@ export default function SublixStudioView({
                 </button>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ROUND-9: Modal Gộp Vai Diễn (Merge Roles Modal) */}
+      {showMergeModal && (
+        <div className="studio-modal-backdrop" onClick={() => setShowMergeModal(false)}>
+          <div className="studio-modal-box studio-merge-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="studio-modal-title">
+              <IconLink size={18} />
+              <span>Gộp Vai Diễn (Merge Roles)</span>
+              <button
+                type="button"
+                className="studio-modal-close-btn"
+                onClick={() => setShowMergeModal(false)}
+                title="Đóng cửa sổ gộp"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="studio-merge-modal-desc">
+              Chuyển toàn bộ các câu thoại từ <strong>Vai nguồn</strong> sang <strong>Vai đích</strong>.
+              Timeline sẽ được sắp xếp lại tự động và giữ tính đồng bộ hoàn hảo.
+            </p>
+
+            <div className="studio-merge-fields">
+              <div className="studio-merge-field">
+                <label>Vai nguồn (Cần gộp đi):</label>
+                <select
+                  className="studio-form-select"
+                  value={mergeFromSpkId}
+                  onChange={(e) => setMergeFromSpkId(e.target.value)}
+                >
+                  {speakers.map((spk) => (
+                    <option key={spk.id} value={spk.id}>
+                      {spk.name} ({segments.filter((s) => s.speakerId === spk.id).length} câu)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="studio-merge-arrow">➔</div>
+
+              <div className="studio-merge-field">
+                <label>Vai đích (Nhận câu thoại):</label>
+                <select
+                  className="studio-form-select"
+                  value={mergeToSpkId}
+                  onChange={(e) => setMergeToSpkId(e.target.value)}
+                >
+                  {speakers
+                    .filter((spk) => spk.id !== mergeFromSpkId)
+                    .map((spk) => (
+                      <option key={spk.id} value={spk.id}>
+                        {spk.name} ({segments.filter((s) => s.speakerId === spk.id).length} câu)
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="studio-merge-options">
+              <label className="studio-merge-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={deleteSourceAfterMerge}
+                  onChange={(e) => setDeleteSourceAfterMerge(e.target.checked)}
+                />
+                <span>Xoá bỏ vai nguồn sau khi gộp xong (Khuyên dùng để dọn sạch timeline)</span>
+              </label>
+            </div>
+
+            <div className="studio-merge-actions">
+              <button
+                type="button"
+                className="studio-btn-voice-preview"
+                onClick={() => setShowMergeModal(false)}
+              >
+                Huỷ
+              </button>
+              <button
+                type="button"
+                className="studio-btn-action-primary"
+                onClick={handleConfirmMergeSpeakers}
+              >
+                <IconCheck size={14} /> Xác Nhận Gộp Vai
+              </button>
+            </div>
           </div>
         </div>
       )}
