@@ -1019,18 +1019,21 @@ export default function SettingsView() {
 
   return (
     <div className="app-shell">
-      {/* STUDIO FULL-BLEED: Studio chiếm trọn cửa sổ — panel trái/tạnh cũ ẩn khi ở Studio */}
-      {activeTab === "studio" && (
-        <div className="studio-fullbleed">
-          <SublixStudioView
-            initialFilePath={pendingDubbingPath}
-            isActive
-            onNavigateTab={(t) => setActiveTab(t)}
-            currentTheme={theme}
-            onThemeChange={handleThemeChange}
-          />
-        </div>
-      )}
+      {/* STUDIO FULL-BLEED: Giữ mounted vĩnh viễn trong DOM để KHÔNG bao giờ bị clear project/timeline khi chuyển tab */}
+      <div
+        className="studio-fullbleed"
+        style={{
+          display: activeTab === "studio" ? "flex" : "none",
+        }}
+      >
+        <SublixStudioView
+          initialFilePath={pendingDubbingPath}
+          isActive={activeTab === "studio"}
+          onNavigateTab={(t) => setActiveTab(t)}
+          currentTheme={theme}
+          onThemeChange={handleThemeChange}
+        />
+      </div>
             {/* RIGHT MAIN WORKSPACE */}
       <main className="app-main" style={{ display: activeTab === "studio" ? "none" : "flex" }}>
         {/* MASTER STUDIO TOPBAR */}

@@ -87,6 +87,21 @@ function formatTimecode(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
 }
 
+const STUDIO_PROJECT_CACHE_KEY = "sublix_active_studio_project_v1";
+
+interface SavedStudioProject {
+  filePath: string;
+  fileName: string;
+  mediaDuration: number;
+  segments: SubtitleItem[];
+  speakers: SpeakerItem[];
+  audioPeaks: number[];
+  filmstripThumbs: Array<{ time_sec: number; data_uri: string }>;
+  currentTime: number;
+  sttLang?: string;
+  targetLang?: string;
+}
+
 export default function SublixStudioView({
   onNavigateTab,
   currentTheme = "cinema",
@@ -95,13 +110,30 @@ export default function SublixStudioView({
   isActive = true,
   fileNonce,
 }: SublixStudioViewProps) {
+  // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
+  const [cachedProject] = useState<SavedStudioProject | null>(() => {
+    if (initialFilePath) return null;
+    try {
+      const raw = localStorage.getItem(STUDIO_PROJECT_CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Navigation & Project Meta
   const [activeTab, setActiveTab] = useState<string>("studio");
-  const [filePath, setFilePath] = useState<string>(initialFilePath || "");
-  const [fileName, setFileName] = useState<string>(
-    initialFilePath ? (initialFilePath.split(/[\\/]/).pop() || "") : ""
+  const [filePath, setFilePath] = useState<string>(
+    initialFilePath || cachedProject?.filePath || ""
   );
-  const [mediaDuration, setMediaDuration] = useState<number>(0);
+  const [fileName, setFileName] = useState<string>(
+    initialFilePath
+      ? (initialFilePath.split(/[\\/]/).pop() || "")
+      : (cachedProject?.fileName || "")
+  );
+  const [mediaDuration, setMediaDuration] = useState<number>(
+    cachedProject?.mediaDuration || 0
+  );
 
   // Undo history stacks: General, Subtitles, Translations, Audio/Speakers
   const [undoStack, setUndoStack] = useState<SubtitleItem[][]>([]);
@@ -137,8 +169,12 @@ export default function SublixStudioView({
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
 
   // Step 3: Speakers & Segments (P2, P4, P5)
-  const [speakers, setSpeakers] = useState<SpeakerItem[]>([]);
-  const [segments, setSegments] = useState<SubtitleItem[]>([]);
+  const [speakers, setSpeakers] = useState<SpeakerItem[]>(
+    cachedProject?.speakers || []
+  );
+  const [segments, setSegments] = useState<SubtitleItem[]>(
+    cachedProject?.segments || []
+  );
   const [selectedSegId, setSelectedSegId] = useState<number>(0);
   const [speakerFilter, setSpeakerFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -149,8 +185,12 @@ export default function SublixStudioView({
   const [analyzeMessage, setAnalyzeMessage] = useState<string>("");
 
   // R2-03 & R2-D: Real audio peaks and filmstrip video thumbnails
-  const [audioPeaks, setAudioPeaks] = useState<number[]>([]);
-  const [filmstripThumbs, setFilmstripThumbs] = useState<Array<{ time_sec: number; data_uri: string }>>([]);
+  const [audioPeaks, setAudioPeaks] = useState<number[]>(
+    cachedProject?.audioPeaks || []
+  );
+  const [filmstripThumbs, setFilmstripThumbs] = useState<Array<{ time_sec: number; data_uri: string }>>(
+    cachedProject?.filmstripThumbs || []
+  );
   const [isPreviewExtracting, setIsPreviewExtracting] = useState<boolean>(false);
 
   // Preview TTS, Progressive Simulation & Export
@@ -234,10 +274,10 @@ export default function SublixStudioView({
     });
   }, []);
 
-  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes
+  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (chỉ cập nhật khi có path mới khác path hiện tại)
   useEffect(() => {
-    setTranscodedPath(null); // ROUND-4 R4-01: reset transcode cache khi đổi file
-    if (initialFilePath) {
+    if (initialFilePath && initialFilePath !== filePath) {
+      setTranscodedPath(null); // ROUND-4 R4-01: reset transcode cache khi đổi file
       setFilePath(initialFilePath);
       const name = initialFilePath.split(/[\\/]/).pop() || initialFilePath;
       setFileName(name);
@@ -246,8 +286,41 @@ export default function SublixStudioView({
     }
   }, [initialFilePath, fileNonce]);
 
+  // Tự động tạm dừng phát video khi người dùng chuyển sang tab khác
+  useEffect(() => {
+    if (!isActive && videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [isActive]);
+
+  // Tự động lưu trạng thái dự án Studio vào localStorage để không bao giờ bị mất
+  useEffect(() => {
+    if (!filePath) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const payload: SavedStudioProject = {
+          filePath,
+          fileName,
+          mediaDuration,
+          segments,
+          speakers,
+          audioPeaks,
+          filmstripThumbs,
+          currentTime,
+          sttLang,
+          targetLang,
+        };
+        localStorage.setItem(STUDIO_PROJECT_CACHE_KEY, JSON.stringify(payload));
+      } catch (err) {
+        console.warn("Studio auto-save to localStorage failed:", err);
+      }
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [filePath, fileName, mediaDuration, segments, speakers, audioPeaks, filmstripThumbs, currentTime, sttLang, targetLang]);
+
   // R5-01: cleanup loadedMetadataTimer khi component unmount hoặc đổi file
-  // (trnh setState sau khi component đ unmount → React warning).
+  // (tránh setState sau khi component đã unmount → React warning).
   useEffect(() => {
     return () => {
       if (loadedMetadataTimerRef.current !== null) {
@@ -258,30 +331,29 @@ export default function SublixStudioView({
   }, [initialFilePath, fileNonce]);
 
   // R5-03: cleanup preview file cũ khi user đổi video (setFilePath với file mới)
-  // hoặc clear file (setFilePath("")). Dng ref để track file trước đ → gọi
-  // backend cleanup theo input_path cũ. Khng cần await (fire-and-forget OK).
+  // hoặc clear file (setFilePath("")). Dùng ref để track file trước đó → gọi
+  // backend cleanup theo input_path cũ. Không cần await (fire-and-forget OK).
   const prevFilePathRef = useRef<string | null>(null);
   useEffect(() => {
     const prev = prevFilePathRef.current;
     if (prev && prev !== filePath) {
-      // Đổi file hoặc clear → dọn preview cũ (nếu c)
+      // Đổi file hoặc clear → dọn preview cũ (nếu có)
       void sublix.cleanupPreviewForInput(prev).catch((e) => {
         console.warn("cleanupPreviewForInput failed:", e);
       });
-      // Reset transcodedPath để <video> khng trỏ vo file preview đ bị xo
+      // Reset transcodedPath để <video> không trỏ vào file preview đã bị xoá
       setTranscodedPath(null);
     }
     prevFilePathRef.current = filePath || null;
   }, [filePath]);
 
-  // R5-03: cleanup TON BỘ preview khi component unmount (chuyển tab khc hoặc đng app).
-  // Fire-and-forget; Rust command xo async, khng block React.
+  // Dọn dẹp cache preview chỉ khi tắt trình duyệt / thoát ứng dụng hoàn toàn (beforeunload)
   useEffect(() => {
-    return () => {
-      void sublix.cleanupAllPreviews().catch((e) => {
-        console.warn("cleanupAllPreviews failed:", e);
-      });
+    const onBeforeUnload = () => {
+      void sublix.cleanupAllPreviews().catch(() => {});
     };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
   // Tự động trích xuất sóng âm audio peaks và thumbnails khi nạp video vào timeline
@@ -1511,6 +1583,9 @@ export default function SublixStudioView({
                     console.warn("Video clear error:", e);
                   }
                 }
+                try {
+                  localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
+                } catch {}
                 showToast("Đã đóng video hiện tại");
               }}
             >
