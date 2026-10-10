@@ -183,6 +183,25 @@ export default function SublixStudioView({
     cachedProject?.segments || []
   );
   const [selectedSegId, setSelectedSegId] = useState<number>(0);
+  const [selectedSegIds, setSelectedSegIds] = useState<number[]>([]);
+  const selectedSegIdsRef = useRef<number[]>([]);
+  selectedSegIdsRef.current = selectedSegIds;
+
+  // ROUND-11: Marquee Box Selection on Timeline
+  const [marqueeBox, setMarqueeBox] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+  const isMarqueeSelectingRef = useRef<boolean>(false);
+
+  // ROUND-11: Consolidated Workflow Checklist (Các công đoạn lựa chọn)
+  const [workflowOptStt, setWorkflowOptStt] = useState<boolean>(true);
+  const [workflowOptDiarize, setWorkflowOptDiarize] = useState<boolean>(true);
+  const [workflowOptTranslate, setWorkflowOptTranslate] = useState<boolean>(true);
+  const [workflowOptVoice, setWorkflowOptVoice] = useState<boolean>(false);
+
   const [speakerFilter, setSpeakerFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -1044,12 +1063,161 @@ export default function SublixStudioView({
   };
 
   const handleDeleteSegment = (idToDelete?: number) => {
-    const id = idToDelete ?? selectedSegIdRef.current;
-    if (segmentsRef.current.length === 0 || !id) return;
+    const ids = idToDelete
+      ? [idToDelete]
+      : selectedSegIdsRef.current.length > 0
+      ? selectedSegIdsRef.current
+      : selectedSegIdRef.current > 0
+      ? [selectedSegIdRef.current]
+      : [];
+
+    if (ids.length === 0 || segmentsRef.current.length === 0) return;
     saveUndoHistory();
-    setSegments((prev) => prev.filter((s) => s.id !== id));
-    if (selectedSegIdRef.current === id) setSelectedSegId(0);
-    showToast(`🗑️ Đã xóa câu thoại #${id}`);
+    setSegments((prev) => prev.filter((s) => !ids.includes(s.id)));
+    setSelectedSegIds([]);
+    selectedSegIdsRef.current = [];
+    setSelectedSegId(0);
+    selectedSegIdRef.current = 0;
+    showToast(`🗑️ Đã xóa ${ids.length} câu thoại`);
+  };
+
+  // ROUND-11: Xóa toàn bộ Track (Toàn bộ phụ đề hoặc toàn bộ câu thoại của vai)
+  const handleClearTrack = (type: "subtitles" | "speaker", spkId?: string) => {
+    saveUndoHistory();
+    if (type === "subtitles") {
+      const count = segmentsRef.current.length;
+      if (count === 0) {
+        showToast("ℹ️ Track phụ đề hiện đang trống.");
+        return;
+      }
+      setSegments([]);
+      setSelectedSegIds([]);
+      selectedSegIdsRef.current = [];
+      setSelectedSegId(0);
+      selectedSegIdRef.current = 0;
+      showToast(`🗑️ Đã xóa sạch toàn bộ ${count} câu thoại trong track phụ đề`);
+    } else if (type === "speaker" && spkId) {
+      const spk = speakers.find((s) => s.id === spkId);
+      const count = segmentsRef.current.filter((s) => s.speakerId === spkId).length;
+      if (count === 0) {
+        showToast(`ℹ️ Vai ${spk?.name || spkId} hiện không có câu thoại nào.`);
+        return;
+      }
+      setSegments((prev) => prev.filter((s) => s.speakerId !== spkId));
+      setSelectedSegIds((prev) =>
+        prev.filter((id) => {
+          const s = segmentsRef.current.find((item) => item.id === id);
+          return s && s.speakerId !== spkId;
+        })
+      );
+      showToast(`🗑️ Đã xóa sạch ${count} câu thoại của vai "${spk?.name || spkId}"`);
+    }
+  };
+
+  // ROUND-11: Chọn câu thoại có hỗ trợ Multi-select (Shift / Ctrl / Cmd)
+  const handleSelectSegmentWithModifier = (seg: SubtitleItem, e?: React.MouseEvent) => {
+    if (e && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      setSelectedSegIds((prev) => {
+        const next = prev.includes(seg.id) ? prev.filter((id) => id !== seg.id) : [...prev, seg.id];
+        selectedSegIdsRef.current = next;
+        if (next.length > 0) {
+          setSelectedSegId(next[next.length - 1]);
+          selectedSegIdRef.current = next[next.length - 1];
+        } else {
+          setSelectedSegId(0);
+          selectedSegIdRef.current = 0;
+        }
+        return next;
+      });
+    } else {
+      setSelectedSegIds([seg.id]);
+      selectedSegIdsRef.current = [seg.id];
+      setSelectedSegId(seg.id);
+      selectedSegIdRef.current = seg.id;
+    }
+    handleSeek(seg.start);
+  };
+
+  // ROUND-11: Marquee Box Selection kéo chuột trái trên Timeline
+  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(".studio-timeline-block") ||
+      target.closest(".studio-timeline-playhead") ||
+      target.closest(".studio-btn-transport") ||
+      target.closest("button") ||
+      target.closest(".studio-ruler-range-handle")
+    ) {
+      return;
+    }
+
+    const container = timelineTracksBodyRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft || 0;
+    const startX = e.clientX - rect.left + scrollLeft;
+    const startY = e.clientY - rect.top;
+
+    isMarqueeSelectingRef.current = true;
+    setMarqueeBox({
+      startX,
+      startY,
+      currentX: startX,
+      currentY: startY,
+    });
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isMarqueeSelectingRef.current) return;
+      const curScrollLeft = container.scrollLeft || 0;
+      const currentX = moveEvent.clientX - rect.left + curScrollLeft;
+      const currentY = moveEvent.clientY - rect.top;
+
+      setMarqueeBox((prev) => (prev ? { ...prev, currentX, currentY } : null));
+
+      const minX = Math.min(startX, currentX);
+      const maxX = Math.max(startX, currentX);
+      const minY = Math.min(startY, currentY);
+      const maxY = Math.max(startY, currentY);
+
+      const blockEls = container.querySelectorAll(".studio-timeline-block");
+      const matchedIds: number[] = [];
+
+      blockEls.forEach((block) => {
+        const segId = Number(block.getAttribute("data-seg-id"));
+        if (!segId) return;
+        const bRect = block.getBoundingClientRect();
+        const bLeft = bRect.left - rect.left + curScrollLeft;
+        const bRight = bLeft + bRect.width;
+        const bTop = bRect.top - rect.top;
+        const bBottom = bTop + bRect.height;
+
+        const isOverlap = bLeft < maxX && bRight > minX && bTop < maxY && bBottom > minY;
+        if (isOverlap && !matchedIds.includes(segId)) {
+          matchedIds.push(segId);
+        }
+      });
+
+      setSelectedSegIds(matchedIds);
+      selectedSegIdsRef.current = matchedIds;
+      if (matchedIds.length > 0) {
+        setSelectedSegId(matchedIds[0]);
+        selectedSegIdRef.current = matchedIds[0];
+      }
+    };
+
+    const onMouseUp = () => {
+      isMarqueeSelectingRef.current = false;
+      setMarqueeBox(null);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      if (selectedSegIdsRef.current.length > 0) {
+        showToast(`✨ Đã chọn ${selectedSegIdsRef.current.length} câu thoại`);
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
   // Premiere-style Timeline Vertical Resizer (Kéo mở rộng chiều cao)
@@ -1399,6 +1567,66 @@ export default function SublixStudioView({
   };
 
   // =========================================================================
+  // ROUND-11: CÔNG ĐOẠN TẬP TRUNG — CHẠY THEO CÁC OPTION ĐÃ TÍCH CHỌN
+  // =========================================================================
+  const handleRunCustomWorkflow = async () => {
+    if (!filePath) {
+      showToast("⚠️ Vui lòng mở hoặc kéo thả video trước khi xử lý");
+      return;
+    }
+    if (!workflowOptStt && !workflowOptDiarize && !workflowOptTranslate && !workflowOptVoice) {
+      showToast("⚠️ Vui lòng chọn ít nhất 1 công đoạn để xử lý.");
+      return;
+    }
+    if ((workflowOptTranslate || workflowOptVoice) && !workflowOptStt && segments.length === 0) {
+      showToast("⚠️ Dự án chưa có câu thoại nào! Vui lòng tích chọn Bước 1 (Tạo phụ đề gốc STT) trước.");
+      return;
+    }
+
+    // Nếu chọn Full (cả 3 công đoạn chính)
+    if (workflowOptStt && workflowOptTranslate && workflowOptVoice) {
+      await handleRunAnalysis();
+      return;
+    }
+
+    // Nếu chỉ bóc tách phụ đề gốc (+ phân vai nếu tick)
+    if (workflowOptStt && !workflowOptTranslate && !workflowOptVoice) {
+      await handleRunSttOnly();
+      return;
+    }
+
+    // Nếu chỉ dịch thuật
+    if (!workflowOptStt && workflowOptTranslate && !workflowOptVoice) {
+      await handleRunTranslateOnly();
+      return;
+    }
+
+    // Nếu chỉ tạo giọng đọc (Voice)
+    if (!workflowOptStt && !workflowOptTranslate && workflowOptVoice) {
+      await handleRunVoiceOnly();
+      return;
+    }
+
+    // Nếu làm Sub + Dịch thuật (không voice)
+    if (workflowOptStt && workflowOptTranslate && !workflowOptVoice) {
+      await handleRunSttOnly();
+      setTimeout(() => {
+        void handleRunTranslateOnly();
+      }, 1000);
+      return;
+    }
+
+    // Nếu Dịch thuật + Tạo Voice (đã có sub từ trước)
+    if (!workflowOptStt && workflowOptTranslate && workflowOptVoice) {
+      await handleRunTranslateOnly();
+      setTimeout(() => {
+        void handleRunVoiceOnly();
+      }, 1000);
+      return;
+    }
+  };
+
+  // =========================================================================
   // ROUND-8: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
   // =========================================================================
   const handleRunSttOnly = async () => {
@@ -1464,7 +1692,19 @@ export default function SublixStudioView({
           setSegments(newMappedSegs);
         }
 
-        if (project.speakers.length > 0) {
+        if (expectedSpeakerCount === 1) {
+          const singleSpk: SpeakerItem = {
+            id: "spk_1",
+            name: "Nhân vật chính",
+            gender: "male",
+            color: "#38bdf8",
+            voice: "vi-VN-NamMinhNeural",
+            count: newMappedSegs.length,
+            sampleAudio: null,
+          };
+          setSpeakers([singleSpk]);
+          setSegments(newMappedSegs.map((s) => ({ ...s, speakerId: "spk_1" })));
+        } else if (project.speakers.length > 0) {
           const mappedSpeakers: SpeakerItem[] = project.speakers.map((spk, idx) => ({
             id: spk.id,
             name: spk.label,
@@ -1695,16 +1935,31 @@ export default function SublixStudioView({
           setFilmstripThumbs(project.filmstrip_thumbs);
         }
 
-        const mappedSpeakers: SpeakerItem[] = project.speakers.map((spk, idx) => ({
-          id: spk.id,
-          name: spk.label,
-          gender: spk.gender as "male" | "female",
-          color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
-          voice: spk.voice,
-          count: project.segments.filter((s) => s.speaker_id === spk.id).length,
-          sampleAudio: spk.sample_audio_data || null,
-        }));
-        setSpeakers(mappedSpeakers);
+        let mappedSpeakers: SpeakerItem[] = [];
+        if (expectedSpeakerCount === 1) {
+          const singleSpk: SpeakerItem = {
+            id: "spk_1",
+            name: "Nhân vật chính",
+            gender: "male",
+            color: "#38bdf8",
+            voice: "vi-VN-NamMinhNeural",
+            count: project.segments.length,
+            sampleAudio: null,
+          };
+          mappedSpeakers = [singleSpk];
+          setSpeakers(mappedSpeakers);
+        } else {
+          mappedSpeakers = project.speakers.map((spk, idx) => ({
+            id: spk.id,
+            name: spk.label,
+            gender: spk.gender as "male" | "female",
+            color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
+            voice: spk.voice,
+            count: project.segments.filter((s) => s.speaker_id === spk.id).length,
+            sampleAudio: spk.sample_audio_data || null,
+          }));
+          setSpeakers(mappedSpeakers);
+        }
 
         const newMappedSegments: SubtitleItem[] = project.segments.map((seg) => ({
           id: seg.id,
@@ -3060,76 +3315,113 @@ export default function SublixStudioView({
                 </div>
               )}
 
-              {/* Row of Step-by-Step Modular Actions */}
-              <div className="studio-step-actions-row">
-                <button
-                  type="button"
-                  className={`studio-btn-step-action ${timelineProcessType === "stt" ? "active" : ""}`}
-                  onClick={handleRunSttOnly}
-                  disabled={isAnalyzing}
-                  title="Chỉ nhận dạng giọng nói & bóc tách câu thoại gốc (STT) mà không dịch"
-                >
-                  <span className="step-icon">🎙️</span>
-                  <span className="step-name">Chỉ Làm Sub</span>
-                </button>
+              {/* ROUND-11: BẢNG CHỌN CÔNG ĐOẠN CẦN CHẠY & NÚT BẮT ĐẦU DUY NHẤT */}
+              <div className="studio-workflow-panel">
+                <div className="studio-workflow-panel-title">
+                  <span>🛠️ Chọn Các Công Đoạn Cần Xử Lý</span>
+                  <span style={{ fontSize: 10, color: "var(--ac)", fontWeight: 600 }}>Tùy chọn linh hoạt</span>
+                </div>
 
-                <button
-                  type="button"
-                  className={`studio-btn-step-action ${timelineProcessType === "translate" ? "active" : ""}`}
-                  onClick={handleRunTranslateOnly}
-                  disabled={isAnalyzing || segments.length === 0}
-                  title="Chỉ dịch các câu thoại hiện có sang ngôn ngữ đích bằng LLM đã chọn"
-                >
-                  <span className="step-icon">🌐</span>
-                  <span className="step-name">Chỉ Dịch</span>
-                </button>
+                <div className="studio-workflow-checklist">
+                  {/* Step 1: STT */}
+                  <label className={`studio-workflow-item ${workflowOptStt ? "active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={workflowOptStt}
+                      onChange={(e) => setWorkflowOptStt(e.target.checked)}
+                    />
+                    <div className="studio-workflow-item-content">
+                      <span className="studio-workflow-item-name">🎙️ 1. Bóc tách âm thanh & Tạo phụ đề gốc (Whisper)</span>
+                      <span className="studio-workflow-item-desc">Trích xuất mốc thời gian và lời thoại từ video</span>
+                    </div>
+                  </label>
 
-                <button
-                  type="button"
-                  className={`studio-btn-step-action ${timelineProcessType === "voice" ? "active" : ""}`}
-                  onClick={handleRunVoiceOnly}
-                  disabled={isAnalyzing || segments.length === 0}
-                  title="Chỉ sinh giọng đọc / lồng tiếng (TTS) cho các nhân vật"
-                >
-                  <span className="step-icon">🗣️</span>
-                  <span className="step-name">Chỉ Tạo Voice</span>
-                </button>
-              </div>
+                  {/* Step 2: Diarize */}
+                  <label className={`studio-workflow-item ${workflowOptDiarize ? "active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={workflowOptDiarize}
+                      onChange={(e) => setWorkflowOptDiarize(e.target.checked)}
+                    />
+                    <div className="studio-workflow-item-content">
+                      <span className="studio-workflow-item-name">👥 2. Phân tích phổ giọng & Chia vai (Sherpa AI)</span>
+                      <span className="studio-workflow-item-desc">
+                        {expectedSpeakerCount === 1
+                          ? "Khóa chuẩn 1 vai chính (độc thoại/thuyết minh)"
+                          : expectedSpeakerCount === 2
+                          ? "Phân biệt chính xác 2 vai đối thoại"
+                          : "Tự động phân vai theo vector âm học"}
+                      </span>
+                    </div>
+                  </label>
 
-              {/* Main 1-Click Pipeline CTA */}
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  type="button"
-                  className="studio-btn-action-primary"
-                  style={{ padding: 10, flex: 1 }}
-                  onClick={handleRunAnalysis}
-                  disabled={isAnalyzing}
-                >
-                  ⚡ {isAnalyzing ? (timelineProcessMessage || "Đang xử lý...") : "1-Click Toàn Bộ (Pipeline)"}
-                </button>
-                {isAnalyzing && (
+                  {/* Step 3: Translate */}
+                  <label className={`studio-workflow-item ${workflowOptTranslate ? "active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={workflowOptTranslate}
+                      onChange={(e) => setWorkflowOptTranslate(e.target.checked)}
+                    />
+                    <div className="studio-workflow-item-content">
+                      <span className="studio-workflow-item-name">🌐 3. Dịch thuật sang tiếng Việt (LLM)</span>
+                      <span className="studio-workflow-item-desc">Dịch ngữ cảnh điện ảnh với DeepSeek / OpenAI</span>
+                    </div>
+                  </label>
+
+                  {/* Step 4: Voice */}
+                  <label className={`studio-workflow-item ${workflowOptVoice ? "active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={workflowOptVoice}
+                      onChange={(e) => setWorkflowOptVoice(e.target.checked)}
+                    />
+                    <div className="studio-workflow-item-content">
+                      <span className="studio-workflow-item-name">🗣️ 4. Lồng tiếng AI đa vai (Kokoro / Edge TTS)</span>
+                      <span className="studio-workflow-item-desc">Tổng hợp giọng đọc chất lượng cao theo từng nhân vật</span>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Single Consolidated Action Button */}
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <button
                     type="button"
-                    className="studio-btn-action-danger"
-                    onClick={handleCancelAnalysis}
-                    style={{
-                      background: "rgba(239, 68, 68, 0.15)",
-                      border: "1px solid rgba(239, 68, 68, 0.4)",
-                      color: "#f87171",
-                      borderRadius: 6,
-                      padding: "8px 12px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      fontSize: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                    title="Dừng tiến trình đang chạy"
+                    className="studio-workflow-run-btn"
+                    style={{ flex: 1 }}
+                    onClick={handleRunCustomWorkflow}
+                    disabled={isAnalyzing}
+                    title="Chạy tuần tự các công đoạn đã được tích chọn ở trên"
                   >
-                    🛑 Dừng
+                    {isAnalyzing ? (
+                      <>⚡ {timelineProcessMessage || "Đang xử lý..."}</>
+                    ) : (
+                      <>🚀 BẮT ĐẦU XỬ LÝ (Theo các công đoạn đã chọn)</>
+                    )}
                   </button>
-                )}
+                  {isAnalyzing && (
+                    <button
+                      type="button"
+                      className="studio-btn-action-danger"
+                      onClick={handleCancelAnalysis}
+                      style={{
+                        background: "rgba(239, 68, 68, 0.15)",
+                        border: "1px solid rgba(239, 68, 68, 0.4)",
+                        color: "#f87171",
+                        borderRadius: 8,
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                      title="Dừng tiến trình đang chạy"
+                    >
+                      🛑 Dừng
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                 <span style={{ fontSize: 10, color: "var(--t3)" }}>Hoàn tác:</span>
@@ -4165,9 +4457,18 @@ export default function SublixStudioView({
             </div>
             <div className="studio-track-header-item">
               <div className="studio-track-header-left">
-                <span></span>
                 <span>💬 PHỤ ĐỀ</span>
               </div>
+              <button
+                className="studio-track-clear-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClearTrack("subtitles");
+                }}
+                title="Xóa toàn bộ câu trong track phụ đề"
+              >
+                🗑️
+              </button>
             </div>
 
             {/* Dynamic Speaker Tracks */}
@@ -4185,6 +4486,16 @@ export default function SublixStudioView({
                   </span>
                   <span>🎭 VAI DIỄN ({speakers.length})</span>
                 </div>
+                <button
+                  className="studio-track-clear-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleClearTrack("subtitles");
+                  }}
+                  title="Xóa toàn bộ câu của tất cả vai diễn"
+                >
+                  🗑️
+                </button>
               </div>
             ) : (
               speakers.map((spk) => (
@@ -4196,6 +4507,16 @@ export default function SublixStudioView({
                     />
                     <span> {spk.name}</span>
                   </div>
+                  <button
+                    className="studio-track-clear-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearTrack("speaker", spk.id);
+                    }}
+                    title={`Xóa các câu của vai ${spk.name}`}
+                  >
+                    🗑️
+                  </button>
                 </div>
               ))
             )}
@@ -4205,11 +4526,25 @@ export default function SublixStudioView({
           <div
             ref={timelineTracksBodyRef}
             className={`studio-timeline-tracks-body ${isDraggingPlayhead ? "scrubbing" : ""}`}
+            onMouseDown={handleTimelineMouseDown}
             onWheel={handleTimelineWheel}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
           >
+            {/* ROUND-11: Marquee Box Selection Overlay */}
+            {marqueeBox && (
+              <div
+                className="studio-timeline-marquee-box"
+                style={{
+                  left: `${Math.min(marqueeBox.startX, marqueeBox.currentX)}px`,
+                  top: `${Math.min(marqueeBox.startY, marqueeBox.currentY)}px`,
+                  width: `${Math.abs(marqueeBox.currentX - marqueeBox.startX)}px`,
+                  height: `${Math.abs(marqueeBox.currentY - marqueeBox.startY)}px`,
+                }}
+              />
+            )}
+
             {/* Playhead Vertical Needle */}
             <div
               className={`studio-timeline-playhead ${isDraggingPlayhead ? "dragging" : ""}`}
@@ -4464,11 +4799,13 @@ export default function SublixStudioView({
                 const left = (seg.start / totalDur) * timelineWidth + 40;
                 const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                 const isSelected = seg.id === selectedSegId;
+                const isMultiSelected = selectedSegIds.includes(seg.id);
 
                 return (
                   <div
                     key={seg.id}
-                    className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                    data-seg-id={seg.id}
+                    className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
                     style={{
                       left: `${left}px`,
                       width: `${Math.max(50, width)}px`,
@@ -4477,7 +4814,7 @@ export default function SublixStudioView({
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleSelectSegment(seg);
+                      handleSelectSegmentWithModifier(seg, e);
                     }}
                     title={seg.translated}
                   >
@@ -4548,12 +4885,14 @@ export default function SublixStudioView({
                   const left = (seg.start / totalDur) * timelineWidth + 40;
                   const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                   const isSelected = seg.id === selectedSegId;
+                  const isMultiSelected = selectedSegIds.includes(seg.id);
                   const spkColor = spk?.color || "#38bdf8";
 
                   return (
                     <div
                       key={seg.id}
-                      className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                      data-seg-id={seg.id}
+                      className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
                       style={{
                         left: `${left}px`,
                         width: `${Math.max(50, width)}px`,
@@ -4562,7 +4901,7 @@ export default function SublixStudioView({
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSelectSegment(seg);
+                        handleSelectSegmentWithModifier(seg, e);
                       }}
                       title={`[${spk?.name || "Nhân vật"}] ${seg.translated || seg.original}`}
                     >
@@ -4631,11 +4970,13 @@ export default function SublixStudioView({
                       const left = (seg.start / totalDur) * timelineWidth + 40;
                       const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                       const isSelected = seg.id === selectedSegId;
+                      const isMultiSelected = selectedSegIds.includes(seg.id);
 
                       return (
                         <div
                           key={seg.id}
-                          className={`studio-timeline-block ${isSelected ? "active" : ""}`}
+                          data-seg-id={seg.id}
+                          className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
                           style={{
                             left: `${left}px`,
                             width: `${Math.max(50, width)}px`,
@@ -4644,7 +4985,7 @@ export default function SublixStudioView({
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleSelectSegment(seg);
+                            handleSelectSegmentWithModifier(seg, e);
                           }}
                           title={`[${spk.name}] ${seg.translated || seg.original}`}
                         >
