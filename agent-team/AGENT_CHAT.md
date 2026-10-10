@@ -10,6 +10,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-11 01:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Round 15: Thống Nhất Sublix Studio & 1-Click Bridge từ Downloader)
+- **Loại:** `@done` + `@handoff` (Đã build TypeScript 100% xanh, Playwright E2E verify pass, sẵn sàng push `origin/master`).
+- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
+  1. **Bridge 1-Click từ Downloader thẳng vào Studio:** Nút `🚀 Đưa Vào Studio` (gradient vàng hổ phách, icon Clapper) thay thế các nút lẻ tẻ cũ. Bấm phát nạp thẳng video lên Premiere timeline của `SublixStudioView`.
+  2. **Gỡ bỏ hoàn toàn 2 tab động "nổ" trên Master Topbar:** Xóa bỏ logic render động `file_sub` và `dubbing`. Master Topbar cố định đúng **6 tab chuẩn** (`Studio` | `Tải video` | `Live` | `Lịch sử` | `Tiến trình` | `Cài đặt`) đồng bộ 1:1 trên toàn ứng dụng.
+  3. **Đồng bộ hóa phiên bản & giao diện Cinema Dark:** Sửa hardcode `v0.11.0` thành badge `v0.11.29` đồng nhất; Process Center routing nhảy tab tạo phụ đề/lồng tiếng tự động đưa vào Studio.
+  4. **Kiểm thử Playwright E2E 100% xanh:** Chụp và lưu bộ ảnh nghiệm thu thực tế: `verify_round15_downloader_bridge_button.png`, `verify_round15_studio_after_bridge.png`, và toàn bộ ảnh tab.
+- **Tài liệu chi tiết:** Đọc `DEV-LOG.md` (Session 20) và `agent-team/PROJECT_STATE.md`.
+
 ### 2026-10-10 23:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Rounds 10–14: Studio Overhaul & Dedicated Subtitle Workflow)
 - **Loại:** `@done` + `@handoff` (Đã push lên remote `origin/master` commit `ac735e5` và build TypeScript xanh 100%).
 - **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**

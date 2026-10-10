@@ -711,4 +711,57 @@ sublix/
 
 *Last updated: 2026-10-10 — v0.11.29 (Premiere timeline, Marquee selection, VietNeu TTS, Dynamic AI HUD)*
 
+---
+
+## Session 20 — 2026-10-11 00:45 → 01:25 (Antigravity) — Unified Sublix Studio & 1-Click Bridge (Round 15)
+
+### User intent & PO Feedback (Anh Tuấn)
+- "tôi thấy phiên bản studio 1 kiểu còn các tab khác thì nó lại vẫn là 1 kiểu giống phần mềm cũ ấy, các chức năng như từ download video về bấm thẳng qua thì nó lại nổ thêm 1 tab video mới chứ không về tab studio. với nhiều các chức năng khác nữa, mấy các tab khác nói chung nó vẫn liên kết với nhau chứ vẫn không thành một phần mềm liên kết như hiện tại. bạn rà soát lại cho tôi nhé"
+- "bạn nhớ git rồi ghi vào tài liệu cho anh em nhé, trong trường hợp bạn offline còn có người khác tiếp quản"
+
+### Nguyên nhân gốc rễ (Root Cause)
+1. **Hiện tượng nổ thêm tab video:**
+   - Trong `DownloaderView.tsx` (dòng 1081–1095 cũ): Khi video tải xong, 2 nút `📝 Tạo Phụ Đề File` và `🎬 Lồng Tiếng AI` điều hướng sang `onNavigateToFileSub(safe)` và `onNavigateToDubbing(safe)`.
+   - Trong `SettingsView.tsx` (dòng 127–135 cũ): Chuyển state sang `activeTab = "file_sub"` hoặc `activeTab = "dubbing"`.
+   - Trong Topbar `SettingsView.tsx` (dòng 1123–1152 cũ): Có logic render ĐỘNG 2 tab "Phụ đề" và "Lồng tiếng", dẫn vào 2 view cũ `FileSubView` và `DubbingStudioView`. Người dùng thấy tự nhiên mọc thêm tab mới và giao diện bị phân mảnh kiểu phần mềm cũ, không về `SublixStudioView`.
+2. **Lệch version & badge:**
+   - Topbar badge bị hardcode `v0.11.0` thay vì `v0.11.29`.
+
+### Giải pháp kỹ thuật đã triển khai (Arch & Implementation)
+1. **Thiết lập 1-Click Bridge chuẩn từ Downloader sang Studio (`SublixStudioView`):**
+   - Trong `DownloaderView.tsx`: Thêm prop `onNavigateToStudio?: (filePath: string) => void`. Thay thế nút cũ bằng nút nổi bật: **`🚀 Đưa Vào Studio`** (với style gradient vàng hổ phách `.item-btn.bridge-studio`, icon Clapper).
+   - Trong `SettingsView.tsx`: Định nghĩa `handleRouteToStudio(path: string)`:
+     - Set `pendingDubbingPath = safe`, `pendingStudioPath = safe`, tăng `studioFileNonce`.
+     - Chuyển `setActiveTab("studio")`.
+     - Kích hoạt load video thẳng lên Premiere timeline của `SublixStudioView`.
+     - Cả `onNavigateToFileSub` và `onNavigateToDubbing` đều được trỏ về `handleRouteToStudio` để đảm bảo tương thích 100%.
+2. **Gỡ bỏ triệt để 2 tab động "nổ" trên Master Topbar:**
+   - Xóa bỏ khối nút bấm điều kiện `file_sub` và `dubbing` trên thanh `<nav className="studio-nav-tabs">`.
+   - Giữ cố định đúng **6 tab Master duy nhất**:
+     `Studio` | `Tải video` | `Live` | `Lịch sử` | `Tiến trình` | `Cài đặt`.
+   - Bổ sung fallback và đồng bộ badge phiên bản `v0.11.29` đồng nhất trên tất cả các view.
+3. **Đồng bộ hóa điều hướng trong Process Center:**
+   - Cập nhật `AppTaskItem.targetTab` hỗ trợ `"studio"`.
+   - Mọi thao tác nhảy tab từ Tiến trình đối với tác vụ tạo phụ đề/lồng tiếng đều đưa người dùng thẳng về `"studio"`.
+4. **Trực quan hóa & Fallback trình duyệt (`tauri.ts`):**
+   - Thêm graceful fallback cho `downloaderFileExists` khi chạy trên môi trường test / web bên ngoài desktop Tauri.
+   - Thêm null-safe defensive checks cho `(sttModels ?? []).find(...)` và `(transModels ?? []).find(...)` trong `SettingsView.tsx`.
+
+### Verification (Playwright E2E & Visual Inspection)
+- ✅ `npm run build`: Pass 100% trong 1.90s, 0 TypeScript error, bundle sạch sẽ.
+- ✅ Playwright E2E automation: Chạy thành công qua kịch bản trọn vẹn:
+  1. Tải video xong trong Downloader: Hiển thị nút `🚀 Đưa Vào Studio` sáng rõ.
+  2. Click `🚀 Đưa Vào Studio`: App lập tức chuyển thẳng sang tab `Studio`, nạp video `kenji_VI_HARDSUB.mp4` lên timeline.
+  3. Master Topbar giữ nguyên đúng 6 tab, không nổ thêm bất kỳ tab lạ nào.
+  4. Cả 6 tab (`Studio`, `Tải video`, `Live`, `Lịch sử`, `Tiến trình`, `Cài đặt`) đều hoạt động nhất quán theo chuẩn giao diện Cinema Dark StudioShell.
+- 📸 Bằng chứng ảnh chụp thực tế:
+  - `verify_round15_downloader_bridge_button.png`: Nút `🚀 Đưa Vào Studio` nổi bật trên card video hoàn thành.
+  - `verify_round15_studio_after_bridge.png`: Studio mở ngay với video đã nạp, timeline Premiere, badge `v0.11.29`.
+  - `verify_round15_tab_live.png`: Giao diện Live đồng bộ.
+  - `verify_round15_tab_history.png`: Giao diện Lịch sử thoại 3 cột đồng bộ.
+  - `verify_round15_tab_process.png`: Giao diện Trung tâm Tiến trình đồng bộ.
+  - `verify_round15_tab_models.png`: Giao diện Cài đặt & Presets 1-click đồng bộ.
+
+*Last updated: 2026-10-11 — v0.11.29 (Unified Studio Bridge, Fixed Popping Tabs, Master Topbar Synchronization)*
+
 

@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-STUDIO-ROUND-15` | Unified Studio: Bridge Downloader thẳng vào Studio, dọn sạch 2 tab nổ, đồng bộ Master Topbar | **Antigravity** | 2026-10-11 | ✅ Nút `🚀 Đưa Vào Studio`, loại bỏ tab popping `file_sub`/`dubbing`, đồng bộ 6 Master tabs, badge v0.11.29, E2E Playwright pass |
 | `TSK-STUDIO-ROUNDS-10-14` | Studio Premiere Timeline Resizer, Marquee, VietNeu TTS, Dynamic HUD, Sub-only Flow | **Antigravity** | 2026-10-10 | ✅ Hoàn tất 5 rounds (R10-R14), commit `ac735e5`, push GitHub xanh, build TS 100% |
 |----|------|-------|-----------|--------------------------------|
 | `TSK-V2-S4-VERIFY` | Step S4: E2E Verification video đa vai + trích xuất deliverables v2_* & bump v0.10.0 | **Antigravity** | 2026-10-07 | ✅ E2E multi_speaker_scene.mp4 -> v2_multi_speaker_DUBBED.mp4 (375KB, 26s), 2 clips sample audio, test_v2_diarization_e2e pass |

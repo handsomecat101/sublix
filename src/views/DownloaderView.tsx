@@ -15,7 +15,6 @@ import { CustomSelect, type SelectOption } from "./CustomSelect";
 import {
   IconDownload,
   IconFolder,
-  IconFilm,
   IconClapper,
   IconPause,
   IconPlay,
@@ -27,8 +26,9 @@ import { StudioShell, ShellCard } from "./StudioShell";
 import "./DownloaderView.css";
 
 interface DownloaderViewProps {
-  onNavigateToFileSub: (filePath: string) => void;
-  onNavigateToDubbing: (filePath: string) => void;
+  onNavigateToFileSub?: (filePath: string) => void;
+  onNavigateToDubbing?: (filePath: string) => void;
+  onNavigateToStudio?: (filePath: string) => void;
 }
 
 // v0.9.6: friendly quality label for a "WIDTHxHEIGHT" resolution string.
@@ -160,6 +160,7 @@ function formatError(e: unknown, fallback: string): string {
 export default function DownloaderView({
   onNavigateToFileSub,
   onNavigateToDubbing,
+  onNavigateToStudio,
 }: DownloaderViewProps) {
   const [url, setUrl] = useState<string>("");
   const [format, setFormat] = useState<string>("max");
@@ -1076,21 +1077,21 @@ export default function DownloaderView({
                             <>
                               <button
                                 type="button"
-                                className="item-btn bridge-filesub"
+                                className="item-btn bridge-studio"
                                 disabled={!pathReady}
-                                onClick={() => pathReady && onNavigateToFileSub(safe)}
-                                title={pathReady ? "Đưa video này sang Tạo Phụ Đề Vietsub (.SRT)" : tip}
+                                onClick={() => {
+                                  if (!pathReady) return;
+                                  if (onNavigateToStudio) {
+                                    onNavigateToStudio(safe);
+                                  } else if (onNavigateToDubbing) {
+                                    onNavigateToDubbing(safe);
+                                  } else if (onNavigateToFileSub) {
+                                    onNavigateToFileSub(safe);
+                                  }
+                                }}
+                                title={pathReady ? "Đưa video trực tiếp vào Sublix Studio (Chế bản phụ đề, dịch thuật & lồng tiếng AI)" : tip}
                               >
-                                <IconFilm size={14} /> 📝 Tạo Phụ Đề File
-                              </button>
-                              <button
-                                type="button"
-                                className="item-btn bridge-dubbing"
-                                disabled={!pathReady}
-                                onClick={() => pathReady && onNavigateToDubbing(safe)}
-                                title={pathReady ? "Đưa video này sang Studio Lồng Tiếng AI (Đa vai, lồng tiếng Việt chuẩn rạp)" : tip}
-                              >
-                                <IconClapper size={14} /> 🎬 Lồng Tiếng AI
+                                <IconClapper size={14} /> 🚀 Đưa Vào Studio
                               </button>
                             </>
                           );

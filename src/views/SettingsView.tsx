@@ -29,7 +29,7 @@ import { ChangelogModal } from "./ChangelogModal";
 import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
 import { ProcessCenterView } from "./ProcessCenterView";
 import {
-  IconFilm, IconClapper, IconMic, IconClock,
+  IconClapper, IconMic, IconClock,
   IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
   IconPlay, IconStop, IconGlobe, IconSettings, IconTrash, IconRotateCw,
 } from "../icons";
@@ -123,15 +123,24 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "process" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
   const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
+  const [pendingStudioPath, setPendingStudioPath] = useState<string>("");
+  const [studioFileNonce, setStudioFileNonce] = useState<number>(0);
+
+  const handleRouteToStudio = (path: string) => {
+    const safe = path ? path.replace(/\//g, "\\").trim() : "";
+    setPendingDubbingPath(safe);
+    setPendingStudioPath(safe);
+    setPendingFileSubPath(safe);
+    setStudioFileNonce((prev) => prev + 1);
+    setActiveTab("studio");
+  };
 
   const handleRouteToFileSub = (path: string) => {
-    setPendingFileSubPath(path);
-    setActiveTab("file_sub");
+    handleRouteToStudio(path);
   };
 
   const handleRouteToDubbing = (path: string) => {
-    setPendingDubbingPath(path);
-    setActiveTab("dubbing");
+    handleRouteToStudio(path);
   };
   const [historySearch, setHistorySearch] = useState<string>("");
   const [settingsSubtab, setSettingsSubtab] = useState<"presets" | "ai" | "stt" | "overlay" | "models_hub">("presets");
@@ -323,7 +332,7 @@ export default function SettingsView() {
             detail: p.message || "Tạo phụ đề thành công",
             startedAt: existing?.startedAt || Date.now() - 5000,
             completedAt: Date.now(),
-            targetTab: "file_sub",
+            targetTab: "studio",
           });
           const next = { ...prev };
           delete next[taskId];
@@ -342,7 +351,7 @@ export default function SettingsView() {
             error: p.message,
             startedAt: existing?.startedAt || Date.now() - 5000,
             completedAt: Date.now(),
-            targetTab: "file_sub",
+            targetTab: "studio",
           });
           const next = { ...prev };
           delete next[taskId];
@@ -371,7 +380,7 @@ export default function SettingsView() {
               detail: p.message,
               eta: p.total_segments > 0 ? `${p.current_segment}/${p.total_segments} câu` : undefined,
               startedAt: existing?.startedAt || Date.now(),
-              targetTab: "file_sub",
+              targetTab: "studio",
             },
           };
         });
@@ -447,7 +456,7 @@ export default function SettingsView() {
             status: "running",
             detail: p.total_items > 0 ? `${p.current_item}/${p.total_items} câu thoại` : undefined,
             startedAt: prev[taskId]?.startedAt || Date.now(),
-            targetTab: "dubbing",
+            targetTab: "studio",
           },
         }));
       }
@@ -529,7 +538,7 @@ export default function SettingsView() {
   async function refreshSetup() {
     try {
       const s = await sublix.checkSetup();
-      setSttModels(s.stt_models);
+      setSttModels(s.stt_models ?? []);
       setTransModels(s.translation_models ?? []);
     } catch (e) {
       console.error("checkSetup failed:", e);
@@ -1008,11 +1017,9 @@ export default function SettingsView() {
     }
   }
 
-  const selectedSttInfo = sttModels.find((m) => m.name === model);
-  const selectedTransInfo = transModels.find((m) => m.name === translationModel);
+  const selectedSttInfo = (sttModels ?? []).find((m) => m.name === model);
+  const selectedTransInfo = (transModels ?? []).find((m) => m.name === translationModel);
 
-  const runningFileSub = Object.values(globalTasks).find((t) => t.type === "file_sub" && t.status === "running");
-  const runningDubbing = Object.values(globalTasks).find((t) => t.type === "dubbing" && t.status === "running");
   const runningDownloads = Object.values(globalTasks).filter((t) => t.type === "downloader" && t.status === "running");
   const runningModels = Object.values(globalTasks).filter((t) => t.type === "model" && t.status === "running");
   const totalActiveTasksCount = Object.values(globalTasks).filter((t) => t.status === "running").length;
@@ -1027,7 +1034,8 @@ export default function SettingsView() {
         }}
       >
         <SublixStudioView
-          initialFilePath={pendingDubbingPath}
+          initialFilePath={pendingStudioPath || pendingDubbingPath}
+          fileNonce={studioFileNonce}
           isActive={activeTab === "studio"}
           onNavigateTab={(t) => setActiveTab(t)}
           currentTheme={theme}
@@ -1044,7 +1052,7 @@ export default function SettingsView() {
                 <IconClapper size={15} />
               </div>
               <span className="studio-brand-title">SUBLIX STUDIO</span>
-              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? "0.11.0"}</span>
+              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? "0.11.29"}</span>
             </div>
 
             <nav className="studio-nav-tabs">
@@ -1120,36 +1128,6 @@ export default function SettingsView() {
                   </span>
                 )}
               </button>
-              {(activeTab === "file_sub" || runningFileSub) && (
-                <button
-                  type="button"
-                  className={`studio-nav-tab ${activeTab === "file_sub" ? "active" : ""}`}
-                  onClick={() => setActiveTab("file_sub")}
-                >
-                  <IconFilm size={13} />
-                  <span>Phụ đề</span>
-                  {runningFileSub && (
-                    <span className="sidebar-process-badge pulse-amber" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
-                      ⚡ {runningFileSub.percent.toFixed(0)}%
-                    </span>
-                  )}
-                </button>
-              )}
-              {(activeTab === "dubbing" || runningDubbing) && (
-                <button
-                  type="button"
-                  className={`studio-nav-tab ${activeTab === "dubbing" ? "active" : ""}`}
-                  onClick={() => setActiveTab("dubbing")}
-                >
-                  <IconClapper size={13} />
-                  <span>Lồng tiếng</span>
-                  {runningDubbing && (
-                    <span className="sidebar-process-badge pulse-purple" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
-                      🎬 {runningDubbing.percent.toFixed(0)}%
-                    </span>
-                  )}
-                </button>
-              )}
             </nav>
           </div>
 
@@ -1229,6 +1207,7 @@ export default function SettingsView() {
         }}
       >
         <DownloaderView
+          onNavigateToStudio={handleRouteToStudio}
           onNavigateToFileSub={handleRouteToFileSub}
           onNavigateToDubbing={handleRouteToDubbing}
         />
@@ -2756,7 +2735,7 @@ export default function SettingsView() {
                     onClick={() => setShowChangelog(true)}
                     style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
                   >
-                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
+                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.11.29"})
                   </button>
                   <button
                     type="button"
@@ -2955,7 +2934,7 @@ export default function SettingsView() {
         <ProcessCenterView
           activeTasks={Object.values(globalTasks)}
           historyTasks={processHistory}
-          onNavigateToTab={(t) => setActiveTab(t as any)}
+          onNavigateToTab={(t) => setActiveTab((t === "file_sub" || t === "dubbing") ? "studio" : (t as any))}
           onClearHistory={handleClearProcessHistory}
           sttServerEngine={sttServerEngine}
           transEnginePref={transEnginePref}
@@ -2974,7 +2953,7 @@ export default function SettingsView() {
           <div
             className="floating-task-toast"
             onClick={() => {
-              setActiveTab(primaryTask.targetTab);
+              setActiveTab((primaryTask.targetTab === "file_sub" || primaryTask.targetTab === "dubbing") ? "studio" : primaryTask.targetTab);
             }}
             title="Bấm để chuyển ngay đến tab đang xử lý"
           >
@@ -3006,7 +2985,7 @@ export default function SettingsView() {
         activeTasks={Object.values(globalTasks)}
         historyTasks={processHistory}
         onNavigateToTab={(tab) => {
-          setActiveTab(tab);
+          setActiveTab((tab === "file_sub" || tab === "dubbing") ? "studio" : tab);
           setShowProcessCenter(false);
         }}
         onClearHistory={handleClearProcessHistory}
@@ -3015,7 +2994,7 @@ export default function SettingsView() {
       <ChangelogModal
         isOpen={showChangelog}
         onClose={() => setShowChangelog(false)}
-        currentVersion={`v${appInfo?.version ?? "0.8.0"}`}
+        currentVersion={`v${appInfo?.version ?? "0.11.29"}`}
         currentTheme={theme}
         onThemeChange={handleThemeChange}
       />

@@ -511,7 +511,15 @@ export const sublix = {
   // (Tạo Phụ Đề / Lồng Tiếng AI) can disable themselves when the file
   // yt-dlp reported has been deleted or was never actually written.
   async downloaderFileExists(path: string): Promise<boolean> {
-    return await invoke<boolean>("downloader_file_exists", { path });
+    try {
+      return await invoke<boolean>("downloader_file_exists", { path });
+    } catch {
+      // Graceful fallback for web browser dev/test mode outside Tauri desktop
+      if (typeof window !== "undefined" && !(window as any).__TAURI_INTERNALS__) {
+        return (path || "").trim().length > 0;
+      }
+      return false;
+    }
   },
 };
 

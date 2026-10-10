@@ -345,17 +345,22 @@ export default function SublixStudioView({
     });
   }, []);
 
-  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (chỉ cập nhật khi có path mới khác path hiện tại)
+  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (cập nhật khi có path mới hoặc nonce mới)
+  const lastLoadedNonceRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (initialFilePath && initialFilePath !== filePath) {
-      setTranscodedPath(null); // ROUND-4 R4-01: reset transcode cache khi đổi file
-      setFilePath(initialFilePath);
-      const name = initialFilePath.split(/[\\/]/).pop() || initialFilePath;
-      setFileName(name);
-      setVideoPlayError(false);
-      handleSeek(0);
+    if (initialFilePath) {
+      const isNewNonce = fileNonce !== undefined && fileNonce !== lastLoadedNonceRef.current;
+      if (initialFilePath !== filePath || isNewNonce) {
+        lastLoadedNonceRef.current = fileNonce;
+        setTranscodedPath(null); // ROUND-4 R4-01: reset transcode cache khi đổi file
+        setFilePath(initialFilePath);
+        const name = initialFilePath.split(/[\\/]/).pop() || initialFilePath;
+        setFileName(name);
+        setVideoPlayError(false);
+        handleSeek(0);
+      }
     }
-  }, [initialFilePath, fileNonce]);
+  }, [initialFilePath, fileNonce, filePath]);
 
   // Tự động tạm dừng phát video khi người dùng chuyển sang tab khác
   useEffect(() => {
@@ -2452,7 +2457,7 @@ export default function SublixStudioView({
               <IconClapper size={15} />
             </div>
             <span className="studio-brand-title">SUBLIX STUDIO</span>
-            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v0.11.0</span>
+            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v0.11.29</span>
           </div>
 
           <nav className="studio-nav-tabs">

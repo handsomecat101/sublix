@@ -26,7 +26,7 @@ export interface AppTaskItem {
   eta?: string;
   startedAt: number;
   completedAt?: number;
-  targetTab: "downloader" | "file_sub" | "dubbing" | "live" | "models";
+  targetTab: "downloader" | "file_sub" | "dubbing" | "live" | "models" | "studio";
   outputPath?: string;
   error?: string;
 }
@@ -36,7 +36,7 @@ interface ProcessCenterModalProps {
   onClose: () => void;
   activeTasks: AppTaskItem[];
   historyTasks: AppTaskItem[];
-  onNavigateToTab: (tab: "downloader" | "file_sub" | "dubbing" | "live" | "models") => void;
+  onNavigateToTab: (tab: "downloader" | "file_sub" | "dubbing" | "live" | "models" | "studio") => void;
   onClearHistory: () => void;
 }
 
