@@ -269,9 +269,9 @@
 
 /* P2 — LEFT COLUMN: STEPS ACCORDION */
 .studio-col-steps {
-  width: 310px;
-  min-width: 290px;
-  max-width: 340px;
+  width: 325px;
+  min-width: 300px;
+  max-width: 360px;
   background: var(--bg-side);
   border-right: 1px solid var(--line);
   display: flex;
@@ -309,23 +309,58 @@
 .studio-steps-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+.studio-steps-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.studio-steps-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.studio-steps-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.studio-steps-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 /* Card Step */
 .studio-step-card {
+  flex-shrink: 0;
   background: var(--bg-card);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   overflow: hidden;
-  transition: border-color 0.15s ease;
+  transition: all 0.18s ease;
 }
 
 .studio-step-card:hover {
   border-color: var(--line);
+}
+
+.studio-step-card.active-feature {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+
+.studio-sub-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--t2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
 }
 
 .studio-step-card-header {
@@ -733,6 +768,32 @@
 .studio-segments-actions {
   display: flex;
   gap: 6px;
+}
+
+.studio-btn-subtle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--t2);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.studio-btn-subtle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--t1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.studio-btn-subtle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .studio-btn-subtle-sm {
@@ -2074,6 +2135,7 @@
 
 /* 3. Step-by-Step Modular Action Buttons & Pipeline Hub */
 .studio-pipeline-action-hub {
+  flex-shrink: 0;
   margin-top: auto;
   display: flex;
   flex-direction: column;
@@ -2484,77 +2546,58 @@
 .studio-workflow-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: rgba(15, 23, 42, 0.6);
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  padding: 12px;
-  margin-top: 10px;
+  padding: 10px;
+  margin-top: 6px;
 }
 
-.studio-workflow-panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--t1);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.studio-workflow-checklist {
+.studio-action-hub-compact {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px;
 }
 
-.studio-workflow-item {
+.studio-mode-summary-pill {
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  padding: 8px 10px;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  user-select: none;
+  justify-content: center;
+  text-align: center;
+  transition: all 0.2s ease;
+  line-height: 1.4;
 }
 
-.studio-workflow-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+.studio-mode-summary-pill.full {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
 }
 
-.studio-workflow-item.active {
-  background: rgba(56, 189, 248, 0.1);
-  border-color: rgba(56, 189, 248, 0.35);
+.studio-mode-summary-pill.sub {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
 }
 
-.studio-workflow-item input[type="checkbox"] {
-  accent-color: #38bdf8;
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
+.studio-mode-summary-pill.dub {
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #c084fc;
 }
 
-.studio-workflow-item-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-}
-
-.studio-workflow-item-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--t1);
-}
-
-.studio-workflow-item-desc {
-  font-size: 10px;
-  color: var(--t3);
+.studio-mode-summary-pill.none {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
 }
 
 .studio-workflow-run-btn {
