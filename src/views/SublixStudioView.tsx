@@ -230,9 +230,26 @@ export default function SublixStudioView({
 
   // Timeline (P5)
   const [batchMode, setBatchMode] = useState<boolean>(false);
-  // v0.11.3: zoom semantic đổi từ "số giy hiển thị" → "% viewport" (100% = full video fit viewport).
-  // Đng chuẩn Premiere/DaVinci: zoom out max = ton cảnh video, zoom in = frame lớn.
-  // Mốc tick tự co gin (1s/5s/30s/1min/5min...) theo pxPerSec, khng cố định 5s nữa.
+  // ROUND-10: Premiere-style Vertical Timeline Resizer (Kéo mở rộng chiều cao Timeline)
+  const [timelineHeight, setTimelineHeight] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sublix_studio_timeline_height");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 180 && val <= 1200) return val;
+      }
+    } catch {
+      // fallback
+    }
+    return 320;
+  });
+  const [isResizingTimeline, setIsResizingTimeline] = useState<boolean>(false);
+  const timelineHeightRef = useRef<number>(timelineHeight);
+  timelineHeightRef.current = timelineHeight;
+
+  // v0.11.3: zoom semantic đổi từ "số giây hiển thị" → "% viewport" (100% = full video fit viewport).
+  // Đúng chuẩn Premiere/DaVinci: zoom out max = toàn cảnh video, zoom in = frame lớn.
+  // Mốc tick tự co giãn (1s/5s/30s/1min/5min...) theo pxPerSec, không cố định 5s nữa.
   const [zoomLevel, setZoomLevel] = useState<number>(100); // % viewport (100 = full video)
   const [magnetSnap, setMagnetSnap] = useState<boolean>(true);
   const [linkTracks, setLinkTracks] = useState<boolean>(true);
@@ -655,6 +672,8 @@ export default function SublixStudioView({
   segmentsRef.current = segments;
   const speakersRef = useRef<SpeakerItem[]>(speakers);
   speakersRef.current = speakers;
+  const selectedSegIdRef = useRef<number>(selectedSegId);
+  selectedSegIdRef.current = selectedSegId;
 
   const saveSubtitleUndo = () => {
     setUndoSubtitleStack((prev) => [...prev.slice(-19), segmentsRef.current]);
@@ -877,21 +896,25 @@ export default function SublixStudioView({
       showToast("⚠ Video gặp lỗi định dạng, không thể phát");
       return;
     }
-    if (isPlaying) {
+    const isCurrentlyPlaying = videoRef.current ? !videoRef.current.paused : isPlayingRef.current;
+    if (isCurrentlyPlaying) {
       setIsPlaying(false);
+      isPlayingRef.current = false;
       if (videoRef.current && !videoRef.current.paused) {
         try { videoRef.current.pause(); } catch (e) { console.warn("Video pause error:", e); }
       }
     } else {
-      if (currentTime >= mediaDuration - 0.1) {
+      if (currentTimeRef.current >= mediaDurationRef.current - 0.1 && mediaDurationRef.current > 0) {
         handleSeek(0);
       }
       setIsPlaying(true);
+      isPlayingRef.current = true;
       if (videoRef.current) {
         videoRef.current.play().catch((err) => {
           console.error("Video element play failed:", err);
           setVideoPlayError(true);
           setIsPlaying(false);
+          isPlayingRef.current = false;
           showToast("Không thể phát video này trong trình xem");
         });
       }
@@ -975,6 +998,109 @@ export default function SublixStudioView({
     }
   }, [currentTime, isPlaying, segments, selectedSegId]);
 
+  // ROUND-10: Timeline Action Handlers & Shortcuts
+  const handleSplitSegment = (segIdToSplit?: number) => {
+    const id = segIdToSplit ?? selectedSegIdRef.current;
+    if (!id) return;
+    const curTime = currentTimeRef.current;
+    const target = segmentsRef.current.find((s) => s.id === id);
+    if (!target) return;
+    if (curTime <= target.start || curTime >= target.end) {
+      showToast("⚠️ Vị trí playhead phải nằm trong khoảng thời gian của câu thoại để cắt");
+      return;
+    }
+
+    saveUndoHistory();
+    setSegments((prev) => {
+      const newId = (prev.length > 0 ? Math.max(...prev.map((s) => s.id)) : 0) + 1;
+      const firstHalf: SubtitleItem = { ...target, end: Number(curTime.toFixed(2)) };
+      const secondHalf: SubtitleItem = {
+        ...target,
+        id: newId,
+        start: Number(curTime.toFixed(2)),
+        translated: target.translated + " (phần 2)",
+      };
+
+      return prev.flatMap((s) => (s.id === id ? [firstHalf, secondHalf] : [s]));
+    });
+    showToast(`✂️ Đã tách câu thoại #${id} tại vị trí playhead`);
+  };
+
+  const handleDuplicateSegment = () => {
+    const id = selectedSegIdRef.current;
+    const target = segmentsRef.current.find((s) => s.id === id);
+    if (!target) return;
+    saveUndoHistory();
+    const newId = (segmentsRef.current.length > 0 ? Math.max(...segmentsRef.current.map((s) => s.id)) : 0) + 1;
+    const dur = target.end - target.start;
+    const copy: SubtitleItem = {
+      ...target,
+      id: newId,
+      start: Number((target.end + 0.2).toFixed(2)),
+      end: Number((target.end + 0.2 + dur).toFixed(2)),
+    };
+    setSegments((prev) => [...prev, copy]);
+    showToast("📋 Đã nhân bản câu thoại");
+  };
+
+  const handleDeleteSegment = (idToDelete?: number) => {
+    const id = idToDelete ?? selectedSegIdRef.current;
+    if (segmentsRef.current.length === 0 || !id) return;
+    saveUndoHistory();
+    setSegments((prev) => prev.filter((s) => s.id !== id));
+    if (selectedSegIdRef.current === id) setSelectedSegId(0);
+    showToast(`🗑️ Đã xóa câu thoại #${id}`);
+  };
+
+  // Premiere-style Timeline Vertical Resizer (Kéo mở rộng chiều cao)
+  const handleTimelineResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingTimeline(true);
+    const startY = e.clientY;
+    const startH = timelineHeightRef.current;
+
+    const handleWindowMouseMove = (ev: MouseEvent) => {
+      const deltaY = startY - ev.clientY;
+      const minH = 180;
+      const maxH = Math.max(300, Math.round(window.innerHeight * 0.8));
+      const nextH = Math.max(minH, Math.min(maxH, startH + deltaY));
+      setTimelineHeight(nextH);
+    };
+
+    const handleWindowMouseUp = () => {
+      setIsResizingTimeline(false);
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+      try {
+        localStorage.setItem("sublix_studio_timeline_height", String(timelineHeightRef.current));
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+  };
+
+  // Premiere / NLE-style Wheel Controls:
+  // Alt+Wheel hoặc Ctrl+Wheel: Zoom In / Out timeline
+  // Shift+Wheel: Cuộn ngang tracks body
+  const handleTimelineWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.altKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        setZoomLevel((z) => Math.min(10000, Math.round(z * 1.25)));
+      } else if (e.deltaY > 0) {
+        setZoomLevel((z) => Math.max(100, Math.round(z / 1.25)));
+      }
+    } else if (e.shiftKey) {
+      if (timelineTracksBodyRef.current) {
+        e.preventDefault();
+        timelineTracksBodyRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
   // ROUND-8: In-Out Range Helpers
   const handleSetInPoint = (time?: number) => {
     const val = Number((time !== undefined ? time : currentTimeRef.current).toFixed(2));
@@ -1044,14 +1170,43 @@ export default function SublixStudioView({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (
+      const isInput =
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
         target?.tagName === "SELECT" ||
-        target?.tagName === "BUTTON" ||
-        target?.isContentEditable
-      ) {
+        target?.isContentEditable;
+
+      // Đang nhập liệu trong text box -> không can thiệp
+      if (isInput) {
         return;
+      }
+
+      // Spacebar: Phát / Dừng video (Premiere standard)
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (target?.tagName === "BUTTON") {
+          target.blur();
+        }
+        handleTogglePlay();
+        return;
+      }
+
+      // Delete / Backspace: Xóa phân đoạn / item câu thoại đang chọn
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedSegIdRef.current > 0) {
+          e.preventDefault();
+          handleDeleteSegment(selectedSegIdRef.current);
+          return;
+        }
+      }
+
+      // S / C: Cắt / Tách phân đoạn tại playhead (Razor tool)
+      if (!e.ctrlKey && !e.metaKey && (e.key === "s" || e.key === "S" || e.key === "c" || e.key === "C")) {
+        if (selectedSegIdRef.current > 0) {
+          e.preventDefault();
+          handleSplitSegment(selectedSegIdRef.current);
+          return;
+        }
       }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
@@ -1069,9 +1224,6 @@ export default function SublixStudioView({
       } else if (!e.ctrlKey && !e.metaKey && (e.key === "x" || e.key === "X")) {
         e.preventDefault();
         handleClearRange();
-      } else if (e.code === "Space") {
-        e.preventDefault();
-        handleTogglePlay();
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
         handleSeek(currentTimeRef.current - (e.shiftKey ? 5 : 1));
@@ -1086,7 +1238,7 @@ export default function SublixStudioView({
         handleSeek(mediaDurationRef.current);
       } else if (e.key === "+" || e.key === "=" || e.code === "NumpadAdd" ||
                  ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "="))) {
-        // v0.11.4: Zoom in (chuẩn Premiere). Trnh trng với Ctrl+= (zoom browser).
+        // v0.11.4: Zoom in (chuẩn Premiere). Tránh trùng với Ctrl+= (zoom browser).
         if (!(e.ctrlKey || e.metaKey) || e.key === "+" || e.key === "=") {
           e.preventDefault();
           setZoomLevel((z) => Math.min(10000, Math.round(z * 1.5)));
@@ -1779,52 +1931,7 @@ export default function SublixStudioView({
     handleSeek(seg.start);
   };
 
-  // R2-08: Side-effect saveUndoHistory() moved strictly outside setSegments updater
-  const handleSplitSegment = (segIdToSplit?: number) => {
-    const id = segIdToSplit ?? selectedSegId;
-    const target = segments.find((s) => s.id === id);
-    if (!target) return;
-    if (currentTime <= target.start || currentTime >= target.end) return;
 
-    saveUndoHistory();
-    setSegments((prev) => {
-      const newId = (prev.length > 0 ? Math.max(...prev.map((s) => s.id)) : 0) + 1;
-      const firstHalf: SubtitleItem = { ...target, end: Number(currentTime.toFixed(2)) };
-      const secondHalf: SubtitleItem = {
-        ...target,
-        id: newId,
-        start: Number(currentTime.toFixed(2)),
-        translated: target.translated + " (phần 2)",
-      };
-
-      return prev.flatMap((s) => (s.id === id ? [firstHalf, secondHalf] : [s]));
-    });
-    showToast("✂ Đ tch cu tại vị tr playhead");
-  };
-
-  const handleDuplicateSegment = () => {
-    const target = segments.find((s) => s.id === selectedSegId);
-    if (!target) return;
-    saveUndoHistory();
-    const newId = (segments.length > 0 ? Math.max(...segments.map((s) => s.id)) : 0) + 1;
-    const dur = target.end - target.start;
-    const copy: SubtitleItem = {
-      ...target,
-      id: newId,
-      start: Number((target.end + 0.2).toFixed(2)),
-      end: Number((target.end + 0.2 + dur).toFixed(2)),
-    };
-    setSegments((prev) => [...prev, copy]);
-    showToast("📋 Đã nhân bản câu thoại");
-  };
-
-  const handleDeleteSegment = (idToDelete?: number) => {
-    const id = idToDelete ?? selectedSegId;
-    if (segments.length === 0) return;
-    saveUndoHistory();
-    setSegments((prev) => prev.filter((s) => s.id !== id));
-    showToast("🗑 Đã xóa câu thoại");
-  };
 
   const handleFitTimeline = () => {
     // v0.11.3: Fit full media duration into view = zoom 100% (full video fit viewport)
@@ -3752,9 +3859,24 @@ export default function SublixStudioView({
       </div>
 
       {/* ====================================================================
+          PREMIERE-STYLE TIMELINE VERTICAL RESIZER
+          ==================================================================== */}
+      <div
+        className={`studio-timeline-resizer ${isResizingTimeline ? "is-resizing" : ""}`}
+        onMouseDown={handleTimelineResizeStart}
+        title="Kéo lên / xuống để mở rộng hoặc thu gọn không gian Timeline (Premiere Pro style)"
+      >
+        <div className="studio-timeline-resizer-line" />
+        <div className="studio-timeline-resizer-grip" />
+      </div>
+
+      {/* ====================================================================
           P5 — TIMELINE ĐA LÀN (BOTTOM TIMELINE)
           ==================================================================== */}
-      <footer className="studio-timeline-area">
+      <footer
+        className="studio-timeline-area"
+        style={{ height: `${timelineHeight}px` }}
+      >
         {/* P5a: Timeline Control Bar */}
         <div className="studio-timeline-ctrl-bar">
           {/* EZMAX Action Tools */}
@@ -4083,6 +4205,7 @@ export default function SublixStudioView({
           <div
             ref={timelineTracksBodyRef}
             className={`studio-timeline-tracks-body ${isDraggingPlayhead ? "scrubbing" : ""}`}
+            onWheel={handleTimelineWheel}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}

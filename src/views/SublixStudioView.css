@@ -879,16 +879,93 @@
 /* ==========================================================================
    P5 — TIMELINE (BÀN ĐIỀU KHIỂN TRUNG TÂM NHIỀU LÀN)
    ========================================================================== */
-.studio-timeline-area {
-  height: 250px;
-  min-height: 200px;
-  max-height: 320px;
+
+/* Premier-style Horizontal Splitter / Resizer between Top Workspace & Timeline */
+.studio-timeline-resizer {
+  height: 9px;
+  min-height: 9px;
   background: var(--bg-side);
   border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 60;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.studio-timeline-resizer:hover,
+.studio-timeline-resizer.resizing {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.studio-timeline-resizer-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: transparent;
+  transform: translateY(-50%);
+}
+
+.studio-timeline-resizer:hover .studio-timeline-resizer-line,
+.studio-timeline-resizer.resizing .studio-timeline-resizer-line {
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+.studio-timeline-resizer-grip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 16px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 2;
+  transition: all 0.15s ease;
+}
+
+.studio-timeline-resizer:hover .studio-timeline-resizer-grip,
+.studio-timeline-resizer.resizing .studio-timeline-resizer-grip {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.studio-timeline-resizer-grip span {
+  width: 14px;
+  height: 1.5px;
+  background: var(--t2);
+  border-radius: 1px;
+  transition: background 0.15s ease;
+}
+
+.studio-timeline-resizer:hover .studio-timeline-resizer-grip span,
+.studio-timeline-resizer.resizing .studio-timeline-resizer-grip span {
+  background: #fff;
+}
+
+.studio-timeline-area {
+  min-height: 180px;
+  max-height: calc(100vh - 160px);
+  background: var(--bg-side);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 50;
+  position: relative;
+  transition: none;
+}
+
+.studio-timeline-area.is-resizing * {
+  user-select: none !important;
+  pointer-events: none !important;
 }
 
 /* P5a — Timeline Control Bar */
@@ -1002,7 +1079,8 @@
 .studio-timeline-scroll-wrap {
   flex: 1;
   display: flex;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
 }
 
@@ -1027,6 +1105,9 @@
   display: flex;
   align-items: center;
   padding: 0 8px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .studio-track-header-item {
@@ -1075,7 +1156,9 @@
   background: var(--bg-inset);
   display: flex;
   align-items: center;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 35;
   min-width: 1400px;
 }
 
