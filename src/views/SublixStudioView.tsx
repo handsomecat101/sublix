@@ -37,6 +37,7 @@ import {
   IconLink,
   IconBookmark,
   IconArrowsHorizontal,
+  IconX,
 } from "../icons";
 import "./SublixStudioView.css";
 
@@ -243,6 +244,20 @@ export default function SublixStudioView({
   const [subFontColor, setSubFontColor] = useState<string>("#e8a33d");
   const [subPosition, setSubPosition] = useState<"bottom" | "center" | "top">("bottom");
   const [subShowShadow, setSubShowShadow] = useState<boolean>(true);
+
+  // ROUND-8: Timeline In/Out Loop Range & Custom Range Selection (Khoanh vùng phạm vi)
+  const [inPoint, setInPoint] = useState<number | null>(null);
+  const [outPoint, setOutPoint] = useState<number | null>(null);
+  const [useRangeOnly, setUseRangeOnly] = useState<boolean>(false);
+  const inPointRef = useRef<number | null>(null);
+  const outPointRef = useRef<number | null>(null);
+  inPointRef.current = inPoint;
+  outPointRef.current = outPoint;
+
+  // ROUND-8: Timeline Visual Progressive Filling & Action States (Lấp đầy trực quan)
+  const [timelineProcessType, setTimelineProcessType] = useState<"stt" | "translate" | "voice" | "pipeline" | null>(null);
+  const [timelineProgress, setTimelineProgress] = useState<number>(0);
+  const [timelineProcessMessage, setTimelineProcessMessage] = useState<string>("");
 
   // Bookmarks & Toast notification
   const [bookmarks, setBookmarks] = useState<number[]>([]);
@@ -659,6 +674,13 @@ export default function SublixStudioView({
     }
   };
 
+  const saveTranslationUndo = () => {
+    setUndoTranslationStack((prev) => [
+      ...prev.slice(-19),
+      segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })),
+    ]);
+  };
+
   const saveAudioUndo = () => {
     setUndoAudioStack((prev) => [...prev.slice(-19), speakersRef.current]);
   };
@@ -845,7 +867,70 @@ export default function SublixStudioView({
     }
   }, [currentTime, isPlaying, segments, selectedSegId]);
 
-  // Keyboard Shortcuts: Spacebar (Play/Pause), Left/Right (-1s/+1s), Home/End
+  // ROUND-8: In-Out Range Helpers
+  const handleSetInPoint = (time?: number) => {
+    const val = Number((time !== undefined ? time : currentTimeRef.current).toFixed(2));
+    setInPoint(val);
+    if (outPointRef.current !== null && val >= outPointRef.current) {
+      setOutPoint(Math.min(mediaDurationRef.current, val + 5));
+    }
+    setUseRangeOnly(true);
+    showToast(`🎯 Đã đặt điểm Vào (In): ${formatTimecode(val)}`);
+  };
+
+  const handleSetOutPoint = (time?: number) => {
+    const val = Number((time !== undefined ? time : currentTimeRef.current).toFixed(2));
+    setOutPoint(val);
+    if (inPointRef.current !== null && val <= inPointRef.current) {
+      setInPoint(Math.max(0, val - 5));
+    }
+    setUseRangeOnly(true);
+    showToast(`🎯 Đã đặt điểm Ra (Out): ${formatTimecode(val)}`);
+  };
+
+  const handleClearRange = () => {
+    setInPoint(null);
+    setOutPoint(null);
+    setUseRangeOnly(false);
+    showToast("Đã xóa vùng chọn Timeline");
+  };
+
+  // Dragging Range Handles on Ruler
+  const startDraggingRangeHandle = (e: React.MouseEvent | React.PointerEvent, handle: "in" | "out") => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const handleWindowMove = (moveEvent: MouseEvent | PointerEvent) => {
+      const container = timelineTracksBodyRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const scrollLeft = container.scrollLeft || 0;
+      const relativeX = moveEvent.clientX - rect.left + scrollLeft - 40;
+      const dur = Math.max(1, mediaDurationRef.current);
+      const tw = timelineWidthRef.current || 1200;
+      const newTime = Math.max(0, Math.min(dur, (relativeX / tw) * dur));
+
+      if (handle === "in") {
+        setInPoint(Number(newTime.toFixed(2)));
+      } else {
+        setOutPoint(Number(newTime.toFixed(2)));
+      }
+    };
+
+    const handleWindowUp = () => {
+      window.removeEventListener("pointermove", handleWindowMove);
+      window.removeEventListener("pointerup", handleWindowUp);
+      window.removeEventListener("mousemove", handleWindowMove);
+      window.removeEventListener("mouseup", handleWindowUp);
+    };
+
+    window.addEventListener("pointermove", handleWindowMove);
+    window.addEventListener("pointerup", handleWindowUp);
+    window.addEventListener("mousemove", handleWindowMove);
+    window.addEventListener("mouseup", handleWindowUp);
+  };
+
+  // Keyboard Shortcuts: Spacebar (Play/Pause), Left/Right (-1s/+1s), Home/End, I/O/X (In/Out/Clear Range)
   useEffect(() => {
     if (isActive === false) return;
 
@@ -867,6 +952,15 @@ export default function SublixStudioView({
       } else if ((e.ctrlKey || e.metaKey) && (e.key === "i" || e.key === "I")) {
         e.preventDefault();
         handlePickMediaFile();
+      } else if (!e.ctrlKey && !e.metaKey && (e.key === "i" || e.key === "I")) {
+        e.preventDefault();
+        handleSetInPoint();
+      } else if (!e.ctrlKey && !e.metaKey && (e.key === "o" || e.key === "O")) {
+        e.preventDefault();
+        handleSetOutPoint();
+      } else if (!e.ctrlKey && !e.metaKey && (e.key === "x" || e.key === "X")) {
+        e.preventDefault();
+        handleClearRange();
       } else if (e.code === "Space") {
         e.preventDefault();
         handleTogglePlay();
@@ -981,6 +1075,40 @@ export default function SublixStudioView({
   };
 
   const handleRulerMouseDown = (e: React.MouseEvent | React.PointerEvent) => {
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const container = timelineTracksBodyRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const scrollLeft = container.scrollLeft || 0;
+      const relativeX = e.clientX - rect.left + scrollLeft - 40;
+      const dur = Math.max(1, mediaDurationRef.current);
+      const tw = timelineWidthRef.current || 1200;
+      const startTime = Number(Math.max(0, Math.min(dur, (relativeX / tw) * dur)).toFixed(2));
+      setInPoint(startTime);
+      setOutPoint(startTime);
+      setUseRangeOnly(true);
+
+      const handleMove = (ev: MouseEvent | PointerEvent) => {
+        const curRel = ev.clientX - rect.left + container.scrollLeft - 40;
+        const curTime = Number(Math.max(0, Math.min(dur, (curRel / tw) * dur)).toFixed(2));
+        setOutPoint(curTime);
+      };
+
+      const handleUp = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
+      };
+
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
+      return;
+    }
     e.preventDefault();
     startScrubbing(e.clientX);
   };
@@ -1010,32 +1138,40 @@ export default function SublixStudioView({
     }
   };
 
-  // Real pipeline analysis (Sherpa Diarization + Whisper + LLM)
-  const handleRunAnalysis = async () => {
+  // =========================================================================
+  // ROUND-8: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
+  // =========================================================================
+  const handleRunSttOnly = async () => {
     if (!filePath) {
-      showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phát");
+      showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return;
     }
     setIsAnalyzing(true);
-    setAnalyzeProgress(5);
-    setAnalyzeMessage("Đang khởi tạo pipeline AI...");
+    setTimelineProcessType("stt");
+    setTimelineProgress(10);
+    setTimelineProcessMessage("Đang bóc tách câu thoại gốc (Whisper STT)...");
 
-    const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
-    if (!isTauri) {
-      showToast(" Đang khởi tạo pipeline phân tích...");
-      return;
-    }
+    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+    const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
+    const startOffset = isRange && startSec > 0 ? startSec : undefined;
 
     let unlisten: (() => void) | null = null;
     try {
-      await handleSaveProviderConfig();
-      // Listen to progress events
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
         setAnalyzeProgress(event.payload.percent);
-        setAnalyzeMessage(event.payload.message);
+        setTimelineProgress(event.payload.percent);
+        setTimelineProcessMessage(event.payload.message);
       });
 
-      const project: DubbingProject = await sublix.dubbingAnalyze(filePath, sttLang === "auto" ? undefined : sttLang, targetLang);
+      const project: DubbingProject = await sublix.dubbingAnalyze(
+        filePath,
+        sttLang === "auto" ? undefined : sttLang,
+        undefined, // Chỉ bóc tách sub gốc, không dịch
+        durLimit,
+        startOffset
+      );
 
       if (project) {
         setMediaDuration(project.media_duration_sec);
@@ -1046,7 +1182,257 @@ export default function SublixStudioView({
           setFilmstripThumbs(project.filmstrip_thumbs);
         }
 
-        // Map speakers
+        const newMappedSegs: SubtitleItem[] = project.segments.map((seg) => ({
+          id: seg.id,
+          start: seg.start_sec,
+          end: seg.end_sec,
+          speakerId: seg.speaker_id,
+          original: seg.original_text,
+          translated: seg.original_text, // Giữ nguyên câu gốc để duyệt
+          hasAudio: true,
+        }));
+
+        saveUndoHistory();
+        if (isRange) {
+          setSegments((prev) => {
+            const preserved = prev.filter((s) => s.end < startSec || s.start > endSec);
+            const combined = [...preserved, ...newMappedSegs].sort((a, b) => a.start - b.start);
+            return combined.map((s, idx) => ({ ...s, id: idx + 1 }));
+          });
+        } else {
+          setSegments(newMappedSegs);
+        }
+
+        if (project.speakers.length > 0) {
+          const mappedSpeakers: SpeakerItem[] = project.speakers.map((spk, idx) => ({
+            id: spk.id,
+            name: spk.label,
+            gender: spk.gender as "male" | "female",
+            color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
+            voice: spk.voice,
+            count: project.segments.filter((s) => s.speaker_id === spk.id).length,
+            sampleAudio: spk.sample_audio_data || null,
+          }));
+          setSpeakers(mappedSpeakers);
+        }
+
+        setTimelineProgress(100);
+        setTimelineProcessMessage("Hoàn tất trích xuất phụ đề!");
+        showToast(`✅ Đã trích xuất ${newMappedSegs.length} câu thoại gốc!`);
+      }
+    } catch (err) {
+      console.error("STT error:", err);
+      showToast(`❌ Lỗi nhận dạng phụ đề: ${err}`);
+    } finally {
+      if (unlisten) unlisten();
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setTimelineProcessType(null);
+      }, 500);
+    }
+  };
+
+  // =========================================================================
+  // ROUND-8: CÔNG ĐOẠN 2 — CHỈ DỊCH THUẬT (TRANSLATE ONLY / LLM)
+  // =========================================================================
+  const handleRunTranslateOnly = async () => {
+    if (segments.length === 0) {
+      showToast("⚠ Chưa có câu thoại nào để dịch! Hãy chạy 'Chỉ Làm Sub' trước.");
+      return;
+    }
+
+    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+
+    const targetSegs = isRange
+      ? segments.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
+      : segments;
+
+    if (targetSegs.length === 0) {
+      showToast("⚠ Không có câu thoại nào trong vùng chọn để dịch!");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setTimelineProcessType("translate");
+    setTimelineProgress(5);
+    setTimelineProcessMessage(`Đang dịch ${targetSegs.length} câu thoại sang ${targetLang.toUpperCase()}...`);
+
+    try {
+      await handleSaveProviderConfig();
+      saveTranslationUndo();
+
+      const BATCH_SIZE = 8;
+      const total = targetSegs.length;
+      let completedCount = 0;
+
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const chunk = targetSegs.slice(i, i + BATCH_SIZE);
+        const texts = chunk.map((s) => s.original);
+
+        setTimelineProcessMessage(
+          `Đang dịch câu ${i + 1}-${Math.min(total, i + BATCH_SIZE)}/${total} (${targetLang.toUpperCase()})...`
+        );
+
+        let translatedTexts: string[] = [];
+        try {
+          translatedTexts = await sublix.translateBatch(
+            texts,
+            sttLang === "auto" ? "auto" : sttLang,
+            targetLang
+          );
+        } catch {
+          for (const s of chunk) {
+            try {
+              const res = await sublix.translateTest(s.original, sttLang, targetLang);
+              translatedTexts.push(res);
+            } catch {
+              translatedTexts.push(s.original);
+            }
+          }
+        }
+
+        setSegments((prev) =>
+          prev.map((s) => {
+            const chunkIdx = chunk.findIndex((c) => c.id === s.id);
+            if (chunkIdx !== -1 && translatedTexts[chunkIdx]) {
+              return { ...s, translated: translatedTexts[chunkIdx] };
+            }
+            return s;
+          })
+        );
+
+        completedCount += chunk.length;
+        const pct = Math.min(95, Math.round((completedCount / total) * 95));
+        setTimelineProgress(pct);
+      }
+
+      setTimelineProgress(100);
+      setTimelineProcessMessage("Dịch thuật hoàn tất!");
+      showToast(`✅ Đã dịch xong ${total} câu thoại sang ${targetLang.toUpperCase()}!`);
+    } catch (err) {
+      console.error("Translation error:", err);
+      showToast(`❌ Lỗi dịch thuật: ${err}`);
+    } finally {
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setTimelineProcessType(null);
+      }, 500);
+    }
+  };
+
+  // =========================================================================
+  // ROUND-8: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
+  // =========================================================================
+  const handleRunVoiceOnly = async () => {
+    if (segments.length === 0) {
+      showToast("⚠ Chưa có câu thoại nào để tạo giọng đọc!");
+      return;
+    }
+
+    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+
+    const targetSegs = isRange
+      ? segments.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
+      : segments;
+
+    if (targetSegs.length === 0) {
+      showToast("⚠ Không có câu thoại nào trong vùng chọn!");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setTimelineProcessType("voice");
+    setTimelineProgress(10);
+    setTimelineProcessMessage(`Đang tổng hợp giọng đọc TTS cho ${targetSegs.length} câu...`);
+
+    try {
+      saveAudioUndo();
+      const total = targetSegs.length;
+
+      for (let i = 0; i < total; i++) {
+        const seg = targetSegs[i];
+        setTimelineProgress(Math.round(((i + 1) / total) * 95));
+        setTimelineProcessMessage(`Tổng hợp giọng câu ${i + 1}/${total}...`);
+
+        const spk = speakers.find((s) => s.id === seg.speakerId);
+        const voice = spk?.voice || "kokoro:tuan_ngoc";
+        try {
+          await sublix.dubbingPreviewTts(seg.translated, voice);
+        } catch {
+          // ignore individual tts error
+        }
+
+        setSegments((prev) =>
+          prev.map((s) => (s.id === seg.id ? { ...s, hasAudio: true } : s))
+        );
+      }
+
+      setTimelineProgress(100);
+      setTimelineProcessMessage("Hoàn tất tạo giọng đọc!");
+      showToast(`✅ Đã tổng hợp giọng đọc cho ${total} câu thoại!`);
+    } catch (err) {
+      console.error("Voice TTS error:", err);
+      showToast(`❌ Lỗi tạo giọng đọc: ${err}`);
+    } finally {
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setTimelineProcessType(null);
+      }, 500);
+    }
+  };
+
+  // =========================================================================
+  // ROUND-8: 1-CLICK TOÀN BỘ PIPELINE (STT + DIARIZATION + TRANSLATION + VOICE)
+  // =========================================================================
+  const handleRunAnalysis = async () => {
+    if (!filePath) {
+      showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
+      return;
+    }
+    setIsAnalyzing(true);
+    setTimelineProcessType("pipeline");
+    setAnalyzeProgress(5);
+    setTimelineProgress(5);
+    setAnalyzeMessage("Đang khởi tạo pipeline AI...");
+    setTimelineProcessMessage("Đang khởi tạo pipeline AI...");
+
+    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+    const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
+    const startOffset = isRange && startSec > 0 ? startSec : undefined;
+
+    let unlisten: (() => void) | null = null;
+    try {
+      await handleSaveProviderConfig();
+      unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
+        setAnalyzeProgress(event.payload.percent);
+        setTimelineProgress(event.payload.percent);
+        setAnalyzeMessage(event.payload.message);
+        setTimelineProcessMessage(event.payload.message);
+      });
+
+      const project: DubbingProject = await sublix.dubbingAnalyze(
+        filePath,
+        sttLang === "auto" ? undefined : sttLang,
+        targetLang,
+        durLimit,
+        startOffset
+      );
+
+      if (project) {
+        setMediaDuration(project.media_duration_sec);
+        if (project.peaks && project.peaks.length > 0) {
+          setAudioPeaks(project.peaks);
+        }
+        if (project.filmstrip_thumbs && project.filmstrip_thumbs.length > 0) {
+          setFilmstripThumbs(project.filmstrip_thumbs);
+        }
+
         const mappedSpeakers: SpeakerItem[] = project.speakers.map((spk, idx) => ({
           id: spk.id,
           name: spk.label,
@@ -1058,8 +1444,7 @@ export default function SublixStudioView({
         }));
         setSpeakers(mappedSpeakers);
 
-        // Map segments
-        const mappedSegments: SubtitleItem[] = project.segments.map((seg) => ({
+        const newMappedSegments: SubtitleItem[] = project.segments.map((seg) => ({
           id: seg.id,
           start: seg.start_sec,
           end: seg.end_sec,
@@ -1068,34 +1453,52 @@ export default function SublixStudioView({
           translated: seg.dubbed_text || seg.original_text,
           hasAudio: true,
         }));
-        setSegments(mappedSegments);
-        if (mappedSegments.length > 0) {
-          setSelectedSegId(mappedSegments[0].id);
+
+        saveUndoHistory();
+        if (isRange) {
+          setSegments((prev) => {
+            const preserved = prev.filter((s) => s.end < startSec || s.start > endSec);
+            const combined = [...preserved, ...newMappedSegments].sort((a, b) => a.start - b.start);
+            return combined.map((s, idx) => ({ ...s, id: idx + 1 }));
+          });
+        } else {
+          setSegments(newMappedSegments);
+        }
+
+        if (newMappedSegments.length > 0) {
+          setSelectedSegId(newMappedSegments[0].id);
         }
         setAnalyzeProgress(100);
+        setTimelineProgress(100);
         setAnalyzeMessage("Phân tích hoàn tất!");
-        showToast(`✅ Phân tích xong: ${mappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật.`);
+        setTimelineProcessMessage("Hoàn tất!");
+        showToast(`✅ Phân tích xong: ${newMappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật.`);
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes("hủy") || errMsg.includes("cancel") || errMsg.includes("dừng")) {
-        setAnalyzeMessage("Tiến trnh đ bị ngưi dng hủy.");
+        setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
+        setTimelineProcessMessage("Đã hủy");
         showToast("🛑 Tiến trình phân tích đã bị hủy.");
       } else {
         setAnalyzeMessage(`Lỗi phân tích: ${errMsg}`);
-        showToast(` Lỗi phân tích: ${errMsg}`);
+        showToast(`❌ Lỗi phân tích: ${errMsg}`);
       }
       setAnalyzeProgress(0);
+      setTimelineProgress(0);
     } finally {
       if (unlisten) {
         unlisten();
       }
-      setIsAnalyzing(false);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setTimelineProcessType(null);
+      }, 500);
     }
   };
 
-  // R3-03: Cancel video analysis / dubbing pipeline
+  // Cancel video analysis / dubbing pipeline
   const handleCancelAnalysis = async () => {
     try {
       const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
@@ -1103,8 +1506,11 @@ export default function SublixStudioView({
         await sublix.dubbingCancel();
       }
       showToast("🛑 Đã gửi lệnh dừng phân tích video.");
-      setAnalyzeMessage("Tiến trnh đ bị ngưi dng hủy.");
+      setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
+      setTimelineProcessMessage("Đã hủy");
       setIsAnalyzing(false);
+      setTimelineProcessType(null);
+      setTimelineProgress(0);
     } catch (err) {
       console.warn("Cancel analysis error:", err);
     }
@@ -2319,8 +2725,68 @@ export default function SublixStudioView({
           </div>
         )}
 
-            {/* Quick Process CTA */}
-            <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* ROUND-8: Modular Step-by-Step Action Hub & Pipeline CTA */}
+            <div className="studio-pipeline-action-hub">
+              {/* Range Scope Indicator Bar (if In/Out markers exist) */}
+              {inPoint !== null && outPoint !== null && (
+                <div className={`studio-range-scope-bar ${useRangeOnly ? "active" : ""}`}>
+                  <div className="studio-range-scope-label">
+                    <span>🎯 Vùng chọn:</span>
+                    <span className="studio-range-scope-time">
+                      {formatTimecode(Math.min(inPoint, outPoint))} ➔ {formatTimecode(Math.max(inPoint, outPoint))}
+                    </span>
+                    <span style={{ fontSize: 9.5, opacity: 0.75 }}>
+                      ({Math.abs(outPoint - inPoint).toFixed(1)}s)
+                    </span>
+                  </div>
+                  <label className="studio-range-scope-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useRangeOnly}
+                      onChange={(e) => setUseRangeOnly(e.target.checked)}
+                    />
+                    <span>Chỉ vùng này</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Row of Step-by-Step Modular Actions */}
+              <div className="studio-step-actions-row">
+                <button
+                  type="button"
+                  className={`studio-btn-step-action ${timelineProcessType === "stt" ? "active" : ""}`}
+                  onClick={handleRunSttOnly}
+                  disabled={isAnalyzing}
+                  title="Chỉ nhận dạng giọng nói & bóc tách câu thoại gốc (STT) mà không dịch"
+                >
+                  <span className="step-icon">🎙️</span>
+                  <span className="step-name">Chỉ Làm Sub</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`studio-btn-step-action ${timelineProcessType === "translate" ? "active" : ""}`}
+                  onClick={handleRunTranslateOnly}
+                  disabled={isAnalyzing || segments.length === 0}
+                  title="Chỉ dịch các câu thoại hiện có sang ngôn ngữ đích bằng LLM đã chọn"
+                >
+                  <span className="step-icon">🌐</span>
+                  <span className="step-name">Chỉ Dịch</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`studio-btn-step-action ${timelineProcessType === "voice" ? "active" : ""}`}
+                  onClick={handleRunVoiceOnly}
+                  disabled={isAnalyzing || segments.length === 0}
+                  title="Chỉ sinh giọng đọc / lồng tiếng (TTS) cho các nhân vật"
+                >
+                  <span className="step-icon">🗣️</span>
+                  <span className="step-name">Chỉ Tạo Voice</span>
+                </button>
+              </div>
+
+              {/* Main 1-Click Pipeline CTA */}
               <div style={{ display: "flex", gap: 6 }}>
                 <button
                   type="button"
@@ -2329,7 +2795,7 @@ export default function SublixStudioView({
                   onClick={handleRunAnalysis}
                   disabled={isAnalyzing}
                 >
-                  ✨ {isAnalyzing ? "Đang Xử Lý Video..." : "Xử Lý Video (1-Click Pipeline)"}
+                  ⚡ {isAnalyzing ? (timelineProcessMessage || "Đang xử lý...") : "1-Click Toàn Bộ (Pipeline)"}
                 </button>
                 {isAnalyzing && (
                   <button
@@ -2349,9 +2815,9 @@ export default function SublixStudioView({
                       alignItems: "center",
                       gap: 4,
                     }}
-                    title="Dừng tiến trình xử lý video"
+                    title="Dừng tiến trình đang chạy"
                   >
-                     Dừng
+                    🛑 Dừng
                   </button>
                 )}
               </div>
@@ -3158,6 +3624,51 @@ export default function SublixStudioView({
             >
               <IconBookmark size={13} />
             </button>
+            <div className="studio-timeline-tools-divider" />
+            {/* ROUND-8: In-Out Range Tools (Khoanh vùng phạm vi) */}
+            <div className="studio-timeline-range-tools">
+              <button
+                type="button"
+                className={`studio-timeline-tool-btn ${inPoint !== null ? "active" : ""}`}
+                onClick={() => handleSetInPoint()}
+                title="Đặt điểm Vào (Mark In — phím I)"
+              >
+                <span style={{ fontSize: 9.5, fontWeight: 800 }}>[ I</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-timeline-tool-btn ${outPoint !== null ? "active" : ""}`}
+                onClick={() => handleSetOutPoint()}
+                title="Đặt điểm Ra (Mark Out — phím O)"
+              >
+                <span style={{ fontSize: 9.5, fontWeight: 800 }}>O ]</span>
+              </button>
+              {(inPoint !== null || outPoint !== null) && (
+                <>
+                  <button
+                    type="button"
+                    className="studio-timeline-tool-btn"
+                    onClick={handleClearRange}
+                    title="Xóa vùng chọn (Clear In/Out — phím X)"
+                  >
+                    <IconX size={12} />
+                  </button>
+                  <div
+                    className="studio-range-badge"
+                    title="Vùng chọn hiện tại. Nhấn để bật/tắt chế độ 'Chỉ áp dụng vùng này'"
+                    onClick={() => {
+                      const next = !useRangeOnly;
+                      setUseRangeOnly(next);
+                      showToast(next ? "🎯 BẬT chế độ 'Chỉ xử lý trong vùng chọn'" : "Đã TẮT chế độ vùng chọn (xử lý toàn video)");
+                    }}
+                    style={{ cursor: "pointer", opacity: useRangeOnly ? 1 : 0.65 }}
+                  >
+                    <span>🎯 {formatTimecode(Math.min(inPoint ?? 0, outPoint ?? mediaDuration))} ➔ {formatTimecode(Math.max(inPoint ?? 0, outPoint ?? mediaDuration))}</span>
+                    <span style={{ fontSize: 9, opacity: 0.85 }}>({useRangeOnly ? "Bật" : "Tắt"})</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Transport Controls */}
@@ -3359,6 +3870,42 @@ export default function SublixStudioView({
               />
             </div>
 
+            {/* ROUND-8: Selection Range Overlay Band & Dimmed Outside Area */}
+            {inPoint !== null && outPoint !== null && (
+              <>
+                {/* Left Dimmed Outside Area */}
+                {Math.min(inPoint, outPoint) > 0 && (
+                  <div
+                    className="studio-timeline-dimmed-outside"
+                    style={{
+                      left: 40,
+                      width: `${(Math.min(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
+                    }}
+                  />
+                )}
+
+                {/* Selection Range Band */}
+                <div
+                  className="studio-timeline-range-band"
+                  style={{
+                    left: `${(Math.min(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth + 40}px`,
+                    width: `${(Math.abs(outPoint - inPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
+                  }}
+                />
+
+                {/* Right Dimmed Outside Area */}
+                {Math.max(inPoint, outPoint) < mediaDuration && (
+                  <div
+                    className="studio-timeline-dimmed-outside"
+                    style={{
+                      left: `${(Math.max(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth + 40}px`,
+                      width: `${((mediaDuration - Math.max(inPoint, outPoint)) / Math.max(1, mediaDuration)) * timelineWidth}px`,
+                    }}
+                  />
+                )}
+              </>
+            )}
+
             {/* Time Ruler */}
             <div
               className="studio-timeline-ruler"
@@ -3368,8 +3915,30 @@ export default function SublixStudioView({
                 if (e.touches.length > 0) startScrubbing(e.touches[0].clientX);
               }}
               onClick={handleTimelineClick}
-              title="Bấm giữ v ko r để chạy video theo mốc thi gian"
+              title="Bấm giữ và kéo rê để chạy video theo mốc thời gian (hoặc Giữ Shift + Kéo để khoanh vùng)"
             >
+              {/* ROUND-8: Range Handles (In / Out) on Ruler */}
+              {inPoint !== null && (
+                <div
+                  className="studio-ruler-range-handle in"
+                  style={{ left: `${(inPoint / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+                  onMouseDown={(e) => startDraggingRangeHandle(e, "in")}
+                  title={`Điểm Vào (In): ${formatTimecode(inPoint)} — Kéo để điều chỉnh`}
+                >
+                  [ IN
+                </div>
+              )}
+              {outPoint !== null && (
+                <div
+                  className="studio-ruler-range-handle out"
+                  style={{ left: `${(outPoint / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+                  onMouseDown={(e) => startDraggingRangeHandle(e, "out")}
+                  title={`Điểm Ra (Out): ${formatTimecode(outPoint)} — Kéo để điều chỉnh`}
+                >
+                  OUT ]
+                </div>
+              )}
+
               {Array.from({ length: Math.ceil(mediaDuration / tickIntervalSec) + 1 }).map((_, i) => {
                 const t = i * tickIntervalSec;
                 if (t > mediaDuration + 2) return null;
@@ -3505,6 +4074,36 @@ export default function SublixStudioView({
 
             {/* Track 3: Subtitles Block Lane (Progressive Filling) */}
             <div className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
+              {/* ROUND-8: Visual Progressive Fill Overlay on Subtitles Track */}
+              {timelineProcessType && (
+                (() => {
+                  const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+                  const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+                  const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+                  const totalSec = Math.max(0.1, endSec - startSec);
+                  const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                  const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
+                  const currentWidthPx = totalWidthPx * (timelineProgress / 100);
+
+                  return (
+                    <div
+                      className={`studio-timeline-progress-fill ${timelineProcessType}`}
+                      style={{
+                        left: `${startLeftPx}px`,
+                        width: `${Math.max(12, currentWidthPx)}px`,
+                      }}
+                    >
+                      <div className="studio-timeline-progress-stripes" />
+                      <div className="studio-timeline-laser-head">
+                        <div className="studio-timeline-laser-badge">
+                          ⚡ {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
               {segments.map((seg) => {
                 const totalDur = Math.max(1, mediaDuration);
                 const left = (seg.start / totalDur) * timelineWidth + 40;
@@ -3557,6 +4156,36 @@ export default function SublixStudioView({
 
               return (
                 <div key={spk.id} className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
+                  {/* ROUND-8: Visual Progressive Fill on Voice / Pipeline */}
+                  {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
+                    (() => {
+                      const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+                      const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+                      const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+                      const totalSec = Math.max(0.1, endSec - startSec);
+                      const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                      const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
+                      const currentWidthPx = totalWidthPx * (timelineProgress / 100);
+
+                      return (
+                        <div
+                          className="studio-timeline-progress-fill voice"
+                          style={{
+                            left: `${startLeftPx}px`,
+                            width: `${Math.max(12, currentWidthPx)}px`,
+                            opacity: 0.85,
+                          }}
+                        >
+                          <div className="studio-timeline-progress-stripes" />
+                          <div className="studio-timeline-laser-head">
+                            <div className="studio-timeline-laser-badge">
+                              🗣️ {spk.name}: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
                   {spkSegments.map((seg) => {
                     const totalDur = Math.max(1, mediaDuration);
                     const left = (seg.start / totalDur) * timelineWidth + 40;

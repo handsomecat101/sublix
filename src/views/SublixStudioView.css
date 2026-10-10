@@ -1834,5 +1834,278 @@
   opacity: 1;
 }
 
+/* ==========================================================================
+   ROUND-8: TIMELINE IN/OUT RANGE (KHOANH VÙNG PHẠM VI) & PROGRESSIVE FILL
+   ========================================================================== */
 
+/* 1. Timeline In/Out Selection Range Overlay */
+.studio-timeline-range-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(232, 163, 61, 0.14);
+  border-left: 2px solid #e8a33d;
+  border-right: 2px solid #e8a33d;
+  box-shadow: inset 0 0 16px rgba(232, 163, 61, 0.12);
+  pointer-events: none;
+  z-index: 25;
+}
 
+.studio-timeline-dimmed-outside {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+  z-index: 24;
+}
+
+/* Ruler Range Handles (Markers In/Out) */
+.studio-ruler-range-handle {
+  position: absolute;
+  top: 0;
+  height: 24px;
+  background: #e8a33d;
+  color: #000;
+  font-size: 9.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: 2px;
+  cursor: ew-resize;
+  pointer-events: auto;
+  z-index: 40;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.studio-ruler-range-handle:hover {
+  filter: brightness(1.2);
+  transform: scale(1.08);
+}
+
+.studio-ruler-range-handle.in {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  transform: translateX(-100%);
+}
+
+.studio-ruler-range-handle.in:hover {
+  transform: translateX(-100%) scale(1.08);
+}
+
+.studio-ruler-range-handle.out {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* 2. Timeline Visual Progressive Filling Animation (Lấp đầy trực quan) */
+.studio-timeline-progress-fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 4px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  transition: width 0.15s linear;
+}
+
+.studio-timeline-progress-fill.stt {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.15) 0%, rgba(45, 212, 191, 0.45) 100%);
+  border: 1px dashed #2dd4bf;
+}
+
+.studio-timeline-progress-fill.translate {
+  background: linear-gradient(90deg, rgba(232, 163, 61, 0.15) 0%, rgba(232, 163, 61, 0.48) 100%);
+  border: 1px dashed #e8a33d;
+}
+
+.studio-timeline-progress-fill.voice {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0.5) 100%);
+  border: 1px dashed #a855f7;
+}
+
+.studio-timeline-progress-fill.pipeline {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(239, 68, 68, 0.45) 100%);
+  border: 1px dashed #f59e0b;
+}
+
+/* Animated Shimmer Stripes inside Fill */
+.studio-timeline-progress-stripes {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.08) 0,
+    rgba(255, 255, 255, 0.08) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+  background-size: 28px 28px;
+  animation: studioStripesMove 1s linear infinite;
+  border-radius: 4px;
+}
+
+@keyframes studioStripesMove {
+  0% { background-position: 0 0; }
+  100% { background-position: 28px 0; }
+}
+
+/* Laser Scanner Line at the front edge of the fill */
+.studio-timeline-laser-head {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 10px 2px var(--ac), 0 0 20px rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 32;
+}
+
+.studio-timeline-laser-badge {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: -20px;
+  background: #111827;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ac);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+/* 3. Step-by-Step Modular Action Buttons & Pipeline Hub */
+.studio-pipeline-action-hub {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.studio-step-actions-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.studio-btn-step-action {
+  padding: 7px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-card);
+  color: var(--t1);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.studio-btn-step-action:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--ac);
+  transform: translateY(-1px);
+}
+
+.studio-btn-step-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.studio-btn-step-action.active {
+  background: var(--ac-soft);
+  border-color: var(--ac);
+  color: var(--ac);
+}
+
+.studio-btn-step-action .step-icon {
+  font-size: 13px;
+}
+
+.studio-btn-step-action .step-name {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* In/Out Scope Indicator Bar */
+.studio-range-scope-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(232, 163, 61, 0.08);
+  border: 1px dashed rgba(232, 163, 61, 0.4);
+  font-size: 10.5px;
+  color: var(--t2);
+}
+
+.studio-range-scope-bar.active {
+  background: rgba(232, 163, 61, 0.15);
+  border-style: solid;
+  border-color: #e8a33d;
+  color: #fff;
+}
+
+.studio-range-scope-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.studio-range-scope-time {
+  font-family: var(--font-mono);
+  color: #e8a33d;
+  font-weight: 700;
+}
+
+.studio-range-scope-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* In-Out Range Controls on Timeline Bar */
+.studio-timeline-range-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-range-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(232, 163, 61, 0.16);
+  border: 1px solid rgba(232, 163, 61, 0.5);
+  color: #e8a33d;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}

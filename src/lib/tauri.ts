@@ -179,6 +179,20 @@ export const sublix = {
     });
   },
 
+  async translateBatch(
+    texts: string[],
+    sourceLang: string,
+    targetLang: string,
+    modelName?: string,
+  ): Promise<string[]> {
+    return await invoke<string[]>("translate_batch", {
+      texts,
+      sourceLang,
+      targetLang,
+      modelName,
+    });
+  },
+
   async showOverlay(): Promise<void> {
     return await invoke("show_overlay");
   },
@@ -408,13 +422,15 @@ export const sublix = {
     filePath: string,
     sourceLang?: string,
     targetLang?: string,
-    timeLimitSec?: number
+    timeLimitSec?: number,
+    startOffsetSec?: number
   ): Promise<DubbingProject> {
     return await invoke<DubbingProject>("dubbing_analyze", {
       filePath,
       sourceLang,
       targetLang,
       timeLimitSec: timeLimitSec && timeLimitSec > 0 ? timeLimitSec : null,
+      startOffsetSec: startOffsetSec && startOffsetSec > 0 ? startOffsetSec : null,
     });
   },
 

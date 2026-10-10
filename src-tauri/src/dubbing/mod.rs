@@ -1579,6 +1579,7 @@ pub fn analyze_and_create_project(
     source_lang: Option<String>,
     target_lang: Option<String>,
     time_limit_sec: Option<f64>,
+    start_offset_sec: Option<f64>,
 ) -> Result<DubbingProject> {
     let my_gen = start_new_generation();
 
@@ -1606,16 +1607,23 @@ pub fn analyze_and_create_project(
 
     emit("extracting", 5.0, "Đang trích xuất audio 16kHz từ video...", 0, 100);
 
-    // 1. Extract 16kHz mono wav (honoring time_limit_sec if specified for lightning-fast testing)
+    // 1. Extract 16kHz mono wav (honoring time_limit_sec and start_offset_sec if specified)
     let temp_dir = std::env::temp_dir().join("sublix_dubbing");
     fs::create_dir_all(&temp_dir)?;
     let temp_wav = temp_dir.join(format!("audio_{}.wav", gen_unique_id()));
     let temp_srt_stem = temp_dir.join(format!("srt_{}", gen_unique_id()));
     let temp_srt_file = temp_dir.join(format!("{}.srt", temp_srt_stem.display()));
 
+    let offset = start_offset_sec.unwrap_or(0.0).max(0.0);
+
     let ffmpeg_bin = find_ffmpeg();
     let mut extract_cmd = Command::new(&ffmpeg_bin);
     extract_cmd.arg("-y");
+
+    if offset > 0.0 {
+        info!("⏱️ Applying start offset: {:.2}s for custom timeline range", offset);
+        extract_cmd.arg("-ss").arg(format!("{:.2}", offset));
+    }
 
     if let Some(limit) = time_limit_sec {
         if limit > 0.0 {
@@ -1897,6 +1905,14 @@ pub fn analyze_and_create_project(
     let peaks = extract_audio_peaks(&temp_wav, 400).ok();
 
     let _ = fs::remove_file(&temp_wav);
+
+    // If start_offset_sec was applied, shift segment timestamps back to global video time
+    if offset > 0.0 {
+        for seg in parsed_segments.iter_mut() {
+            seg.start_sec += offset;
+            seg.end_sec += offset;
+        }
+    }
 
     if is_generation_cancelled(my_gen) {
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
@@ -2630,6 +2646,7 @@ mod tests {
             Some("en".to_string()),
             Some("vi".to_string()),
             Some(30.0), // limit to first 30s for fast diagnostics
+            None,
         );
 
         match project_res {

@@ -97,6 +97,35 @@ fn translate_test(
         .map_err(|e| format!("{e:#}"))
 }
 
+#[tauri::command]
+async fn translate_batch(
+    app: tauri::AppHandle,
+    texts: Vec<String>,
+    source_lang: String,
+    target_lang: String,
+    model_name: Option<String>,
+) -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let cfg = config::AppConfig::load(&app);
+        let variant = TranslationModelVariant::resolve_or_best(
+            model_name
+                .as_deref()
+                .or(Some(cfg.translation_model.as_str())),
+        );
+        let pref = stt::EnginePreference::from_str(&cfg.translation_engine_preference);
+        Ok(translate::translate_batch_with_config(
+            &texts,
+            &source_lang,
+            &target_lang,
+            variant,
+            pref,
+            &cfg,
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -114,6 +143,7 @@ pub fn run() {
             capture_test,
             transcribe_test,
             translate_test,
+            translate_batch,
             show_overlay,
             hide_overlay,
             set_overlay_click_through,
@@ -1033,9 +1063,17 @@ async fn dubbing_analyze(
     source_lang: Option<String>,
     target_lang: Option<String>,
     time_limit_sec: Option<f64>,
+    start_offset_sec: Option<f64>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::analyze_and_create_project(Some(&app), &file_path, source_lang, target_lang, time_limit_sec)
+        dubbing::analyze_and_create_project(
+            Some(&app),
+            &file_path,
+            source_lang,
+            target_lang,
+            time_limit_sec,
+            start_offset_sec,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
