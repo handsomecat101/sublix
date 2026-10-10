@@ -195,6 +195,12 @@ export default function SublixStudioView({
     currentY: number;
   } | null>(null);
   const isMarqueeSelectingRef = useRef<boolean>(false);
+  const didJustMarqueeRef = useRef<boolean>(false);
+
+  // ROUND-12: Timeline Tool Mode (Tách riêng chế độ Chọn vs Tua timeline)
+  const [timelineToolMode, setTimelineToolMode] = useState<"select" | "scrub" | "range">("select");
+  const timelineToolModeRef = useRef<"select" | "scrub" | "range">("select");
+  timelineToolModeRef.current = timelineToolMode;
 
   // ROUND-11: Consolidated Workflow Checklist (Các công đoạn lựa chọn)
   const [workflowOptStt, setWorkflowOptStt] = useState<boolean>(true);
@@ -1138,17 +1144,36 @@ export default function SublixStudioView({
     handleSeek(seg.start);
   };
 
-  // ROUND-11: Marquee Box Selection kéo chuột trái trên Timeline
+  // ROUND-11 & ROUND-12: Marquee Box Selection kéo chuột trái trên Timeline (Tách riêng biệt hoàn toàn với Tua Timeline)
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
+
+    // 1. Phân tách triệt để: Nếu click vào Ruler, Filmstrip, Sóng âm, Playhead, Range Handle, Nút bấm -> KHÔNG BAO GIỜ vẽ Marquee
     if (
-      target.closest(".studio-timeline-block") ||
+      target.closest(".studio-timeline-ruler") ||
       target.closest(".studio-timeline-playhead") ||
+      target.closest(".studio-filmstrip-thumbs") ||
+      target.closest(".studio-filmstrip-thumb-item") ||
+      target.closest(".studio-waveform-canvas") ||
+      target.closest(".studio-track-media-lane") ||
+      target.closest(".studio-timeline-block") ||
       target.closest(".studio-btn-transport") ||
       target.closest("button") ||
       target.closest(".studio-ruler-range-handle")
     ) {
+      return;
+    }
+
+    // 2. Nếu đang ở chế độ Tua (Scrub tool mode) -> Tua video
+    if (timelineToolModeRef.current === "scrub") {
+      e.preventDefault();
+      startScrubbing(e.clientX);
+      return;
+    }
+
+    // 3. Chỉ kích hoạt Marquee Box trong các rãnh câu thoại hoặc vùng trống bên dưới (không thuộc dải Media)
+    if (target.closest(".studio-track-media-lane")) {
       return;
     }
 
@@ -1159,21 +1184,29 @@ export default function SublixStudioView({
     const startX = e.clientX - rect.left + scrollLeft;
     const startY = e.clientY - rect.top;
 
-    isMarqueeSelectingRef.current = true;
-    setMarqueeBox({
-      startX,
-      startY,
-      currentX: startX,
-      currentY: startY,
-    });
+    let isDragging = false;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!isMarqueeSelectingRef.current) return;
+      const dx = moveEvent.clientX - e.clientX;
+      const dy = moveEvent.clientY - e.clientY;
+
+      // Ngưỡng kéo: Phải di chuyển chuột > 5px mới bắt đầu vẽ Marquee box (tránh click nhầm)
+      if (!isDragging) {
+        if (Math.hypot(dx, dy) < 6) return;
+        isDragging = true;
+        isMarqueeSelectingRef.current = true;
+      }
+
       const curScrollLeft = container.scrollLeft || 0;
       const currentX = moveEvent.clientX - rect.left + curScrollLeft;
       const currentY = moveEvent.clientY - rect.top;
 
-      setMarqueeBox((prev) => (prev ? { ...prev, currentX, currentY } : null));
+      setMarqueeBox({
+        startX,
+        startY,
+        currentX,
+        currentY,
+      });
 
       const minX = Math.min(startX, currentX);
       const maxX = Math.max(startX, currentX);
@@ -1207,13 +1240,28 @@ export default function SublixStudioView({
     };
 
     const onMouseUp = () => {
-      isMarqueeSelectingRef.current = false;
-      setMarqueeBox(null);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
-      if (selectedSegIdsRef.current.length > 0) {
-        showToast(`✨ Đã chọn ${selectedSegIdsRef.current.length} câu thoại`);
+
+      if (isDragging) {
+        didJustMarqueeRef.current = true;
+        setTimeout(() => {
+          didJustMarqueeRef.current = false;
+        }, 150);
+
+        if (selectedSegIdsRef.current.length > 0) {
+          showToast(`✨ Đã chọn ${selectedSegIdsRef.current.length} câu thoại`);
+        }
+      } else {
+        // Chỉ click đơn trên khoảng trống track -> Bỏ chọn tất cả blocks
+        setSelectedSegIds([]);
+        selectedSegIdsRef.current = [];
+        setSelectedSegId(0);
+        selectedSegIdRef.current = 0;
       }
+
+      isMarqueeSelectingRef.current = false;
+      setMarqueeBox(null);
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -1377,6 +1425,26 @@ export default function SublixStudioView({
         }
       }
 
+      // ROUND-12: V / T / R (NLE Mode Switch: Chọn / Tua / Khoanh vùng)
+      if (!e.ctrlKey && !e.metaKey && (e.key === "v" || e.key === "V")) {
+        e.preventDefault();
+        setTimelineToolMode("select");
+        showToast("🖐️ Chế độ Chọn: Quét chọn & sửa câu thoại (Phím V)");
+        return;
+      }
+      if (!e.ctrlKey && !e.metaKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        setTimelineToolMode("scrub");
+        showToast("⏱️ Chế độ Tua: Di chuột & tua video mọi vị trí (Phím T)");
+        return;
+      }
+      if (!e.ctrlKey && !e.metaKey && (e.key === "r" || e.key === "R")) {
+        e.preventDefault();
+        setTimelineToolMode("range");
+        showToast("🎯 Chế độ Khoanh vùng In/Out (Phím R)");
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         handleUndo();
@@ -1503,9 +1571,10 @@ export default function SublixStudioView({
   };
 
   const handleRulerMouseDown = (e: React.MouseEvent | React.PointerEvent) => {
-    if (e.shiftKey) {
-      e.preventDefault();
-      e.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.shiftKey || timelineToolModeRef.current === "range") {
       const container = timelineTracksBodyRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
@@ -1537,7 +1606,7 @@ export default function SublixStudioView({
       window.addEventListener("mouseup", handleUp);
       return;
     }
-    e.preventDefault();
+
     startScrubbing(e.clientX);
   };
 
@@ -2312,9 +2381,16 @@ export default function SublixStudioView({
   };
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left - 40;
-    const dur = Math.max(1, mediaDuration);
+    if (didJustMarqueeRef.current) {
+      e.stopPropagation();
+      return;
+    }
+    const container = timelineTracksBodyRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft || 0;
+    const clickX = e.clientX - rect.left + scrollLeft - 40;
+    const dur = Math.max(1, mediaDurationRef.current);
     const tw = timelineWidthRef.current || 1200;
     const newTime = Math.max(0, Math.min(dur, (clickX / tw) * dur));
     handleSeek(newTime);
@@ -4171,6 +4247,45 @@ export default function SublixStudioView({
       >
         {/* P5a: Timeline Control Bar */}
         <div className="studio-timeline-ctrl-bar">
+          {/* ROUND-12: NLE Tool Mode Switcher (Tách riêng Chọn câu thoại vs Tua Timeline vs Khoanh vùng) */}
+          <div className="studio-timeline-mode-switcher">
+            <button
+              type="button"
+              className={`studio-timeline-mode-btn ${timelineToolMode === "select" ? "active" : ""}`}
+              onClick={() => {
+                setTimelineToolMode("select");
+                showToast("🖐️ Chế độ Chọn: Quét chọn & sửa câu thoại (Phím V)");
+              }}
+              title="Chế độ Chọn câu thoại & Quét Marquee Box (Phím V)"
+            >
+              <span>🖐️ Chọn (V)</span>
+            </button>
+            <button
+              type="button"
+              className={`studio-timeline-mode-btn ${timelineToolMode === "scrub" ? "active" : ""}`}
+              onClick={() => {
+                setTimelineToolMode("scrub");
+                showToast("⏱️ Chế độ Tua: Di chuột & tua video mọi vị trí (Phím T)");
+              }}
+              title="Chế độ Tua & Dò vị trí video (Phím T)"
+            >
+              <span>⏱️ Tua (T)</span>
+            </button>
+            <button
+              type="button"
+              className={`studio-timeline-mode-btn ${timelineToolMode === "range" ? "active" : ""}`}
+              onClick={() => {
+                setTimelineToolMode("range");
+                showToast("🎯 Chế độ Khoanh vùng In/Out (Phím R)");
+              }}
+              title="Chế độ Khoanh vùng phạm vi In/Out (Phím R)"
+            >
+              <span>🎯 Vùng (R)</span>
+            </button>
+          </div>
+
+          <div className="studio-timeline-tools-divider" />
+
           {/* EZMAX Action Tools */}
           <div className="studio-timeline-tools-group">
             <button
@@ -4673,7 +4788,20 @@ export default function SublixStudioView({
             </div>
 
             {/* Track 1: Video Filmstrip */}
-            <div className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}>
+            <div
+              className="studio-track-lane studio-track-media-lane"
+              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px`, cursor: "col-resize" }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startScrubbing(e.clientX);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTimelineClick(e);
+              }}
+              title="🎞️ Khung hình video: Bấm hoặc kéo để tua nhanh video"
+            >
               <div className="studio-filmstrip-thumbs">
                 {filmstripThumbs.length > 0 ? (
                   filmstripThumbs.map((thumb, i) => {
@@ -4752,7 +4880,20 @@ export default function SublixStudioView({
             </div>
 
             {/* Track 2: Original Waveform */}
-            <div className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}>
+            <div
+              className="studio-track-lane studio-track-media-lane"
+              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px`, cursor: "col-resize" }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startScrubbing(e.clientX);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTimelineClick(e);
+              }}
+              title="♫ Sóng âm: Bấm hoặc kéo để tua nhanh video"
+            >
               <canvas
                 ref={waveformCanvasRef}
                 className="studio-waveform-canvas"
@@ -4763,7 +4904,20 @@ export default function SublixStudioView({
             </div>
 
             {/* Track 3: Subtitles Block Lane (Progressive Filling) */}
-            <div className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
+            <div
+              className="studio-track-lane studio-track-workspace-lane workspace-start"
+              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+              onClick={(e) => {
+                if (timelineToolMode === "scrub") {
+                  handleTimelineClick(e);
+                } else if (!didJustMarqueeRef.current) {
+                  setSelectedSegIds([]);
+                  selectedSegIdsRef.current = [];
+                  setSelectedSegId(0);
+                  selectedSegIdRef.current = 0;
+                }
+              }}
+            >
               {/* ROUND-8: Visual Progressive Fill Overlay on Subtitles Track */}
               {timelineProcessType && (
                 (() => {
@@ -4845,9 +4999,18 @@ export default function SublixStudioView({
             {/* Track 4..n: Dynamic Speaker Tracks (Progressive Filling per Character) */}
             {collapseSpeakerTracks ? (
               <div
-                className="studio-track-lane"
+                className="studio-track-lane studio-track-workspace-lane"
                 style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
-                onClick={handleTimelineClick}
+                onClick={(e) => {
+                  if (timelineToolMode === "scrub") {
+                    handleTimelineClick(e);
+                  } else if (!didJustMarqueeRef.current) {
+                    setSelectedSegIds([]);
+                    selectedSegIdsRef.current = [];
+                    setSelectedSegId(0);
+                    selectedSegIdRef.current = 0;
+                  }
+                }}
               >
                 {/* Visual Progressive Fill on Voice / Pipeline */}
                 {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
@@ -4934,7 +5097,21 @@ export default function SublixStudioView({
                 const spkSegments = segments.filter((s) => s.speakerId === spk.id);
 
                 return (
-                  <div key={spk.id} className="studio-track-lane" style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }} onClick={handleTimelineClick}>
+                  <div
+                    key={spk.id}
+                    className="studio-track-lane studio-track-workspace-lane"
+                    style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+                    onClick={(e) => {
+                      if (timelineToolMode === "scrub") {
+                        handleTimelineClick(e);
+                      } else if (!didJustMarqueeRef.current) {
+                        setSelectedSegIds([]);
+                        selectedSegIdsRef.current = [];
+                        setSelectedSegId(0);
+                        selectedSegIdRef.current = 0;
+                      }
+                    }}
+                  >
                     {/* ROUND-8: Visual Progressive Fill on Voice / Pipeline */}
                     {(timelineProcessType === "voice" || timelineProcessType === "pipeline") && (
                       (() => {

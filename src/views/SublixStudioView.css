@@ -2587,3 +2587,66 @@
   transform: none;
 }
 
+/* ==========================================================================
+   ROUND-12: NLE TOOL MODE SWITCHER & TIMELINE SEPARATION (TÁCH BIỆT RÕ RÀNG)
+   ========================================================================== */
+.studio-timeline-mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.studio-timeline-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--t2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.studio-timeline-mode-btn:hover {
+  color: var(--t1);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.studio-timeline-mode-btn.active {
+  background: #38bdf8;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 1px 6px rgba(56, 189, 248, 0.45);
+}
+
+/* Dải Media (Thước đo, Khung hình, Sóng âm): Chuyên biệt Tua Video */
+.studio-track-media-lane {
+  background: rgba(15, 23, 42, 0.45) !important;
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.studio-track-media-lane:hover {
+  background: rgba(30, 41, 59, 0.65) !important;
+}
+
+/* Dải Workspace (Phụ đề & Vai diễn): Chuyên biệt Quét chọn & Chỉnh sửa Câu thoại */
+.studio-track-workspace-lane {
+  cursor: crosshair;
+}
+
+/* Đường phân tách rõ rệt giữa dải trên (Media/Ruler) và dải dưới (Phụ đề/Vai diễn) */
+.studio-track-lane.workspace-start {
+  border-top: 2px solid rgba(56, 189, 248, 0.35) !important;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
