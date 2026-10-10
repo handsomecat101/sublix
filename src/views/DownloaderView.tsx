@@ -23,6 +23,7 @@ import {
   IconRotateCw,
   IconGlobe,
 } from "../icons";
+import { StudioShell } from "./StudioShell";
 import "./DownloaderView.css";
 
 interface DownloaderViewProps {
@@ -678,38 +679,8 @@ export default function DownloaderView({
   ).length;
 
   return (
-    <div className="downloader-view">
-      {/* HEADER SECTION */}
-      <div className="downloader-header">
-        <div className="downloader-title-row">
-          <div className="downloader-title-group">
-            <h2 className="downloader-title">
-              <IconGlobe size={20} /> Tải Video Đa Nền Tảng (Multi-Platform Downloader)
-            </h2>
-            <p className="downloader-subtitle">
-              Tải chất lượng cao từ YouTube, TikTok, Douyin (抖音), Bilibili (哔哩哔哩), Facebook, X, Instagram... và đưa thẳng vào Studio lồng tiếng hoặc làm phụ đề chỉ với 1 cú click.
-            </p>
-            {dlDir && (
-              <p
-                style={{ margin: "4px 0 0", fontSize: "0.75rem", opacity: 0.8, wordBreak: "break-word" }}
-                title={dlDir}
-              >
-                📁 File tải về được lưu tại:{" "}
-                <code style={{ fontFamily: "Consolas, monospace" }}>{dlDir}</code>
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="downloader-btn-secondary"
-            onClick={() => sublix.downloaderOpenFolder()}
-            title="Mở thư mục lưu trữ file tải về trên máy tính"
-          >
-            <IconFolder size={14} /> Mở Thư Mục Download
-          </button>
-        </div>
-      </div>
-
+    <StudioShell
+      left={<>
       {/* INPUT CARD */}
       <div className="downloader-card input-card">
         <div className="downloader-url-group">
@@ -877,6 +848,9 @@ export default function DownloaderView({
       </div>
 
       {/* DOWNLOADS LIST SECTION */}
+      </>
+      }
+      center={<>
       <div className="downloader-list-section">
         <div className="downloader-list-header">
           <div className="downloader-tabs">
@@ -1158,6 +1132,40 @@ export default function DownloaderView({
         )}
       </div>
 
+      </>
+      }
+      right={<>
+      {/* HEADER INFO */}
+      <div className="downloader-header">
+        <div className="downloader-title-row">
+          <div className="downloader-title-group">
+            <h2 className="downloader-title">
+              <IconGlobe size={20} /> Tải Video Đa Nền Tảng (Multi-Platform Downloader)
+            </h2>
+            <p className="downloader-subtitle">
+              Tải chất lượng cao từ YouTube, TikTok, Douyin (抖音), Bilibili (哔哩哔哩), Facebook, X, Instagram... và đưa thẳng vào Studio lồng tiếng hoặc làm phụ đề chỉ với 1 cú click.
+            </p>
+            {dlDir && (
+              <p
+                style={{ margin: "4px 0 0", fontSize: "0.75rem", opacity: 0.8, wordBreak: "break-word" }}
+                title={dlDir}
+              >
+                📁 File tải về được lưu tại:{" "}
+                <code style={{ fontFamily: "Consolas, monospace" }}>{dlDir}</code>
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="downloader-btn-secondary"
+            onClick={() => sublix.downloaderOpenFolder()}
+            title="Mở thư mục lưu trữ file tải về trên máy tính"
+          >
+            <IconFolder size={14} /> Mở Thư Mục Download
+          </button>
+        </div>
+      </div>
+
       {/* COPYRIGHT DISCLAIMER */}
       <div className="downloader-copyright-banner">
         <span className="banner-icon">⚖️</span>
@@ -1168,6 +1176,8 @@ export default function DownloaderView({
           </span>
         </div>
       </div>
-    </div>
+      </>
+      }
+    />
   );
 }

@@ -10,6 +10,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-10 - CommandCode → @Gemini (PO: tiếp quản xây lại UI — bàn giao đầy đủ)
+- **Yêu cầu (PO chốt):** MỌI tab phải sống trong **khung Studio** như màn Studio: tab chính trên cùng · GIỮA = view chính · TRÁI + PHẢI = 2 cột phụ. Cấm quay về "trang settings phẳng" kiểu cũ. Mẫu = chính `SublixStudioView`.
+- **Đã có sẵn (KHÔNG làm lại):** `src/views/StudioShell.tsx` + `.css` (khung 3 cột + ShellCard, đã build xanh). `DownloaderView.tsx` ĐÃ lắp xong vào khung (trái=input-card, giữa=list, phải=header+copyright) — chỉ cần tinh chỉnh CSS cho gọn. Bản vẽ gốc: `UI_SPEC_SUBLIX_STUDIO.md`.
+- **Còn làm:** re-slot các tab còn lại vào StudioShell (Live/Lịch sử/Cài đặt/Kiểu dáng = block JSX trong `SettingsView.tsx`; Tạo phụ đề = `FileSubView.tsx`; Lồng tiếng = `DubbingStudioView.tsx`) + menu trên cùng đồng bộ kiểu Studio.
+- **Bẫy đã trả giá (đọc để không lặp):** (1) GUI test CHỈ có 1 đường: `ab2.ps1` + `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222'` + chạy `src-tauri\target\debug\sublix.exe` + `npm run dev` chạy kèm; (2) chụp ảnh PHẢI đúng cửa sổ chính (`ab2 tab t2`/`t1` — tab list đảo lộn, dễ nhầm cửa sổ overlay); (3) file bat tự chế PHẢI có dòng `set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"` (thiếu là app chết ngầm); (4) sửa file hàng loạt: script Python + rào chắn % thay đổi — regex `[^"]*` ăn cả code (đã phá 1 lần).
+- **Nền sạch đã commit:** `452e6b6` (cứu mojibake + Studio full-bleed + backend DeepSeek/glossary tái tạo) + `134f0f6` (báo cáo). App không còn panel trái, menu 8 nút thống nhất (cần đồng bộ phong cách về kiểu Studio).
+- **LUẬT BẤT KHUY XÂM PHẠM:** báo "xong" phải kèm ẢNH TỰ CHỤP đúng cửa sổ (không nói mồm); commit git sau mỗi chặng; không `cargo build --release` (BUG-H07); không đụng `Chay-Sublix.bat` + logic tải của DownloaderView.
+
 ### 2026-10-10 02:10 - Mavis (MiniMax-M3) → @CommandCode
 - **Loại:** `@done` (PO feedback "vẫn bị lỗi font ở version 0.11.0" → v0.11.29 `cdc5278` + `.gitignore` `f81c593`)
 - **Root cause (em đào sâu):** `SublixStudioView.tsx` bị corrupt 1400+ ký tự mojibake từ commit `a72c9ed` (v0.11.13 R5-01). File đã qua nhiều vòng Latin-1 mis-encode (commit Gemini/Antigravity chắc save bằng tool lỗi font). Multi-pass Latin-1→UTF-8 không reverse được. `tauri.conf.json:16` cũng hardcode `version: 0.10.0` (lệch package.json: 0.11.28) → title bar lỗi.

@@ -1,0 +1,81 @@
+/* StudioShell.css — khung 3 cột chuẩn Studio (đồng bộ tông với SublixStudioView) */
+
+.studio-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg0, #0d0d0d);
+  color: var(--t1, #f2f2f2);
+  overflow: hidden;
+}
+
+.studio-shell-cols {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr minmax(240px, 320px);
+  gap: 10px;
+  padding: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-shell-col {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.studio-shell-center {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.studio-shell-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Thẻ panel — cùng phong cách card với Studio */
+.shell-card {
+  background: var(--bg1, #161616);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.shell-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.shell-card-title {
+  font-weight: 800;
+  font-size: 13.5px;
+  letter-spacing: 0.2px;
+}
+
+.shell-card-badge {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.shell-card-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.shell-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
