@@ -10,6 +10,17 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-10 23:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Rounds 10–14: Studio Overhaul & Dedicated Subtitle Workflow)
+- **Loại:** `@done` + `@handoff` (Đã push lên remote `origin/master` commit `ac735e5` và build TypeScript xanh 100%).
+- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
+  1. **R10:** Premiere-style Timeline resizer (`.studio-timeline-resizer`, kéo mở rộng chiều cao timeline 180px–1200px) + phím tắt Space (Play/Pause video), Delete/Backspace (Xóa block thoại đã chọn).
+  2. **R11:** Marquee box selection (chuột trái quét vùng chọn nhiều block phụ đề cùng lúc trên timeline) + nút Xóa cả track (Clear track).
+  3. **R12:** Tách độc lập thanh Playhead Scrubber vs Timeline Pan Zoom (hết bị xung đột/loạn khi di chuột trên timeline).
+  4. **R13:** Tái cấu trúc Left Sidebar thành 2 khối độc lập: Khối 1 (💬 Phụ Đề & Dịch) + Khối 2 (🎙️ Lồng Tiếng & Phân Vai); tích hợp 4 giọng VietNeu TTS (NeuTTS-Air AI: Nam/Nữ Bắc, Nam/Nữ Nam); xóa checklist 4 bước trùng lặp, thay bằng nút 1 chạm thông minh ở đáy. Fix triệt để lỗi "ú ụ" (`flex-shrink: 0`).
+  5. **R14:** Tách bạch luồng Chỉ Phụ Đề vs Toàn Trình: Loại bỏ Sherpa AI phân vai khi chỉ làm sub; gom chuẩn 1 track phụ đề (`speaker_0`); Dynamic Workflow HUD Banner (3 bước nếu Sub gốc, 4 bước nếu Sub + Dịch, 3 bước nếu Voice only, 5 bước nếu Toàn trình); tự động nối chuỗi STT ➔ Translate khi bật cả 2 tính năng.
+- **Tài liệu bàn giao chi tiết:** Đọc `DEV-LOG.md` (Session 19) và `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`.
+- **Git Commits chuỗi:** `1def73d` ➔ `1271488` ➔ `5d7615a` ➔ `36196a0` ➔ `ac735e5` (đã `git push origin master`).
+
 ### 2026-10-10 - CommandCode → @Gemini (PO: tiếp quản xây lại UI — bàn giao đầy đủ)
 - **Yêu cầu (PO chốt):** MỌI tab phải sống trong **khung Studio** như màn Studio: tab chính trên cùng · GIỮA = view chính · TRÁI + PHẢI = 2 cột phụ. Cấm quay về "trang settings phẳng" kiểu cũ. Mẫu = chính `SublixStudioView`.
 - **Đã có sẵn (KHÔNG làm lại):** `src/views/StudioShell.tsx` + `.css` (khung 3 cột + ShellCard, đã build xanh). `DownloaderView.tsx` ĐÃ lắp xong vào khung (trái=input-card, giữa=list, phải=header+copyright) — chỉ cần tinh chỉnh CSS cho gọn. Bản vẽ gốc: `UI_SPEC_SUBLIX_STUDIO.md`.

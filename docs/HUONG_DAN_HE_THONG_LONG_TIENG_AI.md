@@ -250,3 +250,34 @@ Khi muốn bổ sung một giọng đọc mới vào danh sách lựa chọn:
   npx tauri build --no-bundle
   ```
   File thành phẩm xuất hiện tại: `H:\AI Project\sublix\src-tauri\target\release\sublix.exe`.
+
+---
+
+## 8. Cấu Trúc Sublix Studio Mới (2 Khối Độc Lập & Timeline Premiere)
+
+Từ phiên bản `v0.11.29` (Rounds 10–14), Sublix Studio (`SublixStudioView.tsx`) được tái cấu trúc triệt để theo tiêu chuẩn dựng phim chuyên nghiệp:
+
+### 8.1 Hai Khối Độc Lập Ở Cột Trái (Left Sidebar)
+1. **💬 Khối 1: Phụ Đề & Dịch Thuật:**
+   - Quản lý bóc tách giọng nói Whisper STT (GPU Large-v3-Turbo / Tiny / Base).
+   - Tùy chọn dịch thuật độc lập (bật/tắt dịch, chọn ngôn ngữ đích, nhà cung cấp DeepSeek / MiniMax / OpenRouter / Ollama, từ điển Glossary).
+   - Nút hành động cục bộ: `💬 Chỉ Tạo Phụ Đề (+ Dịch)`.
+2. **🎙️ Khối 2: Lồng Tiếng & Phân Vai:**
+   - Quản lý danh sách nhân vật (Speaker Roster).
+   - Hỗ trợ đầy đủ các Voice Engine: **Kokoro ONNX Offline (14 giọng)**, **VietNeu TTS (NeuTTS-Air AI: 4 giọng Bắc/Nam)**, và **Edge-TTS Neural**.
+   - Nút hành động cục bộ: `🎙️ Chỉ Chạy Lồng Tiếng (TTS)`.
+
+### 8.2 Cơ Chế Tiến Trình Thông Minh (Dynamic AI Progress HUD Banner)
+Hệ thống tự động thay đổi banner tiến trình phía trên video theo đúng tùy chọn người dùng:
+- **Chỉ Phụ Đề gốc:** Hiển thị 3 bước (`Audio WAV ➔ Whisper STT ➔ Timeline Sub`). **Tuyệt đối không chạy phân vai Sherpa AI**; tự động gom toàn bộ câu thoại vào 1 track phụ đề chuẩn xác (`speaker_0`).
+- **Chỉ Phụ Đề + Dịch:** Hiển thị 4 bước (`Audio WAV ➔ Whisper STT ➔ Dịch Phụ Đề ➔ Timeline Sub`). Tự động nối chuỗi STT sang Dịch kịch bản đồng bộ.
+- **Chỉ Lồng Tiếng:** Hiển thị 3 bước (`Phân Vai ➔ Tổng Hợp TTS ➔ Đồng Bộ Timeline`).
+- **Toàn Trình:** Hiển thị 5 bước đầy đủ khi bật cả 2 khối.
+
+### 8.3 Thao Tác Timeline Chuẩn Premiere Pro
+- **Kéo mở rộng chiều cao Timeline:** Thanh resizer nằm giữa khung video và timeline, hỗ trợ kéo mở rộng từ 180px lên đến 1200px, tự động lưu vào `localStorage`.
+- **Marquee Box Selection:** Giữ chuột trái trên timeline kéo quét vùng chữ nhật để chọn nhiều block thoại cùng lúc.
+- **Phím tắt toàn cục:**
+  - `Space`: Phát / Tạm dừng video (khi không gõ text trong ô input).
+  - `Delete` hoặc `Backspace`: Xóa toàn bộ các block phụ đề đang được chọn (kèm lưu lịch sử Undo).
+- **Xóa cả track (Clear Track):** Biểu tượng thùng rác trên header từng track để xóa nhanh toàn bộ item trên track đó.

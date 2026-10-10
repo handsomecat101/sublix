@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.10.0` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `v0.9.6` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Phase V2 Phân vai AI Offline sherpa-onnx + Speaker Roster UI v0.10.0 hoàn thành trọn gói E2E; Downloader đầy đủ từ v0.9.6) |
+| **Bản Build Hiện Tại** | `v0.11.29` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Git Commit** | `ac735e5` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Active (Studio UI Premiere Timeline, VietNeu TTS, Dynamic HUD Banner, Dedicated Subtitle Flow hoàn thành trọn gói E2E) |
 
 ---
 
@@ -22,7 +22,7 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Phase V2 (S1-S4) bàn giao cho Mavis & CommandCode |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–14 (Studio Overhaul & Dedicated Subtitle Workflow) |
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
 | **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
 | **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Nhận bàn giao V2, review code & nghiệm thu |
@@ -35,12 +35,7 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| `TSK-FIX-BUG044-058` | ~~Vá 15 lỗi Tab Tải Video~~ | **Mavis (MiniMax-M3)** | 🔴 DONE | ✅ All 15 done (3 commits: bd6a9d6/6739ea7/a142999), Job Object deferred | `agent-team/BUG-FIX-REPORT-BUG044-058.md` |
-| `TSK-FIX-R2-001-009` | ~~Vòng 2 nốt 9 lỗi R2-01..R2-09 (sau audit)~~ | **Mavis + alex** | 🔴 DONE | ✅ R2-01..R2-09 đã fix xong (commit `d2d3f7c` R2-08+`1e2bd3d` R2-02..R2-07+R2-09), build xanh | `agent-team/BUG-FIX-REPORT-VONG2.md` |
-| `TSK-AUDIT-VOICE-2026-10-06` | **Audit 17 mục tạo giọng** theo `AUDIT_TAO_GIONG.md` (BƯỚC 1: điền bảng) + **viết code cho thật** | **CommandCode** (chuyển giao 2026-10-06 15:38) | 🔴 HIGH | **PO chuyển giao cho CommandCode lúc 15:38.** Mavis đã điền bảng code-level (17/17 mục, evidence `path:line`); CommandCode tiếp tục: GUI test thật 12 mục cần UI + viết code cho 3 mục "trên giấy" (#11-13 F5-TTS/Viterbox/Kokoro) + sửa lời quảng cáo #14-15. Bằng chứng vào `test-output-audit-giong/`. | `agent-team/AUDIT_TAO_GIONG.md` (bảng đã điền) |
-| `TSK-AUDIT-SUB-2026-10-06` | ~~Audit pipeline tạo phụ đề (file_sub.rs + stt/ + translate/) — đo thời gian thực tế + tìm bottleneck~~ | **Mavis + sub-agent (worker)** | 🔴 DONE | ✅ Worker đo 3 stage end-to-end trên video 21:43. Tổng ~64 phút (large model CPU) / ~41 phút (tiny model). 5 findings (2 🔴 blocker + 3 🟡 UX). Bằng chứng file thật 10 file trong `test-output-audit-sub/`. | `agent-team/AUDIT_SUB_REPORT.md` (22KB, 12 sections) |
-| `TSK-VOICE-CATALOG-2026-10-07` | ~~Voice Catalog theo Model + mẫu nghe thử trước khi chọn + khớp voice đa vai~~ | **CommandCode** | 🔴 HIGH | ✅ DONE (v0.9.9) — model bấm ▸ hiện 7 nam/7 nữ (cả TRƯỚC khi tải); 🎧 tạo mẫu 14/14 cache → nghe tức thì (verified audio thật); multi-role 5 vai→5 giọng khác nhau + chip ⚠️ Trùng giọng. Bằng chứng `test-output-audit-giong/v099_*.png`. Dev-test cần `--no-watch` (BUG-H08) | `dubbing/mod.rs`, `lib.rs`, `DubbingStudioView.tsx/css`, `tauri.ts` |
-| `TSK-V2-E2E-HANDOFF` | **Phase V2 Bàn giao & Nghiệm thu**: S1-S4 hoàn thành trọn vẹn, sẵn sàng bàn giao Mavis GUI test & CommandCode audit | **Mavis + CommandCode** | 🔴 HIGH | 🟢 Antigravity đã xong code + test + deliverables; đang chờ Mavis test GUI và CommandCode review | `agent-team/REPORT_PHASE_V2_COMPLETION.md` |
+| `TSK-STUDIO-ROUNDS-10-14` | ~~Studio Premiere Timeline, Marquee, VietNeu TTS, Dynamic AI Progress HUD~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành 5 rounds (R10-R14) commit ac735e5, push GitHub | `SublixStudioView.tsx`, `SublixStudioView.css` |
 
 ---
 
@@ -58,6 +53,8 @@
 ## ✅ Task Hoàn Thành (1 dòng / task)
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
+|----|------|-------|-----------|--------------------------------|
+| `TSK-STUDIO-ROUNDS-10-14` | Studio Premiere Timeline Resizer, Marquee, VietNeu TTS, Dynamic HUD, Sub-only Flow | **Antigravity** | 2026-10-10 | ✅ Hoàn tất 5 rounds (R10-R14), commit `ac735e5`, push GitHub xanh, build TS 100% |
 |----|------|-------|-----------|--------------------------------|
 | `TSK-V2-S4-VERIFY` | Step S4: E2E Verification video đa vai + trích xuất deliverables v2_* & bump v0.10.0 | **Antigravity** | 2026-10-07 | ✅ E2E multi_speaker_scene.mp4 -> v2_multi_speaker_DUBBED.mp4 (375KB, 26s), 2 clips sample audio, test_v2_diarization_e2e pass |
 | `TSK-V2-S3-UI` | Step S3: UI Bảng vai diễn: nghe giọng gốc (Base64 data URI), gộp vai, badge AI Sherpa/Heuristic | **Antigravity** | 2026-10-07 | ✅ UI DubbingStudioView đầy đủ nút Nghe giọng gốc, dropdown gộp vai, badge phân vai, đếm câu thoại, npm run build xanh 2.45s |

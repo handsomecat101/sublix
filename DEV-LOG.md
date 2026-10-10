@@ -668,4 +668,47 @@ sublix/
 
 *Last updated: 2026-10-07 — v0.9.9 (voice catalog theo model + mẫu nghe thử cache + khớp voice đa vai)*
 
+---
+
+## Session 19 — 2026-10-10 20:30 → 23:25 (Antigravity) — Studio UI/UX Overhaul & Dedicated Subtitle Workflow (Rounds 10–14)
+
+### User intent & PO Feedback (Anh Tuấn)
+1. "kéo mở thêm đất như của premiere đi, giữa panel trên và dưới... kiểm tra phím Space play/pause, Delete xóa item...": Kéo giãn chiều cao timeline tự do, phím tắt dựng phim tiêu chuẩn.
+2. "ở dưới các phần track không thể mở box trái chuột chọn nhiều item để xóa hay sửa... xóa được cả track... bỏ nút 1 click chạy hết đi thay bằng chạy dựa trên options chọn... sao chọn nó cứ tự động làm 1 nam 1 nữ...": Box marquee selection, Clear track, thống nhất workflow options.
+3. "thanh trái giờ ú ụ rồi... xem lại option có trùng lặp không... tính năng phụ đề là phụ đề, lồng tiếng là lồng tiếng... có cả vietneu tts nữa thì thêm vào": Cấu trúc 2 khối độc lập, fix co ép `flex-shrink`, tích hợp 4 giọng VietNeu TTS.
+4. "chọn mỗi tạo phụ đề mà nó vẫn hiện full 5 bước và chạy Sherpa AI... giải thích quy trình xem nào": Tách bạch luồng Phụ đề không chạy phân vai/Sherpa AI, Dynamic HUD banner.
+
+### Đã làm & Quyết định kỹ thuật
+- **R10 (Commit `1def73d`):**
+  - Premiere-style Timeline resizer (`.studio-timeline-resizer`) giữa panel video và timeline. Lưu `localStorage("sublix_studio_timeline_height")`, min 180px, max 1200px.
+  - Phím tắt toàn cục: `Space` (Play/Pause video khi không focus input/textarea), `Delete` / `Backspace` (xóa block phụ đề đang chọn kèm undo).
+- **R11 (Commit `1271488`):**
+  - Marquee Box Selection: Giữ chuột trái trên timeline body kéo quét hộp chữ nhật xanh translucent (`.studio-marquee-selection-box`) chọn nhiều segment đồng thời (`selectedSegmentIds: Set<number>`).
+  - Nút thùng rác xóa sạch cả track (Clear Track) trên track header phụ đề kèm confirm.
+- **R12 (Commit `5d7615a`):**
+  - Phân tách độc lập 3 công cụ: Chọn (V), Tua Time Scrubber (T), Vùng lặp (R).
+  - Khắc phục xung đột tua playhead khi rê chuột trên track body.
+- **R13 (Commit `36196a0`):**
+  - Tái cấu trúc Left Sidebar thành 2 khối cốt lõi:
+    - 💬 Khối 1: Phụ Đề & Dịch Thuật (STT, chọn Whisper model, ngôn ngữ gốc, bật/tắt dịch, glossary).
+    - 🎙️ Khối 2: Lồng Tiếng & Phân Vai (TTS, phân vai nhân vật, gán voice Kokoro / VietNeu TTS / Edge-TTS).
+  - Tích hợp 4 giọng NeuTTS-Air AI (VietNeu TTS): Nam/Nữ miền Bắc, Nam/Nữ miền Nam.
+  - Sửa triệt để lỗi "ú ụ" co ép: thêm `flex-shrink: 0` vào cards và action hub, scrollbar mượt mà 5px.
+  - Thay thế bảng checklist 4 bước trùng lặp bằng 1 Pill tóm tắt chế độ + 1 Nút to thông minh duy nhất ("🚀 BẮT ĐẦU XỬ LÝ").
+- **R14 (Commit `ac735e5`):**
+  - Dynamic AI Progress HUD Banner: Tự động thích ứng số bước theo đúng chế độ:
+    - Chỉ Phụ đề gốc (3 bước: Audio WAV ➔ Whisper STT ➔ Timeline Sub).
+    - Chỉ Phụ đề + Dịch (4 bước: Audio WAV ➔ Whisper STT ➔ Dịch Phụ Đề ➔ Timeline Sub).
+    - Chỉ Lồng tiếng (3 bước: Phân Vai ➔ Tổng Hợp TTS ➔ Đồng Bộ Timeline).
+    - Toàn trình (5 bước).
+  - Tuyệt đối loại bỏ Sherpa AI / Phân vai khi chỉ làm phụ đề. Toàn bộ câu thoại gom vào 1 track phụ đề chuẩn xác (`speaker_0`), không sinh nhiều track vai lạ gây rối mắt.
+  - Nối chuỗi tự động mượt mà giữa STT và LLM Translate khi bật cả hai.
+
+### Verification & Deliverables
+- ✅ TypeScript build (`npm run build`): 100% pass (3.86s).
+- ✅ Playwright E2E screenshots: `verify_round14_sub_only_no_translate.png`, `verify_round14_sub_only_with_translate.png`, `verify_round14_voice_only.png`.
+- ✅ Git commits chuỗi: `1def73d` ➔ `1271488` ➔ `5d7615a` ➔ `36196a0` ➔ `ac735e5` (đã push GitHub origin/master).
+
+*Last updated: 2026-10-10 — v0.11.29 (Premiere timeline, Marquee selection, VietNeu TTS, Dynamic AI HUD)*
+
 
