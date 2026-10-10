@@ -24,14 +24,14 @@ import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import SublixStudioView from "./SublixStudioView";
 import DownloaderView from "./DownloaderView";
+import { StudioShell, ShellCard } from "./StudioShell";
 import { ChangelogModal } from "./ChangelogModal";
 import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
 import {
-  IconFilm, IconClapper, IconMic, IconBox, IconClock, IconPanel,
-  IconSparkles, IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
-  IconPlay, IconStop, IconGlobe,
+  IconFilm, IconClapper, IconMic, IconClock,
+  IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
+  IconPlay, IconStop, IconGlobe, IconSettings, IconTrash, IconRotateCw,
 } from "../icons";
-import logoUrl from "../assets/logo.png";
 import spotHistoryUrl from "../assets/spot-history.jpg";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import "./SettingsView.css";
@@ -133,6 +133,14 @@ export default function SettingsView() {
     setActiveTab("dubbing");
   };
   const [historySearch, setHistorySearch] = useState<string>("");
+  const [settingsSubtab, setSettingsSubtab] = useState<"presets" | "ai" | "stt" | "overlay" | "models_hub">("presets");
+
+  useEffect(() => {
+    if (activeTab === "overlay") {
+      setSettingsSubtab("overlay");
+    }
+  }, [activeTab]);
+  const [selectedHistorySub, setSelectedHistorySub] = useState<LiveSubPreview | null>(null);
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
   const [theme, setTheme] = useState<string>("cinema");
   const [bgOpacity, setBgOpacity] = useState<number>(85);
@@ -1017,254 +1025,173 @@ export default function SettingsView() {
             initialFilePath={pendingDubbingPath}
             isActive
             onNavigateTab={(t) => setActiveTab(t)}
+            currentTheme={theme}
+            onThemeChange={handleThemeChange}
           />
         </div>
       )}
-      {/* LEFT SIDEBAR */}
-      <aside className="app-sidebar hidden-shell">
-        <div className="sidebar-top">
-          {/* Brand */}
-          <div className="sidebar-brand">
-            <img className="sidebar-brand-icon" src={logoUrl} alt="Sublix" />
-            <div className="sidebar-brand-text">
-              <span className="sidebar-brand-title">
-                Sublix{" "}
+            {/* RIGHT MAIN WORKSPACE */}
+      <main className="app-main" style={{ display: activeTab === "studio" ? "none" : "flex" }}>
+        {/* MASTER STUDIO TOPBAR */}
+        <header className="studio-topbar">
+          <div className="studio-topbar-left">
+            <div className="studio-brand" onClick={() => setActiveTab("studio")}>
+              <div className="studio-brand-logo">
+                <IconClapper size={15} />
+              </div>
+              <span className="studio-brand-title">SUBLIX STUDIO</span>
+              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? "0.11.0"}</span>
+            </div>
+
+            <nav className="studio-nav-tabs">
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "studio" ? "active" : ""}`}
+                onClick={() => setActiveTab("studio")}
+              >
+                <IconClapper size={13} />
+                <span>Studio</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "downloader" ? "active" : ""}`}
+                onClick={() => setActiveTab("downloader")}
+              >
+                <IconGlobe size={13} />
+                <span>Tải video</span>
+                {runningDownloads.length > 0 && (
+                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
+                    ⬇ {runningDownloads.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "live" ? "active" : ""}`}
+                onClick={() => setActiveTab("live")}
+              >
+                <IconMic size={13} />
+                <span>Live</span>
+                {isLive && (
+                  <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, fontWeight: 700, marginLeft: 4 }}>
+                    LIVE
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "history" ? "active" : ""}`}
+                onClick={() => setActiveTab("history")}
+              >
+                <IconClock size={13} />
+                <span>Lịch sử</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "models" || activeTab === "overlay" ? "active" : ""}`}
+                onClick={() => setActiveTab("models")}
+              >
+                <IconSettings size={13} />
+                <span>Cài đặt</span>
+                {runningModels.length > 0 && (
+                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
+                    📥 {runningModels.length}
+                  </span>
+                )}
+              </button>
+              {(activeTab === "file_sub" || runningFileSub) && (
                 <button
                   type="button"
-                  className="sidebar-version-badge clickable"
-                  onClick={() => setShowChangelog(true)}
-                  title="Bấm để xem chi tiết cập nhật & tính năng mới (Changelog)"
+                  className={`studio-nav-tab ${activeTab === "file_sub" ? "active" : ""}`}
+                  onClick={() => setActiveTab("file_sub")}
                 >
-                  v{appInfo?.version ?? "0.8.0"}
+                  <IconFilm size={13} />
+                  <span>Phụ đề</span>
+                  {runningFileSub && (
+                    <span className="sidebar-process-badge pulse-amber" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
+                      ⚡ {runningFileSub.percent.toFixed(0)}%
+                    </span>
+                  )}
                 </button>
-              </span>
-              <span className="sidebar-brand-slogan">Local AI Subtitle Studio</span>
+              )}
+              {(activeTab === "dubbing" || runningDubbing) && (
+                <button
+                  type="button"
+                  className={`studio-nav-tab ${activeTab === "dubbing" ? "active" : ""}`}
+                  onClick={() => setActiveTab("dubbing")}
+                >
+                  <IconClapper size={13} />
+                  <span>Lồng tiếng</span>
+                  {runningDubbing && (
+                    <span className="sidebar-process-badge pulse-purple" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
+                      🎬 {runningDubbing.percent.toFixed(0)}%
+                    </span>
+                  )}
+                </button>
+              )}
+            </nav>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className={`main-topbar-status status-${status.kind}`} style={{ fontSize: 11.5 }}>
+              {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch live..." : "✓ Sẵn sàng")}
+              {status.kind === "working" && `⏳ ${status.message}`}
+              {status.kind === "error" && `⚠ ${status.message}`}
+              {status.kind === "success" && `✓ ${status.message}`}
             </div>
           </div>
 
-          {/* Hardware Status Pill */}
-          <div className="sidebar-hw-pill">
-            <span className="sidebar-hw-pill-icon">
-              {sttServerEngine === "cuda" || engine === "cuda" ? <IconZap size={14} /> : <IconCpu size={14} />}
-            </span>
-            <div className="sidebar-hw-pill-info">
-              <span className="sidebar-hw-pill-title">
-                {sttServerEngine === "cuda" || engine === "cuda" ? "NVIDIA CUDA GPU" : "CPU Đa Luồng"}
-              </span>
-              <span className="sidebar-hw-pill-sub">
-                {sttServerEngine === "cuda" || engine === "cuda" ? "Tăng tốc phần cứng" : "Mọi PC / Laptop"}
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Items */}
-          <nav className="sidebar-nav">
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "studio" ? "active" : ""}`}
-              onClick={() => setActiveTab("studio")}
-            >
-              <IconClapper className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Studio (Mới)</span>
-              <span style={{ fontSize: 9, background: "#f59e0b", color: "#111", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>MỚI</span>
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "downloader" ? "active" : ""}`}
-              onClick={() => setActiveTab("downloader")}
-            >
-              <IconGlobe className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Tải Video Đa Nền Tảng</span>
-              {runningDownloads.length > 0 ? (
-                <span className="sidebar-process-badge pulse-blue">
-                  ⬇ {runningDownloads.length}
-                </span>
-              ) : (
-                <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>HOT</span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "file_sub" ? "active" : ""}`}
-              onClick={() => setActiveTab("file_sub")}
-            >
-              <IconFilm className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Tạo Phụ Đề File</span>
-              {runningFileSub ? (
-                <span className="sidebar-process-badge pulse-amber">
-                  ⚡ {runningFileSub.percent.toFixed(0)}%
-                </span>
-              ) : null}
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "dubbing" ? "active" : ""}`}
-              onClick={() => setActiveTab("dubbing")}
-            >
-              <IconClapper className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Studio Lồng Tiếng AI</span>
-              {runningDubbing ? (
-                <span className="sidebar-process-badge pulse-purple">
-                  🎬 {runningDubbing.percent.toFixed(0)}%
-                </span>
-              ) : (
-                <span style={{ fontSize: 9, background: "#8b5cf6", color: "#fff", padding: "1px 5px", borderRadius: 3, marginLeft: "auto", fontWeight: 700 }}>NEW</span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "live" ? "active" : ""}`}
-              onClick={() => setActiveTab("live")}
-            >
-              <IconMic className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Dịch Trực Tiếp Live</span>
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "models" ? "active" : ""}`}
-              onClick={() => setActiveTab("models")}
-            >
-              <IconBox className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Mô Hình & Cấu Hình</span>
-              {runningModels.length > 0 && (
-                <span className="sidebar-process-badge pulse-blue">
-                  📥 {runningModels.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "history" ? "active" : ""}`}
-              onClick={() => setActiveTab("history")}
-            >
-              <IconClock className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Lịch Sử Lời Thoại</span>
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeTab === "overlay" ? "active" : ""}`}
-              onClick={() => setActiveTab("overlay")}
-            >
-              <IconPanel className="sidebar-nav-icon" />
-              <span className="sidebar-nav-label">Kiểu Dáng Overlay</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="sidebar-footer">
-          <div className="sidebar-theme-row" title="Đổi giao diện (Theme)">
-            {([
-              { id: "cinema", label: "Rạp phim", dot: "#e8a33d" },
-              { id: "studio", label: "Phòng dựng", dot: "#2dd4bf" },
-              { id: "light", label: "Sáng nhẹ", dot: "#b45309" },
-              { id: "vibrant", label: "Vibrant", dot: "#e11d48" },
-            ]).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`sidebar-theme-dot ${theme === t.id ? "active" : ""}`}
-                style={{ background: t.dot }}
-                title={t.label}
-                onClick={() => handleThemeChange(t.id)}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            className="sidebar-quick-btn"
-            title="Phím tắt: Ctrl+Shift+O"
-            onClick={async () => {
-              if (overlayVisible) {
-                await sublix.hideOverlay();
-                setOverlayVisible(false);
-              } else {
-                await sublix.showOverlay();
-                setOverlayVisible(true);
-              }
-            }}
-          >
-            {overlayVisible ? <IconEyeOff size={13} /> : <IconEye size={13} />}
-            {overlayVisible ? "Ẩn Cửa Sổ Overlay" : "Hiện Cửa Sổ Overlay"}
-          </button>
-          <button
-            type="button"
-            className="sidebar-quick-btn"
-            onClick={() => sublix.openModelsFolder()}
-          >
-            <IconFolder size={13} /> Mở Thư Mục Models
-          </button>
-          <button
-            type="button"
-            className="sidebar-quick-btn changelog-btn"
-            onClick={() => setShowChangelog(true)}
-          >
-            <IconFileText size={13} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
-          </button>
-        </div>
-      </aside>
-
-      {/* RIGHT MAIN WORKSPACE */}
-      <main className="app-main">
-        {/* Topbar */}
-        <div className={`main-topbar ${activeTab === "studio" ? "hidden-shell" : ""}`}>
-          <div className="main-topbar-title" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            {([["studio", "▶ Studio"], ["downloader", "⬇ Tải video"], ["file_sub", "🎬 Tạo phụ đề"], ["dubbing", "🎙 Lồng tiếng"], ["live", "📶 Live"], ["history", "🕘 Lịch sử"], ["models", "⚙ Cài đặt"], ["overlay", "🎨 Kiểu dáng"]] as const).map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setActiveTab(k)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  background: activeTab === k ? "var(--color-accent, #f59e0b)" : "rgba(120,120,140,0.14)",
-                  color: activeTab === k ? "#111" : "inherit",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="main-topbar-actions">
+          <div className="studio-topbar-right">
             <button
               type="button"
               className={`topbar-process-btn ${totalActiveTasksCount > 0 ? "has-active" : ""}`}
               onClick={() => setShowProcessCenter(true)}
               title="Xem trung tâm toàn bộ tiến trình ứng dụng (Background Jobs)"
+              style={{ padding: "4px 10px", fontSize: 11.5 }}
             >
               <span className={totalActiveTasksCount > 0 ? "process-icon-spin" : ""}>
                 {totalActiveTasksCount > 0 ? "⚡" : "📊"}
               </span>
               <span>Tiến Trình ({totalActiveTasksCount})</span>
             </button>
+
+            <div className="studio-theme-dots" title="Đổi theme giao diện">
+              {[
+                { id: "cinema", bg: "#e8a33d" },
+                { id: "studio", bg: "#2dd4bf" },
+                { id: "light", bg: "#b45309" },
+                { id: "vibrant", bg: "#e11d48" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`studio-theme-dot ${theme === t.id ? "active" : ""}`}
+                  style={{ background: t.bg }}
+                  onClick={() => handleThemeChange(t.id)}
+                />
+              ))}
+            </div>
+
             <button
               type="button"
-              className="topbar-changelog-btn"
-              onClick={() => setShowChangelog(true)}
-              title="Bấm để xem các tính năng mới trong v0.8.0"
+              className="sidebar-quick-btn"
+              style={{ margin: 0, padding: "4px 10px", fontSize: 11.5 }}
+              onClick={async () => {
+                if (overlayVisible) {
+                  await sublix.hideOverlay();
+                  setOverlayVisible(false);
+                } else {
+                  await sublix.showOverlay();
+                  setOverlayVisible(true);
+                }
+              }}
+              title="Phím tắt: Ctrl+Shift+O"
             >
-              <IconSparkles size={13} /> v{appInfo?.version ?? "0.8.0"} Changelog
+              {overlayVisible ? <IconEyeOff size={13} /> : <IconEye size={13} />}
+              <span>{overlayVisible ? "Ẩn Overlay" : "Hiện Overlay"}</span>
             </button>
-            <div className={`main-topbar-status status-${status.kind}`}>
-              {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch..." : "✓ Sẵn sàng")}
-              {status.kind === "working" && `⏳ ${status.message}`}
-              {status.kind === "error" && `⚠ ${status.message}`}
-              {status.kind === "success" && `✓ ${status.message}`}
-            </div>
           </div>
-        </div>
+        </header>
 
         {/* Scrollable Body */}
         <div className="main-body">
@@ -1320,1302 +1247,1688 @@ export default function SettingsView() {
       </div>
 
       {activeTab === "live" && (
-        <>
-          {/* SECTION 1: LIVE CAPTURE */}
-          <section className="settings-section">
-        <h2>🎬 Live Subtitle Stream (Zero-Gap + Smart VAD)</h2>
-        <p className="settings-help">
-          Continuously captures system audio without gaps, slices phrases at natural pauses,
-          transcribes with GPU Whisper, and translates with GPU LLM into the floating overlay.
-        </p>
-
-        <div className="settings-row">
-          <label>Source lang:</label>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="settings-select"
-          >
-            <option value="ja">🇯🇵 Japanese (Phim / Anime / Video Nhật)</option>
-            <option value="en">🇺🇸 English (YouTube / Course / Meeting)</option>
-            <option value="zh">🇨🇳 Chinese (Phim / Video Trung)</option>
-            <option value="ko">🇰🇷 Korean (Phim / Video Hàn)</option>
-            <option value="auto">🌐 Auto-detect language</option>
-          </select>
-        </div>
-
-        <div className="settings-row">
-          <label>Output mode:</label>
-          <select
-            value={outputMode}
-            onChange={(e) => setOutputMode(e.target.value as "original" | "translated")}
-            className="settings-select"
-          >
-            <option value="translated">🌐 Translate to Target Language (Recommended)</option>
-            <option value="original">📝 Original transcript only (No translation)</option>
-          </select>
-        </div>
-
-        {outputMode === "translated" && (
-          <div className="settings-row">
-            <label>Target lang:</label>
-            <select
-              value={targetLang}
-              onChange={(e) => setTargetLang(e.target.value)}
-              className="settings-select"
-            >
-              <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
-              <option value="en">🇺🇸 English</option>
-              <option value="ja">🇯🇵 Japanese</option>
-              <option value="zh">🇨🇳 Chinese</option>
-              <option value="ko">🇰🇷 Korean</option>
-            </select>
-          </div>
-        )}
-
-        <div className="settings-row">
-          <label>Max chunk:</label>
-          <input
-            type="range"
-            min={2}
-            max={8}
-            step={1}
-            value={chunkSeconds}
-            onChange={(e) => setChunkSeconds(Number(e.target.value))}
-            className="settings-slider"
-          />
-          <span className="settings-slider-value">{chunkSeconds}s</span>
-          <label style={{ marginLeft: 16, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={vadEnabled}
-              onChange={(e) => setVadEnabled(e.target.checked)}
-            />
-            <span>✂️ Smart VAD (Cut on natural speech pause)</span>
-          </label>
-        </div>
-
-        <div className="settings-row" style={{ marginTop: 10 }}>
-          {!isLive ? (
-            <button
-              onClick={handleStartLive}
-              className="settings-btn-primary"
-              title="Phím tắt: Ctrl+Shift+L"
-            >
-              <IconPlay size={13} /> Start Live Subtitles
-            </button>
-          ) : (
-            <button
-              onClick={handleStopLive}
-              title="Phím tắt: Ctrl+Shift+L"
-              className="settings-btn-secondary"
-              style={{
-                background: "rgba(248, 113, 113, 0.22)",
-                borderColor: "rgba(248, 113, 113, 0.5)",
-                color: "#fca5a5",
-                fontWeight: 600,
-              }}
-            >
-              <IconStop size={13} /> Stop Live
-            </button>
-          )}
-
-          <button
-            onClick={() => sublix.showOverlay()}
-            className="settings-btn-secondary"
-            title="Phím tắt: Ctrl+Shift+O"
-          >
-            <IconEye size={13} /> Show Overlay
-          </button>
-        </div>
-
-        {recentSubs.length > 0 && (
-          <div className="settings-transcript" style={{ marginTop: 12 }}>
-            <strong>Recent Live Subtitles:</strong>
-            {recentSubs.map((s) => (
-              <div key={s.id} style={{ marginTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }}>
-                <div style={{ color: "#f8fafc", fontWeight: 600 }}>{s.text}</div>
-                {s.original && s.original !== s.text && (
-                  <div style={{ color: "#94a3b8", fontSize: 12 }}>{s.original}</div>
-                )}
-                <div style={{ color: "#64748b", fontSize: 11 }}>
-                  #{s.id}
-                  {s.stt_duration !== undefined && ` • STT ${(s.stt_duration * 1000).toFixed(0)}ms`}
-                  {s.translate_duration !== undefined && s.translate_duration > 0 && ` • LLM ${(s.translate_duration * 1000).toFixed(0)}ms`}
+        <StudioShell
+          left={
+            <>
+              <ShellCard
+                icon={<IconSettings size={14} />}
+                title="Cấu Hình Nhận Dạng & Dịch"
+              >
+                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                  <label style={{ fontSize: 11.5, opacity: 0.8 }}>Ngôn ngữ gốc (Source):</label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="settings-select"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="ja">🇯🇵 Japanese (Phim / Anime Nhật)</option>
+                    <option value="en">🇺🇸 English (YouTube / Meeting)</option>
+                    <option value="zh">🇨🇳 Chinese (Phim / Video Trung)</option>
+                    <option value="ko">🇰🇷 Korean (Phim / Video Hàn)</option>
+                    <option value="auto">🌐 Auto-detect (Tự động)</option>
+                  </select>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
-      {/* SECTION 2: AUDIO DEVICE */}
-      <section className="settings-section">
-        <h2>🎙 Audio Output Device (WASAPI Loopback)</h2>
-        <div className="settings-row">
-          <select
-            value={selectedDevice}
-            onChange={(e) => setSelectedDevice(e.target.value)}
-            className="settings-select"
-          >
-            <option value="default">Default (Windows default audio output)</option>
-            {devices.map((d, i) => (
-              <option key={d.id} value={`index:${i}`}>
-                [{i}] {d.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={loadDevices} className="settings-btn-secondary">
-            Refresh
-          </button>
-          <button
-            onClick={async () => {
-              if (isLive) {
-                setStatus({ kind: "error", message: "Stop Live mode before scanning devices." });
-                return;
-              }
-              setScanning(true);
-              setStatus({ kind: "working", message: "Scanning all audio devices..." });
-              try {
-                const levels = await sublix.scanAudioLevels();
-                setDeviceLevels(levels);
-                const active = levels.filter((l) => l.has_audio);
-                if (active.length === 0) {
-                  setStatus({
-                    kind: "error",
-                    message: "🔇 No device currently playing audio. Start a video first!",
-                  });
-                } else {
-                  setStatus({
-                    kind: "success",
-                    message: `🔊 Found ${active.length} active audio device(s).`,
-                  });
-                }
-              } catch (e) {
-                setStatus({ kind: "error", message: `Scan failed: ${e}` });
-              } finally {
-                setScanning(false);
-              }
-            }}
-            className="settings-btn-secondary"
-            disabled={scanning || isLive}
-          >
-            {scanning ? "⏳ Scanning..." : "🔍 Scan Active Audio"}
-          </button>
-          <button
-            onClick={async () => {
-              setStatus({ kind: "working", message: "Testing selected device (3s)..." });
-              try {
-                const deviceIndex = selectedDevice === "default"
-                  ? undefined
-                  : Number(selectedDevice.replace("index:", ""));
-                const result = await sublix.testAudio(deviceIndex);
-                setAudioTest(result);
-                if (result.has_audio) {
-                  setStatus({
-                    kind: "success",
-                    message: `🔊 Audio detected! Peak ${(result.peak_volume * 100).toFixed(0)}%`,
-                  });
-                } else {
-                  setStatus({
-                    kind: "error",
-                    message: "🔇 Silence on this device. Try 'Scan Active Audio' to find the right speaker/headphone.",
-                  });
-                }
-              } catch (e) {
-                setStatus({ kind: "error", message: `Test failed: ${e}` });
-              }
-            }}
-            className="settings-btn-secondary"
-            disabled={isLive}
-          >
-            🔊 Test 3s
-          </button>
-        </div>
+                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                  <label style={{ fontSize: 11.5, opacity: 0.8 }}>Chế độ xuất:</label>
+                  <select
+                    value={outputMode}
+                    onChange={(e) => setOutputMode(e.target.value as "original" | "translated")}
+                    className="settings-select"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="translated">🌐 Dịch sang ngôn ngữ đích (Khuyên Dùng)</option>
+                    <option value="original">📝 Chỉ gõ chữ gốc (Không dịch)</option>
+                  </select>
+                </div>
 
-        {deviceLevels && (
-          <div className="settings-levels">
-            {deviceLevels.map((l) => {
-              const pct = Math.min(100, l.peak_volume * 100);
-              const isSelected = selectedDevice === `index:${l.index}`;
-              return (
-                <div
-                  key={l.index}
-                  className={`settings-level-row ${l.has_audio ? "active" : ""} ${isSelected ? "selected" : ""}`}
-                >
-                  <span className="settings-level-name">
-                    [{l.index}] {l.name}
-                  </span>
-                  <div className="settings-level-bar">
-                    <div
-                      className="settings-level-bar-fill"
-                      style={{ width: `${pct}%` }}
-                      data-active={l.has_audio}
-                    />
+                {outputMode === "translated" && (
+                  <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                    <label style={{ fontSize: 11.5, opacity: 0.8 }}>Ngôn ngữ đích (Target):</label>
+                    <select
+                      value={targetLang}
+                      onChange={(e) => setTargetLang(e.target.value)}
+                      className="settings-select"
+                      style={{ width: "100%" }}
+                    >
+                      <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                      <option value="en">🇺🇸 English</option>
+                      <option value="ja">🇯🇵 Japanese</option>
+                      <option value="zh">🇨🇳 Chinese</option>
+                      <option value="ko">🇰🇷 Korean</option>
+                    </select>
                   </div>
-                  <span className="settings-level-pct">{pct.toFixed(0)}%</span>
-                  <button
-                    type="button"
-                    className="settings-btn-secondary settings-level-use"
-                    onClick={() => setSelectedDevice(`index:${l.index}`)}
-                  >
-                    {isSelected ? "✓" : "Use"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {audioTest && (
-          <div className="settings-help" style={{ marginTop: 6 }}>
-            <strong>Last test:</strong> {audioTest.device_name} • Peak {(audioTest.peak_volume * 100).toFixed(1)}% •{" "}
-            {audioTest.has_audio ? "✓ Audio present" : "✗ Silent"}
-          </div>
-        )}
-      </section>
-    </>
-  )}
-
-  {activeTab === "models" && (
-    <>
-      {/* SECTION: HARDWARE PRESETS (1-CLICK CONFIG FOR ANY PC) */}
-      <section className="settings-section">
-        <h2>⚡ Lựa Chọn Cấu Hình Phần Cứng Đề Xuất (1-Click Presets)</h2>
-        <p className="settings-help">
-          Bấm 1-click để Sublix tự động tối ưu mô hình STT, Translation và Engine theo sức mạnh máy tính của bạn:
-        </p>
-
-        <div className="hardware-presets">
-          {/* Preset 1: CPU / Laptop */}
-          <div
-            className={`preset-card ${currentPreset === "cpu" ? "active" : ""}`}
-            onClick={() => applyHardwarePreset("cpu")}
-          >
-            <div className="preset-header">
-              <span className="preset-title">💻 Thuần CPU (Laptop / Văn Phòng)</span>
-              <span className="preset-tag">Pure CPU</span>
-            </div>
-            <div className="preset-desc">
-              Dành cho laptop mỏng nhẹ hoặc PC không có card đồ hoạ rời NVIDIA. Tiết kiệm RAM, máy mát và ổn định.
-            </div>
-            <div className="preset-specs">
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">STT Model:</span>
-                <span className="preset-spec-val">base (140MB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Dịch LLM:</span>
-                <span className="preset-spec-val">Qwen2.5-1.5B (1.1GB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Engine:</span>
-                <span className="preset-spec-val">CPU Multi-thread</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Preset 2: GPU 4GB - 8GB */}
-          <div
-            className={`preset-card ${currentPreset === "gpu_mid" ? "active" : ""}`}
-            onClick={() => applyHardwarePreset("gpu_mid")}
-          >
-            <div className="preset-header">
-              <span className="preset-title">⚡ GPU Tầm Trung (4GB – 8GB VRAM)</span>
-              <span className="preset-tag">GTX / RTX Phổ Thông</span>
-            </div>
-            <div className="preset-desc">
-              Phổ biến nhất (GTX 1650/1660, RTX 2060, 3050, 3060 6G, 4050/4060). STT nhanh ~0.1s, dịch tiếng Việt tự nhiên.
-            </div>
-            <div className="preset-specs">
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">STT Model:</span>
-                <span className="preset-spec-val">base (140MB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Dịch LLM:</span>
-                <span className="preset-spec-val">Qwen2.5-3B (2.0GB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Engine:</span>
-                <span className="preset-spec-val">NVIDIA CUDA GPU</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Preset 3: GPU 12GB - 24GB */}
-          <div
-            className={`preset-card ${currentPreset === "gpu_high" ? "active" : ""}`}
-            onClick={() => applyHardwarePreset("gpu_high")}
-          >
-            <div className="preset-header">
-              <span className="preset-title">🚀 GPU Khủng (12GB – 24GB VRAM)</span>
-              <span className="preset-tag">RTX 3080/3090/4090</span>
-            </div>
-            <div className="preset-desc">
-              Tối ưu cho card đồ hoạ cao cấp (RTX 3060 12GB, 3080, 3090, 4080, 4090). Nhận diện Whisper Turbo Q8 + Qwen3 2026 đỉnh cao!
-            </div>
-            <div className="preset-specs">
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">STT Model:</span>
-                <span className="preset-spec-val">Large-v3-Turbo Q8 (874MB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Dịch LLM:</span>
-                <span className="preset-spec-val">Qwen3-4B (2.5GB)</span>
-              </div>
-              <div className="preset-spec-item">
-                <span className="preset-spec-label">Engine:</span>
-                <span className="preset-spec-val">NVIDIA CUDA GPU</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 3: STT ENGINE & 2026 WHISPER MODELS */}
-      <section className="settings-section">
-        <h2>🎤 Speech Recognition (2026 Whisper Large-v3-Turbo)</h2>
-        <p className="settings-help">
-          Long-running <code>whisper-server</code> keeps the model in GPU VRAM (~0.1s per chunk on RTX 3090).
-          Hot-swaps automatically when you change model or CPU/GPU mode.
-        </p>
-
-        <div className="settings-row">
-          <label>Whisper Model:</label>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="settings-select"
-          >
-            {sttModels.length > 0 ? (
-              sttModels.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.downloaded ? "✓ " : "⬇ "} {m.label}
-                </option>
-              ))
-            ) : (
-              <>
-                <option value="large-v3-turbo-q8_0">✓ large-v3-turbo Q8 (874MB) — ⭐ 2026 GPU Best</option>
-                <option value="base">✓ base (140MB) — Fast lightweight</option>
-                <option value="tiny">✓ tiny (75MB) — Ultra-light</option>
-              </>
-            )}
-          </select>
-
-          {selectedSttInfo && !selectedSttInfo.downloaded && (
-            <button
-              onClick={async () => {
-                setDownloadingModel(model);
-                setStatus({ kind: "working", message: `Downloading Whisper ${model} (~${selectedSttInfo.size_mb}MB)...` });
-                try {
-                  await sublix.downloadSttModel(model);
-                  await refreshSetup();
-                  setStatus({ kind: "success", message: `✅ Downloaded Whisper ${model}!` });
-                } catch (e) {
-                  setStatus({ kind: "error", message: `Download failed: ${e}` });
-                } finally {
-                  setDownloadingModel(null);
-                }
-              }}
-              className="settings-btn-primary"
-              disabled={downloadingModel !== null}
-            >
-              {downloadingModel === model ? "⏳ Downloading..." : `⬇ Download (${selectedSttInfo.size_mb}MB)`}
-            </button>
-          )}
-        </div>
-
-        <div className="settings-row">
-          <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
-          <div className="settings-engine-toggle">
-            <button
-              className={`settings-engine-btn ${sttEnginePref === "auto" ? "active" : ""}`}
-              onClick={() => handleSttEngineChange("auto")}
-              disabled={!configLoaded}
-            >
-              ⚙ AUTO
-            </button>
-            <button
-              className={`settings-engine-btn ${sttEnginePref === "cpu" ? "active" : ""}`}
-              onClick={() => handleSttEngineChange("cpu")}
-              disabled={!configLoaded}
-            >
-              💻 CPU
-            </button>
-            <button
-              className={`settings-engine-btn ${sttEnginePref === "cuda" ? "active" : ""}`}
-              onClick={() => handleSttEngineChange("cuda")}
-              disabled={!configLoaded}
-            >
-              🎮 GPU (CUDA)
-            </button>
-          </div>
-
-          <button
-            onClick={async () => {
-              setSttServerStarting(true);
-              setStatus({ kind: "working", message: `Loading Whisper (${model}) into memory...` });
-              try {
-                const eng = await sublix.preloadSttServer(model);
-                setSttServerEngine(eng);
-                setStatus({
-                  kind: "success",
-                  message: `✅ STT server ready on ${eng.toUpperCase()} (${model})`,
-                });
-              } catch (e) {
-                setStatus({ kind: "error", message: `STT server error: ${e}` });
-                setSttServerEngine(null);
-              } finally {
-                setSttServerStarting(false);
-              }
-            }}
-            className="settings-btn-secondary"
-            disabled={sttServerStarting}
-          >
-            {sttServerStarting ? "⏳ Loading..." : sttServerEngine ? "🔄 Reload STT Server" : "▶ Pre-warm STT Server"}
-          </button>
-        </div>
-
-        <div className="settings-row">
-          <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
-          {sttServerStarting ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-starting" />
-              <span style={{ color: "#fbbf24" }}>Loading Whisper model into VRAM...</span>
-            </span>
-          ) : sttServerEngine === "cuda" ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-cuda" />
-              <span style={{ color: "#34d399", fontWeight: 600 }}>
-                Running on NVIDIA GPU (CUDA) — ~0.08–0.15s per chunk
-              </span>
-            </span>
-          ) : sttServerEngine === "cpu" ? (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-cpu" />
-              <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                Running on CPU — ~1–2s per chunk
-              </span>
-            </span>
-          ) : (
-            <span className="settings-engine-indicator">
-              <span className="engine-dot engine-dot-idle" />
-              <span style={{ color: "#94a3b8" }}>
-                Standby (CUDA binary ready: {sttEngine === "cuda" ? "✓ Yes" : "CPU only"})
-              </span>
-            </span>
-          )}
-        </div>
-      </section>
-
-      {/* SECTION 4: TRANSLATION & CINEMATIC SCRIPTING LLM ENGINE */}
-      <section className="settings-section">
-        <h2>🌐 Bộ Não Dịch Thuật & Biên Kịch Lồng Tiếng (AI Translation & Scripting)</h2>
-        <p className="settings-help">
-          Lựa chọn nguồn AI dịch kịch bản: <strong>MiniMax Cloud API (Unlimited)</strong> cho văn phong điện ảnh mượt mà và 0% VRAM, <strong>Ollama Local (Qwen 27B / 32B)</strong> chạy trên máy, hoặc <strong>GGUF Embedded</strong> cục bộ.
-        </p>
-
-        {/* Provider Switcher Tabs */}
-        <div className="settings-row" style={{ alignItems: "flex-start", marginBottom: 14 }}>
-          <label style={{ paddingTop: 6, minWidth: 100 }}>Nguồn Dịch:</label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
-            <button
-              className={`settings-engine-btn ${transProvider === "minimax" ? "active" : ""}`}
-              onClick={() => handleProviderChange("minimax")}
-              style={{ padding: "8px 14px", fontWeight: transProvider === "minimax" ? 700 : 500 }}
-            >
-              🌐 MiniMax Cloud API (Unlimited) ⭐ Khuyên Dùng
-            </button>
-            <button
-              className={`settings-engine-btn ${transProvider === "ollama" ? "active" : ""}`}
-              onClick={() => handleProviderChange("ollama")}
-              style={{ padding: "8px 14px", fontWeight: transProvider === "ollama" ? 700 : 500 }}
-            >
-              🦙 Ollama Local (Qwen 27B / 32B)
-            </button>
-            <button
-              className={`settings-engine-btn ${transProvider === "local" ? "active" : ""}`}
-              onClick={() => handleProviderChange("local")}
-              style={{ padding: "8px 14px", fontWeight: transProvider === "local" ? 700 : 500 }}
-            >
-              💻 Local GGUF (llama-server)
-            </button>
-          </div>
-        </div>
-
-        {/* PROVIDER 1: MINIMAX CLOUD API */}
-        {transProvider === "minimax" && (
-          <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(59, 130, 246, 0.2)", marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa" }}>
-                🔑 Cấu hình MiniMax Unlimited API
-              </span>
-              <span style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: 4 }}>
-                0% VRAM GPU • Dịch Điện Ảnh
-              </span>
-            </div>
-            <div className="settings-row" style={{ marginBottom: 10 }}>
-              <label style={{ minWidth: 100 }}>API Key:</label>
-              <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                <input
-                  type={showMinimaxKey ? "text" : "password"}
-                  value={minimaxKey}
-                  onChange={(e) => setMinimaxKey(e.target.value)}
-                  placeholder="Dán API Key MiniMax của bạn vào đây..."
-                  className="settings-input"
-                  style={{ flex: 1, fontFamily: "monospace" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowMinimaxKey(!showMinimaxKey)}
-                  className="settings-btn-secondary"
-                  style={{ padding: "4px 10px", fontSize: 11 }}
-                >
-                  {showMinimaxKey ? "Ẩn" : "Hiện"}
-                </button>
-              </div>
-            </div>
-            <div className="settings-row" style={{ marginBottom: 12 }}>
-              <label style={{ minWidth: 100 }}>Model Name:</label>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
-                <input
-                  type="text"
-                  value={minimaxModel}
-                  onChange={(e) => setMinimaxModel(e.target.value)}
-                  placeholder="MiniMax-M3 (Token Plan) hoặc MiniMax-Text-01"
-                  className="settings-input"
-                  style={{ width: "100%" }}
-                />
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => setMinimaxModel("MiniMax-M3")}
-                    className="settings-btn-secondary"
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      background: minimaxModel === "MiniMax-M3" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                      borderColor: minimaxModel === "MiniMax-M3" ? "#3b82f6" : undefined,
-                    }}
-                  >
-                    ⭐ MiniMax-M3 (Token Plan)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMinimaxModel("MiniMax-M2.7-highspeed")}
-                    className="settings-btn-secondary"
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      background: minimaxModel === "MiniMax-M2.7-highspeed" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                      borderColor: minimaxModel === "MiniMax-M2.7-highspeed" ? "#3b82f6" : undefined,
-                    }}
-                  >
-                    ⚡ MiniMax-M2.7-highspeed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMinimaxModel("MiniMax-M2.7")}
-                    className="settings-btn-secondary"
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      background: minimaxModel === "MiniMax-M2.7" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                      borderColor: minimaxModel === "MiniMax-M2.7" ? "#3b82f6" : undefined,
-                    }}
-                  >
-                    MiniMax-M2.7
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMinimaxModel("MiniMax-Text-01")}
-                    className="settings-btn-secondary"
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      background: minimaxModel === "MiniMax-Text-01" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                      borderColor: minimaxModel === "MiniMax-Text-01" ? "#3b82f6" : undefined,
-                    }}
-                  >
-                    MiniMax-Text-01
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMinimaxModel("abab6.5s-chat")}
-                    className="settings-btn-secondary"
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      background: minimaxModel === "abab6.5s-chat" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                      borderColor: minimaxModel === "abab6.5s-chat" ? "#3b82f6" : undefined,
-                    }}
-                  >
-                    abab6.5s-chat
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-              <button
-                onClick={saveProviderSettings}
-                className="settings-btn-primary"
-                style={{ padding: "6px 14px", fontSize: 12 }}
-              >
-                💾 Lưu Cấu Hình
-              </button>
-              <button
-                onClick={testProviderTranslation}
-                className="settings-btn-secondary"
-                disabled={providerTesting}
-                style={{ padding: "6px 14px", fontSize: 12 }}
-              >
-                {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* PROVIDER 2: OLLAMA LOCAL */}
-        {transProvider === "ollama" && (
-          <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(168, 85, 247, 0.2)", marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#c084fc" }}>
-                🦙 Kết Nối Ollama Local (Máy Cá Nhân)
-              </span>
-              <span style={{ fontSize: 11, background: "rgba(168, 85, 247, 0.2)", color: "#d8b4fe", padding: "2px 8px", borderRadius: 4 }}>
-                Offline 100% • Model 27B / 32B
-              </span>
-            </div>
-            <div className="settings-row" style={{ marginBottom: 10 }}>
-              <label style={{ minWidth: 100 }}>Ollama URL:</label>
-              <input
-                type="text"
-                value={ollamaUrl}
-                onChange={(e) => setOllamaUrl(e.target.value)}
-                placeholder="http://localhost:11434"
-                className="settings-input"
-                style={{ flex: 1, fontFamily: "monospace" }}
-              />
-            </div>
-            <div className="settings-row" style={{ marginBottom: 12 }}>
-              <label style={{ minWidth: 100 }}>Model Name:</label>
-              <input
-                type="text"
-                value={ollamaModel}
-                onChange={(e) => setOllamaModel(e.target.value)}
-                placeholder="smtek/qwen3.8-27b:q4_k_m hoặc qwen:latest"
-                className="settings-input"
-                style={{ flex: 1, fontFamily: "monospace" }}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-              <button
-                onClick={saveProviderSettings}
-                className="settings-btn-primary"
-                style={{ padding: "6px 14px", fontSize: 12 }}
-              >
-                💾 Lưu Cấu Hình
-              </button>
-              <button
-                onClick={testProviderTranslation}
-                className="settings-btn-secondary"
-                disabled={providerTesting}
-                style={{ padding: "6px 14px", fontSize: 12 }}
-              >
-                {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* PROVIDER TEST RESULT BOX */}
-        {providerTestResult && (
-          <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(52, 211, 153, 0.4)", borderRadius: 6, padding: "10px 14px", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
-              💬 Kết quả dịch thử nghiệm: <em>"I can't believe you actually pulled this off. You're insane, you know that?"</em>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#34d399", lineHeight: 1.4 }}>
-              {providerTestResult}
-            </div>
-          </div>
-        )}
-
-        {/* PROVIDER 3: LOCAL GGUF */}
-        {transProvider === "local" && (
-          <>
-            <div className="settings-row">
-              <label>LLM Model:</label>
-              <select
-                value={translationModel}
-                onChange={(e) => setTranslationModel(e.target.value)}
-                className="settings-select"
-              >
-                {transModels.length > 0 ? (
-                  transModels.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {m.downloaded ? "✓ " : "⬇ "} {m.label}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="qwen3-4b">✓ Qwen3-4B-Instruct-2507 (2.5GB) — ⭐ 2026 Best</option>
-                    <option value="qwen2.5-3b">✓ Qwen2.5-3B-Instruct (2.0GB) — Legacy</option>
-                  </>
                 )}
-              </select>
 
-              {selectedTransInfo && !selectedTransInfo.downloaded && (
-                <button
-                  onClick={async () => {
-                    setDownloadingModel(translationModel);
-                    setStatus({
-                      kind: "working",
-                      message: `Downloading ${translationModel} (~${selectedTransInfo.size_mb}MB)...`,
-                    });
-                    try {
-                      await sublix.downloadTranslationModel(translationModel);
-                      await refreshSetup();
-                      setStatus({ kind: "success", message: `✅ Downloaded ${translationModel}!` });
-                    } catch (e) {
-                      setStatus({ kind: "error", message: `Download failed: ${e}` });
-                    } finally {
-                      setDownloadingModel(null);
-                    }
-                  }}
-                  className="settings-btn-primary"
-                  disabled={downloadingModel !== null}
-                >
-                  {downloadingModel === translationModel
-                    ? "⏳ Downloading..."
-                    : `⬇ Download (${selectedTransInfo.size_mb}MB)`}
-                </button>
-              )}
-            </div>
+                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label style={{ fontSize: 11.5, opacity: 0.8 }}>Độ dài phân đoạn tối đa:</label>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ac)" }}>{chunkSeconds}s</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={2}
+                    max={8}
+                    step={1}
+                    value={chunkSeconds}
+                    onChange={(e) => setChunkSeconds(Number(e.target.value))}
+                    className="settings-slider"
+                  />
+                </div>
 
-            <div className="settings-row">
-              <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
-              <div className="settings-engine-toggle">
-                <button
-                  className={`settings-engine-btn ${transEnginePref === "auto" ? "active" : ""}`}
-                  onClick={() => handleTransEngineChange("auto")}
-                  disabled={!configLoaded}
-                >
-                  ⚙ AUTO
-                </button>
-                <button
-                  className={`settings-engine-btn ${transEnginePref === "cpu" ? "active" : ""}`}
-                  onClick={() => handleTransEngineChange("cpu")}
-                  disabled={!configLoaded}
-                >
-                  💻 CPU
-                </button>
-                <button
-                  className={`settings-engine-btn ${transEnginePref === "cuda" ? "active" : ""}`}
-                  onClick={() => handleTransEngineChange("cuda")}
-                  disabled={!configLoaded}
-                >
-                  🎮 GPU (CUDA)
-                </button>
-              </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={vadEnabled}
+                    onChange={(e) => setVadEnabled(e.target.checked)}
+                  />
+                  <span>✂️ Smart VAD (Cắt câu theo khoảng lặng)</span>
+                </label>
+              </ShellCard>
 
-              <button
-                onClick={async () => {
-                  setServerStarting(true);
-                  setStatus({
-                    kind: "working",
-                    message: `Loading LLM (${translationModel}) into GPU VRAM...`,
-                  });
-                  try {
-                    const eng = await sublix.preloadTranslationServer(translationModel);
-                    setEngine(eng);
-                    setStatus({
-                      kind: "success",
-                      message: `✅ Translation LLM ready on ${eng.toUpperCase()} (${translationModel})`,
-                    });
-                  } catch (e) {
-                    setStatus({ kind: "error", message: `LLM server failed: ${e}` });
-                    setEngine(null);
-                  } finally {
-                    setServerStarting(false);
-                  }
-                }}
-                className="settings-btn-secondary"
-                disabled={serverStarting}
-              >
-                {serverStarting ? "⏳ Loading..." : engine ? "🔄 Reload LLM Server" : "▶ Pre-warm LLM Server"}
-              </button>
-            </div>
-
-            <div className="settings-row">
-              <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
-              {serverStarting ? (
-                <span className="settings-engine-indicator">
-                  <span className="engine-dot engine-dot-starting" />
-                  <span style={{ color: "#fbbf24" }}>Loading GGUF model into VRAM...</span>
-                </span>
-              ) : engine === "cuda" ? (
-                <span className="settings-engine-indicator">
-                  <span className="engine-dot engine-dot-cuda" />
-                  <span style={{ color: "#34d399", fontWeight: 600 }}>
-                    Running on NVIDIA GPU (CUDA) — ~0.1–0.2s per subtitle
-                  </span>
-                </span>
-              ) : engine === "cpu" ? (
-                <span className="settings-engine-indicator">
-                  <span className="engine-dot engine-dot-cpu" />
-                  <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                    Running on CPU — ~1–2s per subtitle
-                  </span>
-                </span>
-              ) : (
-                <span className="settings-engine-indicator">
-                  <span className="engine-dot engine-dot-idle" />
-                  <span style={{ color: "#94a3b8" }}>Standby (auto-starts on first subtitle)</span>
-                </span>
-              )}
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* SECTION: MODEL CATALOG & DOWNLOAD MANAGER */}
-      <section className="settings-section">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2>📦 Trung Tâm Tải & Quản Lý Models (Model Catalog & Download Hub)</h2>
-          <button
-            onClick={() => sublix.openModelsFolder()}
-            className="settings-btn-secondary"
-            style={{ fontSize: 11, padding: "4px 10px" }}
-          >
-            📁 Mở Thư Mục Models
-          </button>
-        </div>
-        <p className="settings-help">
-          Tải trực tiếp bất kỳ model nào bên dưới với 1 click. Thanh tiến trình % hiển thị trực tiếp theo thời gian thực:
-        </p>
-        <img className="spot-ill" src={spotModelsUrl} alt="" />
-
-        {/* STT Models Table */}
-        <h3 style={{ fontSize: 13, color: "#93c5fd", margin: "14px 0 6px" }}>🎤 Whisper STT Models (Nhận diện giọng nói)</h3>
-        <table className="model-hub-table">
-          <thead>
-            <tr>
-              <th>Model</th>
-              <th>Đề xuất</th>
-              <th>Dung lượng</th>
-              <th>Trạng thái / Tải về</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sttModels.map((m) => {
-              const prog = downloadProgress[m.name];
-              const isDownloading = downloadingModel === m.name || (prog && prog.percent < 100 && prog.phase !== "done" && prog.phase !== "error");
-              const tierBadge =
-                m.name === "tiny" || m.name === "base"
-                  ? { label: "💻 CPU / Laptop", cls: "tier-cpu" }
-                  : m.name === "small"
-                  ? { label: "⚡ GPU 4-8GB", cls: "tier-gpu-mid" }
-                  : { label: "🚀 GPU 8-24GB", cls: "tier-gpu-high" };
-
-              return (
-                <tr key={m.name} className="model-hub-row">
-                  <td>
-                    <div className="model-name-col">
-                      <span className="model-main-name">{m.name}</span>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{m.label.split("—")[1] ?? ""}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`model-tier-badge ${tierBadge.cls}`}>{tierBadge.label}</span>
-                  </td>
-                  <td>~{m.size_mb} MB</td>
-                  <td>
-                    {isDownloading ? (
-                      <div className="model-progress-box">
-                        <div className="model-progress-label">
-                          <span>⏳ Đang tải...</span>
-                          <span>{prog?.percent ?? 0}%</span>
-                        </div>
-                        <div className="model-progress-track">
-                          <div className="model-progress-fill" style={{ width: `${prog?.percent ?? 0}%` }} />
-                        </div>
-                      </div>
-                    ) : m.downloaded ? (
-                      <span className="model-status-ready">✓ Đã sẵn sàng</span>
-                    ) : (
-                      <button
-                        className="model-dl-btn"
-                        onClick={() => handleDownloadStt(m.name, m.size_mb)}
-                        disabled={downloadingModel !== null}
-                      >
-                        ⬇ Tải về
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Translation LLM Models Table */}
-        <h3 style={{ fontSize: 13, color: "#a78bfa", margin: "18px 0 6px" }}>🌐 Translation LLM Models (Mô hình dịch ngôn ngữ)</h3>
-        <table className="model-hub-table">
-          <thead>
-            <tr>
-              <th>Model</th>
-              <th>Đề xuất</th>
-              <th>Dung lượng</th>
-              <th>Trạng thái / Tải về</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transModels.map((m) => {
-              const prog = downloadProgress[m.name];
-              const isDownloading = downloadingModel === m.name || (prog && prog.percent < 100 && prog.phase !== "done" && prog.phase !== "error");
-              const tierBadge =
-                m.name === "qwen2.5-1.5b"
-                  ? { label: "💻 CPU / Laptop", cls: "tier-cpu" }
-                  : m.name === "qwen2.5-3b"
-                  ? { label: "⚡ GPU 4-8GB", cls: "tier-gpu-mid" }
-                  : { label: "🚀 GPU 8-24GB", cls: "tier-gpu-high" };
-
-              return (
-                <tr key={m.name} className="model-hub-row">
-                  <td>
-                    <div className="model-name-col">
-                      <span className="model-main-name">{m.name}</span>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{m.label.split("—")[1] ?? ""}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`model-tier-badge ${tierBadge.cls}`}>{tierBadge.label}</span>
-                  </td>
-                  <td>~{m.size_mb} MB</td>
-                  <td>
-                    {isDownloading ? (
-                      <div className="model-progress-box">
-                        <div className="model-progress-label">
-                          <span>⏳ Đang tải...</span>
-                          <span>{prog?.percent ?? 0}%</span>
-                        </div>
-                        <div className="model-progress-track">
-                          <div className="model-progress-fill" style={{ width: `${prog?.percent ?? 0}%` }} />
-                        </div>
-                      </div>
-                    ) : m.downloaded ? (
-                      <span className="model-status-ready">✓ Đã sẵn sàng</span>
-                    ) : (
-                      <button
-                        className="model-dl-btn"
-                        onClick={() => handleDownloadTrans(m.name, m.size_mb)}
-                        disabled={downloadingModel !== null}
-                      >
-                        ⬇ Tải về
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
-
-      {/* SECTION 6: ONE-SHOT DIAGNOSTIC TEST */}
-      <section className="settings-section">
-        <h2>🧪 Manual 5s Capture + STT + Translation Test</h2>
-        <div className="settings-row">
-          <button
-            onClick={handleTestCapture}
-            className="settings-btn-secondary"
-            disabled={status.kind === "working" || isLive}
-          >
-            1. Record 5s Audio
-          </button>
-          {lastCapture && (
-            <button
-              onClick={handleTranscribe}
-              className="settings-btn-primary"
-              disabled={status.kind === "working"}
-            >
-              2. Run STT + Translate
-            </button>
-          )}
-          <button
-            onClick={() => sublix.openModelsFolder()}
-            className="settings-btn-secondary"
-          >
-            📁 Open Models Folder
-          </button>
-        </div>
-        {lastTranscript && (
-          <div className="settings-transcript">
-            <div><strong>Original STT:</strong> {lastTranscript}</div>
-            {lastTranslatedTest && (
-              <div style={{ marginTop: 4, color: "#34d399" }}>
-                <strong>Translated ({targetLang.toUpperCase()}):</strong> {lastTranslatedTest}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-    </>
-  )}
-
-  {activeTab === "history" && (
-    <section className="settings-section">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h2>📜 Lịch Sử Lời Thoại & Phụ Đề Live ({recentSubs.length} câu)</h2>
-        <div className="history-actions">
-          <button
-            type="button"
-            className="settings-btn-secondary"
-            onClick={handleCopyHistory}
-            disabled={recentSubs.length === 0}
-          >
-            📋 Sao Chép
-          </button>
-          <button
-            type="button"
-            className="settings-btn-primary"
-            onClick={handleExportSrt}
-            disabled={recentSubs.length === 0}
-          >
-            🎬 Xuất .SRT
-          </button>
-          <button
-            type="button"
-            className="settings-btn-secondary"
-            onClick={handleExportTxt}
-            disabled={recentSubs.length === 0}
-          >
-            📄 Xuất .TXT
-          </button>
-          <button
-            type="button"
-            className="settings-btn-danger"
-            onClick={() => setRecentSubs([])}
-            disabled={recentSubs.length === 0}
-          >
-            🗑️ Xoá
-          </button>
-        </div>
-      </div>
-
-      <div className="history-toolbar">
-        <input
-          type="text"
-          placeholder="🔍 Tìm kiếm câu thoại hoặc từ khoá..."
-          value={historySearch}
-          onChange={(e) => setHistorySearch(e.target.value)}
-          className="history-search-input"
-        />
-        <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)" }}>
-          {isLive ? "🔴 Đang tự động lưu câu mới khi phát..." : "Tạm dừng"}
-        </span>
-      </div>
-
-      {filteredHistory.length > 0 ? (
-        <div className="history-list">
-          {filteredHistory.map((item) => (
-            <div key={item.id} className="history-item">
-              <div className="history-item-top">
-                <span>#{item.id}</span>
-                <span>
-                  {item.stt_duration ? `STT: ${item.stt_duration.toFixed(2)}s` : ""}
-                  {item.translate_duration ? ` • LLM: ${item.translate_duration.toFixed(2)}s` : ""}
-                </span>
-              </div>
-              {item.original && (
-                <div className="history-item-orig">{item.original}</div>
-              )}
-              <div className="history-item-trans">{item.text}</div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="history-empty">
-          <img className="spot-ill" src={spotHistoryUrl} alt="" />
-          {recentSubs.length === 0
-            ? "Chưa có lời thoại nào được ghi nhận. Bắt đầu phát video và bật 'Dịch Trực Tiếp Live' để ghi nhận!"
-            : "Không tìm thấy câu thoại nào khớp với từ khoá tìm kiếm."}
-        </div>
-      )}
-    </section>
-  )}
-
-  {activeTab === "overlay" && (
-    <>
-      <section className="settings-section">
-        <h2>🎨 Tùy Biến Cửa Sổ Phụ Đề Nổi (Overlay Window)</h2>
-        <p className="settings-help">
-          Cửa sổ phụ đề luôn nổi trên cùng màn hình (Always-on-top), bạn có thể thoải mái kéo thả cửa sổ đến vị trí mong muốn trên video.
-        </p>
-
-        <div className="settings-row">
-          <label>Cỡ chữ (Font size):</label>
-          <input
-            type="range"
-            min={16}
-            max={36}
-            step={1}
-            value={fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value))}
-            onPointerUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
-            onKeyUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
-            className="settings-slider"
-          />
-          <span className="settings-slider-value">{fontSize}px</span>
-        </div>
-
-        <div className="settings-row">
-          <label>Độ trong suốt nền:</label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={bgOpacity}
-            onChange={(e) => setBgOpacity(Number(e.target.value))}
-            onPointerUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
-            onKeyUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
-            className="settings-slider"
-          />
-          <span className="settings-slider-value">{bgOpacity}%</span>
-        </div>
-
-        <div className="settings-row">
-          <label>Màu chữ phụ đề:</label>
-          <div className="theme-switch">
-            {([
-              { id: "white", label: "Trắng", dot: "#ffffff" },
-              { id: "yellow", label: "Vàng", dot: "#ffdf6b" },
-              { id: "amber", label: "Cam ấm", dot: "#ffb454" },
-            ]).map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`theme-chip ${textColor === c.id ? "active" : ""}`}
-                onClick={() => {
-                  setTextColor(c.id);
-                  persistOverlayConfig({ overlay_text_color: c.id });
-                }}
-              >
-                <span className="theme-chip-dot" style={{ background: c.dot }} />
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="settings-row" style={{ gap: 20, marginTop: 10 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={showOriginal}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setShowOriginal(v);
-                persistOverlayConfig({ overlay_show_original: v });
-              }}
-            />
-            <span>🌐 Hiển thị dòng gốc song ngữ (Bilingual Line)</span>
-          </label>
-        </div>
-
-        <div className="settings-row" style={{ gap: 20, marginTop: 10 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={clickThrough}
-              onChange={async (e) => {
-                const v = e.target.checked;
-                setClickThrough(v);
-                try {
-                  const cfg = await sublix.setOverlayClickThrough(v);
-                  setFullConfig(cfg);
-                } catch (err) {
-                  console.error(err);
+              <ShellCard
+                icon={<IconMic size={14} />}
+                title="Thiết Bị Âm Thanh (WASAPI)"
+                actions={
+                  <button
+                    type="button"
+                    onClick={loadDevices}
+                    className="settings-btn-secondary"
+                    style={{ padding: "2px 8px", fontSize: 11 }}
+                    title="Làm mới danh sách thiết bị"
+                  >
+                    <IconRotateCw size={11} />
+                  </button>
                 }
-              }}
-            />
-            <span>🔒 Chế độ xuyên thấu chuột (Click-through - Click chuột xuyên qua video bên dưới)</span>
-          </label>
-        </div>
+              >
+                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                  <select
+                    value={selectedDevice}
+                    onChange={(e) => setSelectedDevice(e.target.value)}
+                    className="settings-select"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="default">Mặc định (Default Windows Audio)</option>
+                    {devices.map((d, i) => (
+                      <option key={d.id} value={`index:${i}`}>
+                        [{i}] {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-        <div className="settings-row" style={{ marginTop: 16, gap: 10 }}>
-          <button
-            type="button"
-            className="settings-btn-primary"
-            onClick={() => sublix.showOverlay()}
-            title="Phím tắt: Ctrl+Shift+O"
-          >
-            <IconEye size={13} /> Hiện Cửa Sổ Overlay
-          </button>
-          <button
-            type="button"
-            className="settings-btn-secondary"
-            onClick={() => sublix.hideOverlay()}
-            title="Phím tắt: Ctrl+Shift+O"
-          >
-            <IconEyeOff size={13} /> Ẩn Cửa Sổ Overlay
-          </button>
-        </div>
-      </section>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (isLive) {
+                        setStatus({ kind: "error", message: "Hãy dừng Live trước khi quét thiết bị." });
+                        return;
+                      }
+                      setScanning(true);
+                      setStatus({ kind: "working", message: "Đang quét âm thanh tất cả thiết bị..." });
+                      try {
+                        const levels = await sublix.scanAudioLevels();
+                        setDeviceLevels(levels);
+                        const active = levels.filter((l) => l.has_audio);
+                        if (active.length === 0) {
+                          setStatus({ kind: "error", message: "🔇 Chưa thấy âm thanh phát. Hãy bật 1 video/nhạc trước!" });
+                        } else {
+                          setStatus({ kind: "success", message: `🔊 Tìm thấy ${active.length} thiết bị có tiếng.` });
+                        }
+                      } catch (e) {
+                        setStatus({ kind: "error", message: `Quét thất bại: ${e}` });
+                      } finally {
+                        setScanning(false);
+                      }
+                    }}
+                    className="settings-btn-secondary"
+                    disabled={scanning || isLive}
+                    style={{ flex: 1, fontSize: 11, padding: "5px 8px" }}
+                  >
+                    {scanning ? "⏳ Đang quét..." : "🔍 Quét Âm Thanh"}
+                  </button>
 
-      {/* Overlay Live Preview Card */}
-      <section className="settings-section">
-        <h2>👀 Xem Trước Mẫu Phụ Đề (Preview)</h2>
-        <p className="settings-help">Preview hiển thị đúng cài đặt thật: cỡ chữ, màu chữ và độ trong suốt nền.</p>
-        <div
-          style={{
-            padding: "28px 24px",
-            background: "linear-gradient(135deg, #1c2433, #0d1017)",
-            borderRadius: 8,
-            border: "1px dashed var(--line)",
-            marginTop: 8,
-          }}
-        >
-          <div
-            style={{
-              background: `rgba(20, 20, 25, ${Math.min(100, bgOpacity) / 100})`,
-              borderRadius: 8,
-              padding: "10px 18px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <div
-              style={{
-                fontSize: fontSize,
-                fontWeight: 600,
-                color: textColor === "yellow" ? "#ffdf6b" : textColor === "amber" ? "#ffb454" : "rgba(255, 255, 255, 0.98)",
-                textShadow: "0 2px 4px rgba(0,0,0,0.8), 0 0 2px #000",
-                textAlign: "center",
-              }}
-            >
-              Đây là đoạn phụ đề mẫu hiển thị trên màn hình của bạn.
-            </div>
-            {showOriginal && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setStatus({ kind: "working", message: "Đang thử bắt 3s..." });
+                      try {
+                        const deviceIndex = selectedDevice === "default"
+                          ? undefined
+                          : Number(selectedDevice.replace("index:", ""));
+                        const result = await sublix.testAudio(deviceIndex);
+                        setAudioTest(result);
+                        if (result.has_audio) {
+                          setStatus({ kind: "success", message: `🔊 Bắt được âm thanh! Đỉnh ${(result.peak_volume * 100).toFixed(0)}%` });
+                        } else {
+                          setStatus({ kind: "error", message: "🔇 Không có tiếng trên thiết bị này. Hãy dùng 'Quét Âm Thanh'!" });
+                        }
+                      } catch (e) {
+                        setStatus({ kind: "error", message: `Thử thất bại: ${e}` });
+                      }
+                    }}
+                    className="settings-btn-secondary"
+                    disabled={isLive}
+                    style={{ fontSize: 11, padding: "5px 8px" }}
+                  >
+                    🔊 Thử 3s
+                  </button>
+                </div>
+
+                {audioTest && (
+                  <div className="settings-help" style={{ margin: "4px 0", fontSize: 11 }}>
+                    <strong>Thử:</strong> {audioTest.device_name} • {(audioTest.peak_volume * 100).toFixed(0)}% •{" "}
+                    {audioTest.has_audio ? "✓ Có tiếng" : "✗ Im lặng"}
+                  </div>
+                )}
+                {deviceLevels && deviceLevels.length > 0 && (
+                  <div className="settings-levels" style={{ maxHeight: 150, overflowY: "auto" }}>
+                    {deviceLevels.map((l) => {
+                      const pct = Math.min(100, l.peak_volume * 100);
+                      const isSelected = selectedDevice === `index:${l.index}`;
+                      return (
+                        <div
+                          key={l.index}
+                          className={`settings-level-row ${l.has_audio ? "active" : ""} ${isSelected ? "selected" : ""}`}
+                          style={{ padding: "4px 8px" }}
+                        >
+                          <span className="settings-level-name" style={{ fontSize: 11 }}>[{l.index}] {l.name}</span>
+                          <div className="settings-level-bar" style={{ flex: 1 }}>
+                            <div className="settings-level-bar-fill" style={{ width: `${pct}%` }} data-active={l.has_audio} />
+                          </div>
+                          <span className="settings-level-pct" style={{ fontSize: 10 }}>{pct.toFixed(0)}%</span>
+                          <button
+                            type="button"
+                            className="settings-btn-secondary settings-level-use"
+                            onClick={() => setSelectedDevice(`index:${l.index}`)}
+                            style={{ padding: "2px 6px", fontSize: 10 }}
+                          >
+                            {isSelected ? "✓" : "Chọn"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ShellCard>
+            </>
+          }
+          center={
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12 }}>
               <div
                 style={{
-                  fontSize: Math.max(12, Math.round(fontSize * 0.62)),
-                  color: "rgba(255, 255, 255, 0.55)",
-                  fontStyle: "italic",
-                  textAlign: "center",
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, rgba(10, 15, 25, 0.9) 100%)",
+                  borderRadius: 14,
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  padding: 24,
+                  position: "relative",
+                  overflow: "hidden",
                 }}
               >
-                これは字幕のサンプルテキストです。
+                {/* Visualizer wave pulses */}
+                <div style={{ display: "flex", alignItems: "center", gap: 5, height: 60, marginBottom: 20 }}>
+                  {[12, 28, 45, 20, 55, 75, 40, 60, 30, 70, 85, 45, 25, 65, 35, 18].map((h, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 4,
+                        height: isLive ? `${h}%` : "15%",
+                        background: isLive ? "var(--ac)" : "rgba(255, 255, 255, 0.2)",
+                        borderRadius: 3,
+                        transition: "height 0.2s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Status Indicator */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: isLive ? "#ef4444" : "#22c55e",
+                      boxShadow: isLive ? "0 0 10px #ef4444" : "0 0 8px #22c55e",
+                    }}
+                  />
+                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 0.5 }}>
+                    {isLive ? "ĐANG BẮT ÂM THANH & DỊCH TRỰC TIẾP (LIVE STREAM)" : "SẴN SÀNG PHÁT LIVE"}
+                  </span>
+                </div>
+
+                <p style={{ maxWidth: 500, textAlign: "center", fontSize: 12.5, color: "var(--t3)", margin: "0 0 24px", lineHeight: 1.5 }}>
+                  {isLive
+                    ? "Sublix đang lắng nghe qua WASAPI Loopback, cắt câu thông minh bằng Smart VAD, nhận dạng và bắn phụ đề trực tiếp lên màn hình."
+                    : "Mở YouTube, phim, podcast hoặc game. Bấm 'Bắt Đầu Live' để phụ đề nổi tự động dịch theo thời gian thực."}
+                </p>
+
+                {/* Live Action Buttons */}
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  {!isLive ? (
+                    <button
+                      type="button"
+                      onClick={handleStartLive}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "10px 24px",
+                        borderRadius: 24,
+                        background: "var(--ac)",
+                        color: "#000",
+                        fontWeight: 800,
+                        fontSize: 14,
+                        border: "none",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 14px rgba(232, 163, 61, 0.4)",
+                      }}
+                      title="Phím tắt: Ctrl+Shift+L"
+                    >
+                      <IconPlay size={16} /> Bắt Đầu Dịch Trực Tiếp Live
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStopLive}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "10px 24px",
+                        borderRadius: 24,
+                        background: "#ef4444",
+                        color: "#fff",
+                        fontWeight: 800,
+                        fontSize: 14,
+                        border: "none",
+                        cursor: "pointer",
+                        boxShadow: "0 4px 14px rgba(239, 68, 68, 0.4)",
+                      }}
+                      title="Phím tắt: Ctrl+Shift+L"
+                    >
+                      <IconStop size={16} /> Dừng Dịch Trực Tiếp
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => sublix.showOverlay()}
+                    className="settings-btn-secondary"
+                    style={{ padding: "10px 18px", borderRadius: 24, fontSize: 13 }}
+                    title="Phím tắt: Ctrl+Shift+O"
+                  >
+                    <IconEye size={14} /> Mở Cửa Sổ Overlay
+                  </button>
+                </div>
+
+                {recentSubs.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 16,
+                      left: 20,
+                      right: 20,
+                      background: "rgba(0, 0, 0, 0.65)",
+                      backdropFilter: "blur(8px)",
+                      borderRadius: 10,
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      padding: "8px 16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ac)" }}>
+                      {recentSubs[0]?.text}
+                    </div>
+                    {recentSubs[0]?.original && recentSubs[0]?.original !== recentSubs[0]?.text && (
+                      <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>
+                        {recentSubs[0]?.original}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </section>
-    </>
-  )}
+            </div>
+          }
+          right={
+            <ShellCard
+              icon={<IconClock size={14} />}
+              title={`Luồng Thoại (${recentSubs.length})`}
+              actions={
+                recentSubs.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setRecentSubs([])}
+                    className="settings-btn-secondary"
+                    style={{ padding: "2px 8px", fontSize: 11 }}
+                    title="Xoá danh sách tạm"
+                  >
+                    <IconTrash size={11} />
+                  </button>
+                ) : undefined
+              }
+            >
+              {recentSubs.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
+                  {recentSubs.map((s) => (
+                    <div
+                      key={s.id}
+                      style={{
+                        padding: "8px 10px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        borderRadius: 8,
+                        border: "1px solid rgba(255, 255, 255, 0.05)",
+                      }}
+                    >
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "#f8fafc", lineHeight: 1.4 }}>
+                        {s.text}
+                      </div>
+                      {s.original && s.original !== s.text && (
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                          {s.original}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, display: "flex", gap: 6 }}>
+                        <span>#{s.id}</span>
+                        {s.stt_duration !== undefined && <span>STT: {(s.stt_duration * 1000).toFixed(0)}ms</span>}
+                        {s.translate_duration !== undefined && s.translate_duration > 0 && <span>LLM: {(s.translate_duration * 1000).toFixed(0)}ms</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "24px 8px", color: "var(--t3)", fontSize: 12 }}>
+                  Chưa có lời thoại nào. Bấm <strong>Bắt Đầu Live</strong> để bắt đầu ghi nhận.
+                </div>
+              )}
+            </ShellCard>
+          }
+        />
+      )}
+
+      {(activeTab === "models" || activeTab === "overlay") && (
+        <StudioShell
+          left={
+            <>
+              <ShellCard
+                icon={<IconSettings size={14} />}
+                title="Danh Mục Cài Đặt"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {[
+                    { id: "presets", label: "⚡ 1-Click Cấu Hình Đề Xuất", desc: "Tự động theo cấu hình PC" },
+                    { id: "ai", label: "🌐 AI Dịch Thuật & Phân Vai", desc: "MiniMax / Ollama / GGUF" },
+                    { id: "stt", label: "🎤 Nhận Dạng Giọng Nói", desc: "Whisper Large-v3-Turbo" },
+                    { id: "overlay", label: "🎨 Kiểu Dáng Cửa Sổ Overlay", desc: "Cỡ chữ, vị trí, độ mờ" },
+                    { id: "models_hub", label: "📦 Quản Lý Mô Hình (Hub)", desc: "Tải và cập nhật models" },
+                  ].map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setSettingsSubtab(sub.id as any)}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid",
+                        borderColor: settingsSubtab === sub.id ? "var(--ac)" : "rgba(255, 255, 255, 0.05)",
+                        background: settingsSubtab === sub.id ? "rgba(232, 163, 61, 0.12)" : "rgba(255, 255, 255, 0.02)",
+                        color: settingsSubtab === sub.id ? "var(--ac)" : "var(--t1)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>{sub.label}</span>
+                      <span style={{ fontSize: 10.5, opacity: 0.65, marginTop: 2 }}>{sub.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </ShellCard>
+
+              <ShellCard
+                icon={<IconZap size={14} />}
+                title="1-Click Presets Nhanh"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => applyHardwarePreset("cpu")}
+                    className={`preset-card ${currentPreset === "cpu" ? "active" : ""}`}
+                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>💻 Thuần CPU (Laptop)</div>
+                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Qwen2.5-1.5B</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyHardwarePreset("gpu_mid")}
+                    className={`preset-card ${currentPreset === "gpu_mid" ? "active" : ""}`}
+                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>⚡ GPU Tầm Trung (4-8GB)</div>
+                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Qwen2.5-3B + CUDA</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyHardwarePreset("gpu_high")}
+                    className={`preset-card ${currentPreset === "gpu_high" ? "active" : ""}`}
+                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>🚀 GPU Khủng (12-24GB)</div>
+                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>Large-v3-Turbo Q8 + Qwen3-4B</div>
+                  </button>
+                </div>
+              </ShellCard>
+            </>
+          }
+          center={
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", height: "100%", paddingRight: 4 }}>
+              {/* SUBTAB: PRESETS */}
+              {settingsSubtab === "presets" && (
+                <section className="settings-section">
+                  <h2>⚡ Lựa Chọn Cấu Hình Phần Cứng Đề Xuất (1-Click Presets)</h2>
+                  <p className="settings-help">
+                    Bấm 1-click để Sublix tự động tối ưu mô hình STT, Translation và Engine theo sức mạnh máy tính của bạn:
+                  </p>
+
+                  <div className="hardware-presets">
+                    {/* Preset 1: CPU / Laptop */}
+                    <div
+                      className={`preset-card ${currentPreset === "cpu" ? "active" : ""}`}
+                      onClick={() => applyHardwarePreset("cpu")}
+                    >
+                      <div className="preset-header">
+                        <span className="preset-title">💻 Thuần CPU (Laptop / Văn Phòng)</span>
+                        <span className="preset-tag">Pure CPU</span>
+                      </div>
+                      <div className="preset-desc">
+                        Dành cho laptop mỏng nhẹ hoặc PC không có card đồ hoạ rời NVIDIA. Tiết kiệm RAM, máy mát và ổn định.
+                      </div>
+                      <div className="preset-specs">
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">STT Model:</span>
+                          <span className="preset-spec-val">base (140MB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Dịch LLM:</span>
+                          <span className="preset-spec-val">Qwen2.5-1.5B (1.1GB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Engine:</span>
+                          <span className="preset-spec-val">CPU Multi-thread</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preset 2: GPU 4GB - 8GB */}
+                    <div
+                      className={`preset-card ${currentPreset === "gpu_mid" ? "active" : ""}`}
+                      onClick={() => applyHardwarePreset("gpu_mid")}
+                    >
+                      <div className="preset-header">
+                        <span className="preset-title">⚡ GPU Tầm Trung (4GB – 8GB VRAM)</span>
+                        <span className="preset-tag">GTX / RTX Phổ Thông</span>
+                      </div>
+                      <div className="preset-desc">
+                        Phổ biến nhất (GTX 1650/1660, RTX 2060, 3050, 3060 6G, 4050/4060). STT nhanh ~0.1s, dịch tiếng Việt tự nhiên.
+                      </div>
+                      <div className="preset-specs">
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">STT Model:</span>
+                          <span className="preset-spec-val">base (140MB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Dịch LLM:</span>
+                          <span className="preset-spec-val">Qwen2.5-3B (2.0GB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Engine:</span>
+                          <span className="preset-spec-val">NVIDIA CUDA GPU</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preset 3: GPU 12GB - 24GB */}
+                    <div
+                      className={`preset-card ${currentPreset === "gpu_high" ? "active" : ""}`}
+                      onClick={() => applyHardwarePreset("gpu_high")}
+                    >
+                      <div className="preset-header">
+                        <span className="preset-title">🚀 GPU Khủng (12GB – 24GB VRAM)</span>
+                        <span className="preset-tag">RTX 3080/3090/4090</span>
+                      </div>
+                      <div className="preset-desc">
+                        Tối ưu cho card đồ hoạ cao cấp (RTX 3060 12GB, 3080, 3090, 4080, 4090). Nhận diện Whisper Turbo Q8 + Qwen3 2026 đỉnh cao!
+                      </div>
+                      <div className="preset-specs">
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">STT Model:</span>
+                          <span className="preset-spec-val">Large-v3-Turbo Q8 (874MB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Dịch LLM:</span>
+                          <span className="preset-spec-val">Qwen3-4B (2.5GB)</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Engine:</span>
+                          <span className="preset-spec-val">NVIDIA CUDA GPU</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* SUBTAB: AI DỊCH & PHÂN VAI */}
+              {settingsSubtab === "ai" && (
+                <section className="settings-section">
+                  <h2>🌐 Bộ Não Dịch Thuật & Biên Kịch Lồng Tiếng (AI Translation & Scripting)</h2>
+                  <p className="settings-help">
+                    Lựa chọn nguồn AI dịch kịch bản: <strong>MiniMax Cloud API (Unlimited)</strong> cho văn phong điện ảnh mượt mà và 0% VRAM, <strong>Ollama Local (Qwen 27B / 32B)</strong> chạy trên máy, hoặc <strong>GGUF Embedded</strong> cục bộ.
+                  </p>
+
+                  {/* Provider Switcher Tabs */}
+                  <div className="settings-row" style={{ alignItems: "flex-start", marginBottom: 14 }}>
+                    <label style={{ paddingTop: 6, minWidth: 100 }}>Nguồn Dịch:</label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
+                      <button
+                        className={`settings-engine-btn ${transProvider === "minimax" ? "active" : ""}`}
+                        onClick={() => handleProviderChange("minimax")}
+                        style={{ padding: "8px 14px", fontWeight: transProvider === "minimax" ? 700 : 500 }}
+                      >
+                        🌐 MiniMax Cloud API (Unlimited) ⭐ Khuyên Dùng
+                      </button>
+                      <button
+                        className={`settings-engine-btn ${transProvider === "ollama" ? "active" : ""}`}
+                        onClick={() => handleProviderChange("ollama")}
+                        style={{ padding: "8px 14px", fontWeight: transProvider === "ollama" ? 700 : 500 }}
+                      >
+                        🦙 Ollama Local (Qwen 27B / 32B)
+                      </button>
+                      <button
+                        className={`settings-engine-btn ${transProvider === "local" ? "active" : ""}`}
+                        onClick={() => handleProviderChange("local")}
+                        style={{ padding: "8px 14px", fontWeight: transProvider === "local" ? 700 : 500 }}
+                      >
+                        💻 Local GGUF (llama-server)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* PROVIDER 1: MINIMAX CLOUD API */}
+                  {transProvider === "minimax" && (
+                    <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(59, 130, 246, 0.2)", marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa" }}>
+                          🔑 Cấu hình MiniMax Unlimited API
+                        </span>
+                        <span style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: 4 }}>
+                          0% VRAM GPU • Dịch Điện Ảnh
+                        </span>
+                      </div>
+                      <div className="settings-row" style={{ marginBottom: 10 }}>
+                        <label style={{ minWidth: 100 }}>API Key:</label>
+                        <div style={{ display: "flex", gap: 6, flex: 1 }}>
+                          <input
+                            type={showMinimaxKey ? "text" : "password"}
+                            value={minimaxKey}
+                            onChange={(e) => setMinimaxKey(e.target.value)}
+                            placeholder="Dán API Key MiniMax của bạn vào đây..."
+                            className="settings-input"
+                            style={{ flex: 1, fontFamily: "monospace" }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowMinimaxKey(!showMinimaxKey)}
+                            className="settings-btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: 11 }}
+                          >
+                            {showMinimaxKey ? "Ẩn" : "Hiện"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="settings-row" style={{ marginBottom: 12 }}>
+                        <label style={{ minWidth: 100 }}>Model Name:</label>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                          <input
+                            type="text"
+                            value={minimaxModel}
+                            onChange={(e) => setMinimaxModel(e.target.value)}
+                            placeholder="MiniMax-M3 (Token Plan) hoặc MiniMax-Text-01"
+                            className="settings-input"
+                            style={{ width: "100%" }}
+                          />
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => setMinimaxModel("MiniMax-M3")}
+                              className="settings-btn-secondary"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                background: minimaxModel === "MiniMax-M3" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                                borderColor: minimaxModel === "MiniMax-M3" ? "#3b82f6" : undefined,
+                              }}
+                            >
+                              ⭐ MiniMax-M3 (Token Plan)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMinimaxModel("MiniMax-M2.7-highspeed")}
+                              className="settings-btn-secondary"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                background: minimaxModel === "MiniMax-M2.7-highspeed" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                                borderColor: minimaxModel === "MiniMax-M2.7-highspeed" ? "#3b82f6" : undefined,
+                              }}
+                            >
+                              ⚡ MiniMax-M2.7-highspeed
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMinimaxModel("MiniMax-M2.7")}
+                              className="settings-btn-secondary"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                background: minimaxModel === "MiniMax-M2.7" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                                borderColor: minimaxModel === "MiniMax-M2.7" ? "#3b82f6" : undefined,
+                              }}
+                            >
+                              MiniMax-M2.7
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMinimaxModel("MiniMax-Text-01")}
+                              className="settings-btn-secondary"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                background: minimaxModel === "MiniMax-Text-01" ? "rgba(59, 130, 246, 0.3)" : undefined,
+                                borderColor: minimaxModel === "MiniMax-Text-01" ? "#3b82f6" : undefined,
+                              }}
+                            >
+                              MiniMax-Text-01
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                        <button
+                          onClick={saveProviderSettings}
+                          className="settings-btn-primary"
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                        >
+                          💾 Lưu Cấu Hình
+                        </button>
+                        <button
+                          onClick={testProviderTranslation}
+                          className="settings-btn-secondary"
+                          disabled={providerTesting}
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                        >
+                          {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PROVIDER 2: OLLAMA LOCAL */}
+                  {transProvider === "ollama" && (
+                    <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(168, 85, 247, 0.2)", marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#c084fc" }}>
+                          🦙 Kết Nối Ollama Local (Máy Cá Nhân)
+                        </span>
+                        <span style={{ fontSize: 11, background: "rgba(168, 85, 247, 0.2)", color: "#d8b4fe", padding: "2px 8px", borderRadius: 4 }}>
+                          Offline 100% • Model 27B / 32B
+                        </span>
+                      </div>
+                      <div className="settings-row" style={{ marginBottom: 10 }}>
+                        <label style={{ minWidth: 100 }}>Ollama URL:</label>
+                        <input
+                          type="text"
+                          value={ollamaUrl}
+                          onChange={(e) => setOllamaUrl(e.target.value)}
+                          placeholder="http://localhost:11434"
+                          className="settings-input"
+                          style={{ flex: 1, fontFamily: "monospace" }}
+                        />
+                      </div>
+                      <div className="settings-row" style={{ marginBottom: 12 }}>
+                        <label style={{ minWidth: 100 }}>Model Name:</label>
+                        <input
+                          type="text"
+                          value={ollamaModel}
+                          onChange={(e) => setOllamaModel(e.target.value)}
+                          placeholder="smtek/qwen3.8-27b:q4_k_m hoặc qwen:latest"
+                          className="settings-input"
+                          style={{ flex: 1, fontFamily: "monospace" }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                        <button
+                          onClick={saveProviderSettings}
+                          className="settings-btn-primary"
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                        >
+                          💾 Lưu Cấu Hình
+                        </button>
+                        <button
+                          onClick={testProviderTranslation}
+                          className="settings-btn-secondary"
+                          disabled={providerTesting}
+                          style={{ padding: "6px 14px", fontSize: 12 }}
+                        >
+                          {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PROVIDER TEST RESULT BOX */}
+                  {providerTestResult && (
+                    <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(52, 211, 153, 0.4)", borderRadius: 6, padding: "10px 14px", marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+                        💬 Kết quả dịch thử nghiệm: <em>"I can't believe you actually pulled this off. You're insane, you know that?"</em>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#34d399", lineHeight: 1.4 }}>
+                        {providerTestResult}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PROVIDER 3: LOCAL GGUF */}
+                  {transProvider === "local" && (
+                    <>
+                      <div className="settings-row">
+                        <label>LLM Model:</label>
+                        <select
+                          value={translationModel}
+                          onChange={(e) => setTranslationModel(e.target.value)}
+                          className="settings-select"
+                        >
+                          {transModels.length > 0 ? (
+                            transModels.map((m) => (
+                              <option key={m.name} value={m.name}>
+                                {m.downloaded ? "✓ " : "⬇ "} {m.label}
+                              </option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="qwen3-4b">✓ Qwen3-4B-Instruct-2507 (2.5GB) — ⭐ 2026 Best</option>
+                              <option value="qwen2.5-3b">✓ Qwen2.5-3B-Instruct (2.0GB) — Legacy</option>
+                            </>
+                          )}
+                        </select>
+
+                        {selectedTransInfo && !selectedTransInfo.downloaded && (
+                          <button
+                            onClick={async () => {
+                              setDownloadingModel(translationModel);
+                              setStatus({
+                                kind: "working",
+                                message: `Downloading ${translationModel} (~${selectedTransInfo.size_mb}MB)...`,
+                              });
+                              try {
+                                await sublix.downloadTranslationModel(translationModel);
+                                await refreshSetup();
+                                setStatus({ kind: "success", message: `✅ Downloaded ${translationModel}!` });
+                              } catch (e) {
+                                setStatus({ kind: "error", message: `Download failed: ${e}` });
+                              } finally {
+                                setDownloadingModel(null);
+                              }
+                            }}
+                            className="settings-btn-primary"
+                            disabled={downloadingModel !== null}
+                          >
+                            {downloadingModel === translationModel
+                              ? "⏳ Downloading..."
+                              : `⬇ Download (${selectedTransInfo.size_mb}MB)`}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="settings-row">
+                        <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
+                        <div className="settings-engine-toggle">
+                          <button
+                            className={`settings-engine-btn ${transEnginePref === "auto" ? "active" : ""}`}
+                            onClick={() => handleTransEngineChange("auto")}
+                            disabled={!configLoaded}
+                          >
+                            ⚙ AUTO
+                          </button>
+                          <button
+                            className={`settings-engine-btn ${transEnginePref === "cpu" ? "active" : ""}`}
+                            onClick={() => handleTransEngineChange("cpu")}
+                            disabled={!configLoaded}
+                          >
+                            💻 CPU
+                          </button>
+                          <button
+                            className={`settings-engine-btn ${transEnginePref === "cuda" ? "active" : ""}`}
+                            onClick={() => handleTransEngineChange("cuda")}
+                            disabled={!configLoaded}
+                          >
+                            🎮 GPU (CUDA)
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={async () => {
+                            setServerStarting(true);
+                            setStatus({
+                              kind: "working",
+                              message: `Loading LLM (${translationModel}) into GPU VRAM...`,
+                            });
+                            try {
+                              const eng = await sublix.preloadTranslationServer(translationModel);
+                              setEngine(eng);
+                              setStatus({
+                                kind: "success",
+                                message: `✅ Translation LLM ready on ${eng.toUpperCase()} (${translationModel})`,
+                              });
+                            } catch (e) {
+                              setStatus({ kind: "error", message: `LLM server failed: ${e}` });
+                              setEngine(null);
+                            } finally {
+                              setServerStarting(false);
+                            }
+                          }}
+                          className="settings-btn-secondary"
+                          disabled={serverStarting}
+                        >
+                          {serverStarting ? "⏳ Loading..." : engine ? "🔄 Reload LLM Server" : "▶ Pre-warm LLM Server"}
+                        </button>
+                      </div>
+
+                      <div className="settings-row">
+                        <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
+                        {serverStarting ? (
+                          <span className="settings-engine-indicator">
+                            <span className="engine-dot engine-dot-starting" />
+                            <span style={{ color: "#fbbf24" }}>Loading GGUF model into VRAM...</span>
+                          </span>
+                        ) : engine === "cuda" ? (
+                          <span className="settings-engine-indicator">
+                            <span className="engine-dot engine-dot-cuda" />
+                            <span style={{ color: "#34d399", fontWeight: 600 }}>
+                              Running on NVIDIA GPU (CUDA) — ~0.1–0.2s per subtitle
+                            </span>
+                          </span>
+                        ) : engine === "cpu" ? (
+                          <span className="settings-engine-indicator">
+                            <span className="engine-dot engine-dot-cpu" />
+                            <span style={{ color: "#60a5fa", fontWeight: 600 }}>
+                              Running on CPU — ~1–2s per subtitle
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="settings-engine-indicator">
+                            <span className="engine-dot engine-dot-idle" />
+                            <span style={{ color: "#94a3b8" }}>Standby (auto-starts on first subtitle)</span>
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* SUBTAB: STT WHISPER */}
+              {settingsSubtab === "stt" && (
+                <>
+                  <section className="settings-section">
+                    <h2>🎤 Speech Recognition (2026 Whisper Large-v3-Turbo)</h2>
+                    <p className="settings-help">
+                      Long-running <code>whisper-server</code> keeps the model in GPU VRAM (~0.1s per chunk on RTX 3090).
+                      Hot-swaps automatically when you change model or CPU/GPU mode.
+                    </p>
+
+                    <div className="settings-row">
+                      <label>Whisper Model:</label>
+                      <select
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        className="settings-select"
+                      >
+                        {sttModels.length > 0 ? (
+                          sttModels.map((m) => (
+                            <option key={m.name} value={m.name}>
+                              {m.downloaded ? "✓ " : "⬇ "} {m.label}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="large-v3-turbo-q8_0">✓ large-v3-turbo Q8 (874MB) — ⭐ 2026 GPU Best</option>
+                            <option value="base">✓ base (140MB) — Fast lightweight</option>
+                            <option value="tiny">✓ tiny (75MB) — Ultra-light</option>
+                          </>
+                        )}
+                      </select>
+
+                      {selectedSttInfo && !selectedSttInfo.downloaded && (
+                        <button
+                          onClick={async () => {
+                            setDownloadingModel(model);
+                            setStatus({ kind: "working", message: `Downloading Whisper ${model} (~${selectedSttInfo.size_mb}MB)...` });
+                            try {
+                              await sublix.downloadSttModel(model);
+                              await refreshSetup();
+                              setStatus({ kind: "success", message: `✅ Downloaded Whisper ${model}!` });
+                            } catch (e) {
+                              setStatus({ kind: "error", message: `Download failed: ${e}` });
+                            } finally {
+                              setDownloadingModel(null);
+                            }
+                          }}
+                          className="settings-btn-primary"
+                          disabled={downloadingModel !== null}
+                        >
+                          {downloadingModel === model ? "⏳ Downloading..." : `⬇ Download (${selectedSttInfo.size_mb}MB)`}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="settings-row">
+                      <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
+                      <div className="settings-engine-toggle">
+                        <button
+                          className={`settings-engine-btn ${sttEnginePref === "auto" ? "active" : ""}`}
+                          onClick={() => handleSttEngineChange("auto")}
+                          disabled={!configLoaded}
+                        >
+                          ⚙ AUTO
+                        </button>
+                        <button
+                          className={`settings-engine-btn ${sttEnginePref === "cpu" ? "active" : ""}`}
+                          onClick={() => handleSttEngineChange("cpu")}
+                          disabled={!configLoaded}
+                        >
+                          💻 CPU
+                        </button>
+                        <button
+                          className={`settings-engine-btn ${sttEnginePref === "cuda" ? "active" : ""}`}
+                          onClick={() => handleSttEngineChange("cuda")}
+                          disabled={!configLoaded}
+                        >
+                          🎮 GPU (CUDA)
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          setSttServerStarting(true);
+                          setStatus({ kind: "working", message: `Loading Whisper (${model}) into memory...` });
+                          try {
+                            const eng = await sublix.preloadSttServer(model);
+                            setSttServerEngine(eng);
+                            setStatus({
+                              kind: "success",
+                              message: `✅ STT server ready on ${eng.toUpperCase()} (${model})`,
+                            });
+                          } catch (e) {
+                            setStatus({ kind: "error", message: `STT server error: ${e}` });
+                            setSttServerEngine(null);
+                          } finally {
+                            setSttServerStarting(false);
+                          }
+                        }}
+                        className="settings-btn-secondary"
+                        disabled={sttServerStarting}
+                      >
+                        {sttServerStarting ? "⏳ Loading..." : sttServerEngine ? "🔄 Reload STT Server" : "▶ Pre-warm STT Server"}
+                      </button>
+                    </div>
+
+                    <div className="settings-row">
+                      <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
+                      {sttServerStarting ? (
+                        <span className="settings-engine-indicator">
+                          <span className="engine-dot engine-dot-starting" />
+                          <span style={{ color: "#fbbf24" }}>Loading Whisper model into VRAM...</span>
+                        </span>
+                      ) : sttServerEngine === "cuda" ? (
+                        <span className="settings-engine-indicator">
+                          <span className="engine-dot engine-dot-cuda" />
+                          <span style={{ color: "#34d399", fontWeight: 600 }}>
+                            Running on NVIDIA GPU (CUDA) — ~0.08–0.15s per chunk
+                          </span>
+                        </span>
+                      ) : sttServerEngine === "cpu" ? (
+                        <span className="settings-engine-indicator">
+                          <span className="engine-dot engine-dot-cpu" />
+                          <span style={{ color: "#60a5fa", fontWeight: 600 }}>
+                            Running on CPU — ~1–2s per chunk
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="settings-engine-indicator">
+                          <span className="engine-dot engine-dot-idle" />
+                          <span style={{ color: "#94a3b8" }}>
+                            Standby (CUDA binary ready: {sttEngine === "cuda" ? "✓ Yes" : "CPU only"})
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Diagnostic Test */}
+                  <section className="settings-section">
+                    <h2>🧪 Manual 5s Capture + STT + Translation Test</h2>
+                    <div className="settings-row">
+                      <button
+                        onClick={handleTestCapture}
+                        className="settings-btn-secondary"
+                        disabled={status.kind === "working" || isLive}
+                      >
+                        1. Record 5s Audio
+                      </button>
+                      {lastCapture && (
+                        <button
+                          onClick={handleTranscribe}
+                          className="settings-btn-primary"
+                          disabled={status.kind === "working"}
+                        >
+                          2. Run STT + Translate
+                        </button>
+                      )}
+                      <button
+                        onClick={() => sublix.openModelsFolder()}
+                        className="settings-btn-secondary"
+                      >
+                        📁 Open Models Folder
+                      </button>
+                    </div>
+                    {lastTranscript && (
+                      <div className="settings-transcript">
+                        <div><strong>Original STT:</strong> {lastTranscript}</div>
+                        {lastTranslatedTest && (
+                          <div style={{ marginTop: 4, color: "#34d399" }}>
+                            <strong>Translated ({targetLang.toUpperCase()}):</strong> {lastTranslatedTest}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+
+              {/* SUBTAB: OVERLAY */}
+              {settingsSubtab === "overlay" && (
+                <>
+                  <section className="settings-section">
+                    <h2>🎨 Tùy Biến Cửa Sổ Phụ Đề Nổi (Overlay Window)</h2>
+                    <p className="settings-help">
+                      Cửa sổ phụ đề luôn nổi trên cùng màn hình (Always-on-top), bạn có thể thoải mái kéo thả cửa sổ đến vị trí mong muốn trên video.
+                    </p>
+
+                    <div className="settings-row">
+                      <label>Cỡ chữ (Font size):</label>
+                      <input
+                        type="range"
+                        min={16}
+                        max={36}
+                        step={1}
+                        value={fontSize}
+                        onChange={(e) => setFontSize(Number(e.target.value))}
+                        onPointerUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
+                        onKeyUp={() => persistOverlayConfig({ overlay_font_size: fontSize })}
+                        className="settings-slider"
+                      />
+                      <span className="settings-slider-value">{fontSize}px</span>
+                    </div>
+
+                    <div className="settings-row">
+                      <label>Độ trong suốt nền:</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={bgOpacity}
+                        onChange={(e) => setBgOpacity(Number(e.target.value))}
+                        onPointerUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
+                        onKeyUp={() => persistOverlayConfig({ overlay_bg_opacity: bgOpacity })}
+                        className="settings-slider"
+                      />
+                      <span className="settings-slider-value">{bgOpacity}%</span>
+                    </div>
+
+                    <div className="settings-row">
+                      <label>Màu chữ phụ đề:</label>
+                      <div className="theme-switch">
+                        {([
+                          { id: "white", label: "Trắng", dot: "#ffffff" },
+                          { id: "yellow", label: "Vàng", dot: "#ffdf6b" },
+                          { id: "amber", label: "Cam ấm", dot: "#ffb454" },
+                        ]).map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`theme-chip ${textColor === c.id ? "active" : ""}`}
+                            onClick={() => {
+                              setTextColor(c.id);
+                              persistOverlayConfig({ overlay_text_color: c.id });
+                            }}
+                          >
+                            <span className="theme-chip-dot" style={{ background: c.dot }} />
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="settings-row" style={{ gap: 20, marginTop: 10 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={showOriginal}
+                          onChange={(e) => {
+                            const v = e.target.checked;
+                            setShowOriginal(v);
+                            persistOverlayConfig({ overlay_show_original: v });
+                          }}
+                        />
+                        <span>🌐 Hiển thị dòng gốc song ngữ (Bilingual Line)</span>
+                      </label>
+                    </div>
+
+                    <div className="settings-row" style={{ gap: 20, marginTop: 10 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={clickThrough}
+                          onChange={async (e) => {
+                            const v = e.target.checked;
+                            setClickThrough(v);
+                            try {
+                              const cfg = await sublix.setOverlayClickThrough(v);
+                              setFullConfig(cfg);
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                        />
+                        <span>🔒 Chế độ xuyên thấu chuột (Click-through - Click chuột xuyên qua video bên dưới)</span>
+                      </label>
+                    </div>
+
+                    <div className="settings-row" style={{ marginTop: 16, gap: 10 }}>
+                      <button
+                        type="button"
+                        className="settings-btn-primary"
+                        onClick={() => sublix.showOverlay()}
+                        title="Phím tắt: Ctrl+Shift+O"
+                      >
+                        <IconEye size={13} /> Hiện Cửa Sổ Overlay
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-btn-secondary"
+                        onClick={() => sublix.hideOverlay()}
+                        title="Phím tắt: Ctrl+Shift+O"
+                      >
+                        <IconEyeOff size={13} /> Ẩn Cửa Sổ Overlay
+                      </button>
+                    </div>
+                  </section>
+
+                  {/* Overlay Live Preview Card */}
+                  <section className="settings-section">
+                    <h2>👀 Xem Trước Mẫu Phụ Đề (Preview)</h2>
+                    <p className="settings-help">Preview hiển thị đúng cài đặt thật: cỡ chữ, màu chữ và độ trong suốt nền.</p>
+                    <div
+                      style={{
+                        padding: "28px 24px",
+                        background: "linear-gradient(135deg, #1c2433, #0d1017)",
+                        borderRadius: 8,
+                        border: "1px dashed var(--line)",
+                        marginTop: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: `rgba(20, 20, 25, ${Math.min(100, bgOpacity) / 100})`,
+                          borderRadius: 8,
+                          padding: "10px 18px",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: fontSize,
+                            fontWeight: 600,
+                            color: textColor === "yellow" ? "#ffdf6b" : textColor === "amber" ? "#ffb454" : "rgba(255, 255, 255, 0.98)",
+                            textShadow: "0 2px 4px rgba(0,0,0,0.8), 0 0 2px #000",
+                            textAlign: "center",
+                          }}
+                        >
+                          Đây là đoạn phụ đề mẫu hiển thị trên màn hình của bạn.
+                        </div>
+                        {showOriginal && (
+                          <div
+                            style={{
+                              fontSize: Math.max(12, Math.round(fontSize * 0.62)),
+                              color: "rgba(255, 255, 255, 0.55)",
+                              fontStyle: "italic",
+                              textAlign: "center",
+                            }}
+                          >
+                            これは字幕のサンプルテキストです。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* SUBTAB: MODELS HUB */}
+              {settingsSubtab === "models_hub" && (
+                <section className="settings-section">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h2>📦 Trung Tâm Tải & Quản Lý Models (Model Catalog & Download Hub)</h2>
+                    <button
+                      onClick={() => sublix.openModelsFolder()}
+                      className="settings-btn-secondary"
+                      style={{ fontSize: 11, padding: "4px 10px" }}
+                    >
+                      📁 Mở Thư Mục Models
+                    </button>
+                  </div>
+                  <p className="settings-help">
+                    Tải trực tiếp bất kỳ model nào bên dưới với 1 click. Thanh tiến trình % hiển thị trực tiếp theo thời gian thực:
+                  </p>
+                  <img className="spot-ill" src={spotModelsUrl} alt="" />
+
+                  {/* STT Models Table */}
+                  <h3 style={{ fontSize: 13, color: "#93c5fd", margin: "14px 0 6px" }}>🎤 Whisper STT Models (Nhận diện giọng nói)</h3>
+                  <table className="model-hub-table">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>Đề xuất</th>
+                        <th>Dung lượng</th>
+                        <th>Trạng thái / Tải về</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sttModels.map((m) => {
+                        const prog = downloadProgress[m.name];
+                        const isDownloading = downloadingModel === m.name || (prog && prog.percent < 100 && prog.phase !== "done" && prog.phase !== "error");
+                        const tierBadge =
+                          m.name === "tiny" || m.name === "base"
+                            ? { label: "💻 CPU / Laptop", cls: "tier-cpu" }
+                            : m.name === "small"
+                            ? { label: "⚡ GPU 4-8GB", cls: "tier-gpu-mid" }
+                            : { label: "🚀 GPU 8-24GB", cls: "tier-gpu-high" };
+
+                        return (
+                          <tr key={m.name} className="model-hub-row">
+                            <td>
+                              <div className="model-name-col">
+                                <span className="model-main-name">{m.name}</span>
+                                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{m.label.split("—")[1] ?? ""}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`model-tier-badge ${tierBadge.cls}`}>{tierBadge.label}</span>
+                            </td>
+                            <td>~{m.size_mb} MB</td>
+                            <td>
+                              {isDownloading ? (
+                                <div className="model-progress-box">
+                                  <div className="model-progress-label">
+                                    <span>⏳ Đang tải...</span>
+                                    <span>{prog?.percent ?? 0}%</span>
+                                  </div>
+                                  <div className="model-progress-track">
+                                    <div className="model-progress-fill" style={{ width: `${prog?.percent ?? 0}%` }} />
+                                  </div>
+                                </div>
+                              ) : m.downloaded ? (
+                                <span className="model-status-ready">✓ Đã sẵn sàng</span>
+                              ) : (
+                                <button
+                                  className="model-dl-btn"
+                                  onClick={() => handleDownloadStt(m.name, m.size_mb)}
+                                  disabled={downloadingModel !== null}
+                                >
+                                  ⬇ Tải về
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Translation LLM Models Table */}
+                  <h3 style={{ fontSize: 13, color: "#a78bfa", margin: "18px 0 6px" }}>🌐 Translation LLM Models (Mô hình dịch ngôn ngữ)</h3>
+                  <table className="model-hub-table">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>Đề xuất</th>
+                        <th>Dung lượng</th>
+                        <th>Trạng thái / Tải về</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transModels.map((m) => {
+                        const prog = downloadProgress[m.name];
+                        const isDownloading = downloadingModel === m.name || (prog && prog.percent < 100 && prog.phase !== "done" && prog.phase !== "error");
+                        const tierBadge =
+                          m.name === "qwen2.5-1.5b"
+                            ? { label: "💻 CPU / Laptop", cls: "tier-cpu" }
+                            : m.name === "qwen2.5-3b"
+                            ? { label: "⚡ GPU 4-8GB", cls: "tier-gpu-mid" }
+                            : { label: "🚀 GPU 8-24GB", cls: "tier-gpu-high" };
+
+                        return (
+                          <tr key={m.name} className="model-hub-row">
+                            <td>
+                              <div className="model-name-col">
+                                <span className="model-main-name">{m.name}</span>
+                                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{m.label.split("—")[1] ?? ""}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`model-tier-badge ${tierBadge.cls}`}>{tierBadge.label}</span>
+                            </td>
+                            <td>~{m.size_mb} MB</td>
+                            <td>
+                              {isDownloading ? (
+                                <div className="model-progress-box">
+                                  <div className="model-progress-label">
+                                    <span>⏳ Đang tải...</span>
+                                    <span>{prog?.percent ?? 0}%</span>
+                                  </div>
+                                  <div className="model-progress-track">
+                                    <div className="model-progress-fill" style={{ width: `${prog?.percent ?? 0}%` }} />
+                                  </div>
+                                </div>
+                              ) : m.downloaded ? (
+                                <span className="model-status-ready">✓ Đã sẵn sàng</span>
+                              ) : (
+                                <button
+                                  className="model-dl-btn"
+                                  onClick={() => handleDownloadTrans(m.name, m.size_mb)}
+                                  disabled={downloadingModel !== null}
+                                >
+                                  ⬇ Tải về
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+              )}
+            </div>
+          }
+          right={
+            <>
+              <ShellCard
+                icon={<IconZap size={14} />}
+                title="Trạng Thái Hệ Thống"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Engine Nhận Dạng:</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: sttServerEngine === "cuda" ? "#34d399" : "#60a5fa" }}>
+                      {sttServerEngine ? sttServerEngine.toUpperCase() : "Chưa tải"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Engine Dịch Thuật:</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: engine === "cuda" ? "#34d399" : "#60a5fa" }}>
+                      {engine ? engine.toUpperCase() : "Chưa tải"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Chế độ tăng tốc:</span>
+                    <span style={{ fontSize: 11, color: "var(--ac)", display: "flex", alignItems: "center", gap: 4 }}>
+                      {sttServerEngine === "cuda" || engine === "cuda" ? <IconZap size={13} /> : <IconCpu size={13} />}
+                      {sttServerEngine === "cuda" || engine === "cuda" ? "NVIDIA CUDA GPU" : "CPU Đa Luồng"}
+                    </span>
+                  </div>
+                </div>
+              </ShellCard>
+
+              <ShellCard
+                icon={<IconFolder size={14} />}
+                title="Thao Tác Nhanh"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    type="button"
+                    className="downloader-btn-secondary"
+                    onClick={() => sublix.openModelsFolder()}
+                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
+                  >
+                    <IconFolder size={12} /> Mở Thư Mục Models
+                  </button>
+                  <button
+                    type="button"
+                    className="downloader-btn-secondary"
+                    onClick={() => setShowChangelog(true)}
+                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
+                  >
+                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.8.0"})
+                  </button>
+                  <button
+                    type="button"
+                    className="downloader-btn-secondary"
+                    onClick={async () => {
+                      if (overlayVisible) {
+                        await sublix.hideOverlay();
+                        setOverlayVisible(false);
+                      } else {
+                        await sublix.showOverlay();
+                        setOverlayVisible(true);
+                      }
+                    }}
+                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
+                  >
+                    {overlayVisible ? <IconEyeOff size={12} /> : <IconEye size={12} />}
+                    {overlayVisible ? "Ẩn Cửa Sổ Overlay" : "Hiện Cửa Sổ Overlay"}
+                  </button>
+                </div>
+              </ShellCard>
+            </>
+          }
+        />
+      )}
+
+      {activeTab === "history" && (
+        <StudioShell
+          left={
+            <>
+              <ShellCard
+                icon={<IconClock size={14} />}
+                title="Bộ Lọc & Tìm Kiếm"
+                badge={<span style={{ fontSize: 11, opacity: 0.8 }}>{filteredHistory.length}/{recentSubs.length}</span>}
+              >
+                <input
+                  type="text"
+                  placeholder="🔍 Tìm câu thoại..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="history-search-input"
+                  style={{ width: "100%", boxSizing: "border-box" }}
+                />
+
+                <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 4 }}>
+                  {isLive ? "🔴 Đang tự động lưu câu mới khi phát..." : "⏸ Tạm dừng ghi"}
+                </div>
+              </ShellCard>
+
+              <ShellCard
+                icon={<IconSettings size={14} />}
+                title="Thao Tác Lịch Sử"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    type="button"
+                    className="settings-btn-secondary"
+                    onClick={handleCopyHistory}
+                    disabled={recentSubs.length === 0}
+                    style={{ justifyContent: "center" }}
+                  >
+                    📋 Sao Chép Tất Cả
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-btn-primary"
+                    onClick={handleExportSrt}
+                    disabled={recentSubs.length === 0}
+                    style={{ justifyContent: "center" }}
+                  >
+                    🎬 Xuất File .SRT
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-btn-secondary"
+                    onClick={handleExportTxt}
+                    disabled={recentSubs.length === 0}
+                    style={{ justifyContent: "center" }}
+                  >
+                    📄 Xuất File .TXT
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-btn-danger"
+                    onClick={() => {
+                      setRecentSubs([]);
+                      setSelectedHistorySub(null);
+                    }}
+                    disabled={recentSubs.length === 0}
+                    style={{ justifyContent: "center" }}
+                  >
+                    <IconTrash size={12} /> Xoá Toàn Bộ Lịch Sử
+                  </button>
+                </div>
+              </ShellCard>
+            </>
+          }
+          center={
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
+              {filteredHistory.length > 0 ? (
+                <div className="history-list" style={{ gap: 8 }}>
+                  {filteredHistory.map((item) => {
+                    const isSelected = selectedHistorySub?.id === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`history-item ${isSelected ? "selected" : ""}`}
+                        onClick={() => setSelectedHistorySub(item)}
+                        style={{
+                          cursor: "pointer",
+                          borderColor: isSelected ? "var(--ac)" : undefined,
+                          background: isSelected ? "rgba(232, 163, 61, 0.08)" : undefined,
+                        }}
+                      >
+                        <div className="history-item-top">
+                          <span style={{ fontWeight: 700, color: isSelected ? "var(--ac)" : undefined }}>#{item.id}</span>
+                          <span>
+                            {item.stt_duration ? `STT: ${item.stt_duration.toFixed(2)}s` : ""}
+                            {item.translate_duration ? ` • LLM: ${item.translate_duration.toFixed(2)}s` : ""}
+                          </span>
+                        </div>
+                        {item.original && (
+                          <div className="history-item-orig">{item.original}</div>
+                        )}
+                        <div className="history-item-trans">{item.text}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="history-empty" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                  <img className="spot-ill" src={spotHistoryUrl} alt="" style={{ maxWidth: 120, opacity: 0.6, marginBottom: 12 }} />
+                  <p style={{ color: "var(--t3)", fontSize: 13, textAlign: "center", maxWidth: 360 }}>
+                    {recentSubs.length === 0
+                      ? "Chưa có lời thoại nào được ghi nhận. Bắt đầu phát video và bật 'Dịch Trực Tiếp Live' để ghi nhận!"
+                      : "Không tìm thấy câu thoại nào khớp với từ khoá tìm kiếm."}
+                  </p>
+                </div>
+              )}
+            </div>
+          }
+          right={
+            <ShellCard
+              icon={<IconFileText size={14} />}
+              title="Chi Tiết Câu Thoại"
+            >
+              {selectedHistorySub ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: 700, color: "var(--ac)" }}>Câu #{selectedHistorySub.id}</span>
+                    <span style={{ fontSize: 10.5, color: "var(--t3)" }}>
+                      {selectedHistorySub.stt_duration ? `STT: ${selectedHistorySub.stt_duration.toFixed(2)}s` : ""}
+                    </span>
+                  </div>
+
+                  {selectedHistorySub.original && (
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>Bản Gốc:</div>
+                      <div style={{ padding: "8px 10px", background: "rgba(0,0,0,0.3)", borderRadius: 6, fontSize: 12.5, fontStyle: "italic", color: "#cbd5e1" }}>
+                        {selectedHistorySub.original}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>Bản Dịch:</div>
+                    <div style={{ padding: "8px 10px", background: "rgba(0,0,0,0.3)", borderRadius: 6, fontSize: 13, fontWeight: 600, color: "#34d399" }}>
+                      {selectedHistorySub.text}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="settings-btn-secondary"
+                    onClick={() => {
+                      const textToCopy = selectedHistorySub.original
+                        ? `${selectedHistorySub.original}\n${selectedHistorySub.text}`
+                        : selectedHistorySub.text;
+                      navigator.clipboard.writeText(textToCopy);
+                    }}
+                    style={{ marginTop: 6, justifyContent: "center" }}
+                  >
+                    📋 Sao Chép Câu Này
+                  </button>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "20px 8px", color: "var(--t3)", fontSize: 12 }}>
+                  Bấm chọn một câu thoại trong danh sách để xem chi tiết bản gốc và bản dịch.
+                </div>
+              )}
+            </ShellCard>
+          }
+        />
+      )}
         </div>
       </main>
 

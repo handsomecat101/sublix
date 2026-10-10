@@ -346,11 +346,12 @@
 
 .main-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px 40px;
+  height: calc(100vh - 48px);
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
 }
 
 /* Sections */

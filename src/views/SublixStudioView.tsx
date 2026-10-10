@@ -194,10 +194,10 @@ export default function SublixStudioView({
   const [subtitleDisplayMode, setSubtitleDisplayMode] = useState<"translated" | "original" | "bilingual">("translated");
   const [videoScale, setVideoScale] = useState<number>(100);
 
-  // Right column tab (Phụ đ vs Thuộc tnh)
+  // Right column tab (Phụ đề vs Thuộc tính)
   const [rightTab, setRightTab] = useState<"subtitles" | "properties">("subtitles");
 
-  // Subtitle styling properties (driven by Thuộc tnh tab)
+  // Subtitle styling properties (driven by Thuộc tính tab)
   const [subFontSize, setSubFontSize] = useState<number>(16);
   const [subFontColor, setSubFontColor] = useState<string>("#e8a33d");
   const [subPosition, setSubPosition] = useState<"bottom" | "center" | "top">("bottom");
@@ -313,7 +313,7 @@ export default function SublixStudioView({
       } catch (err) {
         // R4-09: ko thả fail hon ton → toast cho user biết, khng im lặng
         console.warn("Tauri drag-drop in SublixStudioView failed:", err);
-        showToast("⚠ Ko thả khng khả dụng trn hệ thống ny — hy dng nt 'Mở video'.");
+        showToast("⚠ Kéo thả không khả dụng trên hệ thống này — hãy dùng nút 'Mở video'.");
         return () => {};
       }
     })();
@@ -603,13 +603,13 @@ export default function SublixStudioView({
   const handleUndoAudio = () => {
     const stack = undoAudioStackRef.current;
     if (stack.length === 0) {
-      showToast("ℹ Khng c thao tc ging đc no để hon tc");
+      showToast("ℹ Không có thao tác giọng đọc nào để hoàn tác");
       return;
     }
     const previous = stack[stack.length - 1];
     setUndoAudioStack((prev) => prev.slice(0, -1));
     setSpeakers(previous);
-    showToast("↶ Đ hon tc phn vai / ging đc nhn vật");
+    showToast("↶ Đã hoàn tác phân vai / giọng đọc nhân vật");
   };
 
   const handleTogglePlay = () => {
@@ -896,7 +896,7 @@ export default function SublixStudioView({
 
     const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
     if (!isTauri) {
-      showToast(" Đang khởi tạo pipeline phn tch...");
+      showToast(" Đang khởi tạo pipeline phân tích...");
       return;
     }
 
@@ -947,18 +947,18 @@ export default function SublixStudioView({
           setSelectedSegId(mappedSegments[0].id);
         }
         setAnalyzeProgress(100);
-        setAnalyzeMessage("Phn tch hon tất!");
-        showToast(`✅ Phn tch xong: ${mappedSegments.length} cu thoại, ${mappedSpeakers.length} nhn vật.`);
+        setAnalyzeMessage("Phân tích hoàn tất!");
+        showToast(`✅ Phân tích xong: ${mappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật.`);
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes("hủy") || errMsg.includes("cancel") || errMsg.includes("dừng")) {
         setAnalyzeMessage("Tiến trnh đ bị ngưi dng hủy.");
-        showToast("🛑 Tiến trnh phn tch đ bị hủy.");
+        showToast("🛑 Tiến trình phân tích đã bị hủy.");
       } else {
-        setAnalyzeMessage(`Lỗi phn tch: ${errMsg}`);
-        showToast(` Lỗi phn tch: ${errMsg}`);
+        setAnalyzeMessage(`Lỗi phân tích: ${errMsg}`);
+        showToast(` Lỗi phân tích: ${errMsg}`);
       }
       setAnalyzeProgress(0);
     } finally {
@@ -976,7 +976,7 @@ export default function SublixStudioView({
       if (isTauri) {
         await sublix.dubbingCancel();
       }
-      showToast("🛑 Đ gửi lệnh dừng phn tch video.");
+      showToast("🛑 Đã gửi lệnh dừng phân tích video.");
       setAnalyzeMessage("Tiến trnh đ bị ngưi dng hủy.");
       setIsAnalyzing(false);
     } catch (err) {
@@ -1028,7 +1028,7 @@ export default function SublixStudioView({
         // Fallback to on-demand dubbingPreviewTts
         if (!dataUri) {
           try {
-            const samplePhrase = `Xin cho, ti l ${spk.name}, đy l mẫu ging đc được gn cho nhn vật của ti.`;
+            const samplePhrase = `Xin chào, tôi là ${spk.name}, đây là mẫu giọng đọc được gán cho nhân vật của tôi.`;
             dataUri = await sublix.dubbingPreviewTts(samplePhrase, spkVoice);
           } catch (e) {
             console.warn("Preview TTS invoke failed:", e);
@@ -1159,7 +1159,7 @@ export default function SublixStudioView({
       end: Number((target.end + 0.2 + dur).toFixed(2)),
     };
     setSegments((prev) => [...prev, copy]);
-    showToast("📋 Đ nhn bản cu thoại");
+    showToast("📋 Đã nhân bản câu thoại");
   };
 
   const handleDeleteSegment = (idToDelete?: number) => {
@@ -1167,7 +1167,7 @@ export default function SublixStudioView({
     if (segments.length === 0) return;
     saveUndoHistory();
     setSegments((prev) => prev.filter((s) => s.id !== id));
-    showToast("🗑 Đ xa cu thoại");
+    showToast("🗑 Đã xóa câu thoại");
   };
 
   const handleFitTimeline = () => {
@@ -1365,7 +1365,7 @@ export default function SublixStudioView({
               onClick={() => onNavigateTab?.("models")}
             >
               <IconSettings size={13} />
-              <span>Ci đặt</span>
+              <span>Cài đặt</span>
             </button>
           </nav>
         </div>
@@ -1392,7 +1392,7 @@ export default function SublixStudioView({
             type="button"
             className="studio-btn-import-pill"
             onClick={handlePickMediaFile}
-            title="Nhập video từ my tnh (Phm tắt: Ctrl + I)"
+            title="Nhập video từ my tnh (Phím tắt: Ctrl + I)"
             style={{
               display: "flex",
               alignItems: "center",
@@ -1435,7 +1435,7 @@ export default function SublixStudioView({
                     console.warn("Video clear error:", e);
                   }
                 }
-                showToast("Đ đng video hiện tại");
+                showToast("Đã đóng video hiện tại");
               }}
             >
               ✕
@@ -1475,7 +1475,7 @@ export default function SublixStudioView({
             type="button"
             className="studio-btn-open-video"
             onClick={handlePickMediaFile}
-            title="Mở file video từ my tnh"
+            title="Mở file video từ máy tính"
           >
             <IconPlus size={13} /> Mở video
           </button>
@@ -1510,14 +1510,14 @@ export default function SublixStudioView({
               className={`studio-steps-tab-btn ${leftTab === "review" ? "active" : ""}`}
               onClick={() => setLeftTab("review")}
             >
-              📑 Tm Tắt & Review
+              📑 Tóm Tắt & Review
             </button>
           </div>
 
           <div className="studio-steps-body">
             {leftTab === "pipeline" ? (
               <>
-                {/* Card 1: Nhận dạng ging ni (STT) */}
+                {/* Card 1: Nhận dạng giọng nói (STT) */}
                 <div className="studio-step-card">
               <div
                 className="studio-step-card-header"
@@ -1525,7 +1525,7 @@ export default function SublixStudioView({
               >
                 <div className="studio-step-card-title">
                   <IconMic size={14} />
-                  <span>Nhận dạng ging ni</span>
+                  <span>Nhận dạng giọng nói</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span className="studio-step-card-status">
@@ -1611,7 +1611,7 @@ export default function SublixStudioView({
               >
                 <div className="studio-step-card-title">
                   <IconGlobe size={14} />
-                  <span>Dịch thuật & Nh cung cấp LLM</span>
+                  <span>Dịch thuật & Nhà cung cấp LLM</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span className="studio-step-card-status">
@@ -1624,7 +1624,7 @@ export default function SublixStudioView({
               {openCard === "translate" && (
                 <div className="studio-step-card-content">
                   <div className="studio-form-row">
-                    <label className="studio-form-label">Nh cung cấp AI dịch:</label>
+                    <label className="studio-form-label">Nhà cung cấp AI dịch:</label>
                     <select
                       className="studio-form-select"
                       value={transProvider}
@@ -1871,7 +1871,7 @@ export default function SublixStudioView({
               )}
             </div>
 
-            {/* Card 3: Ging đc & Bảng Phn Vai */}
+            {/* Card 3: Giọng đọc & Bảng Phân Vai */}
             <div className="studio-step-card">
               <div
                 className="studio-step-card-header"
@@ -1879,7 +1879,7 @@ export default function SublixStudioView({
               >
                 <div className="studio-step-card-title">
                   <IconClapper size={14} />
-                  <span>Ging đc & Phn vai</span>
+                  <span>Giọng đọc & Phân vai</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span className="studio-step-card-status">{speakers.length} vai diễn</span>
@@ -1898,7 +1898,7 @@ export default function SublixStudioView({
                       disabled={isAnalyzing}
                     >
                       <IconUser size={13} />
-                      {isAnalyzing ? "Đang Phn Tch..." : "Phn Tch Ngưi Ni (Sherpa AI)"}
+                      {isAnalyzing ? "Đang Phân Tích..." : "Phân Tích Người Nói (Sherpa AI)"}
                     </button>
                     {isAnalyzing && (
                       <button
@@ -1918,7 +1918,7 @@ export default function SublixStudioView({
                           alignItems: "center",
                           gap: 4,
                         }}
-                        title="Dừng tiến trnh phn tch nhn vật"
+                        title="Dừng tiến trình phân tích nhân vật"
                       >
                          Dừng
                       </button>
@@ -1993,7 +1993,7 @@ export default function SublixStudioView({
                             className={`studio-btn-voice-preview ${playingAudioSpkId === spk.id ? "is-playing" : ""}`}
                             onClick={() => handlePreviewSpeakerVoice(spk)}
                             disabled={auditioningSpkId === spk.id}
-                            title="Nghe thử ging đc được gn"
+                            title="Nghe thử giọng đọc được gán"
                           >
                             {playingAudioSpkId === spk.id ? (
                               <>
@@ -2044,7 +2044,7 @@ export default function SublixStudioView({
                       ]);
                     }}
                   >
-                    <IconPlus size={12} /> Thm vai diễn
+                    <IconPlus size={12} /> Thêm vai diễn
                   </button>
                 </div>
               )}
@@ -2084,7 +2084,7 @@ export default function SublixStudioView({
               </div>
               <p style={{ fontSize: 11.5, color: "var(--t2)", lineHeight: 1.5, margin: 0 }}>
                 {segments.length > 0
-                  ? `Dự n gồm ${segments.length} cu thoại, tổng ${totalSpeechSeconds.toFixed(1)}s thi lượng thoại của ${speakers.length} nhn vật (${speakers.map((s) => s.name).join(", ")}).`
+                  ? `Dự n gồm ${segments.length} câu thoại, tổng ${totalSpeechSeconds.toFixed(1)}s thi lượng thoại của ${speakers.length} nhn vật (${speakers.map((s) => s.name).join(", ")}).`
                   : "Chưa c kịch bản để tm tắt cốt truyện."}
               </p>
             </div>
@@ -2178,7 +2178,7 @@ export default function SublixStudioView({
                   onClick={handleRunAnalysis}
                   disabled={isAnalyzing}
                 >
-                  ✨ {isAnalyzing ? "Đang Xử L Video..." : "Xử L Video (1-Click Pipeline)"}
+                  ✨ {isAnalyzing ? "Đang Xử Lý Video..." : "Xử Lý Video (1-Click Pipeline)"}
                 </button>
                 {isAnalyzing && (
                   <button
@@ -2198,7 +2198,7 @@ export default function SublixStudioView({
                       alignItems: "center",
                       gap: 4,
                     }}
-                    title="Dừng tiến trnh xử l video"
+                    title="Dừng tiến trình xử lý video"
                   >
                      Dừng
                   </button>
@@ -2208,7 +2208,7 @@ export default function SublixStudioView({
                 <span style={{ fontSize: 10, color: "var(--t3)" }}>Hoàn tác:</span>
                 <span className="studio-filter-chip" onClick={handleUndoAudio} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Audio</span>
                 <span className="studio-filter-chip" onClick={handleUndoTranslation} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Bản dịch</span>
-                <span className="studio-filter-chip" onClick={handleUndoSubtitles} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Phụ đ</span>
+                <span className="studio-filter-chip" onClick={handleUndoSubtitles} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Phụ đề</span>
               </div>
             </div>
           </div>
@@ -2426,7 +2426,7 @@ export default function SublixStudioView({
                       border: "1px solid rgba(232, 163, 61, 0.3)",
                     }}
                   >
-                    Phm tắt: Ctrl + I
+                    Phím tắt: Ctrl + I
                   </div>
                 </div>
               )}
@@ -2521,14 +2521,14 @@ export default function SublixStudioView({
                 className={`studio-segments-tab-btn ${rightTab === "subtitles" ? "active" : ""}`}
                 onClick={() => setRightTab("subtitles")}
               >
-                📑 Phụ đ
+                📑 Phụ đề
               </button>
               <button
                 type="button"
                 className={`studio-segments-tab-btn ${rightTab === "properties" ? "active" : ""}`}
                 onClick={() => setRightTab("properties")}
               >
-                ⚙ Thuộc tnh
+                ⚙ Thuộc tính
               </button>
             </div>
             {rightTab === "subtitles" && (
@@ -2690,7 +2690,7 @@ export default function SublixStudioView({
                         e.stopPropagation();
                         handlePreviewSegmentTts(seg);
                       }}
-                      title="Nghe thử ging đc cu thoại ny (Kokoro TTS)"
+                      title="Nghe thử giọng đọc câu thoại này (Kokoro TTS)"
                     >
                       <IconVolume2 size={11} />
                       {previewingSegId === seg.id ? "Đang tạo..." : "Nghe cu"}
@@ -2717,7 +2717,7 @@ export default function SublixStudioView({
                           saveSubtitleUndo();
                           setSegments(segments.filter((s) => s.id !== seg.id));
                         }}
-                        title="Xa cu"
+                        title="Xóa câu"
                       >
                         <IconTrash size={11} />
                       </button>
@@ -2864,7 +2864,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-timeline-tool-btn"
               onClick={handleDuplicateSegment}
-              title="Nhn bản (Duplicate)"
+              title="Nhân bản (Duplicate)"
             >
               <IconCopy size={13} />
             </button>
@@ -2872,7 +2872,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-timeline-tool-btn"
               onClick={() => handleDeleteSegment()}
-              title="Xa cu (Delete)"
+              title="Xóa câu (Delete)"
             >
               <IconTrash size={13} />
             </button>
@@ -3003,7 +3003,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel((z) => Math.max(100, Math.round(z / 2)))}
-              title="Zoom out mạnh (×0.5) — xem ton cảnh video. Phm tắt: −"
+              title="Zoom out mạnh (×0.5) — xem toàn cảnh video. Phím tắt: −"
               style={{ fontSize: 12, fontWeight: 700, padding: "0 6px", cursor: "pointer" }}
             >
               −−
@@ -3012,7 +3012,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel((z) => Math.max(100, Math.round(z / 1.5)))}
-              title="Zoom out nhẹ (×0.67). Phm tắt: −"
+              title="Zoom out nhẹ (×0.67). Phím tắt: −"
               style={{ fontSize: 16, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               −
@@ -3021,7 +3021,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel(100)}
-              title="Reset v 100% = full video fit viewport. Phm tắt: \\"
+              title="Reset về 100% = full video fit viewport. Phím tắt: \\"
               style={{ fontSize: 11, padding: "0 5px", cursor: "pointer" }}
             >
               ⟲
@@ -3030,7 +3030,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel((z) => Math.min(10000, Math.round(z * 1.5)))}
-              title="Zoom in nhẹ (×1.5). Phm tắt: +"
+              title="Zoom in nhẹ (×1.5). Phím tắt: +"
               style={{ fontSize: 16, fontWeight: 700, padding: "0 8px", cursor: "pointer" }}
             >
               +
@@ -3039,7 +3039,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-subtle-sm"
               onClick={() => setZoomLevel((z) => Math.min(10000, Math.round(z * 2)))}
-              title="Zoom in mạnh (×2) — frame cực lớn, tick 0.1s. Phm tắt: +"
+              title="Zoom in mạnh (×2) — frame cực lớn, tick 0.1s. Phím tắt: +"
               style={{ fontSize: 12, fontWeight: 700, padding: "0 6px", cursor: "pointer" }}
             >
               ++
@@ -3074,7 +3074,7 @@ export default function SublixStudioView({
             <div className="studio-track-header-item">
               <div className="studio-track-header-left">
                 <span></span>
-                <span>♫ TIẾNG GC</span>
+                <span>♫ TIẾNG GỐC</span>
               </div>
             </div>
             <div className="studio-track-header-item">

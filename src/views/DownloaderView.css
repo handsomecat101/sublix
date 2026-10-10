@@ -70,17 +70,17 @@
   background: var(--bg-card);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
-  padding: 18px 22px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 /* Input group */
 .downloader-url-group {
   display: flex;
-  gap: 12px;
-  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .downloader-input-wrapper {
@@ -148,7 +148,7 @@
 }
 
 .downloader-btn-inspect {
-  padding: 0 18px;
+  padding: 8px 18px;
   background: var(--bg-inset);
   border: 1px solid var(--line);
   color: var(--t1);
@@ -158,6 +158,11 @@
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
 }
 
 .downloader-btn-inspect:hover:not(:disabled) {

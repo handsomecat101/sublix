@@ -23,7 +23,7 @@ import {
   IconRotateCw,
   IconGlobe,
 } from "../icons";
-import { StudioShell } from "./StudioShell";
+import { StudioShell, ShellCard } from "./StudioShell";
 import "./DownloaderView.css";
 
 interface DownloaderViewProps {
@@ -1135,49 +1135,51 @@ export default function DownloaderView({
       </>
       }
       right={<>
-      {/* HEADER INFO */}
-      <div className="downloader-header">
-        <div className="downloader-title-row">
-          <div className="downloader-title-group">
-            <h2 className="downloader-title">
-              <IconGlobe size={20} /> Tải Video Đa Nền Tảng (Multi-Platform Downloader)
-            </h2>
-            <p className="downloader-subtitle">
-              Tải chất lượng cao từ YouTube, TikTok, Douyin (抖音), Bilibili (哔哩哔哩), Facebook, X, Instagram... và đưa thẳng vào Studio lồng tiếng hoặc làm phụ đề chỉ với 1 cú click.
+        <ShellCard
+          icon={<IconFolder size={14} />}
+          title="Thư Mục Lưu Trữ"
+          actions={
+            <button
+              type="button"
+              className="downloader-btn-secondary"
+              style={{ padding: "4px 10px", fontSize: "0.8rem" }}
+              onClick={() => sublix.downloaderOpenFolder()}
+              title="Mở thư mục lưu trữ file tải về trên máy tính"
+            >
+              <IconFolder size={12} /> Mở Thư Mục
+            </button>
+          }
+        >
+          {dlDir && (
+            <p style={{ margin: 0, fontSize: "0.78rem", opacity: 0.85, wordBreak: "break-all" }}>
+              <code style={{ fontFamily: "var(--font-mono)", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: 4 }}>{dlDir}</code>
             </p>
-            {dlDir && (
-              <p
-                style={{ margin: "4px 0 0", fontSize: "0.75rem", opacity: 0.8, wordBreak: "break-word" }}
-                title={dlDir}
-              >
-                📁 File tải về được lưu tại:{" "}
-                <code style={{ fontFamily: "Consolas, monospace" }}>{dlDir}</code>
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="downloader-btn-secondary"
-            onClick={() => sublix.downloaderOpenFolder()}
-            title="Mở thư mục lưu trữ file tải về trên máy tính"
-          >
-            <IconFolder size={14} /> Mở Thư Mục Download
-          </button>
-        </div>
-      </div>
+          )}
+        </ShellCard>
 
-      {/* COPYRIGHT DISCLAIMER */}
-      <div className="downloader-copyright-banner">
-        <span className="banner-icon">⚖️</span>
-        <div className="banner-content">
-          <strong>Lưu ý về bản quyền & mục đích sử dụng:</strong>
-          <span>
-            Tính năng tải video đa nền tảng chỉ nhằm phục vụ mục đích nghiên cứu học thuật, học ngoại ngữ và sao lưu nội dung cá nhân hợp pháp. Vui lòng tôn trọng quyền sở hữu trí tuệ và chính sách phân phối của các tác giả nội dung gốc.
-          </span>
-        </div>
-      </div>
-      </>
-      }
+        <ShellCard
+          icon={<IconGlobe size={14} />}
+          title="Nền Tảng Hỗ Trợ"
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: "0.78rem" }}>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(239, 68, 68, 0.15)", color: "#f87171" }}>YouTube</span>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(0, 242, 234, 0.15)", color: "#2dd4bf" }}>TikTok</span>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(254, 44, 85, 0.15)", color: "#fb7185" }}>Douyin 抖音</span>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(0, 161, 214, 0.15)", color: "#38bdf8" }}>Bilibili 哔哩哔哩</span>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>Facebook</span>
+            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(244, 236, 222, 0.1)", color: "#e2e8f0" }}>X / Twitter</span>
+          </div>
+        </ShellCard>
+
+        <ShellCard
+          icon={<span style={{ fontSize: 13 }}>⚖️</span>}
+          title="Lưu Ý Bản Quyền"
+        >
+          <p style={{ margin: 0, fontSize: "0.76rem", lineHeight: 1.5, color: "var(--t3)" }}>
+            Tính năng tải video phục vụ học thuật, dịch thuật và sao lưu nội dung cá nhân hợp pháp. Vui lòng tôn trọng quyền sở hữu trí tuệ của tác giả gốc.
+          </p>
+        </ShellCard>
+      </>}
     />
   );
 }
