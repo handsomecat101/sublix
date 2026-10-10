@@ -1666,10 +1666,12 @@ export default function SublixStudioView({
     if (workflowOptStt && !workflowOptVoice) {
       if (workflowOptTranslate) {
         showToast("💬 Bắt đầu tạo phụ đề và dịch tự động...");
-        await handleRunSttOnly();
-        setTimeout(() => {
-          void handleRunTranslateOnly();
-        }, 1000);
+        const newSegs = await handleRunSttOnly();
+        if (newSegs && newSegs.length > 0) {
+          setTimeout(() => {
+            void handleRunTranslateOnly(newSegs);
+          }, 350);
+        }
       } else {
         showToast("💬 Bắt đầu trích xuất phụ đề gốc (không dịch)...");
         await handleRunSttOnly();
@@ -1690,17 +1692,20 @@ export default function SublixStudioView({
   };
 
   // =========================================================================
-  // ROUND-8: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
+  // ROUND-8 & ROUND-14: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
   // =========================================================================
-  const handleRunSttOnly = async () => {
+  const handleRunSttOnly = async (): Promise<SubtitleItem[] | null> => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
-      return;
+      return null;
     }
     setIsAnalyzing(true);
     setTimelineProcessType("stt");
     setTimelineProgress(10);
-    setTimelineProcessMessage("Đang bóc tách câu thoại gốc (Whisper STT)...");
+    setAnalyzeProgress(10);
+    const startMsg = "Đang trích xuất câu thoại gốc (Whisper STT)...";
+    setAnalyzeMessage(startMsg);
+    setTimelineProcessMessage(startMsg);
 
     const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
@@ -1711,9 +1716,31 @@ export default function SublixStudioView({
     let unlisten: (() => void) | null = null;
     try {
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
-        setAnalyzeProgress(event.payload.percent);
-        setTimelineProgress(event.payload.percent);
-        setTimelineProcessMessage(event.payload.message);
+        let pct = event.payload.percent;
+        let msg = event.payload.message;
+
+        // Masking các thông điệp liên quan đến Sherpa / Diarizing / Phân vai / Biên kịch khi người dùng CHỈ làm phụ đề
+        if (
+          msg.includes("Sherpa") ||
+          msg.includes("phân tích âm sắc") ||
+          msg.includes("diariz") ||
+          event.payload.stage === "diarizing"
+        ) {
+          msg = "🎙️ Đang tối ưu câu thoại & căn chỉnh mốc thời gian phụ đề...";
+          pct = Math.min(85, Math.max(45, pct));
+        } else if (
+          msg.includes("Biên kịch") ||
+          msg.includes("kịch bản") ||
+          event.payload.stage === "scripting"
+        ) {
+          msg = "📝 Đang chuẩn hóa cấu trúc câu phụ đề...";
+          pct = Math.min(92, Math.max(70, pct));
+        }
+
+        setAnalyzeProgress(pct);
+        setTimelineProgress(pct);
+        setAnalyzeMessage(msg);
+        setTimelineProcessMessage(msg);
       });
 
       const project: DubbingProject = await sublix.dubbingAnalyze(
@@ -1722,7 +1749,7 @@ export default function SublixStudioView({
         undefined, // Chỉ bóc tách sub gốc, không dịch
         durLimit,
         startOffset,
-        expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined
+        1 // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
       );
 
       if (project) {
@@ -1734,59 +1761,53 @@ export default function SublixStudioView({
           setFilmstripThumbs(project.filmstrip_thumbs);
         }
 
+        // Tạo vai chuẩn duy nhất "Phụ đề" cho toàn bộ timeline phụ đề
+        const subSpeaker: SpeakerItem = {
+          id: "speaker_0",
+          name: "Phụ đề",
+          gender: "male",
+          color: "#38bdf8",
+          voice: "vietneu:vi_bac_nam",
+          count: project.segments.length,
+          sampleAudio: null,
+        };
+        setSpeakers([subSpeaker]);
+
         const newMappedSegs: SubtitleItem[] = project.segments.map((seg) => ({
           id: seg.id,
           start: seg.start_sec,
           end: seg.end_sec,
-          speakerId: seg.speaker_id,
+          speakerId: "speaker_0", // Thống nhất 1 speaker khi chỉ làm phụ đề
           original: seg.original_text,
           translated: seg.original_text, // Giữ nguyên câu gốc để duyệt
           hasAudio: true,
         }));
 
         saveUndoHistory();
+        let finalSegs = newMappedSegs;
         if (isRange) {
           setSegments((prev) => {
             const preserved = prev.filter((s) => s.end < startSec || s.start > endSec);
             const combined = [...preserved, ...newMappedSegs].sort((a, b) => a.start - b.start);
-            return combined.map((s, idx) => ({ ...s, id: idx + 1 }));
+            finalSegs = combined.map((s, idx) => ({ ...s, id: idx + 1 }));
+            return finalSegs;
           });
         } else {
           setSegments(newMappedSegs);
         }
 
-        if (expectedSpeakerCount === 1) {
-          const singleSpk: SpeakerItem = {
-            id: "spk_1",
-            name: "Nhân vật chính",
-            gender: "male",
-            color: "#38bdf8",
-            voice: "vi-VN-NamMinhNeural",
-            count: newMappedSegs.length,
-            sampleAudio: null,
-          };
-          setSpeakers([singleSpk]);
-          setSegments(newMappedSegs.map((s) => ({ ...s, speakerId: "spk_1" })));
-        } else if (project.speakers.length > 0) {
-          const mappedSpeakers: SpeakerItem[] = project.speakers.map((spk, idx) => ({
-            id: spk.id,
-            name: spk.label,
-            gender: spk.gender as "male" | "female",
-            color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
-            voice: spk.voice,
-            count: project.segments.filter((s) => s.speaker_id === spk.id).length,
-            sampleAudio: spk.sample_audio_data || null,
-          }));
-          setSpeakers(mappedSpeakers);
-        }
-
+        setAnalyzeProgress(100);
         setTimelineProgress(100);
+        setAnalyzeMessage("Hoàn tất trích xuất phụ đề!");
         setTimelineProcessMessage("Hoàn tất trích xuất phụ đề!");
-        showToast(`✅ Đã trích xuất ${newMappedSegs.length} câu thoại gốc!`);
+        showToast(`✅ Đã trích xuất ${newMappedSegs.length} câu phụ đề!`);
+        return finalSegs;
       }
+      return null;
     } catch (err) {
       console.error("STT error:", err);
       showToast(`❌ Lỗi nhận dạng phụ đề: ${err}`);
+      return null;
     } finally {
       if (unlisten) unlisten();
       setTimeout(() => {
@@ -1797,10 +1818,11 @@ export default function SublixStudioView({
   };
 
   // =========================================================================
-  // ROUND-8: CÔNG ĐOẠN 2 — CHỈ DỊCH THUẬT (TRANSLATE ONLY / LLM)
+  // ROUND-8 & ROUND-14: CÔNG ĐOẠN 2 — CHỈ DỊCH THUẬT (TRANSLATE ONLY / LLM)
   // =========================================================================
-  const handleRunTranslateOnly = async () => {
-    if (segments.length === 0) {
+  const handleRunTranslateOnly = async (inputSegs?: SubtitleItem[]) => {
+    const activeSegs = inputSegs && inputSegs.length > 0 ? inputSegs : segments;
+    if (activeSegs.length === 0) {
       showToast("⚠ Chưa có câu thoại nào để dịch! Hãy chạy 'Chỉ Làm Sub' trước.");
       return;
     }
@@ -1810,8 +1832,8 @@ export default function SublixStudioView({
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
     const targetSegs = isRange
-      ? segments.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
-      : segments;
+      ? activeSegs.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
+      : activeSegs;
 
     if (targetSegs.length === 0) {
       showToast("⚠ Không có câu thoại nào trong vùng chọn để dịch!");
@@ -1821,7 +1843,10 @@ export default function SublixStudioView({
     setIsAnalyzing(true);
     setTimelineProcessType("translate");
     setTimelineProgress(5);
-    setTimelineProcessMessage(`Đang dịch ${targetSegs.length} câu thoại sang ${targetLang.toUpperCase()}...`);
+    setAnalyzeProgress(5);
+    const initMsg = `Đang dịch ${targetSegs.length} câu thoại sang ${targetLang.toUpperCase()}...`;
+    setTimelineProcessMessage(initMsg);
+    setAnalyzeMessage(initMsg);
 
     try {
       await handleSaveProviderConfig();
@@ -1835,9 +1860,9 @@ export default function SublixStudioView({
         const chunk = targetSegs.slice(i, i + BATCH_SIZE);
         const texts = chunk.map((s) => s.original);
 
-        setTimelineProcessMessage(
-          `Đang dịch câu ${i + 1}-${Math.min(total, i + BATCH_SIZE)}/${total} (${targetLang.toUpperCase()})...`
-        );
+        const loopMsg = `Đang dịch câu ${i + 1}-${Math.min(total, i + BATCH_SIZE)}/${total} (${targetLang.toUpperCase()})...`;
+        setTimelineProcessMessage(loopMsg);
+        setAnalyzeMessage(loopMsg);
 
         let translatedTexts: string[] = [];
         try {
@@ -1870,10 +1895,13 @@ export default function SublixStudioView({
         completedCount += chunk.length;
         const pct = Math.min(95, Math.round((completedCount / total) * 95));
         setTimelineProgress(pct);
+        setAnalyzeProgress(pct);
       }
 
       setTimelineProgress(100);
+      setAnalyzeProgress(100);
       setTimelineProcessMessage("Dịch thuật hoàn tất!");
+      setAnalyzeMessage("Dịch thuật phụ đề hoàn tất!");
       showToast(`✅ Đã dịch xong ${total} câu thoại sang ${targetLang.toUpperCase()}!`);
     } catch (err) {
       console.error("Translation error:", err);
@@ -1887,7 +1915,7 @@ export default function SublixStudioView({
   };
 
   // =========================================================================
-  // ROUND-8: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
+  // ROUND-8 & ROUND-14: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
   // =========================================================================
   const handleRunVoiceOnly = async () => {
     if (segments.length === 0) {
@@ -1911,7 +1939,10 @@ export default function SublixStudioView({
     setIsAnalyzing(true);
     setTimelineProcessType("voice");
     setTimelineProgress(10);
-    setTimelineProcessMessage(`Đang tổng hợp giọng đọc TTS cho ${targetSegs.length} câu...`);
+    setAnalyzeProgress(10);
+    const vMsg = `Đang tổng hợp giọng đọc TTS cho ${targetSegs.length} câu...`;
+    setTimelineProcessMessage(vMsg);
+    setAnalyzeMessage(vMsg);
 
     try {
       saveAudioUndo();
@@ -1919,8 +1950,12 @@ export default function SublixStudioView({
 
       for (let i = 0; i < total; i++) {
         const seg = targetSegs[i];
-        setTimelineProgress(Math.round(((i + 1) / total) * 95));
-        setTimelineProcessMessage(`Tổng hợp giọng câu ${i + 1}/${total}...`);
+        const pct = Math.round(((i + 1) / total) * 95);
+        setTimelineProgress(pct);
+        setAnalyzeProgress(pct);
+        const lMsg = `Tổng hợp giọng câu ${i + 1}/${total}...`;
+        setTimelineProcessMessage(lMsg);
+        setAnalyzeMessage(lMsg);
 
         const spk = speakers.find((s) => s.id === seg.speakerId);
         const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
@@ -1936,7 +1971,9 @@ export default function SublixStudioView({
       }
 
       setTimelineProgress(100);
+      setAnalyzeProgress(100);
       setTimelineProcessMessage("Hoàn tất tạo giọng đọc!");
+      setAnalyzeMessage("Hoàn tất tạo giọng đọc!");
       showToast(`✅ Đã tổng hợp giọng đọc cho ${total} câu thoại!`);
     } catch (err) {
       console.error("Voice TTS error:", err);
@@ -2962,8 +2999,10 @@ export default function SublixStudioView({
                         onClick={async () => {
                           if (workflowOptTranslate) {
                             showToast("💬 Bắt đầu tạo phụ đề và dịch...");
-                            await handleRunSttOnly();
-                            setTimeout(() => { void handleRunTranslateOnly(); }, 1000);
+                            const newSegs = await handleRunSttOnly();
+                            if (newSegs && newSegs.length > 0) {
+                              setTimeout(() => { void handleRunTranslateOnly(newSegs); }, 350);
+                            }
                           } else {
                             showToast("💬 Bắt đầu trích xuất phụ đề gốc...");
                             await handleRunSttOnly();
@@ -3572,13 +3611,21 @@ export default function SublixStudioView({
             </div>
           </div>
 
-          {/* In-Tab AI Progress Center Banner */}
+          {/* Dynamic In-Tab AI Progress Center Banner */}
           {isAnalyzing && (
             <div className="studio-ai-progress-hud">
               <div className="studio-ai-hud-header">
                 <div className="studio-ai-hud-pulse">
                   <span className="studio-ai-pulse-dot" />
-                  <span className="studio-ai-hud-title">⚡ Đang Xử Lý Video & Diarization AI: {fileName || "Dự án"}</span>
+                  <span className="studio-ai-hud-title">
+                    {timelineProcessType === "stt"
+                      ? `💬 Đang Tạo Phụ Đề: ${fileName || "Dự án"}`
+                      : timelineProcessType === "translate"
+                      ? `🌐 Đang Dịch Phụ Đề (${targetLang.toUpperCase()}): ${fileName || "Dự án"}`
+                      : timelineProcessType === "voice"
+                      ? `🎙️ Đang Tổng Hợp Giọng Đọc Lồng Tiếng: ${fileName || "Dự án"}`
+                      : `⚡ Đang Xử Lý Toàn Trình (Phụ Đề & Lồng Tiếng): ${fileName || "Dự án"}`}
+                  </span>
                 </div>
                 <div className="studio-ai-hud-actions">
                   <span className="studio-ai-hud-pct">{analyzeProgress.toFixed(0)}%</span>
@@ -3603,32 +3650,116 @@ export default function SublixStudioView({
                 </div>
               </div>
 
-              {/* Multi-step progress pipeline */}
+              {/* Dynamic multi-step progress pipeline based on active workflow */}
               <div className="studio-ai-steps-row">
-                <div className={`studio-ai-step-item ${analyzeProgress >= 15 ? "done" : analyzeProgress > 0 ? "active" : ""}`}>
-                  <span className="studio-ai-step-num">1</span>
-                  <span className="studio-ai-step-name">🎵 Audio WAV</span>
-                </div>
-                <div className="studio-ai-step-arrow">›</div>
-                <div className={`studio-ai-step-item ${analyzeProgress >= 40 ? "done" : analyzeProgress >= 15 ? "active" : ""}`}>
-                  <span className="studio-ai-step-num">2</span>
-                  <span className="studio-ai-step-name">🎙️ Whisper STT</span>
-                </div>
-                <div className="studio-ai-step-arrow">›</div>
-                <div className={`studio-ai-step-item ${analyzeProgress >= 60 ? "done" : analyzeProgress >= 40 ? "active" : ""}`}>
-                  <span className="studio-ai-step-num">3</span>
-                  <span className="studio-ai-step-name">👥 Phân Vai (Sherpa AI)</span>
-                </div>
-                <div className="studio-ai-step-arrow">›</div>
-                <div className={`studio-ai-step-item ${analyzeProgress >= 95 ? "done" : analyzeProgress >= 60 ? "active" : ""}`}>
-                  <span className="studio-ai-step-num">4</span>
-                  <span className="studio-ai-step-name">✍️ Dịch Kịch Bản</span>
-                </div>
-                <div className="studio-ai-step-arrow">›</div>
-                <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 95 ? "active" : ""}`}>
-                  <span className="studio-ai-step-num">5</span>
-                  <span className="studio-ai-step-name">🎬 Timeline</span>
-                </div>
+                {timelineProcessType === "stt" ? (
+                  workflowOptTranslate ? (
+                    // CHỈ PHỤ ĐỀ (CÓ DỊCH) - 4 BƯỚC
+                    <>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 20 ? "done" : analyzeProgress > 0 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">1</span>
+                        <span className="studio-ai-step-name">🎵 Audio WAV</span>
+                      </div>
+                      <div className="studio-ai-step-arrow">›</div>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 65 ? "done" : analyzeProgress >= 20 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">2</span>
+                        <span className="studio-ai-step-name">🎙️ Whisper STT</span>
+                      </div>
+                      <div className="studio-ai-step-arrow">›</div>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 95 ? "done" : analyzeProgress >= 65 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">3</span>
+                        <span className="studio-ai-step-name">🌐 Dịch Phụ Đề</span>
+                      </div>
+                      <div className="studio-ai-step-arrow">›</div>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 95 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">4</span>
+                        <span className="studio-ai-step-name">🎬 Timeline Sub</span>
+                      </div>
+                    </>
+                  ) : (
+                    // CHỈ PHỤ ĐỀ GỐC (KHÔNG DỊCH) - 3 BƯỚC TINH GỌN (TUYỆT ĐỐI KHÔNG CÓ SHERPA AI)
+                    <>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 20 ? "done" : analyzeProgress > 0 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">1</span>
+                        <span className="studio-ai-step-name">🎵 Audio WAV</span>
+                      </div>
+                      <div className="studio-ai-step-arrow">›</div>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 85 ? "done" : analyzeProgress >= 20 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">2</span>
+                        <span className="studio-ai-step-name">🎙️ Whisper STT</span>
+                      </div>
+                      <div className="studio-ai-step-arrow">›</div>
+                      <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 85 ? "active" : ""}`}>
+                        <span className="studio-ai-step-num">3</span>
+                        <span className="studio-ai-step-name">🎬 Timeline Sub</span>
+                      </div>
+                    </>
+                  )
+                ) : timelineProcessType === "translate" ? (
+                  // CHỈ DỊCH THUẬT
+                  <>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 25 ? "done" : "active"}`}>
+                      <span className="studio-ai-step-num">1</span>
+                      <span className="studio-ai-step-name">📝 Đọc Kịch Bản</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 90 ? "done" : analyzeProgress >= 25 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">2</span>
+                      <span className="studio-ai-step-name">🌐 LLM Dịch Thuật</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 90 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">3</span>
+                      <span className="studio-ai-step-name">🎬 Cập Nhật Timeline</span>
+                    </div>
+                  </>
+                ) : timelineProcessType === "voice" ? (
+                  // CHỈ LỒNG TIẾNG
+                  <>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 25 ? "done" : "active"}`}>
+                      <span className="studio-ai-step-num">1</span>
+                      <span className="studio-ai-step-name">👥 Phân Vai ({speakers.length} vai)</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 90 ? "done" : analyzeProgress >= 25 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">2</span>
+                      <span className="studio-ai-step-name">🗣️ Tổng Hợp Giọng TTS</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 90 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">3</span>
+                      <span className="studio-ai-step-name">🎬 Đồng Bộ Audio Track</span>
+                    </div>
+                  </>
+                ) : (
+                  // TOÀN TRÌNH PIPELINE
+                  <>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 15 ? "done" : analyzeProgress > 0 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">1</span>
+                      <span className="studio-ai-step-name">🎵 Audio WAV</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 40 ? "done" : analyzeProgress >= 15 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">2</span>
+                      <span className="studio-ai-step-name">🎙️ Whisper STT</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 60 ? "done" : analyzeProgress >= 40 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">3</span>
+                      <span className="studio-ai-step-name">👥 Phân Vai AI</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 95 ? "done" : analyzeProgress >= 60 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">4</span>
+                      <span className="studio-ai-step-name">✍️ Dịch Kịch Bản</span>
+                    </div>
+                    <div className="studio-ai-step-arrow">›</div>
+                    <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 95 ? "active" : ""}`}>
+                      <span className="studio-ai-step-num">5</span>
+                      <span className="studio-ai-step-name">🎬 Timeline</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Progress bar */}
@@ -3641,7 +3772,7 @@ export default function SublixStudioView({
 
               {/* Live status message + Jump to Process Center button */}
               <div className="studio-ai-status-msg">
-                <span>{analyzeMessage || "Đang xử lý luồng AI..."}</span>
+                <span>{analyzeMessage || timelineProcessMessage || "Đang xử lý luồng AI..."}</span>
                 {onNavigateTab && (
                   <button
                     type="button"
