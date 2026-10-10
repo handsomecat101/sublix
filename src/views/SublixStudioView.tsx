@@ -41,7 +41,7 @@ import {
 import "./SublixStudioView.css";
 
 export interface SublixStudioViewProps {
-  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay") => void;
+  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process") => void;
   currentTheme?: string;
   onThemeChange?: (theme: string) => void;
   initialFilePath?: string;
@@ -151,6 +151,7 @@ export default function SublixStudioView({
   // R2-03 & R2-D: Real audio peaks and filmstrip video thumbnails
   const [audioPeaks, setAudioPeaks] = useState<number[]>([]);
   const [filmstripThumbs, setFilmstripThumbs] = useState<Array<{ time_sec: number; data_uri: string }>>([]);
+  const [isPreviewExtracting, setIsPreviewExtracting] = useState<boolean>(false);
 
   // Preview TTS, Progressive Simulation & Export
   const [previewingSegId, setPreviewingSegId] = useState<number | null>(null);
@@ -282,6 +283,51 @@ export default function SublixStudioView({
       });
     };
   }, []);
+
+  // Tự động trích xuất sóng âm audio peaks và thumbnails khi nạp video vào timeline
+  const previewExtractedPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!filePath || filePath.trim() === "") {
+      previewExtractedPathRef.current = null;
+      setAudioPeaks([]);
+      setFilmstripThumbs([]);
+      return;
+    }
+
+    if (previewExtractedPathRef.current === filePath && (filmstripThumbs.length > 0 || mediaDuration <= 0)) {
+      return;
+    }
+
+    let isCancelled = false;
+    setIsPreviewExtracting(true);
+
+    const runExtract = async () => {
+      try {
+        const res = await sublix.extractMediaPreview(filePath, mediaDuration > 0 ? mediaDuration : undefined);
+        if (!isCancelled) {
+          if (res.peaks && res.peaks.length > 0) {
+            setAudioPeaks(res.peaks);
+          }
+          if (res.filmstrip_thumbs && res.filmstrip_thumbs.length > 0) {
+            setFilmstripThumbs(res.filmstrip_thumbs);
+          }
+          previewExtractedPathRef.current = filePath;
+        }
+      } catch (err) {
+        console.warn("extractMediaPreview failed:", err);
+      } finally {
+        if (!isCancelled) {
+          setIsPreviewExtracting(false);
+        }
+      }
+    };
+
+    runExtract();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [filePath, mediaDuration]);
 
   // M1: Native Tauri Drag & Drop for Windows WebView2
   useEffect(() => {
@@ -1074,22 +1120,29 @@ export default function SublixStudioView({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const width = timelineWidth;
-    canvas.width = width;
+    // Cap canvas render width at 8192px to prevent Chromium texture crash on long media
+    const renderWidth = Math.min(timelineWidth, 8192);
+    canvas.width = renderWidth;
     const height = canvas.height || 32;
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, renderWidth, height);
 
     if (mediaDuration <= 0) {
       return;
     }
 
-    ctx.fillStyle = "#38bdf8";
-    const barWidth = 2;
-    const barGap = 1;
-    const numBars = Math.floor(width / (barWidth + barGap));
     const midY = Math.floor(height / 2);
 
     if (audioPeaks.length > 0) {
+      const gradient = ctx.createLinearGradient(0, 0, renderWidth, 0);
+      gradient.addColorStop(0, "#38bdf8");
+      gradient.addColorStop(0.5, "#2dd4bf");
+      gradient.addColorStop(1, "#38bdf8");
+      ctx.fillStyle = gradient;
+
+      const barWidth = 2;
+      const barGap = 1;
+      const numBars = Math.floor(renderWidth / (barWidth + barGap));
+
       for (let i = 0; i < numBars; i++) {
         const ratio = i / Math.max(1, numBars - 1);
         const peakIdx = Math.min(audioPeaks.length - 1, Math.floor(ratio * audioPeaks.length));
@@ -1099,14 +1152,21 @@ export default function SublixStudioView({
           // Silence is strictly a 1px flat baseline
           ctx.fillRect(i * (barWidth + barGap), midY, barWidth, 1);
         } else {
-          const barHeight = Math.max(2, Math.min(height - 4, peakVal * (height - 4)));
-          const y = Math.floor((height - barHeight) / 2);
-          ctx.fillRect(i * (barWidth + barGap), y, barWidth, barHeight);
+          // Mirrored symmetrical waveform (DAW style)
+          const halfH = Math.max(1, Math.min(Math.floor(height / 2) - 2, Math.floor(peakVal * (height / 2 - 2))));
+          ctx.fillRect(i * (barWidth + barGap), midY - halfH, barWidth, halfH * 2);
         }
       }
     } else {
-      // When no analyzed peaks yet, draw a flat 1px baseline across the timeline
-      ctx.fillRect(0, midY, width, 1);
+      // Subtle sine wave baseline indicating audio channel is ready / extracting
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, midY);
+      for (let x = 0; x < renderWidth; x += 8) {
+        ctx.lineTo(x, midY + Math.sin(x * 0.08) * 2);
+      }
+      ctx.stroke();
     }
   }, [audioPeaks, mediaDuration, timelineWidth]);
 
@@ -1366,6 +1426,14 @@ export default function SublixStudioView({
             >
               <IconClock size={13} />
               <span>Lịch sử</span>
+            </button>
+            <button
+              type="button"
+              className="studio-nav-tab"
+              onClick={() => onNavigateTab?.("process")}
+            >
+              <IconClock size={13} />
+              <span>Tiến trình</span>
             </button>
             <button
               type="button"
@@ -2294,6 +2362,89 @@ export default function SublixStudioView({
               </button>
             </div>
           </div>
+
+          {/* In-Tab AI Progress Center Banner */}
+          {isAnalyzing && (
+            <div className="studio-ai-progress-hud">
+              <div className="studio-ai-hud-header">
+                <div className="studio-ai-hud-pulse">
+                  <span className="studio-ai-pulse-dot" />
+                  <span className="studio-ai-hud-title">⚡ Đang Xử Lý Video & Diarization AI: {fileName || "Dự án"}</span>
+                </div>
+                <div className="studio-ai-hud-actions">
+                  <span className="studio-ai-hud-pct">{analyzeProgress.toFixed(0)}%</span>
+                  <button
+                    type="button"
+                    className="studio-btn-action-danger"
+                    onClick={handleCancelAnalysis}
+                    title="Dừng tiến trình phân tích"
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      color: "#f87171",
+                      borderRadius: 4,
+                      padding: "3px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✕ Dừng
+                  </button>
+                </div>
+              </div>
+
+              {/* Multi-step progress pipeline */}
+              <div className="studio-ai-steps-row">
+                <div className={`studio-ai-step-item ${analyzeProgress >= 15 ? "done" : analyzeProgress > 0 ? "active" : ""}`}>
+                  <span className="studio-ai-step-num">1</span>
+                  <span className="studio-ai-step-name">🎵 Audio WAV</span>
+                </div>
+                <div className="studio-ai-step-arrow">›</div>
+                <div className={`studio-ai-step-item ${analyzeProgress >= 40 ? "done" : analyzeProgress >= 15 ? "active" : ""}`}>
+                  <span className="studio-ai-step-num">2</span>
+                  <span className="studio-ai-step-name">🎙️ Whisper STT</span>
+                </div>
+                <div className="studio-ai-step-arrow">›</div>
+                <div className={`studio-ai-step-item ${analyzeProgress >= 60 ? "done" : analyzeProgress >= 40 ? "active" : ""}`}>
+                  <span className="studio-ai-step-num">3</span>
+                  <span className="studio-ai-step-name">👥 Phân Vai (Sherpa AI)</span>
+                </div>
+                <div className="studio-ai-step-arrow">›</div>
+                <div className={`studio-ai-step-item ${analyzeProgress >= 95 ? "done" : analyzeProgress >= 60 ? "active" : ""}`}>
+                  <span className="studio-ai-step-num">4</span>
+                  <span className="studio-ai-step-name">✍️ Dịch Kịch Bản</span>
+                </div>
+                <div className="studio-ai-step-arrow">›</div>
+                <div className={`studio-ai-step-item ${analyzeProgress >= 100 ? "done" : analyzeProgress >= 95 ? "active" : ""}`}>
+                  <span className="studio-ai-step-num">5</span>
+                  <span className="studio-ai-step-name">🎬 Timeline</span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="studio-ai-progress-track">
+                <div
+                  className="studio-ai-progress-fill"
+                  style={{ width: `${Math.max(3, Math.min(100, analyzeProgress))}%` }}
+                />
+              </div>
+
+              {/* Live status message + Jump to Process Center button */}
+              <div className="studio-ai-status-msg">
+                <span>{analyzeMessage || "Đang xử lý luồng AI..."}</span>
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab("process")}
+                    className="studio-ai-open-tab-btn"
+                  >
+                    Mở tab Tiến trình toàn cục ↗
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div
             className={`studio-video-stage ${isDraggingFile ? "drag-over" : ""}`}
@@ -3234,32 +3385,30 @@ export default function SublixStudioView({
                     );
                   })
                 ) : mediaDuration > 0 ? (
-                  Array.from({ length: Math.min(60, Math.ceil(mediaDuration / 5)) }).map((_, i) => {
-                    const startT = i * 5;
-                    const endT = Math.min(mediaDuration, (i + 1) * 5);
-                    const left = (startT / Math.max(1, mediaDuration)) * timelineWidth + 40;
-                    const w = ((endT - startT) / Math.max(1, mediaDuration)) * timelineWidth;
-                    return (
-                      <div
-                        key={i}
-                        className="studio-filmstrip-thumb-item"
-                        style={{
-                          position: "absolute",
-                          left: `${left}px`,
-                          width: `${Math.max(30, w - 2)}px`,
-                          background: `linear-gradient(135deg, #1e293b, #0f172a)`,
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 10,
-                          color: "#94a3b8",
-                        }}
-                      >
-                        {formatTimecode(startT)}
-                      </div>
-                    );
-                  })
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 40,
+                      width: `${timelineWidth}px`,
+                      height: "32px",
+                      background: "linear-gradient(90deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95))",
+                      border: "1px solid rgba(56, 189, 248, 0.25)",
+                      borderRadius: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0 12px",
+                      gap: 8,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <span style={{ fontSize: 13 }}>🎞️</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#f1f5f9" }}>{fileName || "Video"}</span>
+                    <span style={{ fontSize: 10, color: "#94a3b8" }}>({formatTimecode(mediaDuration)})</span>
+                    <div style={{ flex: 1 }} />
+                    <span style={{ fontSize: 10, color: isPreviewExtracting ? "#38bdf8" : "#64748b", fontStyle: "italic" }}>
+                      {isPreviewExtracting ? "⚡ Đang tạo sóng âm & khung hình..." : "Sẵn sàng phân tích"}
+                    </span>
+                  </div>
                 ) : (
                   <div style={{ padding: "8px 16px", fontSize: 11, color: "var(--t3)", fontStyle: "italic" }}>
                     Chưa nạp video
@@ -3273,7 +3422,7 @@ export default function SublixStudioView({
               <canvas
                 ref={waveformCanvasRef}
                 className="studio-waveform-canvas"
-                width={timelineWidth}
+                width={Math.min(timelineWidth, 8192)}
                 height={32}
                 style={{ width: `${timelineWidth}px`, height: 32, marginLeft: 40 }}
               />

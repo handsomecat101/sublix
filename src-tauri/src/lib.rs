@@ -167,6 +167,7 @@ pub fn run() {
             transcode_for_preview,
             cleanup_preview_for_input,
             cleanup_all_previews,
+            extract_media_preview,
             downloader_check_disk,
             downloader_file_exists
         ])
@@ -1045,6 +1046,19 @@ async fn dubbing_analyze(
 fn dubbing_cancel() -> Result<(), String> {
     dubbing::cancel_dubbing();
     Ok(())
+}
+
+#[tauri::command]
+async fn extract_media_preview(
+    video_path: String,
+    duration_sec: Option<f64>,
+) -> Result<dubbing::MediaPreviewPayload, String> {
+    tokio::task::spawn_blocking(move || {
+        dubbing::extract_media_preview_sync(&video_path, duration_sec)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]

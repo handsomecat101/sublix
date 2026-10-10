@@ -1654,5 +1654,185 @@
   color: var(--t3);
 }
 
+/* ==========================================================================
+   AI PROGRESS HUD (In-Tab Process Center Banner)
+   ========================================================================== */
+.studio-ai-progress-hud {
+  margin: 6px 12px 8px 12px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px rgba(56, 189, 248, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: hudSlideDown 0.25s ease-out;
+}
+
+@keyframes hudSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.studio-ai-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.studio-ai-hud-pulse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-ai-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pulseDotGlow 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseDotGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+.studio-ai-hud-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.2px;
+}
+
+.studio-ai-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.studio-ai-hud-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-ai-steps-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.studio-ai-step-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+.studio-ai-step-item.active {
+  opacity: 1;
+  color: #38bdf8;
+}
+
+.studio-ai-step-item.done {
+  opacity: 0.9;
+  color: #2dd4bf;
+}
+
+.studio-ai-step-num {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-ai-step-item.active .studio-ai-step-num {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+.studio-ai-step-item.done .studio-ai-step-num {
+  background: #2dd4bf;
+  color: #0f172a;
+}
+
+.studio-ai-step-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.studio-ai-step-arrow {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+}
+
+.studio-ai-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.studio-ai-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #2dd4bf, #a78bfa);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.studio-ai-status-msg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.studio-ai-open-tab-btn {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.studio-ai-open-tab-btn:hover {
+  opacity: 1;
+}
+
 
 

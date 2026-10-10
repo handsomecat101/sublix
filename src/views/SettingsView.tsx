@@ -27,6 +27,7 @@ import DownloaderView from "./DownloaderView";
 import { StudioShell, ShellCard } from "./StudioShell";
 import { ChangelogModal } from "./ChangelogModal";
 import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
+import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconFilm, IconClapper, IconMic, IconClock,
   IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
@@ -119,7 +120,7 @@ export default function SettingsView() {
   const [transEnginePref, setTransEnginePref] = useState<"auto" | "cpu" | "cuda">("auto");
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
   const [fullConfig, setFullConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
+  const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "process" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
   const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
 
@@ -1085,6 +1086,23 @@ export default function SettingsView() {
               >
                 <IconClock size={13} />
                 <span>Lịch sử</span>
+              </button>
+              <button
+                type="button"
+                className={`studio-nav-tab ${activeTab === "process" ? "active" : ""}`}
+                onClick={() => setActiveTab("process")}
+              >
+                <IconClock size={13} />
+                <span>Tiến trình</span>
+                {totalActiveTasksCount > 0 ? (
+                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
+                    ⚡ {totalActiveTasksCount}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>
+                    ({processHistory.length})
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -2927,6 +2945,17 @@ export default function SettingsView() {
               )}
             </ShellCard>
           }
+        />
+      )}
+
+      {activeTab === "process" && (
+        <ProcessCenterView
+          activeTasks={Object.values(globalTasks)}
+          historyTasks={processHistory}
+          onNavigateToTab={(t) => setActiveTab(t as any)}
+          onClearHistory={handleClearProcessHistory}
+          sttServerEngine={sttServerEngine}
+          transEnginePref={transEnginePref}
         />
       )}
         </div>

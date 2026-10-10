@@ -333,6 +333,19 @@ export const sublix = {
     return await invoke<number>("cleanup_all_previews");
   },
 
+  /**
+   * Trích xuất waveform audio peaks và filmstrip thumbnails siêu tốc cho video.
+   */
+  async extractMediaPreview(
+    videoPath: string,
+    durationSec?: number
+  ): Promise<MediaPreviewPayload> {
+    return await invoke<MediaPreviewPayload>("extract_media_preview", {
+      videoPath,
+      durationSec: durationSec && durationSec > 0 ? durationSec : null,
+    });
+  },
+
   async generateFileSubtitles(opts: {
     inputPath: string;
     sourceLang?: string;
@@ -528,6 +541,11 @@ export interface DubbingProject {
   diarization_engine?: "sherpa" | "heuristic" | string;
   peaks?: number[];
   filmstrip_thumbs?: Array<{ time_sec: number; data_uri: string }>;
+}
+
+export interface MediaPreviewPayload {
+  peaks: number[];
+  filmstrip_thumbs: Array<{ time_sec: number; data_uri: string }>;
 }
 
 export interface DubbingProgress {

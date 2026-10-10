@@ -179,6 +179,12 @@ pub struct FilmstripThumb {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MediaPreviewPayload {
+    pub peaks: Vec<f32>,
+    pub filmstrip_thumbs: Vec<FilmstripThumb>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DubbingProject {
     pub input_path: String,
     pub media_duration_sec: f64,
@@ -680,6 +686,64 @@ pub fn extract_filmstrip_thumbnails(
 
     let _ = fs::remove_dir_all(&temp_dir);
     Ok(thumbs)
+}
+
+/// Trích xuất waveform audio peaks và filmstrip thumbnails siêu tốc cho giao diện Studio
+pub fn extract_media_preview_sync(
+    input_path: &str,
+    duration_sec: Option<f64>,
+) -> Result<MediaPreviewPayload> {
+    let input = Path::new(input_path);
+    if !input.exists() {
+        return Err(anyhow::anyhow!("File không tồn tại: {}", input_path));
+    }
+
+    let ffmpeg_bin = find_ffmpeg();
+    let temp_dir = std::env::temp_dir().join(format!("sublix_prev_{}", gen_unique_id()));
+    let _ = fs::create_dir_all(&temp_dir);
+    let temp_wav = temp_dir.join("preview.wav");
+
+    // Trích xuất audio 8kHz mono pcm_s16le nhanh gấp 50-100x realtime
+    let mut extract_cmd = Command::new(&ffmpeg_bin);
+    extract_cmd
+        .arg("-y")
+        .arg("-i")
+        .arg(input)
+        .arg("-vn")
+        .arg("-ar")
+        .arg("8000")
+        .arg("-ac")
+        .arg("1")
+        .arg("-c:a")
+        .arg("pcm_s16le")
+        .arg(&temp_wav);
+
+    #[cfg(windows)]
+    extract_cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let status = extract_cmd.status().context("FFmpeg trích xuất preview audio thất bại")?;
+
+    let peaks = if status.success() && temp_wav.exists() {
+        extract_audio_peaks(&temp_wav, 800).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let _ = fs::remove_file(&temp_wav);
+
+    let duration = duration_sec.unwrap_or(0.0);
+    let filmstrip_thumbs = if duration > 0.0 {
+        extract_filmstrip_thumbnails(&ffmpeg_bin, input, duration, 10, 0).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    Ok(MediaPreviewPayload {
+        peaks,
+        filmstrip_thumbs,
+    })
 }
 
 /// Synthesize with the local Kokoro-Vietnamese ONNX model (offline).
