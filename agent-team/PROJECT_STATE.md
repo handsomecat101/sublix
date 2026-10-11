@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-TRACK-VOICE-DISTINCT` | Sửa dứt điểm nhầm lẫn giữa Track Phụ Đề & Track Tiếng Lồng, đổi tên vai thành Thuyết minh AI, Audio Wave Blocks | **Antigravity** | 2026-10-11 | ✅ Đổi tên vai "Phụ đề" ➔ "Thuyết minh AI", Cột Tracks: `💬 PHỤ ĐỀ (TEXT)` vs `🎙️ TIẾNG LỒNG: [Tên vai]`, Audio Waveform Texture, Laser head Tiếng lồng |
 | `TSK-RESIZABLE-TTS-HUB` | Resizable Panels (kéo co giãn cột trái/phải), TTS Engine Selector, VietNeu/Kokoro/Edge giọng đọc phong phú, Đồng bộ Models Hub | **Antigravity** | 2026-10-11 | ✅ Resizable Splitters kèm localStorage/reset, TTS Model Selector Card (VietNeu, Kokoro 82M, Edge-TTS), 20+ giọng đọc chi tiết, Hub Models TTS table |
 | `TSK-PROCESS-POLISH` | Đồng bộ Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard | **Antigravity** | 2026-10-11 | ✅ Đồng bộ metadata (filename, workflow, steps), loại bỏ hardcode 'Studio Lồng Tiếng' & '0/2 câu thoại', Live timer, Stepper |
 | `TSK-TIMELINE-START-ALIGN` | Căn chuẩn gốc Timeline x=0 (xóa offset 40px, Playhead needle & ticks & tracks đồng bộ tại 00:00:00) | **Antigravity** | 2026-10-11 | ✅ Kim tua, ruler tick 00:00, video, sóng âm, phụ đề bắt đầu chuẩn x=0, clip-path cờ khi sát biên, E2E build 100% |

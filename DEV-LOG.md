@@ -915,3 +915,44 @@ sublix/
 - ✅ Cơ chế kéo thả Splitter mượt mà, lưu chuẩn kích thước vào `localStorage`.
 - ✅ Lọc giọng đọc theo Model tức thì, preview giọng chính xác.
 
+---
+
+## [2026-10-11] - Session 24: Sửa Dứt Điểm Nhầm Lẫn Giữa Track Phụ Đề & Track Tiếng Lồng, Nâng Cấp Audio Voice Blocks Trên Timeline Chuẩn Premiere
+
+### Vấn Đề Từ Phản Hồi Của PO (Anh Tuấn)
+- Khi bấm chọn lồng tiếng, người dùng nhìn vào Timeline chỉ thấy xuất hiện 2 dải đều ghi tên "Phụ đề" (`💬 PHỤ ĐỀ` và `🔵 Phụ đề`), không thấy đường Track tiếng nào mang tên Âm Thanh/Lồng Tiếng.
+- Trên dải câu thoại của vai diễn, các khối hiển thị dạng văn bản y hệt khối phụ đề, laser head ghi thông điệp "⚡ Phụ đề: Tổng hợp giọng...", gây nhầm lẫn nghiêm trọng rằng phần mềm không tạo track tiếng mà chỉ tạo phụ đề lặp lại.
+
+### Nguyên Nhân Gốc Rễ (Root Cause Analysis)
+1. **Lỗi đặt tên mặc định:** Trong quy trình `handleRunSttOnly`, speaker khởi tạo ban đầu bị gán cứng `name: "Phụ đề"`. Khi người dùng chuyển sang tính năng Lồng Tiếng, tên vai vẫn giữ nguyên là "Phụ đề".
+2. **Cột TRACKS thiếu nhận diện:** Cột tiêu đề track chỉ render `🔵 ${spk.name}` (tức `🔵 Phụ đề`), đặt ngay dưới track `💬 PHỤ ĐỀ`, khiến người dùng thấy 2 dải phụ đề trùng lặp.
+3. **Block câu thoại không mang đặc tính Audio Clip:** Khối câu thoại của vai diễn chỉ là ô text chữ nhật phẳng, thiếu biểu tượng âm thanh `🎙️`, thiếu sóng âm mini (Waveform texture) và phong cách dải âm thanh.
+4. **Laser head message:** Dòng chữ trên đầu quét tiến trình in ra `${spk.name}: Tổng hợp giọng...` (tức `Phụ đề: Tổng hợp giọng...`).
+
+### Các Thay Đổi Kỹ Thuật Đã Triển Khai
+1. **Khử Bỏ Hoàn Toàn Tên "Phụ đề" Cho Vai Diễn (`src/views/SublixStudioView.tsx`):**
+   - Đổi tên speaker mặc định trong `handleRunSttOnly` thành **`"Thuyết minh AI"`**.
+   - Bổ sung hàm tiện ích `getSpeakerDisplayName(spk)`: Tự động chuyển đổi bất kỳ vai nào có tên "Phụ đề" hoặc rỗng thành **`"Thuyết minh AI"`**.
+   - Bổ sung hook tự động sanitize state `speakers` khi mount hoặc khi load project cũ.
+   - Trường nhập tên vai diễn trong Left Sidebar hiển thị đúng tên vai Thuyết minh/Lồng tiếng.
+
+2. **Đại Tu Cột Tiêu Đề TRACKS (Header Cực Kỳ Rõ Ràng):**
+   - Track 3: Ghi rõ **`💬 PHỤ ĐỀ (TEXT)`** (Track văn bản chữ hiển thị lên màn hình).
+   - Track 4+: Ghi rõ **`🎙️ TIẾNG LỒNG: [Tên vai]`** (ví dụ: `🎙️ TIẾNG LỒNG: Thuyết minh AI`), kèm theo dot màu vai diễn và badge động cơ TTS (`VietNeu` / `Kokoro` / `Edge`).
+   - Khi gộp dải (`collapseSpeakerTracks`): Ghi rõ **`🎙️ TIẾNG LỒNG (X VAI)`**.
+   - Khẳng định 100% đây là Dải Âm Thanh Lồng Tiếng (Audio Dub Track), không thể nhầm lẫn với Phụ Đề.
+
+3. **Nâng Cấp Audio Voice Blocks Chuẩn Premiere Pro (`src/views/SublixStudioView.tsx` & `SublixStudioView.css`):**
+   - Áp dụng class `.studio-timeline-voice-block` cho mọi block trên track lồng tiếng.
+   - **Texture Sóng Âm Mini (Waveform Texture):** 8 cột sóng âm SVG/CSS (`studio-voice-wave-texture`) lồng chìm tinh tế bên trong từng block thoại, mang diện mạo đặc trưng của Audio Clip trong Premiere Pro / Audition.
+   - **Icon & Nhãn Âm Thanh Rõ Nét:** Mỗi block có icon `🎙️` phát sáng, tag tên vai màu nổi bật `[Thuyết minh AI]:`, và nội dung câu thoại đã dịch.
+   - Thêm biểu tượng nốt nhạc `♪` khi câu thoại đã sinh âm thanh (`has-audio`).
+   - Sửa thông điệp Laser Head thành: `🎙️ Tiếng lồng [Tên vai]: Đang sinh giọng câu X/Y...` (loại bỏ hoàn toàn chữ Phụ đề).
+
+### Kết Quả Kiểm Thử (Verification)
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite build production hoàn tất thành công trong 3.61s.
+- ✅ Cột TRACKS hiển thị phân biệt rõ ràng: `💬 PHỤ ĐỀ (TEXT)` và `🎙️ TIẾNG LỒNG: Thuyết minh AI [VietNeu]`.
+- ✅ Các block trên timeline có sóng âm audio clip, nhãn `🎙️ [Thuyết minh AI]`.
+
+

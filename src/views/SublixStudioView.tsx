@@ -252,9 +252,28 @@ export default function SublixStudioView({
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
 
   // Step 3: Speakers & Segments (P2, P4, P5)
-  const [speakers, setSpeakers] = useState<SpeakerItem[]>(
-    cachedProject?.speakers || []
-  );
+  // Tự động chuyển đổi vai mang tên "Phụ đề" thành "Thuyết minh AI" để tránh nhầm lẫn giữa Track Phụ Đề và Track Lồng Tiếng
+  const getSpeakerDisplayName = (spk?: SpeakerItem | null): string => {
+    if (!spk) return "Thuyết minh AI";
+    const trimmed = (spk.name || "").trim();
+    if (!trimmed || trimmed.toLowerCase() === "phụ đề" || trimmed.toLowerCase() === "subtitles") {
+      return "Thuyết minh AI";
+    }
+    return spk.name;
+  };
+
+  const [speakers, setSpeakers] = useState<SpeakerItem[]>(() => {
+    const raw = cachedProject?.speakers || [];
+    return raw.map((s) => (s.name.trim().toLowerCase() === "phụ đề" ? { ...s, name: "Thuyết minh AI" } : s));
+  });
+
+  useEffect(() => {
+    if (speakers.some((s) => s.name.trim().toLowerCase() === "phụ đề")) {
+      setSpeakers((prev) =>
+        prev.map((s) => (s.name.trim().toLowerCase() === "phụ đề" ? { ...s, name: "Thuyết minh AI" } : s))
+      );
+    }
+  }, [speakers]);
   const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number>(2); // 2: 2 người (đối thoại), 1: 1 người (độc thoại), 0: tự động
   const [collapseSpeakerTracks, setCollapseSpeakerTracks] = useState<boolean>(false);
   const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
@@ -1878,10 +1897,10 @@ export default function SublixStudioView({
           setFilmstripThumbs(project.filmstrip_thumbs);
         }
 
-        // Tạo vai chuẩn duy nhất "Phụ đề" cho toàn bộ timeline phụ đề
+        // Tạo vai thuyết minh chuẩn "Thuyết minh AI" cho toàn bộ timeline lồng tiếng
         const subSpeaker: SpeakerItem = {
           id: "speaker_0",
-          name: "Phụ đề",
+          name: "Thuyết minh AI",
           gender: "male",
           color: "#38bdf8",
           voice: "vietneu:vi_bac_nam",
@@ -3742,7 +3761,7 @@ export default function SublixStudioView({
                               <input
                                 type="text"
                                 className="studio-speaker-name-input"
-                                value={spk.name}
+                                value={getSpeakerDisplayName(spk)}
                                 onFocus={() => { audioPreFocusRef.current = speakersRef.current; }}
                                 onBlur={() => saveAudioUndoIfChanged()}
                                 onChange={(e) => {
@@ -3751,6 +3770,8 @@ export default function SublixStudioView({
                                     prev.map((s, i) => (i === idx ? { ...s, name: val } : s))
                                   );
                                 }}
+                                placeholder="Tên vai diễn / người nói"
+                                title="Tên vai diễn / người lồng tiếng"
                               />
                               <span className="studio-speaker-chip-count">
                                 {segments.filter((s) => s.speakerId === spk.id).length} câu
@@ -5271,7 +5292,7 @@ export default function SublixStudioView({
             </div>
             <div className="studio-track-header-item">
               <div className="studio-track-header-left">
-                <span>💬 PHỤ ĐỀ</span>
+                <span>💬 PHỤ ĐỀ (TEXT)</span>
               </div>
               <button
                 className="studio-track-clear-btn"
@@ -5285,9 +5306,9 @@ export default function SublixStudioView({
               </button>
             </div>
 
-            {/* Dynamic Speaker Tracks */}
+            {/* Dynamic Speaker Tracks (TIẾNG LỒNG / DUB AUDIO TRACKS) */}
             {collapseSpeakerTracks ? (
-              <div className="studio-track-header-item">
+              <div className="studio-track-header-item studio-track-header-voice">
                 <div className="studio-track-header-left">
                   <span className="studio-track-header-dot-stack">
                     {speakers.slice(0, 3).map((s) => (
@@ -5298,7 +5319,8 @@ export default function SublixStudioView({
                       />
                     ))}
                   </span>
-                  <span>🎭 VAI DIỄN ({speakers.length})</span>
+                  <span className="studio-track-voice-tag">🎙️ TIẾNG LỒNG</span>
+                  <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length} vai)</span>
                 </div>
                 <button
                   className="studio-track-clear-btn"
@@ -5312,27 +5334,44 @@ export default function SublixStudioView({
                 </button>
               </div>
             ) : (
-              speakers.map((spk) => (
-                <div key={spk.id} className="studio-track-header-item">
-                  <div className="studio-track-header-left">
-                    <span
-                      className="studio-track-header-dot"
-                      style={{ background: spk.color }}
-                    />
-                    <span> {spk.name}</span>
+              speakers.map((spk) => {
+                const spkName = getSpeakerDisplayName(spk);
+                const engineTag = spk.voice?.startsWith("vietneu:")
+                  ? "VietNeu"
+                  : spk.voice?.startsWith("kokoro:")
+                  ? "Kokoro"
+                  : "Edge";
+
+                return (
+                  <div key={spk.id} className="studio-track-header-item studio-track-header-voice">
+                    <div className="studio-track-header-left">
+                      <span
+                        className="studio-track-header-dot"
+                        style={{ background: spk.color }}
+                      />
+                      <span className="studio-track-voice-tag" title="Track âm thanh giọng lồng tiếng">
+                        🎙️ TIẾNG LỒNG:
+                      </span>
+                      <span className="studio-track-voice-name" title={`Vai: ${spkName} • Giọng: ${spk.voice}`}>
+                        {spkName}
+                      </span>
+                      <span className="studio-track-voice-engine-badge">
+                        {engineTag}
+                      </span>
+                    </div>
+                    <button
+                      className="studio-track-clear-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearTrack("speaker", spk.id);
+                      }}
+                      title={`Xóa các câu thoại của vai ${spkName}`}
+                    >
+                      🗑️
+                    </button>
                   </div>
-                  <button
-                    className="studio-track-clear-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleClearTrack("speaker", spk.id);
-                    }}
-                    title={`Xóa các câu của vai ${spk.name}`}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -5744,7 +5783,7 @@ export default function SublixStudioView({
                         <div className="studio-timeline-progress-stripes" />
                         <div className="studio-timeline-laser-head">
                           <div className="studio-timeline-laser-badge">
-                            🗣️ Tất cả vai: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                            🎙️ Tiếng lồng: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
                           </div>
                         </div>
                       </div>
@@ -5753,6 +5792,7 @@ export default function SublixStudioView({
                 )}
                 {segments.map((seg) => {
                   const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
+                  const spkName = getSpeakerDisplayName(spk);
                   const totalDur = Math.max(1, mediaDuration);
                   const left = (seg.start / totalDur) * timelineWidth;
                   const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
@@ -5764,19 +5804,29 @@ export default function SublixStudioView({
                     <div
                       key={seg.id}
                       data-seg-id={seg.id}
-                      className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+                      className={`studio-timeline-block studio-timeline-voice-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
                       style={{
                         left: `${left}px`,
-                        width: `${Math.max(50, width)}px`,
-                        background: `${spkColor}55`,
+                        width: `${Math.max(55, width)}px`,
+                        background: `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)`,
                         borderColor: spkColor,
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSelectSegmentWithModifier(seg, e);
                       }}
-                      title={`[${spk?.name || "Nhân vật"}] ${seg.translated || seg.original}`}
+                      title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
                     >
+                      <div className="studio-voice-wave-texture">
+                        <span style={{ height: "45%" }} />
+                        <span style={{ height: "80%" }} />
+                        <span style={{ height: "60%" }} />
+                        <span style={{ height: "100%" }} />
+                        <span style={{ height: "70%" }} />
+                        <span style={{ height: "40%" }} />
+                        <span style={{ height: "90%" }} />
+                        <span style={{ height: "55%" }} />
+                      </div>
                       <div
                         className="studio-timeline-block-handle left"
                         onClick={(e) => {
@@ -5785,10 +5835,17 @@ export default function SublixStudioView({
                         }}
                         title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
                       />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                        <strong style={{ opacity: 0.9, marginRight: 4 }}>[{spk?.name || "Vai"}]:</strong>
-                        {seg.translated || seg.original}
-                      </span>
+                      <div className="studio-voice-block-inner">
+                        <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                          🎙️
+                        </span>
+                        <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
+                          [{spkName}]:
+                        </strong>
+                        <span className="studio-voice-block-text">
+                          {seg.translated || seg.original}
+                        </span>
+                      </div>
                       <div
                         className="studio-timeline-block-handle right"
                         onClick={(e) => {
@@ -5804,6 +5861,7 @@ export default function SublixStudioView({
             ) : (
               speakers.map((spk) => {
                 const spkSegments = segments.filter((s) => s.speakerId === spk.id);
+                const spkName = getSpeakerDisplayName(spk);
 
                 return (
                   <div
@@ -5844,7 +5902,7 @@ export default function SublixStudioView({
                             <div className="studio-timeline-progress-stripes" />
                             <div className="studio-timeline-laser-head">
                               <div className="studio-timeline-laser-badge">
-                                🗣️ {spk.name}: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                                🎙️ Tiếng lồng [{spkName}]: {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
                               </div>
                             </div>
                           </div>
@@ -5862,19 +5920,29 @@ export default function SublixStudioView({
                         <div
                           key={seg.id}
                           data-seg-id={seg.id}
-                          className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+                          className={`studio-timeline-block studio-timeline-voice-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
                           style={{
                             left: `${left}px`,
-                            width: `${Math.max(50, width)}px`,
-                            background: `${spk.color}55`,
+                            width: `${Math.max(55, width)}px`,
+                            background: `linear-gradient(180deg, ${spk.color}30, ${spk.color}65)`,
                             borderColor: spk.color,
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleSelectSegmentWithModifier(seg, e);
                           }}
-                          title={`[${spk.name}] ${seg.translated || seg.original}`}
+                          title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
                         >
+                          <div className="studio-voice-wave-texture">
+                            <span style={{ height: "45%" }} />
+                            <span style={{ height: "80%" }} />
+                            <span style={{ height: "60%" }} />
+                            <span style={{ height: "100%" }} />
+                            <span style={{ height: "70%" }} />
+                            <span style={{ height: "40%" }} />
+                            <span style={{ height: "90%" }} />
+                            <span style={{ height: "55%" }} />
+                          </div>
                           <div
                             className="studio-timeline-block-handle left"
                             onClick={(e) => {
@@ -5883,9 +5951,14 @@ export default function SublixStudioView({
                             }}
                             title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
                           />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                            {seg.translated || seg.original}
-                          </span>
+                          <div className="studio-voice-block-inner">
+                            <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                              🎙️
+                            </span>
+                            <span className="studio-voice-block-text">
+                              {seg.translated || seg.original}
+                            </span>
+                          </div>
                           <div
                             className="studio-timeline-block-handle right"
                             onClick={(e) => {

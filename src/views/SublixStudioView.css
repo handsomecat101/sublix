@@ -2869,4 +2869,127 @@
   border-color: rgba(168, 85, 247, 0.35);
 }
 
+/* ==========================================================================
+   VOICE DUBBING TRACK & AUDIO CLIP STYLING
+   ========================================================================== */
+.studio-track-header-voice {
+  background: rgba(30, 41, 59, 0.45) !important;
+  border-left: 3px solid #38bdf8;
+}
+
+.studio-track-voice-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.studio-track-voice-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f8fafc;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-track-voice-engine-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  text-transform: uppercase;
+}
+
+/* Audio Voice Block on Timeline (Phân biệt hoàn toàn với Subtitle Text Block) */
+.studio-timeline-voice-block {
+  border-style: solid;
+  border-width: 1.5px;
+  border-radius: 5px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.studio-timeline-voice-block:hover {
+  filter: brightness(1.25);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4) !important;
+}
+
+/* Wave Texture Background bên trong Audio Block */
+.studio-voice-wave-texture {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.studio-voice-wave-texture span {
+  width: 2px;
+  background: #ffffff;
+  border-radius: 1px;
+}
+
+.studio-voice-block-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.studio-voice-block-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+.studio-voice-block-tag {
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.studio-voice-block-text {
+  font-size: 10.5px;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.studio-timeline-voice-block.has-audio {
+  border-color: #38bdf8 !important;
+}
+
+.studio-timeline-voice-block.has-audio::after {
+  content: "♪";
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 9px;
+  color: #38bdf8;
+  opacity: 0.7;
+}
+
+
 

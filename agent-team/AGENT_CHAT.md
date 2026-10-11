@@ -187,3 +187,22 @@
      - Bổ sung bảng "🎙️ Text-to-Speech (TTS) Voice Models" trong Hub Models, hiển thị rõ ràng thông số đề xuất, loại engine, dung lượng và trạng thái hoạt động của VietNeu TTS, Kokoro ONNX, Edge-TTS.
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `src/views/SettingsView.tsx`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
 - **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.27s, Vite bundle thành công).
+
+---
+
+### 2026-10-11 19:50 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Session 24: Sửa Dứt Điểm Nhầm Lẫn Giữa Track Phụ Đề & Track Tiếng Lồng, Nâng Cấp Audio Voice Blocks Trên Timeline Chuẩn Premiere)
+- **Tóm tắt:** 
+  1. **Khử tận gốc tên "Phụ đề" gán nhầm cho Vai Diễn Lồng Tiếng:**
+     - Đổi tên speaker mặc định từ "Phụ đề" thành "Thuyết minh AI".
+     - Bổ sung `getSpeakerDisplayName()` và hook tự động sanitize state để bảo đảm trên UI, Panel trái và Timeline không bao giờ hiển thị tên vai là "Phụ đề".
+  2. **Đại tu cột Tiêu đề TRACKS (Phân biệt rõ ràng giữa Văn bản và Âm thanh):**
+     - Track 3: Ghi rõ `💬 PHỤ ĐỀ (TEXT)` (Track văn bản chữ phụ đề).
+     - Track 4+: Ghi rõ `🎙️ TIẾNG LỒNG: [Tên vai]` (ví dụ: `🎙️ TIẾNG LỒNG: Thuyết minh AI`), kèm icon `🎙️`, dot màu vai, và badge model `[VietNeu]` / `[Kokoro]` / `[Edge]`.
+  3. **Nâng cấp Audio Voice Blocks trên Timeline theo chuẩn Premiere Pro:**
+     - Khối block trên dải lồng tiếng mang diện mạo Audio Clip: viền sáng, gradient nền âm thanh.
+     - Tích hợp **Audio Waveform Texture (sóng âm mini)** chạy chìm bên trong block.
+     - Nhãn `🎙️ [Thuyết minh AI]: "Câu thoại..."` và ký hiệu nốt nhạc `♪` khi đã sinh âm thanh.
+     - Sửa Laser head quét tiến trình: `🎙️ Tiếng lồng [Tên vai]: Đang sinh giọng câu X/Y...` (xóa triệt để chữ Phụ đề).
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
+- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.61s, Vite bundle thành công).
