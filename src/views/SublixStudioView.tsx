@@ -2,7 +2,7 @@
 //! Reverse-Engineered from EZMAXSUB (ezmaxsoft.com) benchmark.
 //! Specification: agent-team/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -107,6 +107,223 @@ function formatTimecode(secs: number): string {
   const ms = Math.floor((secs % 1) * 100);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
 }
+
+interface StudioSegmentCardProps {
+  seg: SubtitleItem;
+  isSelected: boolean;
+  spk: SpeakerItem;
+  speakers: SpeakerItem[];
+  previewingSegId: number | null;
+  onSelect: (seg: SubtitleItem) => void;
+  onNudge: (segId: number, field: "start" | "end", delta: number) => void;
+  onUpdateSpeaker: (segId: number, newSpeakerId: string) => void;
+  onUpdateTranslated: (segId: number, text: string) => void;
+  onPreviewTts: (seg: SubtitleItem) => void;
+  onSplit: (segId: number) => void;
+  onDelete: (segId: number) => void;
+  onPreFocus: () => void;
+  onSaveUndoIfChanged: () => void;
+}
+
+const StudioSegmentCard = memo(function StudioSegmentCard({
+  seg,
+  isSelected,
+  spk,
+  speakers,
+  previewingSegId,
+  onSelect,
+  onNudge,
+  onUpdateSpeaker,
+  onUpdateTranslated,
+  onPreviewTts,
+  onSplit,
+  onDelete,
+  onPreFocus,
+  onSaveUndoIfChanged,
+}: StudioSegmentCardProps) {
+  return (
+    <div
+      className={`studio-segment-card ${isSelected ? "active" : ""}`}
+      onClick={() => onSelect(seg)}
+    >
+      <div className="studio-segment-header-row">
+        <div className="studio-segment-timing-controls">
+          <button
+            type="button"
+            className="studio-timing-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNudge(seg.id, "start", -0.1);
+            }}
+            title="Lùi mốc bắt đầu 0.1s"
+          >
+            -0.1s
+          </button>
+          <span className="studio-segment-timing-text">
+            {formatTimecode(seg.start)} → {formatTimecode(seg.end)}
+          </span>
+          <button
+            type="button"
+            className="studio-timing-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNudge(seg.id, "end", 0.1);
+            }}
+            title="Tiến mốc kết thúc 0.1s"
+          >
+            +0.1s
+          </button>
+        </div>
+
+        <select
+          className="studio-segment-speaker-select"
+          style={{ borderColor: spk?.color }}
+          value={seg.speakerId}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => {
+            e.stopPropagation();
+            onUpdateSpeaker(seg.id, e.target.value);
+          }}
+          title="Chuyển vai diễn cho câu thoại này"
+        >
+          {speakers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="studio-segment-text-original">{seg.original}</div>
+      <input
+        type="text"
+        className="studio-segment-text-translated"
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: 4,
+          padding: "4px 8px",
+          color: "var(--t1)",
+          fontSize: 12,
+          outline: "none",
+          width: "100%",
+          marginTop: 4,
+        }}
+        value={seg.translated}
+        onFocus={onPreFocus}
+        onBlur={onSaveUndoIfChanged}
+        onChange={(e) => onUpdateTranslated(seg.id, e.target.value)}
+      />
+
+      <div className="studio-segment-bottom-row">
+        <button
+          type="button"
+          className={`studio-segment-tts-preview-btn ${previewingSegId === seg.id ? "loading" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPreviewTts(seg);
+          }}
+          title="Nghe thử giọng đọc câu thoại này (Kokoro TTS)"
+        >
+          <IconVolume2 size={11} />
+          {previewingSegId === seg.id ? "Đang tạo..." : "Nghe câu"}
+        </button>
+
+        <div className="studio-segment-item-actions">
+          <button
+            type="button"
+            className="studio-segment-sub-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplit(seg.id);
+            }}
+            title="Tách câu tại playhead"
+          >
+            <IconScissors size={11} />
+          </button>
+          <button
+            type="button"
+            className="studio-segment-sub-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(seg.id);
+            }}
+            title="Xóa câu"
+          >
+            <IconTrash size={11} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+interface StudioTimelineSubtitleBlockProps {
+  seg: SubtitleItem;
+  totalDur: number;
+  timelineWidth: number;
+  isSelected: boolean;
+  isMultiSelected: boolean;
+  onBlockClick: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+  onNudge: (segId: number, field: "start" | "end", delta: number) => void;
+}
+
+const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
+  seg,
+  totalDur,
+  timelineWidth,
+  isSelected,
+  isMultiSelected,
+  onBlockClick,
+  onNudge,
+}: StudioTimelineSubtitleBlockProps) {
+  const left = (seg.start / totalDur) * timelineWidth;
+  const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+  const width = Math.max(3, rawWidth);
+  const isCompact = width < 30;
+
+  return (
+    <div
+      key={seg.id}
+      data-seg-id={seg.id}
+      className={`studio-timeline-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+      style={{
+        left: `${left}px`,
+        width: `${width}px`,
+        background: "rgba(45, 212, 191, 0.35)",
+        borderColor: "#2dd4bf",
+      }}
+      onClick={(e) => onBlockClick(seg, e)}
+      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
+    >
+      {!isCompact && (
+        <div
+          className="studio-timeline-block-handle left"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNudge(seg.id, "start", -0.2);
+          }}
+          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+        />
+      )}
+      {!isCompact && (
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
+          {seg.translated}
+        </span>
+      )}
+      {!isCompact && (
+        <div
+          className="studio-timeline-block-handle right"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNudge(seg.id, "end", 0.2);
+          }}
+          title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+        />
+      )}
+    </div>
+  );
+});
 
 export type TtsEngineKey = "vietneu" | "kokoro" | "edge";
 
@@ -808,75 +1025,23 @@ export default function SublixStudioView({
       if (videoRef.current.playbackRate !== playbackSpeed) {
         videoRef.current.playbackRate = playbackSpeed;
       }
-      // R6-01: detect video im lặng THẬT  dng requestVideoFrameCallback (Chromium/WebView2)
-      // để đợi frame đầu tin được PAINT. Nếu sau 1.2s vẫn khng c frame no (framePainted = false)
-      // HOẶC videoWidth === 0 → kch hoạt transcode fallback.
-      // (R5-01 cũ chỉ check videoWidth=0  khng đủ v nhiều codec hỏng vẫn c videoWidth > 0 nhưng khng paint frame)
+      // Kiểm tra nếu WebView2 không decode được kích thước sau 1.2s -> kích hoạt transcode fallback.
       if (loadedMetadataTimerRef.current !== null) {
         clearTimeout(loadedMetadataTimerRef.current);
       }
-      let framePainted = false;
-      let rvfcHandle: number | null = null;
-      let wdkcInitial: number | null = null;
-      let wdkcHandle: number | null = null;
-      const v = videoRef.current;
-      // R7-01: 3 cấp fallback cho detect frame  khng để thiếu RVFC → transcode oan mọi video.
-      // Cấp 1: requestVideoFrameCallback (Chromium ≥83, WebView2 OK).
-      // Cấp 2: webkitDecodedFrameCount (một số WebKit build cũ).
-      // Cấp 3: khng c g → bỏ detect (framePainted = true để KHNG transcode oan).
-      type VfcCapable = HTMLVideoElement & {
-        requestVideoFrameCallback?: (cb: () => void) => number;
-        cancelVideoFrameCallback?: (h: number) => void;
-        webkitDecodedFrameCount?: number;
-      };
-      const vc = v as VfcCapable | null;
-      if (vc && typeof vc.requestVideoFrameCallback === "function") {
-        // Cấp 1: RVFC
-        rvfcHandle = vc.requestVideoFrameCallback(() => {
-          framePainted = true;
-        });
-      } else if (vc && typeof vc.webkitDecodedFrameCount === "number") {
-        // Cấp 2: sample webkitDecodedFrameCount
-        wdkcInitial = vc.webkitDecodedFrameCount;
-        wdkcHandle = window.setTimeout(() => {
-          const cur = vc as VfcCapable;
-          const curCount = cur.webkitDecodedFrameCount;
-          if (typeof curCount === "number" && typeof wdkcInitial === "number" && curCount > wdkcInitial) {
-            framePainted = true;
-          }
-        }, 500);
-      } else {
-        // Cấp 3: khng c cch no detect → giả định OK để khng transcode oan
-        framePainted = true;
-      }
       loadedMetadataTimerRef.current = window.setTimeout(() => {
-        const cur = videoRef.current as VfcCapable | null;
-        const stillNoFrame = !framePainted;
-        const stillNoDim = cur && cur.videoWidth === 0;
-        // Cleanup RVFC nếu c
-        if (cur && rvfcHandle !== null && typeof cur.cancelVideoFrameCallback === "function") {
-          try {
-            cur.cancelVideoFrameCallback(rvfcHandle);
-          } catch (e) {
-            // ignore
-          }
-        }
-        // Cleanup sample timer
-        if (wdkcHandle !== null) {
-          clearTimeout(wdkcHandle);
-          wdkcHandle = null;
-        }
+        const cur = videoRef.current;
+        // Chỉ kích hoạt transcode fallback nếu video THẬT SỰ không giải mã được kích thước (videoWidth === 0).
+        // Tuyệt đối không kích hoạt khi video chỉ đang tạm dừng (videoWidth > 0).
         if (
           cur &&
-          (stillNoFrame || stillNoDim) &&
+          cur.videoWidth === 0 &&
           !transcodedPathRef.current &&
           filePathRef.current
         ) {
-          const reason = stillNoFrame
-            ? "frame callback khng fire sau 1.2s (codec hỏng kiểu im lặng)"
-            : "videoWidth = 0 (khng decode được)";
-          console.warn(`R6-01: ${reason}  kch hoạt transcode fallback.`);
-          showToast("⏳ Video khng hiển thị hnh  đang chuyển sang dạng xem được");
+          const reason = "videoWidth = 0 (không decode được kích thước)";
+          console.warn(`R6-01: ${reason} — kích hoạt transcode fallback.`);
+          showToast("⏳ Video không hiển thị hình — đang chuyển sang dạng xem được");
           // R7-02: lưu currentTime + isPlaying TRƯỚC khi swap src để resume sau transcode
           const resumeTime = cur.currentTime;
           const wasPlaying = !cur.paused;
@@ -886,7 +1051,7 @@ export default function SublixStudioView({
               if (previewPath) {
                 setTranscodedPath(previewPath);
                 // R7-02: sau khi <video> src đổi sang preview, React sẽ remount. Đợi frame tiếp theo
-                // rồi gọi play() + seek về currentTime cũ nếu c thể.
+                // rồi gọi play() + seek về currentTime cũ nếu có thể.
                 setTimeout(() => {
                   const v2 = videoRef.current;
                   if (!v2) return;
@@ -901,12 +1066,11 @@ export default function SublixStudioView({
                     v2.play().catch((e) => console.warn("R7-02: play() failed:", e));
                   }
                 }, 250);
-                // R7-03: sửa toast ni qu  chỉ thng bo đ chuyển dạng, khng hứa "Đang phát"
-                showToast("✅ Đ chuyển sang dạng xem được");
+                showToast("✅ Đã chuyển sang dạng xem được");
               }
             } catch (err) {
               console.error("R6-01 transcode fallback failed:", err);
-              showToast(`❌ Khng thể chuyển dạng: ${(err as Error)?.message ?? err}`);
+              showToast(`❌ Không thể chuyển dạng: ${(err as Error)?.message ?? err}`);
             }
           })();
         }
@@ -914,8 +1078,13 @@ export default function SublixStudioView({
     }
   };
 
+  const lastNativeTimeUpdateRef = useRef<number>(0);
   const handleTimeUpdate = () => {
-    if (videoRef.current && !videoRef.current.paused) {
+    if (!videoRef.current || videoRef.current.paused) return;
+    const now = performance.now();
+    // Throttle native timeupdate xuống 120ms (~8fps) để đồng bộ mượt mà với React Virtual DOM
+    if (now - lastNativeTimeUpdateRef.current > 120) {
+      lastNativeTimeUpdateRef.current = now;
       setCurrentTime(videoRef.current.currentTime);
     }
   };
@@ -1306,11 +1475,14 @@ export default function SublixStudioView({
       isPlayingRef.current = true;
       if (videoRef.current) {
         videoRef.current.play().catch((err) => {
-          console.error("Video element play failed:", err);
-          setVideoPlayError(true);
+          const isAbort = (err as Error)?.name === "AbortError";
+          if (!isAbort) {
+            console.error("Video element play failed:", err);
+            setVideoPlayError(true);
+            showToast("Không thể phát video này trong trình xem");
+          }
           setIsPlaying(false);
           isPlayingRef.current = false;
-          showToast("Không thể phát video này trong trình xem");
         });
       }
     }
@@ -1363,7 +1535,7 @@ export default function SublixStudioView({
         return;
       }
 
-      if (v.paused || v.ended || videoPlayError) {
+      if (v.ended || videoPlayError) {
         setIsPlaying(false);
         return;
       }
@@ -3311,6 +3483,19 @@ export default function SublixStudioView({
     );
   };
 
+  const handleUpdateTranslated = useCallback((segId: number, text: string) => {
+    setSegments((prev) =>
+      prev.map((s) => (s.id === segId ? { ...s, translated: text } : s))
+    );
+  }, []);
+
+  const handlePreFocusText = useCallback(() => {
+    translationPreFocusRef.current = segmentsRef.current.map((s) => ({
+      id: s.id,
+      translated: s.translated,
+    }));
+  }, []);
+
   const handlePreviewSegmentTts = async (seg: SubtitleItem) => {
     const spk = speakers.find((s) => s.id === seg.speakerId);
     const rawVoice = spk?.voice || "kokoro:tuan_ngoc";
@@ -5051,6 +5236,19 @@ export default function SublixStudioView({
                   key={transcodedPath ?? filePath}
                   onLoadedMetadata={handleLoadedMetadata}
                   onTimeUpdate={handleTimeUpdate}
+                  onPlay={() => {
+                    setIsPlaying(true);
+                    isPlayingRef.current = true;
+                  }}
+                  onPause={() => {
+                    setIsPlaying(false);
+                    isPlayingRef.current = false;
+                  }}
+                  onEnded={() => {
+                    setIsPlaying(false);
+                    isPlayingRef.current = false;
+                    handleSeek(mediaDurationRef.current);
+                  }}
                   onError={async () => {
                     if (!transcodedPath && filePath) {
                       // ROUND-4 R4-01: WebView2 khng giải m được codec gốc (VP9/AV1/HEVC/H.264 high).
@@ -5348,132 +5546,26 @@ export default function SublixStudioView({
               const isSelected = seg.id === selectedSegId;
 
               return (
-                <div
+                <StudioSegmentCard
                   key={seg.id}
-                  className={`studio-segment-card ${isSelected ? "active" : ""}`}
-                  onClick={() => handleSelectSegment(seg)}
-                >
-                  <div className="studio-segment-header-row">
-                    <div className="studio-segment-timing-controls">
-                      <button
-                        type="button"
-                        className="studio-timing-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "start", -0.1);
-                        }}
-                        title="Li mốc bắt đầu 0.1s"
-                      >
-                        -0.1s
-                      </button>
-                      <span className="studio-segment-timing-text">
-                        {formatTimecode(seg.start)} → {formatTimecode(seg.end)}
-                      </span>
-                      <button
-                        type="button"
-                        className="studio-timing-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "end", 0.1);
-                        }}
-                        title="Tiến mốc kết thc 0.1s"
-                      >
-                        +0.1s
-                      </button>
-                    </div>
-
-                    <select
-                      className="studio-segment-speaker-select"
-                      style={{ borderColor: spk?.color }}
-                      value={seg.speakerId}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        handleUpdateSegmentSpeaker(seg.id, e.target.value);
-                      }}
-                      title="Chuyển vai diễn cho cu thoại ny"
-                    >
-                      {speakers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                           {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="studio-segment-text-original">{seg.original}</div>
-                  <input
-                    type="text"
-                    className="studio-segment-text-translated"
-                    style={{
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid var(--line-soft)",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                      color: "var(--t1)",
-                      fontSize: 12,
-                      outline: "none",
-                      width: "100%",
-                      marginTop: 4,
-                    }}
-                    value={seg.translated}
-                    onFocus={() => {
-                      translationPreFocusRef.current = segmentsRef.current.map((s) => ({
-                        id: s.id,
-                        translated: s.translated,
-                      }));
-                    }}
-                    onBlur={() => saveTranslationUndoIfChanged()}
-                    onChange={(e) => {
-                      const updated = segments.map((s) =>
-                        s.id === seg.id ? { ...s, translated: e.target.value } : s
-                      );
-                      setSegments(updated);
-                    }}
-                  />
-
-                  <div className="studio-segment-bottom-row">
-                    <button
-                      type="button"
-                      className={`studio-segment-tts-preview-btn ${previewingSegId === seg.id ? "loading" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePreviewSegmentTts(seg);
-                      }}
-                      title="Nghe thử giọng đọc câu thoại này (Kokoro TTS)"
-                    >
-                      <IconVolume2 size={11} />
-                      {previewingSegId === seg.id ? "Đang tạo..." : "Nghe cu"}
-                    </button>
-
-                    <div className="studio-segment-item-actions">
-                      <button
-                        type="button"
-                        className="studio-segment-sub-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedSegId(seg.id);
-                          handleSplitSegment();
-                        }}
-                        title="Tch cu tại playhead"
-                      >
-                        <IconScissors size={11} />
-                      </button>
-                      <button
-                        type="button"
-                        className="studio-segment-sub-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          saveSubtitleUndo();
-                          setSegments(segments.filter((s) => s.id !== seg.id));
-                        }}
-                        title="Xóa câu"
-                      >
-                        <IconTrash size={11} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  seg={seg}
+                  isSelected={isSelected}
+                  spk={spk}
+                  speakers={speakers}
+                  previewingSegId={previewingSegId}
+                  onSelect={handleSelectSegment}
+                  onNudge={handleNudgeSegment}
+                  onUpdateSpeaker={handleUpdateSegmentSpeaker}
+                  onUpdateTranslated={handleUpdateTranslated}
+                  onPreviewTts={handlePreviewSegmentTts}
+                  onSplit={handleSplitSegment}
+                  onDelete={(id) => {
+                    saveSubtitleUndo();
+                    setSegments((prev) => prev.filter((s) => s.id !== id));
+                  }}
+                  onPreFocus={handlePreFocusText}
+                  onSaveUndoIfChanged={saveTranslationUndoIfChanged}
+                />
               );
             })}
           </div>
@@ -6378,61 +6470,27 @@ export default function SublixStudioView({
                 )}
 
                 {segments.map((seg) => {
-                  const totalDur = Math.max(1, mediaDuration);
-                  const left = (seg.start / totalDur) * timelineWidth;
-                  const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
-                  const width = Math.max(3, rawWidth);
-                  const isCompact = width < 30;
                   const isSelected = seg.id === selectedSegId;
                   const isMultiSelected = selectedSegIds.includes(seg.id);
 
                   return (
-                    <div
+                    <StudioTimelineSubtitleBlock
                       key={seg.id}
-                      data-seg-id={seg.id}
-                      className={`studio-timeline-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
-                      style={{
-                        left: `${left}px`,
-                        width: `${width}px`,
-                        background: "rgba(45, 212, 191, 0.35)",
-                        borderColor: "#2dd4bf",
-                      }}
-                      onClick={(e) => {
+                      seg={seg}
+                      totalDur={Math.max(1, mediaDuration)}
+                      timelineWidth={timelineWidth}
+                      isSelected={isSelected}
+                      isMultiSelected={isMultiSelected}
+                      onBlockClick={(s, e) => {
                         if (timelineToolMode === "scrub") {
                           handleTimelineClick(e);
                           return;
                         }
                         e.stopPropagation();
-                        handleSelectSegmentWithModifier(seg, e);
+                        handleSelectSegmentWithModifier(s, e);
                       }}
-                      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
-                    >
-                      {!isCompact && (
-                        <div
-                          className="studio-timeline-block-handle left"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "start", -0.2);
-                          }}
-                          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                        />
-                      )}
-                      {!isCompact && (
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                          {seg.translated}
-                        </span>
-                      )}
-                      {!isCompact && (
-                        <div
-                          className="studio-timeline-block-handle right"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "end", 0.2);
-                          }}
-                          title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                        />
-                      )}
-                    </div>
+                      onNudge={handleNudgeSegment}
+                    />
                   );
                 })}
               </div>

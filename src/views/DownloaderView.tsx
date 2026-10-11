@@ -626,10 +626,20 @@ export default function DownloaderView({
     }
   };
 
-  // v0.9.4: play the downloaded file with the default media player. If the
-  // file is missing, fall back to revealing the folder instead of failing
-  // silently.
-  const handlePlay = async (path?: string | null) => {
+  // Mở và xem video trực tiếp trong Sublix Studio (trong ứng dụng)
+  const handlePlayInStudio = (path?: string | null) => {
+    if (!path) return;
+    if (onNavigateToStudio) {
+      onNavigateToStudio(path);
+    } else if (onNavigateToDubbing) {
+      onNavigateToDubbing(path);
+    } else if (onNavigateToFileSub) {
+      onNavigateToFileSub(path);
+    }
+  };
+
+  // Mở bằng trình phát ngoài Windows Media Player / Movies & TV (khi người dùng chủ động yêu cầu)
+  const handlePlayExternal = async (path?: string | null) => {
     if (!path) return;
     try {
       await sublix.downloaderOpenFile(path);
@@ -1079,32 +1089,24 @@ export default function DownloaderView({
                                 type="button"
                                 className="item-btn bridge-studio"
                                 disabled={!pathReady}
-                                onClick={() => {
-                                  if (!pathReady) return;
-                                  if (onNavigateToStudio) {
-                                    onNavigateToStudio(safe);
-                                  } else if (onNavigateToDubbing) {
-                                    onNavigateToDubbing(safe);
-                                  } else if (onNavigateToFileSub) {
-                                    onNavigateToFileSub(safe);
-                                  }
-                                }}
-                                title={pathReady ? "Đưa video trực tiếp vào Sublix Studio (Chế bản phụ đề, dịch thuật & lồng tiếng AI)" : tip}
+                                onClick={() => handlePlayInStudio(safe)}
+                                title={pathReady ? "Xem và biên tập video ngay trong Sublix Studio (Phụ đề, dịch thuật & lồng tiếng AI)" : tip}
                               >
-                                <IconClapper size={14} /> 🚀 Đưa Vào Studio
+                                <IconClapper size={14} /> 🚀 Xem Trong Studio
+                              </button>
+
+                              <button
+                                type="button"
+                                className="item-btn secondary"
+                                disabled={!pathReady}
+                                onClick={() => handlePlayExternal(safe)}
+                                title={pathReady ? "Mở video bằng trình phát ngoài của hệ thống Windows (Windows Media Player / Movies & TV / VLC)" : tip}
+                              >
+                                🖥️ Player Ngoài
                               </button>
                             </>
                           );
                         })()}
-
-                        <button
-                          type="button"
-                          className="item-btn play-video"
-                          onClick={() => handlePlay(item.filePath)}
-                          title="Mở video bằng trình phát mặc định của máy (Windows Media Player / Movies & TV...)"
-                        >
-                          <IconPlay size={14} /> Chạy Video
-                        </button>
 
                         <button
                           type="button"
