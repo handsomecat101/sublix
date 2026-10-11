@@ -1,9 +1,9 @@
 # Hướng Dẫn Kỹ Thuật & Vận Hành Hệ Thống Lồng Tiếng AI (AI Dubbing Studio)
 
 > **Mã tài liệu:** MAN-2026-DUB-01  
-> **Dự án:** Sublix Desktop (`v0.6.0+`)  
+> **Dự án:** Sublix Desktop (`v0.11.29+`)  
 > **Tác giả:** Antigravity AI & Anh Tuấn (`handsomecat101`)  
-> **Ngày cập nhật:** 2026-10-04  
+> **Ngày cập nhật:** 2026-10-12  
 > **Kho mã nguồn:** [https://github.com/handsomecat101/sublix](https://github.com/handsomecat101/sublix)  
 > **Mục tiêu:** Tài liệu tra cứu chi tiết và hướng dẫn kỹ thuật cho các kỹ sư, cộng tác viên và các AI Agent (Antigravity, Claude Code, Cursor, Codex) khi tiếp nhận, mở rộng hoặc bảo trì hệ thống lồng tiếng AI.
 
@@ -281,3 +281,67 @@ Hệ thống tự động thay đổi banner tiến trình phía trên video the
   - `Space`: Phát / Tạm dừng video (khi không gõ text trong ô input).
   - `Delete` hoặc `Backspace`: Xóa toàn bộ các block phụ đề đang được chọn (kèm lưu lịch sử Undo).
 - **Xóa cả track (Clear Track):** Biểu tượng thùng rác trên header từng track để xóa nhanh toàn bộ item trên track đó.
+
+---
+
+## 9. Các Cải Tiến Đột Phá & Chuẩn Hóa Vận Hành Mới Nhất (Sessions 26, 27, 28)
+
+Được phát triển và tối ưu trực tiếp theo phản hồi thực tế từ Product Owner (Anh Tuấn) trong các phiên làm việc chuyên sâu ngày 11 và 12 tháng 10 năm 2026:
+
+### 9.1 Phân Loại & Index Độc Quyền Giọng Đọc Theo Từng Model TTS AI (Session 26)
+* **Vấn đề trước đây:** Dropdown chọn giọng của từng nhân vật hiển thị dồn đống tất cả các giọng của mọi mô hình (hàng chục giọng từ VietNeu, Kokoro đến Edge), gây rối rắm và nhầm lẫn cho người dùng.
+* **Kiến trúc Từ điển Metadata `TTS_ENGINE_MODELS`:**
+  - Chuẩn hóa kiểu dữ liệu mô hình: `TtsEngineKey = "vietneu" | "kokoro" | "edge"` (loại bỏ tùy chọn `"all"` gây xung đột).
+  - **VietNeu TTS AI:** 6 giọng Neural biểu cảm cao (`vi_bac_nam`, `vi_bac_nu`, `vi_nam_nam`, `vi_nam_nu`, `vi_hue_nu`, `vi_bac_thoisu`).
+  - **Kokoro-Vietnamese Local 82M:** 14 giọng ONNX offline 100% (`tuan_ngoc`, `manh_dung`, `hung_thinh`, `phat_tai`, `thanh_dat`, `duc_an`, `duc_duy`, `mai_linh`, `ngoc_huyen`, `diem_trinh`, `mai_loan`, `my_yen`, `thuc_trinh`, `storyvert` — 100% có sẵn file mẫu `.wav` thực tế tại `models/voice/kokoro-vi/samples/`).
+  - **Edge-TTS Cloud:** 6 giọng Microsoft Azure Neural chất lượng cao (`vi-VN-NamMinhNeural`, `vi-VN-HoaiMyNeural`, `en-US-AndrewNeural`, `en-US-AvaNeural`, `zh-CN-YunxiNeural`, `ja-JP-KeitaNeural`).
+* **Lọc độc quyền (Exclusive Dropdown Filter):**
+  - Khi người dùng chọn Model nào, dropdown của mọi vai diễn **chỉ hiển thị duy nhất danh sách giọng thuộc model đó**.
+  - Khi người dùng đổi Model (ví dụ từ Edge sang Kokoro), hệ thống tự động ánh xạ lại giọng (auto re-mapping) tương ứng với giới tính của vai (`defaultMaleVoice` hoặc `defaultFemaleVoice` của Model mới), không bao giờ bị lệch giọng hay rỗng giá trị.
+* **Cơ chế Nghe Thử Mẫu Tiêu Biểu (Sample Preview):**
+  - Nút `▶️ Mẫu` tích hợp trực tiếp trên từng nút chọn Model và nút to `▶️ Nghe Thử Mẫu Tiêu Biểu (${model.name})` trong bảng đặc tả kỹ thuật.
+  - Hỗ trợ phát file `.wav` mẫu thật với độ trễ 0ms (đối với Kokoro) hoặc gọi IPC synthesis tức thì (VietNeu, Edge-TTS).
+  - Nút tự động chuyển trạng thái `⏹ Dừng` kèm hiệu ứng nhịp sóng dạ quang (`studio-tts-pulse`) khi đang phát, bấm lại sẽ ngắt ngay lập tức và quản lý audio ref để không bao giờ bị phát đè tiếng.
+
+### 9.2 Khắc Phục Lỗi 4 Track Đè Nhau & Tối Ưu Cấp Phần Cứng Timeline 300+ Câu Thoại (Session 27)
+* **Vấn đề trên video dài (25+ phút, 323 câu thoại):**
+  - AI Diarization quét video phát hiện nhiều cụm âm học, tự động bung 4 track tiếng lồng riêng biệt xếp chồng lên nhau thành 7 lane chiếm kín màn hình.
+  - Khi bấm Play hoặc tua video, màn hình giật cục, CPU 100% và **bị treo cứng ứng dụng** (freeze WebView2 main thread) do re-render 2,584 thẻ DOM và serialize JSON 10MB vào LocalStorage liên tục.
+* **Giải pháp 1-Click "Về 1 Vai (Thuyết Minh Độc Thoại)" (`handleQuickMergeToOneRole`):**
+  - Tự động gộp toàn bộ 323 câu thoại về `speakers[0]` ("Thuyết minh AI").
+  - Xóa sạch các track dư thừa, đưa `expectedSpeakerCount` về 1 và tự động kích hoạt chế độ gộp track (`collapseSpeakerTracks`).
+  - Bổ sung nút bấm `👤 Về 1 vai` trên toolbar và gán hành động này vào nút chip `[👤 1 Người ⭐]` để dọn sạch timeline chỉ với 1 click.
+* **Tối Ưu Hóa Cấp Phần Cứng Cho Playhead & Timecode (Hardware-Accelerated Playback):**
+  - **Direct DOM Manipulation (60fps):** Cập nhật tọa độ con trỏ timeline (`playheadElementRef.style.left`) và đồng hồ thời gian (`timecodeElementRef.textContent`) trực tiếp trên DOM, không kích hoạt React re-render.
+  - **Throttling React Diffing xuống 120ms (~8fps):** Giảm hơn 90% tần suất gọi Virtual DOM diffing trên cây 323 block timeline, giúp playback mượt như nhung.
+  - **Loại bỏ 2,584 thẻ `<span>` DOM:** Thay thế 8 thẻ span con trong mỗi block thoại bằng 1 thẻ rỗng có background CSS texture (`repeating-linear-gradient` kết hợp `mask-image`), giảm tải DOM về 0%.
+  - **Kích hoạt Virtualization với `content-visibility: auto`:** Trình duyệt WebView2 tự động bỏ qua tính toán layout và paint đối với các block nằm ngoài khung nhìn cuộn ngang.
+  - **Tinh gọn LocalStorage:** Loại bỏ mảng Base64 filmstrip và `currentTime` khỏi auto-save, đưa kích thước lưu trữ từ 10MB xuống dưới 50KB với debounce 1200ms.
+
+### 9.3 Tách Rời Hoàn Toàn Quy Trình 2 Bước: Quét & Phân Vai Trước ➔ Lồng Tiếng Sau (Session 28)
+* **Vấn đề trước đây:** Bấm phân tích là AI tự động chạy từ A đến Z, tự phân vai rồi tự tổng hợp lồng tiếng luôn. Người dùng bị đặt vào thế "tù mù", không được xem trước AI đã chia kịch bản như thế nào, có bao nhiêu vai, câu nào của ai.
+* **Quy trình chuẩn hóa 2 bước độc lập:**
+  1. **Bước 1: Quét & Phân Vai Trước (`dubImmediately: false`, `hasAudio: false`):**
+     - Chạy Whisper STT bóc phụ đề + Sherpa AI Diarization nhận diện người nói + Dịch thuật điện ảnh.
+     - Dữ liệu hiển thị lên Timeline với track phụ đề phân màu theo vai diễn, hoàn toàn **chưa sinh file lồng tiếng**.
+     - Người dùng tự do: Nghe lại giọng gốc, đọc lại kịch bản dịch, chỉnh sửa text, đổi vai, gán lại giới tính, chọn Model TTS mong muốn.
+  2. **Bước 2: Bắt Đầu Lồng Tiếng (TTS):**
+     - Nút nổi bật: `🎙️ Bước 2: Bắt Đầu Lồng Tiếng TTS (${speakers.length} vai)` (hiển thị cả ở thẻ Phân vai lẫn Action Hub).
+     - Chỉ khi người dùng bấm nút này, hệ thống mới gửi toàn bộ phân vai và câu thoại sang engine TTS để sinh audio và vẽ track tiếng lồng.
+  3. **Tùy chọn toàn trình:** Vẫn duy trì nút `⚡ Chạy Tự Động Toàn Trình (A ➔ Z)` dành cho trường hợp người dùng muốn xuất nhanh không cần can thiệp.
+
+### 9.4 Presets Tổ Hợp Giới Tính 2 Vai & Nút Toggle Giới Tính 1 Chạm (Session 28)
+* **Presets 2 Vai Nhanh:** Khi số lượng vai là 2, hệ thống cung cấp 3 nút chọn cơ cấu giới tính 1 chạm:
+  - `👨‍🦱👩 1 Nam & 1 Nữ ⭐`: Chuẩn đối thoại nam nữ (Vai 1 là Nam, Vai 2 là Nữ).
+  - `👨‍🦱👨‍🦱 2 Nam`: Cả 2 vai đều là Nam (tự động phân bổ 2 giọng nam khác nhau của Model đang chọn).
+  - `👩👩 2 Nữ`: Cả 2 vai đều là Nữ (tự động phân bổ 2 giọng nữ khác nhau của Model đang chọn).
+* **Nút Toggle Giới Tính Trên Từng Vai (`handleToggleSpeakerGender`):**
+  - Mỗi thẻ vai diễn có nút badge `[👨 Nam]` (nền xanh dương) hoặc `[👩 Nữ]` (nền hồng).
+  - Nhấp chuột là lật giới tính ngay lập tức, dropdown tự động nhảy sang giọng nam/nữ đầu tiên của Model tương ứng.
+
+### 9.5 Bảng Chỉ Báo HUD Trực Quan (Active TTS HUD) (Session 28)
+* Phía trên danh sách phân vai bổ sung bảng chỉ báo HUD kính mờ dạ quang (`.studio-active-tts-hud`):
+  - Hiển thị rõ tên Model TTS đang kích hoạt kèm badge trạng thái (Local Offline vs Cloud).
+  - Thống kê tổng số lượng giọng khả dụng của model.
+  - Liệt kê chi tiết từng vai: Icon giới tính, tên vai, số lượng câu thoại và tên giọng AI cụ thể đang phụ trách (VD: `Vai 1: 👨 Nam • Nam Bắc (180 câu)` | `Vai 2: 👩 Nữ • Nữ Nam (143 câu)`).
+
