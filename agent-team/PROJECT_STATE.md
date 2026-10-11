@@ -13,8 +13,8 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.11.29` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `8385133` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Studio UI Premiere Timeline, VietNeu TTS, Dynamic HUD Banner, Dedicated Subtitle Flow hoàn thành trọn gói E2E) |
+| **Git Commit** | `df622be` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Active (Studio UI Premiere Timeline, Strictly Indexed TTS Models, Audio Sample Previews, Dynamic Tracks & In/Out AI Range Selection) |
 
 ---
 
@@ -22,7 +22,7 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–15 + Căn chuẩn Timeline x=0 |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–15 + Căn chuẩn Timeline x=0 + TTS Model Strict Indexing & Previews |
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
 | **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
 | **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Nhận bàn giao V2, review code & nghiệm thu |
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-TTS-STRICT-INDEX-SAMPLE-PREVIEW` | Phân loại độc quyền giọng đọc theo từng Model TTS AI + Nghe thử mẫu giọng tiêu biểu trước khi load chọn (VietNeu, Kokoro 14 giọng sample WAV, Edge-TTS Cloud) | **Antigravity** | 2026-10-11 | ✅ Bỏ nút Tất cả models; dropdown của vai chỉ hiện voice của Model đang chọn; Nút ▶️ Mẫu trên từng card & spec; toggle dừng/phát chuẩn xác |
 | `TSK-TRACK-CLEAR-DYNAMIC-RANGE` | Sửa dứt điểm nút xóa track tiếng bảo toàn phụ đề, Hiển thị động 2 track Timeline & Menu chuột phải AI khoanh vùng | **Antigravity** | 2026-10-11 | ✅ `handleClearTrack` chỉ xóa `hasAudio`, bảo toàn 100% phụ đề, Timeline rỗng chỉ hiện Video & Audio gốc, Timeline Context Menu In/Out AI bóc tách + dịch + lồng tiếng độc lập |
 | `TSK-TRACK-VOICE-DISTINCT` | Sửa dứt điểm nhầm lẫn giữa Track Phụ Đề & Track Tiếng Lồng, đổi tên vai thành Thuyết minh AI, Audio Wave Blocks | **Antigravity** | 2026-10-11 | ✅ Đổi tên vai "Phụ đề" ➔ "Thuyết minh AI", Cột Tracks: `💬 PHỤ ĐỀ (TEXT)` vs `🎙️ TIẾNG LỒNG: [Tên vai]`, Audio Waveform Texture, Laser head Tiếng lồng |
 | `TSK-RESIZABLE-TTS-HUB` | Resizable Panels (kéo co giãn cột trái/phải), TTS Engine Selector, VietNeu/Kokoro/Edge giọng đọc phong phú, Đồng bộ Models Hub | **Antigravity** | 2026-10-11 | ✅ Resizable Splitters kèm localStorage/reset, TTS Model Selector Card (VietNeu, Kokoro 82M, Edge-TTS), 20+ giọng đọc chi tiết, Hub Models TTS table |

@@ -1017,3 +1017,46 @@ sublix/
 - ✅ Track tiếng xóa độc lập, phụ đề được bảo toàn 100%.
 - ✅ Timeline hiển thị động: sạch sẽ khi mới nạp video, chỉ hiện track khi có dữ liệu hoặc đang chạy tiến trình.
 - ✅ Timeline Context Menu hoạt động trơn tru với đầy đủ các tác vụ bóc tách, dịch và lồng tiếng theo vùng chọn.
+
+---
+
+## [2026-10-11] Session 26: Phân Loại & Index Độc Quyền Giọng Đọc Theo Từng Model TTS AI + Nghe Thử Mẫu Giọng Trước Khi Chọn (df622be)
+
+### Yêu Cầu Của Product Owner (Anh Tuấn):
+1. Loại bỏ hoàn toàn tình trạng dropdown voice hiển thị một đống lẫn lộn các giọng của tất cả mô hình.
+2. Index cụ thể theo từng Model: Khi người dùng chọn Model nào (`VietNeu TTS AI`, `Kokoro Local`, `Edge-TTS Cloud`), dropdown ở các vai diễn **CHỈ HIỂN THỊ ĐÚNG danh sách voice độc quyền của model đó**.
+3. Bỏ nút "Tất Cả Models" gây rối mắt và nhầm lẫn.
+4. Tự động chuyển đổi giọng (re-mapping) khi đổi Model: các vai tự động nhận giọng tương ứng (Nam/Nữ) của Model mới.
+5. Tạo sample voice của từng Model để người dùng nghe thử trước khi load/chọn model đó.
+
+### Kỹ Thuật Đã Triển Khai:
+1. **Từ Điển Metadata `TTS_ENGINE_MODELS`:**
+   - Định nghĩa kiểu `TtsEngineKey = "vietneu" | "kokoro" | "edge"` (bỏ hẳn `"all"`).
+   - Thiết lập cấu trúc dữ liệu cho cả 3 Model:
+     - `vietneu`: **VietNeu TTS AI** (6 giọng Neural biểu cảm cao: vi_bac_nam, vi_bac_nu, vi_nam_nam, vi_nam_nu, vi_hue_nu, vi_bac_thoisu).
+     - `kokoro`: **Kokoro-Vietnamese Local 82M** (14 giọng ONNX offline 100%: tuan_ngoc, manh_dung, hung_thinh, phat_tai, thanh_dat, duc_an, duc_duy, mai_linh, ngoc_huyen, diem_trinh, mai_loan, my_yen, thuc_trinh, storyvert — 100% có sẵn file .wav mẫu thật tại `models/voice/kokoro-vi/samples/*.wav`).
+     - `edge`: **Edge-TTS Cloud** (6 giọng Microsoft Azure Neural: vi-VN-NamMinhNeural, vi-VN-HoaiMyNeural, en-US-AndrewNeural, en-US-AvaNeural, zh-CN-YunxiNeural, ja-JP-KeitaNeural).
+2. **Lọc Độc Quyền Dropdown Của Từng Vai Diễn:**
+   - Dropdown `<select>` của mỗi vai duyệt qua `TTS_ENGINE_MODELS[selectedTtsEngine].voices`.
+   - 100% không còn thẻ `<optgroup>` của model khác chen vào.
+   - Khi chuyển Model, hệ thống tự động kiểm tra và gán lại voice phù hợp (Nam -> `defaultMaleVoice`, Nữ -> `defaultFemaleVoice` của model mới), tránh tình trạng lạc giọng hoặc rỗng giá trị.
+3. **Tính Năng Nghe Thử Mẫu Tiêu Biểu Của Từng Model (`handlePreviewEngineSample`):**
+   - Trên mỗi nút Model: Thêm nút nhỏ `▶️ Mẫu` cho phép nghe thử âm thanh đại diện của từng Model ngay trước khi click chọn.
+   - Trong thẻ chi tiết Spec của Model: Bổ sung nút bấm to nổi bật `▶️ Nghe Thử Mẫu Tiêu Biểu (${model.name})`.
+   - Đọc trực tiếp từ file mẫu .wav chất lượng cao đối với Kokoro (`voiceSampleData`), hoặc gọi `dubbingPreviewTts` đối với VietNeu & Edge.
+   - Nút đổi sang `⏹ Dừng` kèm hiệu ứng sóng âm `is-playing` khi đang phát, bấm lại sẽ dừng ngay lập tức.
+   - Cơ chế quản lý audio refs (`currentAudioPreviewRef`, `engineSampleAudioRef`) đảm bảo không bao giờ phát đè âm thanh lên nhau.
+4. **Nâng Cấp Nút `▷ Nghe Thử` Của Từng Vai:**
+   - Hỗ trợ toggle dừng/phát khi bấm lại trên cùng vai.
+   - Tự động nhận diện đọc file sample cache nếu là giọng Kokoro, tạo độ phản hồi tức thì 0ms.
+5. **Styling Hiện Đại (`SublixStudioView.css`):**
+   - Thêm layout dọc rõ ràng cho `.studio-tts-engine-pills`.
+   - Thêm `.studio-tts-pill-sample-btn`, `.studio-tts-sample-preview-btn`, và animation nhịp tim dạ quang `@keyframes studio-tts-pulse`.
+
+### Kết Quả Kiểm Thử (Verification):
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite build thành công 100% trong 6.16s.
+- ✅ Git commit `df622be` đã được đẩy lên `origin/master`.
+- ✅ Dropdown voice của từng vai diễn hoạt động chính xác 100%, chỉ xuất hiện giọng của Model đang chọn.
+- ✅ Chức năng nghe thử mẫu hoạt động tức thì, mượt mà và trực quan.
+

@@ -229,3 +229,22 @@
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
 - **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (4.39s, Vite bundle thành công).
 
+---
+
+### 2026-10-11 20:35 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Session 26: Phân Loại Độc Quyền Giọng Đọc Theo Model TTS AI + Nghe Thử Mẫu Tiêu Biểu Trước Khi Chọn)
+- **Tóm tắt:** 
+  1. **Loại bỏ hoàn toàn tình trạng dropdown voice hiện "một đống lẫn lộn" các giọng của nhiều mô hình:**
+     - Bỏ hẳn tùy chọn "Tất Cả Models" gây nhầm lẫn.
+     - Khởi tạo từ điển metadata `TTS_ENGINE_MODELS` cho 3 mô hình riêng biệt: `VietNeu TTS AI` (6 giọng Neural biểu cảm cao), `Kokoro Local` (14 giọng ONNX offline 100%), `Edge-TTS Cloud` (6 giọng Microsoft Azure).
+     - Dropdown `<select>` của mỗi vai diễn **CHỈ DUYỆT QUA các giọng độc quyền của Model đang chọn**. Tuyệt đối không lẫn lộn bất kỳ giọng của model khác!
+     - Khi người dùng bấm đổi Model: Hệ thống tự động re-map các vai diễn sang giọng tương ứng (Nam -> defaultMaleVoice, Nữ -> defaultFemaleVoice) của Model mới, đảm bảo giá trị select luôn đồng bộ và hợp lệ ngay lập tức.
+  2. **Tạo Sample Voice của từng Model để nghe thử trước khi load/chọn model đó:**
+     - Trên mỗi nút Model (VietNeu, Kokoro, Edge): Bổ sung nút nghe thử nhỏ gọn `▶️ Mẫu` / `⏹ Dừng`. Người dùng có thể nghe thử âm thanh đại diện của bất kỳ Model nào ngay trước khi click chọn hoặc load model đó!
+     - Trong thẻ Spec chi tiết của Model đang chọn: Thêm nút bấm to nổi bật `▶️ Nghe Thử Mẫu Tiêu Biểu (${model.name})`.
+     - Tận dụng 14 file sample .wav chất lượng cao có sẵn của Kokoro (`voiceSampleData`) cho độ trễ 0ms, và live neural synthesis cho VietNeu / Edge.
+     - Nút `▷ Nghe Thử` của từng vai cũng được nâng cấp hỗ trợ toggle dừng/phát và quản lý audio refs tránh phát chồng âm.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
+- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (6.16s, Vite bundle thành công); Commit `df622be` đã push lên `origin/master`.
+
+
