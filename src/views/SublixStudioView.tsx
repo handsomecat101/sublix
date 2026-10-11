@@ -1317,7 +1317,18 @@ export default function SublixStudioView({
   };
 
   const handleSeek = (timeSec: number) => {
-    const clamped = Math.max(0, Math.min(mediaDuration, timeSec));
+    const dur = Math.max(1, mediaDurationRef.current || mediaDuration);
+    const clamped = Math.max(0, Math.min(dur, timeSec));
+    
+    // Tối ưu hóa cấp phần cứng: Đồng bộ tức thì vị trí playhead & timecode (0ms trễ)
+    if (playheadElementRef.current && dur > 0) {
+      const leftPx = (clamped / dur) * (timelineWidthRef.current || 1200);
+      playheadElementRef.current.style.left = `${leftPx}px`;
+    }
+    if (timecodeElementRef.current) {
+      timecodeElementRef.current.textContent = formatTimecode(clamped);
+    }
+
     setCurrentTime(clamped);
     if (videoRef.current) {
       try {
@@ -1547,7 +1558,14 @@ export default function SublixStudioView({
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
 
-    // 1. Phân tách triệt để: Nếu click vào Ruler, Filmstrip, Sóng âm, Playhead, Range Handle, Nút bấm -> KHÔNG BAO GIỜ vẽ Marquee
+    // 1. Nếu đang ở chế độ Tua (Scrub tool mode) -> Tua video lập tức bất kể bấm ở đâu trên timeline
+    if (timelineToolModeRef.current === "scrub") {
+      e.preventDefault();
+      startScrubbing(e.clientX);
+      return;
+    }
+
+    // 2. Phân tách triệt để: Nếu click vào Ruler, Filmstrip, Sóng âm, Playhead, Range Handle, Nút bấm, Blocks -> KHÔNG BAO GIỜ vẽ Marquee
     if (
       target.closest(".studio-timeline-ruler") ||
       target.closest(".studio-timeline-playhead") ||
@@ -1560,13 +1578,6 @@ export default function SublixStudioView({
       target.closest("button") ||
       target.closest(".studio-ruler-range-handle")
     ) {
-      return;
-    }
-
-    // 2. Nếu đang ở chế độ Tua (Scrub tool mode) -> Tua video
-    if (timelineToolModeRef.current === "scrub") {
-      e.preventDefault();
-      startScrubbing(e.clientX);
       return;
     }
 
@@ -1939,33 +1950,67 @@ export default function SublixStudioView({
   const timelineWidthRef = useRef<number>(timelineWidth);
   timelineWidthRef.current = timelineWidth;
 
-  // Playhead scrubbing pointer handlers (ko thả để chạy video qua timeline)
+  // Playhead scrubbing pointer handlers (kéo thả để tua video qua timeline siêu mượt)
   const isDraggingPlayheadRef = useRef<boolean>(false);
   isDraggingPlayheadRef.current = isDraggingPlayhead;
+  const lastScrubVideoSeekRef = useRef<number>(0);
+  const lastScrubStateUpdateRef = useRef<number>(0);
+  const lastScrubbedTimeRef = useRef<number>(0);
 
-  const updatePlayheadFromClientX = (clientX: number) => {
+  const updatePlayheadFromClientX = (clientX: number, isFinal: boolean = false) => {
     const container = timelineTracksBodyRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
     const scrollLeft = container.scrollLeft || 0;
     const relativeX = clientX - rect.left + scrollLeft;
-    const dur = Math.max(1, mediaDuration);
+    const dur = Math.max(1, mediaDurationRef.current || mediaDuration);
     const tw = timelineWidthRef.current || 1200;
     const newTime = Math.max(0, Math.min(dur, (relativeX / tw) * dur));
-    handleSeek(newTime);
+    lastScrubbedTimeRef.current = newTime;
+
+    // 1. Tối ưu hóa cấp phần cứng: Cập nhật trực tiếp Playhead & Timecode trên DOM (60fps mượt như nhung)
+    if (playheadElementRef.current && dur > 0) {
+      const leftPx = (newTime / dur) * tw;
+      playheadElementRef.current.style.left = `${leftPx}px`;
+    }
+    if (timecodeElementRef.current) {
+      timecodeElementRef.current.textContent = formatTimecode(newTime);
+    }
+
+    if (isFinal) {
+      handleSeek(newTime);
+      return;
+    }
+
+    const now = performance.now();
+    // 2. Throttle video element seek xuống mỗi 45ms (~22fps cho media decoder) để không làm nghẽn pipeline
+    if (now - lastScrubVideoSeekRef.current > 45) {
+      lastScrubVideoSeekRef.current = now;
+      if (videoRef.current) {
+        try {
+          videoRef.current.currentTime = newTime;
+        } catch {}
+      }
+    }
+
+    // 3. Throttle React state re-render xuống mỗi 120ms (~8fps) trong khi kéo
+    if (now - lastScrubStateUpdateRef.current > 120) {
+      lastScrubStateUpdateRef.current = now;
+      setCurrentTime(newTime);
+    }
   };
 
   const startScrubbing = (clientX: number) => {
     setIsDraggingPlayhead(true);
     isDraggingPlayheadRef.current = true;
-    updatePlayheadFromClientX(clientX);
+    updatePlayheadFromClientX(clientX, false);
 
     const handleWindowMove = (moveEvent: MouseEvent | PointerEvent) => {
       if (!isDraggingPlayheadRef.current) return;
-      updatePlayheadFromClientX(moveEvent.clientX);
+      updatePlayheadFromClientX(moveEvent.clientX, false);
     };
 
-    const handleWindowUp = () => {
+    const handleWindowUp = (upEvent: MouseEvent | PointerEvent) => {
       setIsDraggingPlayhead(false);
       isDraggingPlayheadRef.current = false;
       window.removeEventListener("pointermove", handleWindowMove);
@@ -1973,9 +2018,18 @@ export default function SublixStudioView({
       window.removeEventListener("mousemove", handleWindowMove);
       window.removeEventListener("mouseup", handleWindowUp);
       scrubbingCleanupRef.current = null;
+      updatePlayheadFromClientX(upEvent.clientX, true);
     };
 
-    scrubbingCleanupRef.current = handleWindowUp;
+    scrubbingCleanupRef.current = () => {
+      setIsDraggingPlayhead(false);
+      isDraggingPlayheadRef.current = false;
+      window.removeEventListener("pointermove", handleWindowMove);
+      window.removeEventListener("pointerup", handleWindowUp);
+      window.removeEventListener("mousemove", handleWindowMove);
+      window.removeEventListener("mouseup", handleWindowUp);
+    };
+
     window.addEventListener("pointermove", handleWindowMove);
     window.addEventListener("pointerup", handleWindowUp);
     window.addEventListener("mousemove", handleWindowMove);
@@ -6326,7 +6380,9 @@ export default function SublixStudioView({
                 {segments.map((seg) => {
                   const totalDur = Math.max(1, mediaDuration);
                   const left = (seg.start / totalDur) * timelineWidth;
-                  const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const width = Math.max(3, rawWidth);
+                  const isCompact = width < 30;
                   const isSelected = seg.id === selectedSegId;
                   const isMultiSelected = selectedSegIds.includes(seg.id);
 
@@ -6334,38 +6390,48 @@ export default function SublixStudioView({
                     <div
                       key={seg.id}
                       data-seg-id={seg.id}
-                      className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+                      className={`studio-timeline-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
                       style={{
                         left: `${left}px`,
-                        width: `${Math.max(50, width)}px`,
+                        width: `${width}px`,
                         background: "rgba(45, 212, 191, 0.35)",
                         borderColor: "#2dd4bf",
                       }}
                       onClick={(e) => {
+                        if (timelineToolMode === "scrub") {
+                          handleTimelineClick(e);
+                          return;
+                        }
                         e.stopPropagation();
                         handleSelectSegmentWithModifier(seg, e);
                       }}
-                      title={seg.translated}
+                      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
                     >
-                      <div
-                        className="studio-timeline-block-handle left"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "start", -0.2);
-                        }}
-                        title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                      />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                        {seg.translated}
-                      </span>
-                      <div
-                        className="studio-timeline-block-handle right"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "end", 0.2);
-                        }}
-                        title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                      />
+                      {!isCompact && (
+                        <div
+                          className="studio-timeline-block-handle left"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNudgeSegment(seg.id, "start", -0.2);
+                          }}
+                          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                        />
+                      )}
+                      {!isCompact && (
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
+                          {seg.translated}
+                        </span>
+                      )}
+                      {!isCompact && (
+                        <div
+                          className="studio-timeline-block-handle right"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNudgeSegment(seg.id, "end", 0.2);
+                          }}
+                          title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -6423,7 +6489,9 @@ export default function SublixStudioView({
                   const spkName = getSpeakerDisplayName(spk);
                   const totalDur = Math.max(1, mediaDuration);
                   const left = (seg.start / totalDur) * timelineWidth;
-                  const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const width = Math.max(3, rawWidth);
+                  const isCompact = width < 30;
                   const isSelected = seg.id === selectedSegId;
                   const isMultiSelected = selectedSegIds.includes(seg.id);
                   const spkColor = spk?.color || "#38bdf8";
@@ -6432,47 +6500,57 @@ export default function SublixStudioView({
                     <div
                       key={seg.id}
                       data-seg-id={seg.id}
-                      className={`studio-timeline-block studio-timeline-voice-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
+                      className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
                       style={{
                         left: `${left}px`,
-                        width: `${Math.max(55, width)}px`,
+                        width: `${width}px`,
                         background: `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)`,
                         borderColor: spkColor,
                       }}
                       onClick={(e) => {
+                        if (timelineToolMode === "scrub") {
+                          handleTimelineClick(e);
+                          return;
+                        }
                         e.stopPropagation();
                         handleSelectSegmentWithModifier(seg, e);
                       }}
-                      title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
+                      title={`[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
                     >
                       <div className="studio-voice-wave-texture" />
-                      <div
-                        className="studio-timeline-block-handle left"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "start", -0.2);
-                        }}
-                        title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                      />
-                      <div className="studio-voice-block-inner">
-                        <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                          🎙️
-                        </span>
-                        <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
-                          [{spkName}]:
-                        </strong>
-                        <span className="studio-voice-block-text">
-                          {seg.translated || seg.original}
-                        </span>
-                      </div>
-                      <div
-                        className="studio-timeline-block-handle right"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleNudgeSegment(seg.id, "end", 0.2);
-                        }}
-                        title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                      />
+                      {!isCompact && (
+                        <div
+                          className="studio-timeline-block-handle left"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNudgeSegment(seg.id, "start", -0.2);
+                          }}
+                          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                        />
+                      )}
+                      {!isCompact && (
+                        <div className="studio-voice-block-inner">
+                          <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                            🎙️
+                          </span>
+                          <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
+                            [{spkName}]:
+                          </strong>
+                          <span className="studio-voice-block-text">
+                            {seg.translated || seg.original}
+                          </span>
+                        </div>
+                      )}
+                      {!isCompact && (
+                        <div
+                          className="studio-timeline-block-handle right"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNudgeSegment(seg.id, "end", 0.2);
+                          }}
+                          title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -6531,7 +6609,9 @@ export default function SublixStudioView({
                     {spkSegments.map((seg) => {
                       const totalDur = Math.max(1, mediaDuration);
                       const left = (seg.start / totalDur) * timelineWidth;
-                      const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                      const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                      const width = Math.max(3, rawWidth);
+                      const isCompact = width < 30;
                       const isSelected = seg.id === selectedSegId;
                       const isMultiSelected = selectedSegIds.includes(seg.id);
 
@@ -6539,44 +6619,54 @@ export default function SublixStudioView({
                         <div
                           key={seg.id}
                           data-seg-id={seg.id}
-                          className={`studio-timeline-block studio-timeline-voice-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
+                          className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
                           style={{
                             left: `${left}px`,
-                            width: `${Math.max(55, width)}px`,
+                            width: `${width}px`,
                             background: `linear-gradient(180deg, ${spk.color}30, ${spk.color}65)`,
                             borderColor: spk.color,
                           }}
                           onClick={(e) => {
+                            if (timelineToolMode === "scrub") {
+                              handleTimelineClick(e);
+                              return;
+                            }
                             e.stopPropagation();
                             handleSelectSegmentWithModifier(seg, e);
                           }}
-                          title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
+                          title={`[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
                         >
                           <div className="studio-voice-wave-texture" />
-                          <div
-                            className="studio-timeline-block-handle left"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNudgeSegment(seg.id, "start", -0.2);
-                            }}
-                            title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                          />
-                          <div className="studio-voice-block-inner">
-                            <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                              🎙️
-                            </span>
-                            <span className="studio-voice-block-text">
-                              {seg.translated || seg.original}
-                            </span>
-                          </div>
-                          <div
-                            className="studio-timeline-block-handle right"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNudgeSegment(seg.id, "end", 0.2);
-                            }}
-                            title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                          />
+                          {!isCompact && (
+                            <div
+                              className="studio-timeline-block-handle left"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNudgeSegment(seg.id, "start", -0.2);
+                              }}
+                              title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                            />
+                          )}
+                          {!isCompact && (
+                            <div className="studio-voice-block-inner">
+                              <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                                🎙️
+                              </span>
+                              <span className="studio-voice-block-text">
+                                {seg.translated || seg.original}
+                              </span>
+                            </div>
+                          )}
+                          {!isCompact && (
+                            <div
+                              className="studio-timeline-block-handle right"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNudgeSegment(seg.id, "end", 0.2);
+                              }}
+                              title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                            />
+                          )}
                         </div>
                       );
                     })}
