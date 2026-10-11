@@ -108,6 +108,106 @@ function formatTimecode(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
 }
 
+export type TtsEngineKey = "vietneu" | "kokoro" | "edge";
+
+export interface VoiceOption {
+  id: string;
+  label: string;
+  gender: "male" | "female";
+  accent: string;
+  tag: string;
+  description: string;
+}
+
+export interface TtsEngineModel {
+  id: TtsEngineKey;
+  name: string;
+  shortName: string;
+  badge: string;
+  badgeType: "offline" | "cloud" | "neural";
+  speed: string;
+  sizeMb: number;
+  description: string;
+  samplePhrase: string;
+  defaultMaleVoice: string;
+  defaultFemaleVoice: string;
+  voices: VoiceOption[];
+}
+
+export const TTS_ENGINE_MODELS: Record<TtsEngineKey, TtsEngineModel> = {
+  vietneu: {
+    id: "vietneu",
+    name: "VietNeu TTS AI",
+    shortName: "VietNeu AI",
+    badge: "🌟 Neural v2",
+    badgeType: "neural",
+    speed: "Rất nhanh (~0.3s)",
+    sizeMb: 120,
+    description: "Mô hình Neural tối ưu ngữ điệu tiếng Việt tự nhiên, truyền cảm, ngắt nghỉ theo ngữ cảnh câu thoại, rất mượt mà cho phim & truyện.",
+    samplePhrase: "Xin chào! Đây là bản nghe thử giọng đọc biểu cảm cao từ mô hình VietNeu TTS AI.",
+    defaultMaleVoice: "vietneu:vi_bac_nam",
+    defaultFemaleVoice: "vietneu:vi_bac_nu",
+    voices: [
+      { id: "vietneu:vi_bac_nam", label: "🌟 VietNeu Nam ♂ (Bắc - Truyền cảm, Review Phim)", gender: "male", accent: "Miền Bắc", tag: "Review Phim", description: "Giọng nam trầm ấm, truyền cảm, thích hợp phim tài liệu & review" },
+      { id: "vietneu:vi_bac_nu", label: "🌟 VietNeu Nữ ♀ (Bắc - Dịu dàng, Sách nói)", gender: "female", accent: "Miền Bắc", tag: "Sách nói", description: "Giọng nữ trong trẻo, dịu dàng, thích hợp thuyết minh & sách nói" },
+      { id: "vietneu:vi_nam_nam", label: "🌟 VietNeu Nam ♂ (Nam - Ấm áp, Podcast)", gender: "male", accent: "Miền Nam", tag: "Podcast", description: "Giọng nam miền Nam gần gũi, ấm áp, thích hợp podcast" },
+      { id: "vietneu:vi_nam_nu", label: "🌟 VietNeu Nữ ♀ (Nam - Tự nhiên, Vlog)", gender: "female", accent: "Miền Nam", tag: "Vlog", description: "Giọng nữ miền Nam trẻ trung, tự nhiên cho vlog đời sống" },
+      { id: "vietneu:vi_hue_nu", label: "🌟 VietNeu Nữ ♀ (Huế - Ngọt ngào, Trữ tình)", gender: "female", accent: "Miền Trung", tag: "Trữ tình", description: "Giọng nữ Huế ngọt ngào, sâu lắng, đậm chất thơ" },
+      { id: "vietneu:vi_bac_thoisu", label: "🌟 VietNeu Nam ♂ (Bắc - Thời sự, Tin tức)", gender: "male", accent: "Miền Bắc", tag: "Thời sự", description: "Giọng nam đĩnh đạc, dứt khoát, chuẩn bản tin thời sự" },
+    ],
+  },
+  kokoro: {
+    id: "kokoro",
+    name: "Kokoro-Vietnamese",
+    shortName: "Kokoro Local",
+    badge: "📦 Offline 100%",
+    badgeType: "offline",
+    speed: "Realtime x5 (ONNX)",
+    sizeMb: 82,
+    description: "Mô hình ONNX siêu nhẹ chạy hoàn toàn trên máy tính, không cần internet, bảo mật tuyệt đối, độ trễ cực thấp.",
+    samplePhrase: "Xin chào! Đây là giọng đọc mẫu từ mô hình Kokoro tiếng Việt chạy hoàn toàn offline trên máy tính.",
+    defaultMaleVoice: "kokoro:tuan_ngoc",
+    defaultFemaleVoice: "kokoro:mai_linh",
+    voices: [
+      { id: "kokoro:tuan_ngoc", label: "🎙️ Tuấn Ngọc ♂ (Bắc - Trầm ấm, Thuyết minh)", gender: "male", accent: "Miền Bắc", tag: "Thuyết minh", description: "Giọng nam Bắc trầm ấm, điềm đạm, độ vang tốt" },
+      { id: "kokoro:manh_dung", label: "🎙️ Mạnh Dũng ♂ (Nam - Tự nhiên, Mạnh mẽ)", gender: "male", accent: "Miền Nam", tag: "Mạnh mẽ", description: "Giọng nam Nam mạnh mẽ, dứt khoát" },
+      { id: "kokoro:hung_thinh", label: "🎙️ Hưng Thịnh ♂ (Bắc - Phóng sự, Thời sự)", gender: "male", accent: "Miền Bắc", tag: "Thời sự", description: "Giọng nam Bắc trang trọng, rõ ràng" },
+      { id: "kokoro:phat_tai", label: "🎙️ Phát Tài ♂ (Nam - Hào sảng, Thể thao)", gender: "male", accent: "Miền Nam", tag: "Hào sảng", description: "Giọng nam Nam nhiệt huyết, sôi nổi" },
+      { id: "kokoro:thanh_dat", label: "🎙️ Thành Đạt ♂ (Bắc - Tự tin, Trẻ trung)", gender: "male", accent: "Miền Bắc", tag: "Trẻ trung", description: "Giọng nam Bắc trẻ trung, năng động" },
+      { id: "kokoro:duc_an", label: "🎙️ Đức An ♂ (Bắc - Điềm đạm, Trầm tĩnh)", gender: "male", accent: "Miền Bắc", tag: "Điềm đạm", description: "Giọng nam Bắc từ tốn, tri thức" },
+      { id: "kokoro:duc_duy", label: "🎙️ Đức Duy ♂ (Nam - Năng động, Hoạt náo)", gender: "male", accent: "Miền Nam", tag: "Hoạt náo", description: "Giọng nam Nam vui vẻ, hoạt bát" },
+      { id: "kokoro:mai_linh", label: "🎙️ Mai Linh ♀ (Bắc - Nhẹ nhàng, Trong trẻo)", gender: "female", accent: "Miền Bắc", tag: "Trong trẻo", description: "Giọng nữ Bắc thanh thoát, dễ nghe" },
+      { id: "kokoro:ngoc_huyen", label: "🎙️ Ngọc Huyền ♀ (Nam - Truyền cảm, Tâm sự)", gender: "female", accent: "Miền Nam", tag: "Tâm sự", description: "Giọng nữ Nam ấm áp, nhẹ nhàng" },
+      { id: "kokoro:diem_trinh", label: "🎙️ Diễm Trinh ♀ (Bắc - Điện ảnh, Sang trọng)", gender: "female", accent: "Miền Bắc", tag: "Điện ảnh", description: "Giọng nữ Bắc kiêu kỳ, chuẩn điện ảnh" },
+      { id: "kokoro:mai_loan", label: "🎙️ Mai Loan ♀ (Bắc - Ấm áp, Trưởng thành)", gender: "female", accent: "Miền Bắc", tag: "Trưởng thành", description: "Giọng nữ Bắc từng trải, sâu lắng" },
+      { id: "kokoro:my_yen", label: "🎙️ Mỹ Yến ♀ (Nam - Ngọt ngào, Tươi tắn)", gender: "female", accent: "Miền Nam", tag: "Tươi tắn", description: "Giọng nữ Nam dễ thương, tươi vui" },
+      { id: "kokoro:thuc_trinh", label: "🎙️ Thục Trinh ♀ (Bắc - Trang nhã, Lịch thiệp)", gender: "female", accent: "Miền Bắc", tag: "Lịch thiệp", description: "Giọng nữ Bắc chuẩn mực, nhã nhặn" },
+      { id: "kokoro:storyvert", label: "🎙️ Storyvert ♀ (Bắc - Kể chuyện cổ tích, Sách nói)", gender: "female", accent: "Miền Bắc", tag: "Kể chuyện", description: "Giọng nữ Bắc biến hóa, truyền cảm kể chuyện" },
+    ],
+  },
+  edge: {
+    id: "edge",
+    name: "Edge-TTS Cloud",
+    shortName: "Edge Cloud",
+    badge: "☁️ Microsoft Azure",
+    badgeType: "cloud",
+    speed: "Ổn định (Cloud)",
+    sizeMb: 0,
+    description: "Giọng đọc chuẩn phát thanh viên Microsoft Azure đám mây, độ rõ âm cực cao, miễn phí 24/7.",
+    samplePhrase: "Xin chào! Đây là giọng đọc thử nghiệm chất lượng cao từ dịch vụ Microsoft Edge TTS đám mây.",
+    defaultMaleVoice: "vi-VN-NamMinhNeural",
+    defaultFemaleVoice: "vi-VN-HoaiMyNeural",
+    voices: [
+      { id: "vi-VN-NamMinhNeural", label: "🌐 Nam Minh ♂ (Bắc - Chuẩn phát thanh viên)", gender: "male", accent: "Miền Bắc", tag: "Phát thanh", description: "Giọng nam Bắc chuẩn truyền hình, rõ chữ" },
+      { id: "vi-VN-HoaiMyNeural", label: "🌐 Hoài My ♀ (Bắc - Dịu êm, Sâu lắng)", gender: "female", accent: "Miền Bắc", tag: "Dịu êm", description: "Giọng nữ Bắc êm dịu, chuẩn mực" },
+      { id: "en-US-AndrewNeural", label: "🌐 Andrew ♂ (Mỹ - Tiếng Anh Đa sắc thái)", gender: "male", accent: "Tiếng Anh Mỹ", tag: "English Male", description: "Giọng nam tiếng Anh tự nhiên, đa sắc thái" },
+      { id: "en-US-AvaNeural", label: "🌐 Ava ♀ (Mỹ - Tiếng Anh Biểu cảm)", gender: "female", accent: "Tiếng Anh Mỹ", tag: "English Female", description: "Giọng nữ tiếng Anh biểu cảm, trong trẻo" },
+      { id: "zh-CN-YunxiNeural", label: "🌐 Vân Hy ♂ (Trung - Trầm ấm, Kể chuyện)", gender: "male", accent: "Tiếng Trung", tag: "Chinese Male", description: "Giọng nam tiếng Trung chuẩn phổ thông" },
+      { id: "ja-JP-KeitaNeural", label: "🌐 Keita ♂ (Nhật - Tự nhiên, Đàm thoại)", gender: "male", accent: "Tiếng Nhật", tag: "Japanese Male", description: "Giọng nam tiếng Nhật tự nhiên, hiện đại" },
+    ],
+  },
+};
+
 const STUDIO_PROJECT_CACHE_KEY = "sublix_active_studio_project_v1";
 
 interface SavedStudioProject {
@@ -207,16 +307,22 @@ export default function SublixStudioView({
   const [isDraggingLeft, setIsDraggingLeft] = useState<boolean>(false);
   const [isDraggingRight, setIsDraggingRight] = useState<boolean>(false);
 
-  // Bộ chọn TTS Engine / Model AI
-  const [selectedTtsEngine, setSelectedTtsEngine] = useState<"all" | "vietneu" | "kokoro" | "edge">(() => {
+  // Bộ chọn TTS Engine / Model AI (chỉ chọn 1 trong 3 mô hình, không còn 'all')
+  const [selectedTtsEngine, setSelectedTtsEngine] = useState<TtsEngineKey>(() => {
     try {
       const saved = localStorage.getItem("sublix_selected_tts_engine");
-      if (saved && ["all", "vietneu", "kokoro", "edge"].includes(saved)) {
-        return saved as any;
+      if (saved && (saved === "vietneu" || saved === "kokoro" || saved === "edge")) {
+        return saved as TtsEngineKey;
       }
     } catch {}
-    return "all";
+    return "vietneu";
   });
+
+  // State & Ref nghe thử âm thanh mẫu của Model và Speaker (quản lý dừng/phát mượt mà, không đè)
+  const currentAudioPreviewRef = useRef<HTMLAudioElement | null>(null);
+  const [playingEngineSample, setPlayingEngineSample] = useState<TtsEngineKey | null>(null);
+  const [loadingEngineSample, setLoadingEngineSample] = useState<TtsEngineKey | null>(null);
+  const engineSampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Ánh xạ giọng đọc cho TTS engine (Hỗ trợ VietNeu TTS, Kokoro Local và Edge TTS)
   const mapVoiceForEngine = (voice: string): string => {
@@ -1968,7 +2074,7 @@ export default function SublixStudioView({
           name: "Thuyết minh AI",
           gender: "male",
           color: "#38bdf8",
-          voice: "vietneu:vi_bac_nam",
+          voice: TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam",
           count: project.segments.length,
           sampleAudio: null,
         };
@@ -2508,19 +2614,45 @@ export default function SublixStudioView({
     }
   };
 
-  // Play Base64 audio preview for speaker (R3-01: replace alert with toast, track playback state)
+  // Play Base64 audio preview for speaker (hỗ trợ toggle phát/dừng, dừng audio cũ khi phát mới)
   const handlePlayAudio = (sampleAudio?: string | null, spkId?: string) => {
     if (!sampleAudio) {
-      showToast("ℹ Khng c clip m thanh mẫu cho vai ny.");
+      showToast("ℹ Không có clip âm thanh mẫu cho vai này.");
       return;
+    }
+    // Dừng engine sample nếu đang phát
+    if (engineSampleAudioRef.current) {
+      engineSampleAudioRef.current.pause();
+      engineSampleAudioRef.current = null;
+      setPlayingEngineSample(null);
+    }
+    // Bấm lại đúng spk đang phát -> dừng lại
+    if (spkId && playingAudioSpkId === spkId && currentAudioPreviewRef.current) {
+      currentAudioPreviewRef.current.pause();
+      currentAudioPreviewRef.current = null;
+      setPlayingAudioSpkId(null);
+      return;
+    }
+    if (currentAudioPreviewRef.current) {
+      currentAudioPreviewRef.current.pause();
+      currentAudioPreviewRef.current = null;
     }
     try {
       const audio = new Audio(sampleAudio);
+      currentAudioPreviewRef.current = audio;
       if (spkId) {
         setPlayingAudioSpkId(spkId);
-        audio.onended = () => setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
-        audio.onerror = () => setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
-        audio.onpause = () => setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
+        audio.onended = () => {
+          setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
+          currentAudioPreviewRef.current = null;
+        };
+        audio.onerror = () => {
+          setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
+          currentAudioPreviewRef.current = null;
+        };
+        audio.onpause = () => {
+          setPlayingAudioSpkId((curr) => (curr === spkId ? null : curr));
+        };
       }
       audio.play().catch((e) => {
         console.warn("Audio play error:", e);
@@ -2534,6 +2666,17 @@ export default function SublixStudioView({
 
   // R2-04.1 & R3-01: Audition preview assigned speaker voice (or original sample audio)
   const handlePreviewSpeakerVoice = async (spk: SpeakerItem) => {
+    // Nếu đang phát đúng vai này -> bấm lần 2 để dừng
+    if (playingAudioSpkId === spk.id) {
+      if (currentAudioPreviewRef.current) {
+        currentAudioPreviewRef.current.pause();
+        currentAudioPreviewRef.current = null;
+      }
+      setPlayingAudioSpkId(null);
+      showToast(`⏹ Đã dừng nghe thử giọng của ${spk.name}`);
+      return;
+    }
+
     setAuditioningSpkId(spk.id);
     try {
       const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
@@ -2543,14 +2686,16 @@ export default function SublixStudioView({
       const cleanVoice = mappedVoice.replace(/^kokoro:/, "");
 
       if (isTauriEnv) {
-        // Query cached voice sample first
-        try {
-          dataUri = await sublix.voiceSampleData("kokoro-vi", cleanVoice);
-        } catch {
-          dataUri = null;
+        // Nếu là Kokoro: Đọc trực tiếp từ 14 file mẫu .wav có sẵn trong repo
+        if (spkVoice.startsWith("kokoro:")) {
+          try {
+            dataUri = await sublix.voiceSampleData("kokoro-vi", cleanVoice);
+          } catch {
+            dataUri = null;
+          }
         }
 
-        // Fallback to on-demand dubbingPreviewTts
+        // Nếu chưa có sample file hoặc là VietNeu/Edge: Gọi dubbingPreviewTts on-demand
         if (!dataUri) {
           try {
             const samplePhrase = `Xin chào, tôi là ${spk.name}, đây là mẫu giọng đọc được gán cho nhân vật của tôi.`;
@@ -2564,23 +2709,24 @@ export default function SublixStudioView({
       if (dataUri) {
         handlePlayAudio(dataUri, spk.id);
         const voiceLabel = spkVoice.startsWith("vietneu:")
-          ? `VietNeu AI (${spkVoice.split(":")[1]})`
+          ? `VietNeu AI (${spkVoice.replace("vietneu:", "")})`
+          : spkVoice.startsWith("kokoro:")
+          ? `Kokoro (${cleanVoice})`
           : spkVoice;
         showToast(`🎧 Đang nghe thử giọng ${voiceLabel} của ${spk.name}`);
       } else if (spk.sampleAudio) {
         handlePlayAudio(spk.sampleAudio, spk.id);
-        showToast(`🎧 Pht clip ging gốc của ${spk.name}`);
+        showToast(`🎧 Phát clip giọng gốc của ${spk.name}`);
       } else {
-        // R4-03: KHÔNG pht beep giả mạo "mẫu ging". Trung thực bo chưa c mẫu.
-        showToast(`⚠ Chưa c mẫu ging cho vai "${spk.name}"  bấm 🔊 Nghe ging gốc để tạo.`);
+        showToast(`⚠️ Chưa có mẫu âm thanh cho vai "${spk.name}".`);
       }
     } catch (err) {
       console.warn("Failed preview voice, trying sampleAudio fallback:", err);
       if (spk.sampleAudio) {
         handlePlayAudio(spk.sampleAudio, spk.id);
-        showToast(`🎧 Pht clip ging gốc của ${spk.name}`);
+        showToast(`🎧 Phát clip giọng gốc của ${spk.name}`);
       } else {
-        showToast(`ℹ Mẫu ging ${spk.voice || "mặc định"} (${spk.name}) đ được chn.`);
+        showToast(`ℹ Mẫu giọng ${spk.voice || "mặc định"} (${spk.name}) đã được chọn.`);
       }
     } finally {
       setAuditioningSpkId(null);
@@ -2658,41 +2804,130 @@ export default function SublixStudioView({
     showToast("Đã đặt lại độ rộng cột Phụ đề (350px)");
   };
 
-  // TTS Engine & Model Filter Handlers
-  const handleSelectTtsEngine = (engine: "all" | "vietneu" | "kokoro" | "edge") => {
+  // TTS Engine & Model Selection (Tự động lọc chính xác và re-map giọng của các vai)
+  const handleSelectTtsEngine = (engine: TtsEngineKey) => {
     setSelectedTtsEngine(engine);
     try {
       localStorage.setItem("sublix_selected_tts_engine", engine);
     } catch {}
-    if (engine === "vietneu") {
-      showToast("🌟 Đã chọn Mô hình VietNeu TTS AI (Truyền cảm tiếng Việt)");
-    } else if (engine === "kokoro") {
-      showToast("🎙️ Đã chọn Mô hình Kokoro-82M ONNX (Offline Cục Bộ)");
-    } else if (engine === "edge") {
-      showToast("🌐 Đã chọn Mô hình Edge-TTS Neural (Trực tuyến Microsoft)");
-    } else {
-      showToast("⚡ Hiển thị trọn bộ giọng từ tất cả mô hình AI");
-    }
+
+    const model = TTS_ENGINE_MODELS[engine];
+    const validVoiceIds = new Set(model.voices.map((v) => v.id));
+
+    // Tự động kiểm tra và re-map giọng của các vai nếu giọng hiện tại không thuộc model vừa chọn
+    setSpeakers((prev) => {
+      let changed = false;
+      const updated = prev.map((s, idx) => {
+        if (!validVoiceIds.has(s.voice)) {
+          changed = true;
+          const isFemale = s.name.toLowerCase().includes("nữ") || s.name.toLowerCase().includes("female") || idx % 2 === 1;
+          const newVoice = isFemale ? model.defaultFemaleVoice : model.defaultMaleVoice;
+          return { ...s, voice: newVoice };
+        }
+        return s;
+      });
+      if (changed) {
+        saveAudioUndo();
+      }
+      return updated;
+    });
+
+    showToast(`✅ Đã kích hoạt mô hình ${model.name}. Danh sách giọng các vai đã được cập nhật tương ứng!`);
   };
 
-  // Áp dụng nhanh 1 model cho tất cả các vai
-  const handleApplyEngineToAllSpeakers = (engine: "vietneu" | "kokoro" | "edge") => {
+  // Áp dụng nhanh giọng mặc định của Model cho tất cả các vai
+  const handleApplyEngineToAllSpeakers = (engine: TtsEngineKey) => {
     saveAudioUndo();
+    const model = TTS_ENGINE_MODELS[engine];
     setSpeakers((prev) =>
       prev.map((s, idx) => {
-        let newVoice = s.voice;
-        const isFemale = s.name.toLowerCase().includes("nữ") || idx % 2 === 1;
-        if (engine === "vietneu") {
-          newVoice = isFemale ? "vietneu:vi_bac_nu" : "vietneu:vi_bac_nam";
-        } else if (engine === "kokoro") {
-          newVoice = isFemale ? "kokoro:mai_linh" : "kokoro:tuan_ngoc";
-        } else if (engine === "edge") {
-          newVoice = isFemale ? "vi-VN-HoaiMyNeural" : "vi-VN-NamMinhNeural";
-        }
+        const isFemale = s.name.toLowerCase().includes("nữ") || s.name.toLowerCase().includes("female") || idx % 2 === 1;
+        const newVoice = isFemale ? model.defaultFemaleVoice : model.defaultMaleVoice;
         return { ...s, voice: newVoice };
       })
     );
-    showToast(`✅ Đã đồng bộ toàn bộ vai diễn sang mô hình ${engine.toUpperCase()}`);
+    showToast(`✅ Đã đồng bộ giọng đọc (${model.shortName}) cho tất cả các vai diễn`);
+  };
+
+  // Nghe thử âm thanh mẫu đại diện của từng Mô hình TTS (VietNeu / Kokoro / Edge)
+  const handlePreviewEngineSample = async (engineKey: TtsEngineKey) => {
+    // Dừng audio của speaker preview nếu đang phát
+    if (currentAudioPreviewRef.current) {
+      currentAudioPreviewRef.current.pause();
+      currentAudioPreviewRef.current = null;
+      setPlayingAudioSpkId(null);
+    }
+
+    // Nếu đang phát đúng engine này -> bấm lần 2 để dừng
+    if (playingEngineSample === engineKey) {
+      if (engineSampleAudioRef.current) {
+        engineSampleAudioRef.current.pause();
+        engineSampleAudioRef.current = null;
+      }
+      setPlayingEngineSample(null);
+      showToast("⏹ Đã dừng phát mẫu giọng của mô hình.");
+      return;
+    }
+
+    // Dừng engine sample cũ nếu đang phát
+    if (engineSampleAudioRef.current) {
+      engineSampleAudioRef.current.pause();
+      engineSampleAudioRef.current = null;
+    }
+
+    const model = TTS_ENGINE_MODELS[engineKey];
+    setLoadingEngineSample(engineKey);
+
+    try {
+      const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+      let dataUri: string | null = null;
+
+      if (engineKey === "kokoro") {
+        if (isTauriEnv) {
+          dataUri = await sublix.voiceSampleData("kokoro-vi", "tuan_ngoc").catch(() => null);
+          if (!dataUri) {
+            dataUri = await sublix.voiceSampleData("kokoro-vi", "diem_trinh").catch(() => null);
+          }
+        }
+        if (!dataUri && isTauriEnv) {
+          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "kokoro:tuan_ngoc").catch(() => null);
+        }
+      } else if (engineKey === "vietneu") {
+        if (isTauriEnv) {
+          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "vi-VN-NamMinhNeural").catch(() => null);
+        }
+      } else if (engineKey === "edge") {
+        if (isTauriEnv) {
+          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "vi-VN-NamMinhNeural").catch(() => null);
+        }
+      }
+
+      if (dataUri) {
+        const audio = new Audio(dataUri);
+        engineSampleAudioRef.current = audio;
+        setPlayingEngineSample(engineKey);
+        audio.onended = () => {
+          setPlayingEngineSample((curr) => (curr === engineKey ? null : curr));
+          engineSampleAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setPlayingEngineSample((curr) => (curr === engineKey ? null : curr));
+          engineSampleAudioRef.current = null;
+        };
+        audio.onpause = () => {
+          setPlayingEngineSample((curr) => (curr === engineKey ? null : curr));
+        };
+        await audio.play();
+        showToast(`🎧 Đang phát mẫu giọng đại diện của ${model.name}`);
+      } else {
+        showToast(`⚠️ Không thể tải mẫu âm thanh cho mô hình ${model.name}.`);
+      }
+    } catch (err) {
+      console.warn("Lỗi phát mẫu giọng engine:", err);
+      showToast(`⚠️ Lỗi phát mẫu giọng: ${String(err)}`);
+    } finally {
+      setLoadingEngineSample(null);
+    }
   };
 
   // R2-03: Draw Audio Waveform on Canvas (Real speech activity peaks, silence is strictly flat)
@@ -3631,7 +3866,7 @@ export default function SublixStudioView({
                                 name: `Nhân vật ${speakers.length + 1}`,
                                 gender: "male",
                                 color: SPEAKER_COLORS[speakers.length % SPEAKER_COLORS.length],
-                                voice: "vietneu:vi_bac_nam",
+                                voice: TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam",
                                 count: 0,
                               },
                             ]);
@@ -3683,136 +3918,108 @@ export default function SublixStudioView({
                             🤖 Mô Hình Động Cơ TTS:
                           </span>
                           <span style={{ fontSize: 10, color: "var(--t3)" }}>
-                            {selectedTtsEngine === "vietneu"
-                              ? "🌟 VietNeu Neural AI"
-                              : selectedTtsEngine === "kokoro"
-                              ? "🎙️ Kokoro-82M Offline"
-                              : selectedTtsEngine === "edge"
-                              ? "🌐 Edge-TTS Cloud"
-                              : "⚡ Đầy đủ 3 Mô hình"}
+                            {TTS_ENGINE_MODELS[selectedTtsEngine].name} ({TTS_ENGINE_MODELS[selectedTtsEngine].voices.length} giọng)
                           </span>
                         </div>
 
-                        {/* Selector Pills */}
+                        {/* Selector Pills: 3 Models riêng biệt với nút nghe thử mẫu độc lập */}
                         <div className="studio-tts-engine-pills">
-                          <button
-                            type="button"
-                            className={`studio-tts-pill-btn ${selectedTtsEngine === "vietneu" ? "active" : ""}`}
-                            onClick={() => handleSelectTtsEngine("vietneu")}
-                            title="Mô hình VietNeu TTS AI: Ngữ điệu tiếng Việt tự nhiên, truyền cảm, thích hợp thuyết minh phim & vlog"
-                          >
-                            <span className="studio-tts-pill-title">🌟 VietNeu TTS AI</span>
-                            <span className="studio-tts-pill-sub">Biểu cảm • Tự nhiên</span>
-                          </button>
+                          {(["vietneu", "kokoro", "edge"] as TtsEngineKey[]).map((engKey) => {
+                            const model = TTS_ENGINE_MODELS[engKey];
+                            const isSelected = selectedTtsEngine === engKey;
+                            const isPlayingThis = playingEngineSample === engKey;
+                            const isLoadingThis = loadingEngineSample === engKey;
 
-                          <button
-                            type="button"
-                            className={`studio-tts-pill-btn ${selectedTtsEngine === "kokoro" ? "active" : ""}`}
-                            onClick={() => handleSelectTtsEngine("kokoro")}
-                            title="Mô hình Kokoro-Vietnamese: Chạy offline cục bộ 100% bằng ONNX, không cần mạng, siêu nhẹ"
-                          >
-                            <span className="studio-tts-pill-title">🎙️ Kokoro Local</span>
-                            <span className="studio-tts-pill-sub">Offline • ONNX 82M</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`studio-tts-pill-btn ${selectedTtsEngine === "edge" ? "active" : ""}`}
-                            onClick={() => handleSelectTtsEngine("edge")}
-                            title="Mô hình Edge-TTS: Microsoft Azure Neural, giọng chuẩn đài truyền hình, ổn định"
-                          >
-                            <span className="studio-tts-pill-title">🌐 Edge-TTS Cloud</span>
-                            <span className="studio-tts-pill-sub">Phát thanh viên • Azure</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`studio-tts-pill-btn ${selectedTtsEngine === "all" ? "active" : ""}`}
-                            onClick={() => handleSelectTtsEngine("all")}
-                            title="Hiển thị toàn bộ giọng đọc từ tất cả các mô hình AI"
-                          >
-                            <span className="studio-tts-pill-title">⚡ Tất Cả Models</span>
-                            <span className="studio-tts-pill-sub">Đầy đủ 20+ giọng</span>
-                          </button>
+                            return (
+                              <div
+                                key={engKey}
+                                className={`studio-tts-pill-btn ${isSelected ? "active" : ""}`}
+                                onClick={() => handleSelectTtsEngine(engKey)}
+                                title={model.description}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                                  <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                                    <span className="studio-tts-pill-title">{model.name}</span>
+                                    <span className="studio-tts-pill-sub">
+                                      {model.badge} • {model.voices.length} giọng
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className={`studio-tts-pill-sample-btn ${isPlayingThis ? "is-playing" : ""}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void handlePreviewEngineSample(engKey);
+                                    }}
+                                    disabled={isLoadingThis}
+                                    title={`Nghe thử mẫu giọng tiêu biểu của mô hình ${model.name} trước khi chọn`}
+                                  >
+                                    {isLoadingThis ? (
+                                      "⏳"
+                                    ) : isPlayingThis ? (
+                                      "⏹ Dừng"
+                                    ) : (
+                                      "▶️ Mẫu"
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Engine Spec & Quick Apply */}
-                        <div className="studio-tts-engine-spec">
-                          {selectedTtsEngine === "vietneu" && (
-                            <>
+                        {(() => {
+                          const currentModel = TTS_ENGINE_MODELS[selectedTtsEngine];
+                          const isPlayingCurrent = playingEngineSample === selectedTtsEngine;
+                          const isLoadingCurrent = loadingEngineSample === selectedTtsEngine;
+
+                          return (
+                            <div className="studio-tts-engine-spec">
                               <div className="studio-tts-badge-row">
-                                <span className="studio-tts-badge">🌟 VietNeu-Air v2</span>
-                                <span className="studio-tts-badge">⚡ Tốc độ: Rất nhanh</span>
-                                <span className="studio-tts-badge">🎭 Biểu cảm: Cao</span>
-                                <span className="studio-tts-badge badge-offline">✓ Đã sẵn sàng</span>
+                                <span className={`studio-tts-badge ${currentModel.badgeType === "offline" ? "badge-offline" : currentModel.badgeType === "cloud" ? "badge-cloud" : ""}`}>
+                                  {currentModel.badge}
+                                </span>
+                                <span className="studio-tts-badge">⚡ {currentModel.speed}</span>
+                                <span className="studio-tts-badge">
+                                  {currentModel.sizeMb > 0 ? `📦 ~${currentModel.sizeMb}MB` : "☁️ API Cloud"}
+                                </span>
+                                <span className="studio-tts-badge" style={{ color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }}>
+                                  {currentModel.voices.length} giọng độc quyền
+                                </span>
                               </div>
-                              <div>Ngữ điệu tự nhiên chuyên sâu cho tiếng Việt, ngắt nghỉ theo ngữ cảnh câu thoại, rất mượt mà cho phim & truyện.</div>
-                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                              <div style={{ fontSize: 10.5, lineHeight: 1.4, color: "var(--t2)", marginTop: 4 }}>
+                                {currentModel.description}
+                              </div>
+                              <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+                                <button
+                                  type="button"
+                                  className={`studio-tts-sample-preview-btn ${isPlayingCurrent ? "is-playing" : ""}`}
+                                  onClick={() => void handlePreviewEngineSample(selectedTtsEngine)}
+                                  disabled={isLoadingCurrent}
+                                  title={`Nghe câu đọc mẫu đầy đủ của mô hình ${currentModel.name}`}
+                                >
+                                  {isLoadingCurrent ? (
+                                    <>⏳ Đang tải âm thanh mẫu...</>
+                                  ) : isPlayingCurrent ? (
+                                    <>⏹ Dừng nghe mẫu ({currentModel.shortName})</>
+                                  ) : (
+                                    <>▶️ Nghe Thử Mẫu Tiêu Biểu ({currentModel.shortName})</>
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   className="studio-filter-chip"
-                                  onClick={() => handleApplyEngineToAllSpeakers("vietneu")}
-                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
-                                  title="Gán giọng VietNeu (Nam Bắc / Nữ Bắc) cho tất cả các vai hiện tại"
+                                  onClick={() => handleApplyEngineToAllSpeakers(selectedTtsEngine)}
+                                  style={{ cursor: "pointer", fontSize: 10, padding: "3px 8px" }}
+                                  title={`Gán giọng mặc định của ${currentModel.name} cho tất cả các vai`}
                                 >
-                                  ✨ Áp dụng VietNeu cho tất cả các vai
+                                  ✨ Áp dụng {currentModel.shortName} cho tất cả vai
                                 </button>
                               </div>
-                            </>
-                          )}
-
-                          {selectedTtsEngine === "kokoro" && (
-                            <>
-                              <div className="studio-tts-badge-row">
-                                <span className="studio-tts-badge">🎙️ Kokoro-v0.19</span>
-                                <span className="studio-tts-badge">⚡ Realtime x5</span>
-                                <span className="studio-tts-badge badge-offline">📦 Cục bộ Offline 100%</span>
-                                <span className="studio-tts-badge">Dung lượng: ~82MB</span>
-                              </div>
-                              <div>Chạy hoàn toàn trên máy tính cá nhân bằng ONNX Runtime, bảo mật và không phụ thuộc vào internet.</div>
-                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
-                                <button
-                                  type="button"
-                                  className="studio-filter-chip"
-                                  onClick={() => handleApplyEngineToAllSpeakers("kokoro")}
-                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
-                                  title="Gán giọng Kokoro (Tuấn Ngọc / Mai Linh) cho tất cả các vai hiện tại"
-                                >
-                                  ✨ Áp dụng Kokoro cho tất cả các vai
-                                </button>
-                              </div>
-                            </>
-                          )}
-
-                          {selectedTtsEngine === "edge" && (
-                            <>
-                              <div className="studio-tts-badge-row">
-                                <span className="studio-tts-badge">🌐 Microsoft Azure</span>
-                                <span className="studio-tts-badge badge-cloud">☁️ Cloud API</span>
-                                <span className="studio-tts-badge">🔊 Phát thanh viên chuẩn</span>
-                                <span className="studio-tts-badge">Miễn phí 24/7</span>
-                              </div>
-                              <div>Giọng đọc tròn vành rõ chữ, âm lượng đồng đều và ổn định cao từ hạ tầng đám mây.</div>
-                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
-                                <button
-                                  type="button"
-                                  className="studio-filter-chip"
-                                  onClick={() => handleApplyEngineToAllSpeakers("edge")}
-                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
-                                  title="Gán giọng Edge-TTS (Nam Minh / Hoài My) cho tất cả các vai hiện tại"
-                                >
-                                  ✨ Áp dụng Edge-TTS cho tất cả các vai
-                                </button>
-                              </div>
-                            </>
-                          )}
-
-                          {selectedTtsEngine === "all" && (
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span>⚡ Hệ thống sẵn sàng với 3 mô hình TTS: VietNeu Neural, Kokoro Local và Edge-TTS.</span>
                             </div>
-                          )}
-                        </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="studio-speakers-list">
@@ -3845,7 +4052,11 @@ export default function SublixStudioView({
 
                             <select
                               className="studio-form-select"
-                              value={spk.voice}
+                              value={
+                                TTS_ENGINE_MODELS[selectedTtsEngine].voices.some((v) => v.id === spk.voice)
+                                  ? spk.voice
+                                  : TTS_ENGINE_MODELS[selectedTtsEngine].defaultMaleVoice
+                              }
                               onChange={(e) => {
                                 const val = e.target.value;
                                 saveAudioUndo();
@@ -3853,45 +4064,13 @@ export default function SublixStudioView({
                                   prev.map((s, i) => (i === idx ? { ...s, voice: val } : s))
                                 );
                               }}
+                              title={`Chọn giọng đọc từ mô hình ${TTS_ENGINE_MODELS[selectedTtsEngine].name}`}
                             >
-                              {(selectedTtsEngine === "all" || selectedTtsEngine === "vietneu") && (
-                                <optgroup label="🌟 VietNeu TTS AI (Mô hình Neural Tiếng Việt Truyền Cảm)">
-                                  <option value="vietneu:vi_bac_nam">🌟 VietNeu Nam ♂ (Bắc - Truyền cảm, Review Phim)</option>
-                                  <option value="vietneu:vi_bac_nu">🌟 VietNeu Nữ ♀ (Bắc - Dịu dàng, Sách nói)</option>
-                                  <option value="vietneu:vi_nam_nam">🌟 VietNeu Nam ♂ (Nam - Ấm áp, Podcast)</option>
-                                  <option value="vietneu:vi_nam_nu">🌟 VietNeu Nữ ♀ (Nam - Tự nhiên, Vlog)</option>
-                                  <option value="vietneu:vi_hue_nu">🌟 VietNeu Nữ ♀ (Huế - Ngọt ngào, Trữ tình)</option>
-                                  <option value="vietneu:vi_bac_thoisu">🌟 VietNeu Nam ♂ (Bắc - Thời sự, Tin tức)</option>
-                                </optgroup>
-                              )}
-
-                              {(selectedTtsEngine === "all" || selectedTtsEngine === "kokoro") && (
-                                <optgroup label="🎙️ Kokoro-Vietnamese AI (Mô hình Offline ONNX Cục Bộ ~82M)">
-                                  <option value="kokoro:tuan_ngoc">🎙️ Tuấn Ngọc ♂ (Bắc - Trầm ấm, Thuyết minh)</option>
-                                  <option value="kokoro:manh_dung">🎙️ Mạnh Dũng ♂ (Nam - Tự nhiên, Mạnh mẽ)</option>
-                                  <option value="kokoro:hung_thinh">🎙️ Hưng Thịnh ♂ (Bắc - Phóng sự, Thời sự)</option>
-                                  <option value="kokoro:phat_tai">🎙️ Phát Tài ♂ (Nam - Hào sảng, Thể thao)</option>
-                                  <option value="kokoro:thanh_dat">🎙️ Thành Đạt ♂ (Bắc - Tự tin, Trẻ trung)</option>
-                                  <option value="kokoro:duc_an">🎙️ Đức An ♂ (Bắc - Điềm đạm, Trầm tĩnh)</option>
-                                  <option value="kokoro:duc_duy">🎙️ Đức Duy ♂ (Nam - Năng động, Hoạt náo)</option>
-                                  <option value="kokoro:mai_linh">🎙️ Mai Linh ♀ (Bắc - Nhẹ nhàng, Trong trẻo)</option>
-                                  <option value="kokoro:ngoc_huyen">🎙️ Ngọc Huyền ♀ (Nam - Truyền cảm, Tâm sự)</option>
-                                  <option value="kokoro:diem_trinh">🎙️ Diễm Trinh ♀ (Bắc - Điện ảnh, Sang trọng)</option>
-                                  <option value="kokoro:mai_loan">🎙️ Mai Loan ♀ (Bắc - Ấm áp, Trưởng thành)</option>
-                                  <option value="kokoro:my_yen">🎙️ Mỹ Yến ♀ (Nam - Ngọt ngào, Tươi tắn)</option>
-                                  <option value="kokoro:thuc_trinh">🎙️ Thục Trinh ♀ (Bắc - Trang nhã, Lịch thiệp)</option>
-                                  <option value="kokoro:storyvert">🎙️ Storyvert ♀ (Bắc - Kể chuyện cổ tích, Sách nói)</option>
-                                </optgroup>
-                              )}
-
-                              {(selectedTtsEngine === "all" || selectedTtsEngine === "edge") && (
-                                <optgroup label="🌐 Edge-TTS Neural (Mô hình Trực Tuyến Microsoft Azure)">
-                                  <option value="vi-VN-NamMinhNeural">🌐 Nam Minh ♂ (Bắc - Chuẩn phát thanh viên)</option>
-                                  <option value="vi-VN-HoaiMyNeural">🌐 Hoài My ♀ (Bắc - Dịu êm, Sâu lắng)</option>
-                                  <option value="en-US-AndrewNeural">🌐 Andrew ♂ (Mỹ - Tiếng Anh Đa sắc thái)</option>
-                                  <option value="en-US-AvaNeural">🌐 Ava ♀ (Mỹ - Tiếng Anh Biểu cảm)</option>
-                                </optgroup>
-                              )}
+                              {TTS_ENGINE_MODELS[selectedTtsEngine].voices.map((v) => (
+                                <option key={v.id} value={v.id}>
+                                  {v.label}
+                                </option>
+                              ))}
                             </select>
 
                             <div className="studio-speaker-actions">

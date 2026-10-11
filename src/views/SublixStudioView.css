@@ -2780,39 +2780,40 @@
 }
 
 .studio-tts-engine-pills {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
 .studio-tts-pill-btn {
   display: flex;
-  flex-direction: column;
-  padding: 6px 8px;
+  align-items: center;
+  padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.35);
   color: var(--t2);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
   text-align: left;
+  user-select: none;
 }
 
 .studio-tts-pill-btn:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.22);
   color: var(--t1);
 }
 
 .studio-tts-pill-btn.active {
-  background: rgba(56, 189, 248, 0.14);
+  background: rgba(56, 189, 248, 0.12);
   border-color: #38bdf8;
   color: #38bdf8;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
 }
 
 .studio-tts-pill-title {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -2820,13 +2821,44 @@
 }
 
 .studio-tts-pill-sub {
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--t3);
   margin-top: 2px;
 }
 
 .studio-tts-pill-btn.active .studio-tts-pill-sub {
   color: #bae6fd;
+}
+
+/* Nút bấm nghe thử mẫu âm thanh của Model trực tiếp trên Pill */
+.studio-tts-pill-sample-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #7dd3fc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.studio-tts-pill-sample-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.studio-tts-pill-sample-btn.is-playing {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #ef4444;
+  color: #fca5a5;
+  animation: studio-tts-pulse 1.2s infinite alternate;
 }
 
 .studio-tts-engine-spec {
@@ -2867,6 +2899,47 @@
   background: rgba(168, 85, 247, 0.18);
   color: #d8b4fe;
   border-color: rgba(168, 85, 247, 0.35);
+}
+
+/* Nút nghe thử mẫu to trong phần Spec của Model */
+.studio-tts-sample-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 5px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.studio-tts-sample-preview-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.studio-tts-sample-preview-btn.is-playing {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+  color: #fca5a5;
+  animation: studio-tts-pulse 1.2s infinite alternate;
+}
+
+@keyframes studio-tts-pulse {
+  0% {
+    box-shadow: 0 0 2px rgba(239, 68, 68, 0.4);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+    transform: scale(1.02);
+  }
 }
 
 /* ==========================================================================
