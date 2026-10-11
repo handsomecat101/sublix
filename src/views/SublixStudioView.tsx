@@ -380,7 +380,7 @@ export default function SublixStudioView({
       );
     }
   }, [speakers]);
-  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number>(2); // 2: 2 người (đối thoại), 1: 1 người (độc thoại), 0: tự động
+  const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number>(1); // 1: 1 người (độc thoại/thuyết minh), 2: 2 người (đối thoại), 0: tự động
   const [collapseSpeakerTracks, setCollapseSpeakerTracks] = useState<boolean>(false);
   const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
   const [mergeFromSpkId, setMergeFromSpkId] = useState<string>("");
@@ -458,6 +458,11 @@ export default function SublixStudioView({
   const scrubbingCleanupRef = useRef<(() => void) | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
   const timelineTracksBodyRef = useRef<HTMLDivElement | null>(null);
+
+  // Hardware-accelerated playhead & timecode DOM refs (Tránh re-render 4000 nodes 60fps gây treo máy)
+  const playheadElementRef = useRef<HTMLDivElement | null>(null);
+  const timecodeElementRef = useRef<HTMLSpanElement | null>(null);
+  const lastTimeStateUpdateRef = useRef<number>(0);
 
   // Timeline (P5)
   const [batchMode, setBatchMode] = useState<boolean>(false);
@@ -595,9 +600,9 @@ export default function SublixStudioView({
     }
   }, [isActive]);
 
-  // Tự động lưu trạng thái dự án Studio vào localStorage để không bao giờ bị mất
+  // Tự động lưu trạng thái dự án Studio vào localStorage (Tối ưu nhẹ, không lưu base64 ảnh để tránh tràn bộ nhớ và treo máy)
   useEffect(() => {
-    if (!filePath) return;
+    if (!filePath || segments.length === 0) return;
     const timer = window.setTimeout(() => {
       try {
         const payload: SavedStudioProject = {
@@ -606,9 +611,9 @@ export default function SublixStudioView({
           mediaDuration,
           segments,
           speakers,
-          audioPeaks,
-          filmstripThumbs,
-          currentTime,
+          audioPeaks: audioPeaks.slice(0, 300), // Lưu nhẹ tối đa 300 điểm peaks
+          filmstripThumbs: [], // Tuyệt đối không lưu hàng chục ảnh Base64 vào localStorage tránh lag treo WebView2
+          currentTime: 0,
           sttLang,
           targetLang,
         };
@@ -616,9 +621,9 @@ export default function SublixStudioView({
       } catch (err) {
         console.warn("Studio auto-save to localStorage failed:", err);
       }
-    }, 600);
+    }, 1200);
     return () => window.clearTimeout(timer);
-  }, [filePath, fileName, mediaDuration, segments, speakers, audioPeaks, filmstripThumbs, currentTime, sttLang, targetLang]);
+  }, [filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang]);
 
   // R5-01: cleanup loadedMetadataTimer khi component unmount hoặc đổi file
   // (tránh setState sau khi component đã unmount → React warning).
@@ -1084,6 +1089,35 @@ export default function SublixStudioView({
     showToast(`⚡ Đã gộp gọn toàn bộ câu thoại về 2 vai chính: "${mainRole1.name}" và "${mainRole2.name}"!`);
   };
 
+  // 1-Click: Gộp nhanh toàn bộ về 1 vai duy nhất (Thuyết minh độc thoại / Solo Narrator)
+  const handleQuickMergeToOneRole = () => {
+    if (speakers.length === 0) return;
+    saveSubtitleUndo();
+    saveAudioUndo();
+
+    const mainRole = speakers[0];
+    const mainRoleId = mainRole.id;
+
+    const updatedSegments = segments.map((seg) => ({
+      ...seg,
+      speakerId: mainRoleId,
+    }));
+
+    const keptSpeakers: SpeakerItem[] = [
+      {
+        ...mainRole,
+        name: mainRole.name.includes("Thuyết minh") ? mainRole.name : "Thuyết minh AI",
+        count: updatedSegments.length,
+      },
+    ];
+
+    setSegments(updatedSegments);
+    setSpeakers(keptSpeakers);
+    setExpectedSpeakerCount(1);
+    setCollapseSpeakerTracks(true);
+    showToast(`👤 Đã gộp toàn bộ ${updatedSegments.length} câu thoại về 1 vai duy nhất ("${keptSpeakers[0].name}")!`);
+  };
+
   // Gộp tuỳ chọn giữa 2 vai (Modal Merge)
   const handleConfirmMergeSpeakers = () => {
     if (!mergeFromSpkId || !mergeToSpkId) {
@@ -1196,15 +1230,18 @@ export default function SublixStudioView({
     }
   };
 
-  // R2-02: Master Studio Playback Clock (strictly synchronized to real video element)
+  // R2-02: Master Studio Playback Clock (strictly synchronized to real video element, Hardware-accelerated)
   useEffect(() => {
     if (!isPlaying) {
       if (animFrameRef.current !== null) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
       }
-      if (videoRef.current && !videoRef.current.paused) {
-        try { videoRef.current.pause(); } catch (e) { console.warn("Video pause error:", e); }
+      if (videoRef.current) {
+        if (!videoRef.current.paused) {
+          try { videoRef.current.pause(); } catch (e) { console.warn("Video pause error:", e); }
+        }
+        setCurrentTime(videoRef.current.currentTime);
       }
       return;
     }
@@ -1229,7 +1266,23 @@ export default function SublixStudioView({
           setIsPlaying(false);
           return;
         }
-        setCurrentTime(vTime);
+
+        // Tối ưu hóa cấp phần cứng: Di chuyển kim playhead & cập nhật timecode trực tiếp trên DOM (60fps mượt như nhung)
+        if (playheadElementRef.current && mediaDurationRef.current > 0) {
+          const leftPx = (vTime / mediaDurationRef.current) * timelineWidthRef.current;
+          playheadElementRef.current.style.left = `${leftPx}px`;
+        }
+        if (timecodeElementRef.current) {
+          timecodeElementRef.current.textContent = formatTimecode(vTime);
+        }
+
+        // Throttle React state re-render xuống mỗi 120ms (~8fps cho React Virtual DOM thay vì 60fps):
+        // Giảm tải 90% CPU, loại bỏ hoàn toàn hiện tượng quá tải và treo máy khi video có hàng trăm câu thoại
+        const now = performance.now();
+        if (now - lastTimeStateUpdateRef.current > 120) {
+          lastTimeStateUpdateRef.current = now;
+          setCurrentTime(vTime);
+        }
       }
 
       animFrameRef.current = requestAnimationFrame(tick);
@@ -2489,13 +2542,14 @@ export default function SublixStudioView({
         }
 
         let mappedSpeakers: SpeakerItem[] = [];
+        const defaultVoice = TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam";
         if (expectedSpeakerCount === 1) {
           const singleSpk: SpeakerItem = {
             id: "spk_1",
-            name: "Nhân vật chính",
+            name: "Thuyết minh AI",
             gender: "male",
             color: "#38bdf8",
-            voice: "vi-VN-NamMinhNeural",
+            voice: defaultVoice,
             count: project.segments.length,
             sampleAudio: null,
           };
@@ -2507,18 +2561,19 @@ export default function SublixStudioView({
             name: spk.label,
             gender: spk.gender as "male" | "female",
             color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
-            voice: spk.voice,
+            voice: spk.voice || defaultVoice,
             count: project.segments.filter((s) => s.speaker_id === spk.id).length,
             sampleAudio: spk.sample_audio_data || null,
           }));
           setSpeakers(mappedSpeakers);
         }
 
+        const singleSpkId = expectedSpeakerCount === 1 ? mappedSpeakers[0].id : null;
         const newMappedSegments: SubtitleItem[] = project.segments.map((seg) => ({
           id: seg.id,
           start: seg.start_sec,
           end: seg.end_sec,
-          speakerId: seg.speaker_id,
+          speakerId: singleSpkId || seg.speaker_id,
           original: seg.original_text,
           translated: seg.dubbed_text || seg.original_text,
           hasAudio: true,
@@ -3783,18 +3838,23 @@ export default function SublixStudioView({
                           <button
                             type="button"
                             className={`studio-speaker-count-chip ${expectedSpeakerCount === 1 ? "active" : ""}`}
-                            onClick={() => setExpectedSpeakerCount(1)}
-                            title="1 người độc thoại / thuyết minh (Khóa chính xác 1 vai duy nhất)"
+                            onClick={() => {
+                              setExpectedSpeakerCount(1);
+                              if (speakers.length > 1) {
+                                handleQuickMergeToOneRole();
+                              }
+                            }}
+                            title="1 người độc thoại / thuyết minh (Khóa chính xác 1 vai duy nhất, dọn sạch timeline)"
                           >
-                            👤 1 Người
+                            👤 1 Người ⭐
                           </button>
                           <button
                             type="button"
                             className={`studio-speaker-count-chip ${expectedSpeakerCount === 2 ? "active" : ""}`}
                             onClick={() => setExpectedSpeakerCount(2)}
-                            title="2 người đối thoại / podcast / phỏng vấn (Khuyên dùng: Phân đúng 2 vai, không bị rác)"
+                            title="2 người đối thoại / podcast / phỏng vấn (Phân đúng 2 vai)"
                           >
-                            👥 2 Người ⭐
+                            👥 2 Người
                           </button>
                           <button
                             type="button"
@@ -3893,6 +3953,17 @@ export default function SublixStudioView({
                         >
                           <IconLink size={12} /> Gộp vai...
                         </button>
+
+                        {speakers.length > 1 && (
+                          <button
+                            type="button"
+                            className="studio-btn-tool-chip highlight-solo"
+                            onClick={handleQuickMergeToOneRole}
+                            title="👤 Tự động gộp toàn bộ câu thoại về 1 vai duy nhất (Thuyết minh độc thoại), dọn sạch timeline ngay lập tức"
+                          >
+                            👤 Về 1 vai
+                          </button>
+                        )}
 
                         {speakers.length > 2 && (
                           <button
@@ -5411,7 +5482,7 @@ export default function SublixStudioView({
             </button>
 
             <div className="studio-timeline-timecode">
-              <span>{formatTimecode(currentTime)}</span>
+              <span ref={timecodeElementRef}>{formatTimecode(currentTime)}</span>
               <span className="studio-timeline-timecode-total">/ {formatTimecode(mediaDuration)}</span>
             </div>
           </div>
@@ -5675,6 +5746,7 @@ export default function SublixStudioView({
 
             {/* Playhead Vertical Needle */}
             <div
+              ref={playheadElementRef}
               className={`studio-timeline-playhead ${isDraggingPlayhead ? "dragging" : ""}`}
               style={{ left: `${(currentTime / Math.max(1, mediaDuration)) * timelineWidth}px` }}
             >
@@ -6094,16 +6166,7 @@ export default function SublixStudioView({
                       }}
                       title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
                     >
-                      <div className="studio-voice-wave-texture">
-                        <span style={{ height: "45%" }} />
-                        <span style={{ height: "80%" }} />
-                        <span style={{ height: "60%" }} />
-                        <span style={{ height: "100%" }} />
-                        <span style={{ height: "70%" }} />
-                        <span style={{ height: "40%" }} />
-                        <span style={{ height: "90%" }} />
-                        <span style={{ height: "55%" }} />
-                      </div>
+                      <div className="studio-voice-wave-texture" />
                       <div
                         className="studio-timeline-block-handle left"
                         onClick={(e) => {
@@ -6210,16 +6273,7 @@ export default function SublixStudioView({
                           }}
                           title={`[Audio Lồng Tiếng: ${spkName}] ${seg.translated || seg.original}`}
                         >
-                          <div className="studio-voice-wave-texture">
-                            <span style={{ height: "45%" }} />
-                            <span style={{ height: "80%" }} />
-                            <span style={{ height: "60%" }} />
-                            <span style={{ height: "100%" }} />
-                            <span style={{ height: "70%" }} />
-                            <span style={{ height: "40%" }} />
-                            <span style={{ height: "90%" }} />
-                            <span style={{ height: "55%" }} />
-                          </div>
+                          <div className="studio-voice-wave-texture" />
                           <div
                             className="studio-timeline-block-handle left"
                             onClick={(e) => {

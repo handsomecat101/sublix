@@ -1298,6 +1298,8 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transition: all 0.15s ease;
   border: 1px solid rgba(255, 255, 255, 0.15);
+  content-visibility: auto;
+  contain-intrinsic-size: 80px 28px;
 }
 
 .studio-timeline-block:hover {
@@ -2996,25 +2998,38 @@
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.4) !important;
 }
 
-/* Wave Texture Background bên trong Audio Block */
+/* Wave Texture Background bên trong Audio Block (Thuần CSS Gradient, 0 DOM span elements, siêu mượt) */
 .studio-voice-wave-texture {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  opacity: 0.18;
+  opacity: 0.22;
   pointer-events: none;
   z-index: 1;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.5) 0px,
+    rgba(255, 255, 255, 0.5) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  mask-image: linear-gradient(to bottom, transparent 5%, black 25%, black 75%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 5%, black 25%, black 75%, transparent 95%);
 }
 
-.studio-voice-wave-texture span {
-  width: 2px;
-  background: #ffffff;
-  border-radius: 1px;
+.studio-btn-tool-chip.highlight-solo {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  font-weight: 700;
+}
+
+.studio-btn-tool-chip.highlight-solo:hover {
+  background: rgba(56, 189, 248, 0.28) !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
 }
 
 .studio-voice-block-inner {
