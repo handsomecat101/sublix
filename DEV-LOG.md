@@ -1106,4 +1106,46 @@ sublix/
 - ✅ Timeline từ 7 tracks xếp chồng ngập màn hình thu gọn ngay về 1 track thuyết minh duy nhất với 1 click.
 - ✅ Playback và tua video (scrubbing) 323 câu thoại mượt mà 60fps, CPU giảm từ 100% xuống dưới 10%, không còn hiện tượng treo đơ máy.
 
+---
+
+## [2026-10-12] Session 28: Tách Rời Quy Trình Quét Phân Vai & Lồng Tiếng + Bổ Sung Tổ Hợp Giới Tính 2 Vai & Bảng Chỉ Báo Model TTS Trực Quan
+
+### Vấn Đề Gặp Phải (Feedback Product Owner - Anh Tuấn):
+1. **Quy trình bị gộp "tù mù":** Trước đây bấm phân tích là hệ thống tự động gộp chạy hết để lồng tiếng luôn, người dùng không được review kịch bản, không biết AI đã chia những vai gì, ở đoạn nào, câu nào của ai trước khi tổng hợp giọng đọc.
+2. **Thiếu tùy chọn tổ hợp giới tính khi chọn 2 người:** Không có nút chọn cụ thể Nam - Nữ, Nam - Nam, hay Nữ - Nữ.
+3. **Không có chỉ báo trực quan:** Giao diện thiếu bảng hiển thị rõ ràng đang chọn Model TTS nào, giọng nào đang được gán cho vai nào.
+4. **Không đổi được giới tính từng vai:** Người dùng không có nút bấm 1 chạm để đổi vai 1 thành Nam hay Nữ.
+
+### Kỹ Thuật Đã Triển Khai:
+1. **Tách Rời Hoàn Toàn 2 Công Đoạn (2-Step Modular Workflow):**
+   - **Bước 1: Quét & Phân Vai Trước (Chưa Lồng Tiếng):**
+     - Chạy Whisper STT + Sherpa AI Diarization + Dịch thuật.
+     - Đặt `hasAudio: false`: Không tự động tạo track tiếng lồng hay gọi TTS, mà hiển thị rõ danh sách các vai diễn, mốc thời gian và câu thoại để người dùng **review toàn diện**.
+   - **Bước 2: Bắt Đầu Lồng Tiếng (TTS):**
+     - Nút nổi bật `🎙️ Bước 2: Bắt Đầu Lồng Tiếng TTS (${speakers.length} vai)` (cả ở thẻ Phân vai lẫn Action Hub).
+     - Chỉ khi người dùng đã xem xong, chọn ưng ý Model và từng giọng cho từng vai thì mới bấm lồng tiếng.
+   - Vẫn giữ nút `⚡ Chạy Tự Động Toàn Trình (A ➔ Z)` cho ai thích chạy 1-click từ đầu đến cuối.
+2. **Bộ Presets Tổ Hợp Giới Tính 2 Người (`twoSpeakerGenderPreset`):**
+   - Khi chọn `👥 2 Người`, xuất hiện ngay 3 nút bấm 1-click:
+     - `👨‍🦱👩 1 Nam & 1 Nữ ⭐`: Vai 1 gán giọng Nam, Vai 2 gán giọng Nữ (chuẩn đối thoại).
+     - `👨‍🦱👨‍🦱 2 Nam`: Cả 2 vai đều là Nam (gán 2 giọng Nam khác nhau của Model đang chọn).
+     - `👩👩 2 Nữ`: Cả 2 vai đều là Nữ (gán 2 giọng Nữ khác nhau của Model đang chọn).
+3. **Nút Toggle Giới Tính 1 Chạm Cho Từng Vai (`handleToggleSpeakerGender`):**
+   - Trên mỗi thẻ vai diễn, bổ sung nút bấm `[👨 Nam]` / `[👩 Nữ]` nổi bật với màu sắc phân biệt (Xanh dương cho Nam, Hồng cho Nữ).
+   - Bấm vào là lật giới tính ngay lập tức và tự động chuyển dropdown sang giọng phù hợp của Model hiện tại.
+4. **Bảng Chỉ Báo Trực Quan Model & Vai Diễn (`.studio-active-tts-hud`):**
+   - Thiết kế bảng HUD dạ quang hiện đại ngay trên danh sách vai:
+     - Hiển thị rõ tên Model TTS đang kích hoạt (VD: `VietNeu TTS AI (Cloud / Local)`).
+     - Liệt kê từng vai: Icon giới tính, tên vai và tên giọng đọc AI đang gán (VD: `Vai 1: 👨 Nam • Nam Bắc`).
+5. **Cập Nhật Action Hub Ở Cuối Sidebar:**
+   - Chia thành hàng 2 nút bấm rõ ràng: `[🔍 1. Quét & Phân Vai]` và `[🎙️ 2. Lồng Tiếng TTS]`, đi kèm nút 1-click toàn trình.
+
+### Kết Quả Kiểm Thử (Verification):
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite build thành công 100% trong 4.61s.
+- ✅ Người dùng hoàn toàn chủ động quét và review các vai trước khi quyết định lồng tiếng.
+- ✅ Chuyển đổi linh hoạt Nam - Nữ, Nam - Nam, Nữ - Nữ cho 2 vai diễn chỉ với 1 click.
+- ✅ Toàn bộ thông tin Model và phân vai hiển thị minh bạch 100%, không còn cảm giác "tù mù".
+
+
 

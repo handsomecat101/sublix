@@ -381,6 +381,7 @@ export default function SublixStudioView({
     }
   }, [speakers]);
   const [expectedSpeakerCount, setExpectedSpeakerCount] = useState<number>(1); // 1: 1 người (độc thoại/thuyết minh), 2: 2 người (đối thoại), 0: tự động
+  const [twoSpeakerGenderPreset, setTwoSpeakerGenderPreset] = useState<"mf" | "mm" | "ff">("mf"); // mf: 1 Nam 1 Nữ, mm: 2 Nam, ff: 2 Nữ
   const [collapseSpeakerTracks, setCollapseSpeakerTracks] = useState<boolean>(false);
   const [showMergeModal, setShowMergeModal] = useState<boolean>(false);
   const [mergeFromSpkId, setMergeFromSpkId] = useState<string>("");
@@ -1116,6 +1117,103 @@ export default function SublixStudioView({
     setExpectedSpeakerCount(1);
     setCollapseSpeakerTracks(true);
     showToast(`👤 Đã gộp toàn bộ ${updatedSegments.length} câu thoại về 1 vai duy nhất ("${keptSpeakers[0].name}")!`);
+  };
+
+  // Áp dụng tổ hợp giới tính nhanh cho 2 vai diễn (Nam & Nữ / 2 Nam / 2 Nữ)
+  const handleApplyTwoSpeakerPreset = (preset: "mf" | "mm" | "ff") => {
+    setTwoSpeakerGenderPreset(preset);
+    saveAudioUndo();
+
+    const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
+    const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
+    const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+
+    const maleV1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+    const maleV2 = maleVoices[1]?.id || maleV1;
+    const femaleV1 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+    const femaleV2 = femaleVoices[1]?.id || femaleV1;
+
+    setSpeakers((prev) => {
+      let spks = [...prev];
+      if (spks.length === 0) {
+        spks = [
+          {
+            id: "spk_1",
+            name: "Nhân vật 1",
+            gender: "male",
+            color: SPEAKER_COLORS[0],
+            voice: maleV1,
+            count: 0,
+            sampleAudio: null,
+          },
+        ];
+      }
+      if (spks.length < 2) {
+        spks.push({
+          id: `spk_${Date.now()}`,
+          name: "Nhân vật 2",
+          gender: "female",
+          color: SPEAKER_COLORS[1 % SPEAKER_COLORS.length],
+          voice: femaleV1,
+          count: 0,
+          sampleAudio: null,
+        });
+      }
+
+      if (preset === "mf") {
+        return spks.slice(0, 2).map((s, idx) => {
+          if (idx === 0) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nam)", gender: "male" as const, voice: maleV1 };
+          if (idx === 1) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nữ)", gender: "female" as const, voice: femaleV1 };
+          return s;
+        });
+      } else if (preset === "mm") {
+        return spks.slice(0, 2).map((s, idx) => {
+          if (idx === 0) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nam 1)", gender: "male" as const, voice: maleV1 };
+          if (idx === 1) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nam 2)", gender: "male" as const, voice: maleV2 };
+          return s;
+        });
+      } else {
+        // "ff"
+        return spks.slice(0, 2).map((s, idx) => {
+          if (idx === 0) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nữ 1)", gender: "female" as const, voice: femaleV1 };
+          if (idx === 1) return { ...s, name: s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim() + " (Nữ 2)", gender: "female" as const, voice: femaleV2 };
+          return s;
+        });
+      }
+    });
+
+    const labelMap = {
+      mf: "👨‍🦱👩 1 Nam & 1 Nữ (Đối thoại chuẩn)",
+      mm: "👨‍🦱👨‍🦱 2 Nam (Nam & Nam)",
+      ff: "👩👩 2 Nữ (Nữ & Nữ)",
+    };
+    showToast(`🎭 Đã áp dụng phân vai: ${labelMap[preset]} (${currentEngine.name})`);
+  };
+
+  // Toggle giới tính riêng của từng vai diễn: Nam ⇄ Nữ
+  const handleToggleSpeakerGender = (idx: number) => {
+    saveAudioUndo();
+    const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
+    const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
+    const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+
+    const maleVoice = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+    const femaleVoice = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+
+    setSpeakers((prev) =>
+      prev.map((s, i) => {
+        if (i !== idx) return s;
+        const newGender: "male" | "female" = s.gender === "male" ? "female" : "male";
+        const newVoice = newGender === "male" ? maleVoice : femaleVoice;
+        const cleanName = s.name.replace(/ \(Nam.*?\)| \(Nữ.*?\)/g, "").trim();
+        return {
+          ...s,
+          gender: newGender,
+          name: `${cleanName} (${newGender === "male" ? "Nam" : "Nữ"})`,
+          voice: newVoice,
+        };
+      })
+    );
   };
 
   // Gộp tuỳ chọn giữa 2 vai (Modal Merge)
@@ -2465,31 +2563,31 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8: 1-CLICK TOÀN BỘ PIPELINE (STT + DIARIZATION + TRANSLATION + VOICE)
   // =========================================================================
-  const handleRunAnalysis = async (forceRange?: boolean) => {
+  const handleRunAnalysis = async (forceRange?: boolean, dubImmediately: boolean = false) => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return;
     }
     setIsAnalyzing(true);
-    setTimelineProcessType("pipeline");
+    setTimelineProcessType(dubImmediately ? "pipeline" : "stt");
     setAnalyzeProgress(5);
     setTimelineProgress(5);
-    setAnalyzeMessage("Đang khởi tạo pipeline AI...");
-    setTimelineProcessMessage("Đang khởi tạo pipeline AI...");
+    setAnalyzeMessage(dubImmediately ? "Đang khởi tạo pipeline toàn trình..." : "Đang khởi tạo quét phân tích & phân vai...");
+    setTimelineProcessMessage(dubImmediately ? "Đang khởi tạo pipeline toàn trình..." : "Đang quét phân tích...");
 
     notifyTaskUpdate({
       status: "running",
       type: "dubbing",
       workflowType: "dubbing",
-      workflowLabel: "Lồng Tiếng Đa Vai AI",
-      title: `Lồng Tiếng Đa Vai · ${fileName || "Video"}`,
+      workflowLabel: dubImmediately ? "Lồng Tiếng Đa Vai AI" : "Quét Phân Tích & Phân Vai",
+      title: `${dubImmediately ? "Lồng Tiếng Toàn Trình" : "Quét Phân Vai"} · ${fileName || "Video"}`,
       stage: "Đang khởi tạo pipeline AI...",
       percent: 5,
       steps: [
         { id: "stt", label: "Whisper STT", status: "running" },
         { id: "diar", label: "Sherpa Phân Vai", status: "pending" },
         { id: "trans", label: "Dịch AI", status: "pending" },
-        { id: "tts", label: "Lồng Tiếng TTS", status: "pending" },
+        { id: "tts", label: dubImmediately ? "Lồng Tiếng TTS" : "Sẵn Sàng Chọn Giọng", status: "pending" },
       ],
     });
 
@@ -2518,7 +2616,7 @@ export default function SublixStudioView({
             { id: "stt", label: "Whisper STT", status: pStage === "stt" ? "running" : pStage === "diarizing" || pStage === "scripting" || pStage === "translating" || pStage === "tts" ? "done" : "pending" },
             { id: "diar", label: "Sherpa Phân Vai", status: pStage === "diarizing" ? "running" : pStage === "scripting" || pStage === "translating" || pStage === "tts" ? "done" : "pending" },
             { id: "trans", label: "Dịch AI", status: pStage === "scripting" || pStage === "translating" ? "running" : pStage === "tts" ? "done" : "pending" },
-            { id: "tts", label: "Lồng Tiếng TTS", status: pStage === "tts" ? "running" : "pending" },
+            { id: "tts", label: dubImmediately ? "Lồng Tiếng TTS" : "Sẵn Sàng Chọn Giọng", status: pStage === "tts" ? "running" : "pending" },
           ],
         });
       });
@@ -2542,11 +2640,13 @@ export default function SublixStudioView({
         }
 
         let mappedSpeakers: SpeakerItem[] = [];
-        const defaultVoice = TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam";
+        const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
+        const defaultVoice = currentEngine?.defaultMaleVoice || "vietneu:vi_bac_nam";
+
         if (expectedSpeakerCount === 1) {
           const singleSpk: SpeakerItem = {
             id: "spk_1",
-            name: "Thuyết minh AI",
+            name: "Thuyết minh AI (Nam)",
             gender: "male",
             color: "#38bdf8",
             voice: defaultVoice,
@@ -2555,11 +2655,56 @@ export default function SublixStudioView({
           };
           mappedSpeakers = [singleSpk];
           setSpeakers(mappedSpeakers);
+        } else if (expectedSpeakerCount === 2) {
+          // Xử lý chuẩn xác cho 2 người nói theo preset Nam/Nữ người dùng chọn
+          const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
+          const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+
+          let g1: "male" | "female" = "male";
+          let g2: "male" | "female" = "female";
+          let v1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+          let v2 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+
+          if (twoSpeakerGenderPreset === "mm") {
+            g1 = "male";
+            g2 = "male";
+            v1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+            v2 = maleVoices[1]?.id || v1;
+          } else if (twoSpeakerGenderPreset === "ff") {
+            g1 = "female";
+            g2 = "female";
+            v1 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+            v2 = femaleVoices[1]?.id || v1;
+          }
+
+          const spk1Id = project.speakers[0]?.id || "spk_1";
+          const spk2Id = project.speakers[1]?.id || "spk_2";
+
+          const spk1: SpeakerItem = {
+            id: spk1Id,
+            name: `Vai 1 (${g1 === "male" ? "Nam" : "Nữ"})`,
+            gender: g1,
+            color: SPEAKER_COLORS[0],
+            voice: v1,
+            count: project.segments.filter((s) => s.speaker_id === spk1Id).length,
+            sampleAudio: project.speakers[0]?.sample_audio_data || null,
+          };
+          const spk2: SpeakerItem = {
+            id: spk2Id,
+            name: `Vai 2 (${g2 === "male" ? "Nam" : "Nữ"})`,
+            gender: g2,
+            color: SPEAKER_COLORS[1 % SPEAKER_COLORS.length],
+            voice: v2,
+            count: project.segments.filter((s) => s.speaker_id === spk2Id).length,
+            sampleAudio: project.speakers[1]?.sample_audio_data || null,
+          };
+          mappedSpeakers = [spk1, spk2];
+          setSpeakers(mappedSpeakers);
         } else {
           mappedSpeakers = project.speakers.map((spk, idx) => ({
             id: spk.id,
             name: spk.label,
-            gender: spk.gender as "male" | "female",
+            gender: (spk.gender as "male" | "female") || (idx % 2 === 0 ? "male" : "female"),
             color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
             voice: spk.voice || defaultVoice,
             count: project.segments.filter((s) => s.speaker_id === spk.id).length,
@@ -2569,15 +2714,26 @@ export default function SublixStudioView({
         }
 
         const singleSpkId = expectedSpeakerCount === 1 ? mappedSpeakers[0].id : null;
-        const newMappedSegments: SubtitleItem[] = project.segments.map((seg) => ({
-          id: seg.id,
-          start: seg.start_sec,
-          end: seg.end_sec,
-          speakerId: singleSpkId || seg.speaker_id,
-          original: seg.original_text,
-          translated: seg.dubbed_text || seg.original_text,
-          hasAudio: true,
-        }));
+        const validSpkIds = new Set(mappedSpeakers.map((s) => s.id));
+        const fallbackSpkId = mappedSpeakers[0]?.id || "spk_1";
+
+        const newMappedSegments: SubtitleItem[] = project.segments.map((seg) => {
+          let targetSpkId = seg.speaker_id;
+          if (singleSpkId) {
+            targetSpkId = singleSpkId;
+          } else if (!validSpkIds.has(targetSpkId)) {
+            targetSpkId = fallbackSpkId;
+          }
+          return {
+            id: seg.id,
+            start: seg.start_sec,
+            end: seg.end_sec,
+            speakerId: targetSpkId,
+            original: seg.original_text,
+            translated: seg.dubbed_text || seg.original_text,
+            hasAudio: dubImmediately, // Nếu quét trước thì chưa có audio để user review & chọn giọng
+          };
+        });
 
         saveUndoHistory();
         if (isRange) {
@@ -2597,25 +2753,33 @@ export default function SublixStudioView({
         setTimelineProgress(100);
         setAnalyzeMessage("Phân tích hoàn tất!");
         setTimelineProcessMessage("Hoàn tất!");
-        showToast(`✅ Phân tích xong: ${newMappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật.`);
 
         notifyTaskUpdate({
           status: "completed",
           type: "dubbing",
           workflowType: "dubbing",
-          workflowLabel: "Lồng Tiếng Đa Vai AI",
-          title: `Lồng Tiếng Đa Vai · ${fileName || "Video"}`,
-          stage: "Hoàn tất toàn trình lồng tiếng",
-          detail: `Đã tạo ${newMappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật`,
+          workflowLabel: dubImmediately ? "Lồng Tiếng Đa Vai AI" : "Quét Phân Tích & Phân Vai",
+          title: `${dubImmediately ? "Lồng Tiếng Toàn Trình" : "Quét Phân Vai Xong"} · ${fileName || "Video"}`,
+          stage: dubImmediately ? "Hoàn tất toàn trình lồng tiếng" : "Đã bóc tách & phân vai xong",
+          detail: `Phát hiện ${mappedSpeakers.length} vai diễn, ${newMappedSegments.length} câu thoại`,
           percent: 100,
           outputPath: filePath,
           steps: [
             { id: "stt", label: "Whisper STT", status: "done" },
             { id: "diar", label: "Sherpa Phân Vai", status: "done" },
             { id: "trans", label: "Dịch AI", status: "done" },
-            { id: "tts", label: "Lồng Tiếng TTS", status: "done" },
+            { id: "tts", label: dubImmediately ? "Lồng Tiếng TTS" : "Sẵn Sàng Chọn Giọng", status: "done" },
           ],
         });
+
+        if (dubImmediately) {
+          showToast(`⚡ Đã phân tích xong ${newMappedSegments.length} câu thoại. Bắt đầu tổng hợp giọng đọc...`);
+          setTimeout(() => {
+            void handleRunVoiceOnly(forceRange);
+          }, 350);
+        } else {
+          showToast(`✅ Đã phân tích xong ${newMappedSegments.length} câu & ${mappedSpeakers.length} vai! Vui lòng xem lại vai diễn, chọn giọng rồi bấm "Bắt Đầu Lồng Tiếng".`);
+        }
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
@@ -3851,7 +4015,10 @@ export default function SublixStudioView({
                           <button
                             type="button"
                             className={`studio-speaker-count-chip ${expectedSpeakerCount === 2 ? "active" : ""}`}
-                            onClick={() => setExpectedSpeakerCount(2)}
+                            onClick={() => {
+                              setExpectedSpeakerCount(2);
+                              setCollapseSpeakerTracks(false);
+                            }}
                             title="2 người đối thoại / podcast / phỏng vấn (Phân đúng 2 vai)"
                           >
                             👥 2 Người
@@ -3865,9 +4032,42 @@ export default function SublixStudioView({
                             🤖 Tự động
                           </button>
                         </div>
+
+                        {/* Presets tổ hợp 2 vai (Nam & Nữ / 2 Nam / 2 Nữ) */}
+                        {expectedSpeakerCount === 2 && (
+                          <div className="studio-two-speaker-preset-box">
+                            <span className="studio-two-speaker-preset-title">🎭 Chọn tổ hợp giới tính 2 vai:</span>
+                            <div className="studio-two-speaker-preset-chips">
+                              <button
+                                type="button"
+                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "mf" ? "active" : ""}`}
+                                onClick={() => handleApplyTwoSpeakerPreset("mf")}
+                                title="Vai 1 là Nam, Vai 2 là Nữ (Tổ hợp đối thoại chuẩn)"
+                              >
+                                👨‍🦱👩 1 Nam & 1 Nữ ⭐
+                              </button>
+                              <button
+                                type="button"
+                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "mm" ? "active" : ""}`}
+                                onClick={() => handleApplyTwoSpeakerPreset("mm")}
+                                title="Cả 2 vai đều là Nam (Giọng Nam 1 & Nam 2 riêng biệt)"
+                              >
+                                👨‍🦱👨‍🦱 2 Nam
+                              </button>
+                              <button
+                                type="button"
+                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "ff" ? "active" : ""}`}
+                                onClick={() => handleApplyTwoSpeakerPreset("ff")}
+                                title="Cả 2 vai đều là Nữ (Giọng Nữ 1 & Nữ 2 riêng biệt)"
+                              >
+                                👩👩 2 Nữ
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Nút phân tích giọng tách rời nếu cần */}
+                      {/* Bước 1: Nút Quét Phân Tích & Phân Vai Trước (Chưa Lồng Tiếng) */}
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
                           type="button"
@@ -3875,16 +4075,18 @@ export default function SublixStudioView({
                           style={{
                             flex: 1,
                             justifyContent: "center",
-                            background: "rgba(168, 85, 247, 0.08)",
-                            borderColor: "rgba(168, 85, 247, 0.25)",
+                            background: "rgba(168, 85, 247, 0.12)",
+                            borderColor: "rgba(168, 85, 247, 0.35)",
                             color: "#c084fc",
+                            fontWeight: 700,
+                            padding: "8px 12px",
                           }}
-                          onClick={() => void handleRunAnalysis()}
+                          onClick={() => void handleRunAnalysis(false, false)}
                           disabled={isAnalyzing}
-                          title="Dò tìm và phân nhóm giọng người nói trong video"
+                          title="Bước 1: Quét nhận diện kịch bản và phân tích âm sắc phân vai trước để bạn xem lại và chọn giọng"
                         >
                           <IconUser size={13} />
-                          {isAnalyzing ? "Đang Phân Tích..." : "Phân Tích Người Nói (Sherpa AI)"}
+                          {isAnalyzing ? "⏳ Đang Phân Tích..." : "🔍 Bước 1: Quét & Phân Vai Trước (Chưa Lồng Tiếng)"}
                         </button>
                         {isAnalyzing && (
                           <button
@@ -4093,6 +4295,35 @@ export default function SublixStudioView({
                         })()}
                       </div>
 
+                      {/* BẢNG CHỈ BÁO TRỰC QUAN: MÔ HÌNH TTS ĐANG DÙNG & TỔNG QUAN PHÂN VAI */}
+                      <div className="studio-active-tts-hud">
+                        <div className="studio-active-tts-hud-header">
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span className="studio-active-tts-hud-title">🤖 Model TTS Đang Dùng:</span>
+                            <span className="studio-active-tts-hud-engine">
+                              {TTS_ENGINE_MODELS[selectedTtsEngine].name}
+                            </span>
+                          </div>
+                          <span className="studio-active-tts-hud-badge">
+                            {TTS_ENGINE_MODELS[selectedTtsEngine].badge}
+                          </span>
+                        </div>
+                        {speakers.length > 0 && (
+                          <div className="studio-active-tts-hud-chips">
+                            {speakers.map((spk) => {
+                              const vObj = TTS_ENGINE_MODELS[selectedTtsEngine].voices.find((v) => v.id === spk.voice);
+                              return (
+                                <div key={spk.id} className="studio-active-tts-role-tag" style={{ borderLeftColor: spk.color }}>
+                                  <span className="tag-gender">{spk.gender === "male" ? "👨" : "👩"}</span>
+                                  <span className="tag-name">{spk.name}:</span>
+                                  <span className="tag-voice">{vObj?.label || spk.voice}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="studio-speakers-list">
                         {speakers.map((spk, idx) => (
                           <div key={spk.id} className="studio-speaker-item">
@@ -4116,6 +4347,14 @@ export default function SublixStudioView({
                                 placeholder="Tên vai diễn / người nói"
                                 title="Tên vai diễn / người lồng tiếng"
                               />
+                              <button
+                                type="button"
+                                className={`studio-speaker-gender-toggle ${spk.gender}`}
+                                onClick={() => handleToggleSpeakerGender(idx)}
+                                title={`Giới tính hiện tại: ${spk.gender === "male" ? "Nam" : "Nữ"}. Nhấp để đổi sang ${spk.gender === "male" ? "Nữ" : "Nam"} (tự động đổi giọng đọc tương ứng)`}
+                              >
+                                {spk.gender === "male" ? "👨 Nam" : "👩 Nữ"}
+                              </button>
                               <span className="studio-speaker-chip-count">
                                 {segments.filter((s) => s.speakerId === spk.id).length} câu
                               </span>
@@ -4193,24 +4432,26 @@ export default function SublixStudioView({
                         ))}
                       </div>
 
-                      {/* Nút hành động cục bộ: Chỉ chạy lồng tiếng */}
+                      {/* Nút hành động cục bộ: Bước 2 - Bắt đầu lồng tiếng */}
                       <button
                         type="button"
                         className="studio-btn-subtle"
                         style={{
                           width: "100%",
                           justifyContent: "center",
-                          marginTop: 6,
-                          background: "rgba(245, 158, 11, 0.08)",
-                          borderColor: "rgba(245, 158, 11, 0.25)",
+                          marginTop: 10,
+                          background: "rgba(245, 158, 11, 0.15)",
+                          borderColor: "rgba(245, 158, 11, 0.45)",
                           color: "#f59e0b",
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          padding: "10px 14px",
+                          fontSize: 13,
                         }}
                         disabled={isAnalyzing || segments.length === 0}
                         onClick={() => void handleRunVoiceOnly()}
-                        title="Chỉ tạo giọng đọc TTS cho các câu thoại hiện có trên timeline"
+                        title="Tạo giọng đọc TTS cho các câu thoại theo đúng các vai và giọng đã chọn ở trên"
                       >
-                        <IconPlay size={13} /> 🎙️ Chỉ Chạy Lồng Tiếng (TTS)
+                        <IconPlay size={14} /> 🎙️ Bước 2: Bắt Đầu Lồng Tiếng TTS ({speakers.length} vai)
                       </button>
                     </div>
                   )}
@@ -4374,52 +4615,90 @@ export default function SublixStudioView({
                   )}
                 </div>
 
-                {/* Single Consolidated Action Button */}
-                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                  <button
-                    type="button"
-                    className="studio-workflow-run-btn"
-                    style={{ flex: 1 }}
-                    onClick={handleRunCustomWorkflow}
-                    disabled={isAnalyzing || (!workflowOptStt && !workflowOptVoice)}
-                    title="Bắt đầu xử lý theo đúng các tính năng đã bật ở trên"
-                  >
-                    {isAnalyzing ? (
-                      <>⚡ {timelineProcessMessage || "Đang xử lý..."}</>
-                    ) : (
-                      <>
-                        🚀 BẮT ĐẦU XỬ LÝ{" "}
-                        {workflowOptStt && workflowOptVoice
-                          ? "(Toàn Trình)"
-                          : workflowOptStt
-                          ? "(Chỉ Phụ Đề)"
-                          : "(Chỉ Lồng Tiếng)"}
-                      </>
-                    )}
-                  </button>
-                  {isAnalyzing && (
+                {/* Stepped Action Hub Buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {/* Hàng 2 bước tách rời */}
+                  <div style={{ display: "flex", gap: 6 }}>
                     <button
                       type="button"
-                      className="studio-btn-action-danger"
-                      onClick={handleCancelAnalysis}
+                      className="studio-btn-subtle"
                       style={{
-                        background: "rgba(239, 68, 68, 0.15)",
-                        border: "1px solid rgba(239, 68, 68, 0.4)",
-                        color: "#f87171",
-                        borderRadius: 8,
-                        padding: "8px 14px",
-                        cursor: "pointer",
+                        flex: 1,
+                        justifyContent: "center",
+                        background: "rgba(168, 85, 247, 0.12)",
+                        borderColor: "rgba(168, 85, 247, 0.35)",
+                        color: "#c084fc",
                         fontWeight: 700,
+                        padding: "8px 10px",
                         fontSize: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
                       }}
-                      title="Dừng tiến trình đang chạy"
+                      onClick={() => void handleRunAnalysis(false, false)}
+                      disabled={isAnalyzing}
+                      title="Bước 1: Quét nhận diện phụ đề và phân vai trước để bạn review và chọn giọng"
                     >
-                      🛑 Dừng
+                      <IconUser size={13} /> 🔍 1. Quét & Phân Vai
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="studio-btn-subtle"
+                      style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        background: segments.length > 0 ? "rgba(245, 158, 11, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                        borderColor: segments.length > 0 ? "rgba(245, 158, 11, 0.45)" : "rgba(255, 255, 255, 0.1)",
+                        color: segments.length > 0 ? "#f59e0b" : "var(--t3)",
+                        fontWeight: 700,
+                        padding: "8px 10px",
+                        fontSize: 12,
+                      }}
+                      onClick={() => void handleRunVoiceOnly()}
+                      disabled={isAnalyzing || segments.length === 0}
+                      title="Bước 2: Tổng hợp giọng lồng tiếng cho các vai đã chọn"
+                    >
+                      <IconPlay size={13} /> 🎙️ 2. Lồng Tiếng TTS
+                    </button>
+                  </div>
+
+                  {/* Nút Chạy Toàn Trình Tự Động A -> Z */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="studio-workflow-run-btn"
+                      style={{ flex: 1 }}
+                      onClick={handleRunCustomWorkflow}
+                      disabled={isAnalyzing || (!workflowOptStt && !workflowOptVoice)}
+                      title="Tự động chạy toàn trình từ đầu đến cuối không cần can thiệp"
+                    >
+                      {isAnalyzing ? (
+                        <>⚡ {timelineProcessMessage || "Đang xử lý..."}</>
+                      ) : (
+                        <>⚡ Chạy Tự Động Toàn Trình (A ➔ Z)</>
+                      )}
+                    </button>
+                    {isAnalyzing && (
+                      <button
+                        type="button"
+                        className="studio-btn-action-danger"
+                        onClick={handleCancelAnalysis}
+                        style={{
+                          background: "rgba(239, 68, 68, 0.15)",
+                          border: "1px solid rgba(239, 68, 68, 0.4)",
+                          color: "#f87171",
+                          borderRadius: 8,
+                          padding: "8px 14px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                          fontSize: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                        title="Dừng tiến trình đang chạy"
+                      >
+                        🛑 Dừng
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>

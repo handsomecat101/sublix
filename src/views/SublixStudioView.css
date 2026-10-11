@@ -3275,5 +3275,180 @@
   background: rgba(0, 0, 0, 0.15);
 }
 
+/* =========================================================================
+   ROUND-27: 2-SPEAKER PRESET COMBINATIONS & GENDER TOGGLES
+   ========================================================================= */
+.studio-two-speaker-preset-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-two-speaker-preset-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.studio-two-speaker-preset-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.studio-speaker-preset-chip {
+  flex: 1;
+  min-width: 90px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--t2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.studio-speaker-preset-chip:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.studio-speaker-preset-chip.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #f0fdf4;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
+  font-weight: 700;
+}
+
+/* =========================================================================
+   ROUND-27: ACTIVE TTS MODEL & ROLES HUD BANNER
+   ========================================================================= */
+.studio-active-tts-hud {
+  margin-top: 6px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.75) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-active-tts-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.studio-active-tts-hud-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.studio-active-tts-hud-engine {
+  font-size: 11px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.studio-active-tts-hud-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.studio-active-tts-hud-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.studio-active-tts-role-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 3px solid #38bdf8;
+  font-size: 10px;
+}
+
+.studio-active-tts-role-tag .tag-gender {
+  font-size: 10px;
+}
+
+.studio-active-tts-role-tag .tag-name {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.studio-active-tts-role-tag .tag-voice {
+  color: #94a3b8;
+}
+
+/* =========================================================================
+   ROUND-27: SPEAKER GENDER TOGGLE BUTTON (MALE / FEMALE)
+   ========================================================================= */
+.studio-speaker-gender-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.studio-speaker-gender-toggle.male {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.studio-speaker-gender-toggle.male:hover {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+}
+
+.studio-speaker-gender-toggle.female {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f472b6;
+  border: 1px solid rgba(244, 114, 182, 0.35);
+}
+
+.studio-speaker-gender-toggle.female:hover {
+  background: rgba(244, 114, 182, 0.28);
+  border-color: #f472b6;
+  box-shadow: 0 0 6px rgba(244, 114, 182, 0.4);
+}
+
 
 
