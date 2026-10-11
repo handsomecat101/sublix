@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-PROCESS-POLISH` | Đồng bộ Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard | **Antigravity** | 2026-10-11 | ✅ Đồng bộ metadata (filename, workflow, steps), loại bỏ hardcode 'Studio Lồng Tiếng' & '0/2 câu thoại', Live timer, Stepper |
 | `TSK-TIMELINE-START-ALIGN` | Căn chuẩn gốc Timeline x=0 (xóa offset 40px, Playhead needle & ticks & tracks đồng bộ tại 00:00:00) | **Antigravity** | 2026-10-11 | ✅ Kim tua, ruler tick 00:00, video, sóng âm, phụ đề bắt đầu chuẩn x=0, clip-path cờ khi sát biên, E2E build 100% |
 | `TSK-STUDIO-ROUND-15` | Unified Studio: Bridge Downloader thẳng vào Studio, dọn sạch 2 tab nổ, đồng bộ Master Topbar | **Antigravity** | 2026-10-11 | ✅ Nút `🚀 Đưa Vào Studio`, loại bỏ tab popping `file_sub`/`dubbing`, đồng bộ 6 Master tabs, badge v0.11.29, E2E Playwright pass |
 | `TSK-STUDIO-ROUNDS-10-14` | Studio Premiere Timeline Resizer, Marquee, VietNeu TTS, Dynamic HUD, Sub-only Flow | **Antigravity** | 2026-10-10 | ✅ Hoàn tất 5 rounds (R10-R14), commit `ac735e5`, push GitHub xanh, build TS 100% |

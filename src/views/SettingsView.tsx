@@ -173,7 +173,24 @@ export default function SettingsView() {
   const [processHistory, setProcessHistory] = useState<AppTaskItem[]>(() => {
     try {
       const saved = localStorage.getItem("sublix_process_history_v1");
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed: AppTaskItem[] = JSON.parse(saved);
+      // Polish & sanitize lịch sử cũ (loại bỏ "0/2 câu thoại" hoặc hardcode)
+      return parsed.map((item) => {
+        let cleanDetail = item.detail;
+        if (cleanDetail && (cleanDetail.includes("0/2 câu thoại") || cleanDetail.includes("0/0 câu thoại"))) {
+          cleanDetail = "Đã hoàn tất phân tích & xử lý";
+        }
+        let cleanStage = item.stage;
+        if (cleanStage === "Hoàn tất lồng tiếng" && item.workflowType !== "dubbing" && item.workflowType !== "voice_only") {
+          cleanStage = "Hoàn tất xử lý";
+        }
+        return {
+          ...item,
+          detail: cleanDetail,
+          stage: cleanStage,
+        };
+      });
     } catch {
       return [];
     }
@@ -181,7 +198,8 @@ export default function SettingsView() {
 
   const saveToProcessHistory = (item: AppTaskItem) => {
     setProcessHistory((prev) => {
-      const next = [item, ...prev.slice(0, 49)];
+      // Bỏ qua item trùng id và status trong 3 giây gần nhất
+      const next = [item, ...prev.filter((p) => !(p.id === item.id && p.completedAt && item.completedAt && Math.abs(p.completedAt - item.completedAt) < 3000)).slice(0, 49)];
       try {
         localStorage.setItem("sublix_process_history_v1", JSON.stringify(next));
       } catch (err) {
@@ -196,6 +214,99 @@ export default function SettingsView() {
     try {
       localStorage.removeItem("sublix_process_history_v1");
     } catch {}
+  };
+
+  const handleStudioTaskUpdate = (task: any) => {
+    const taskId = "dubbing_active";
+    if (task.status === "idle") {
+      setGlobalTasks((prev) => {
+        if (!prev[taskId]) return prev;
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      return;
+    }
+
+    if (task.status === "completed") {
+      setGlobalTasks((prev) => {
+        const existing = prev[taskId];
+        const completedTask: AppTaskItem = {
+          id: taskId,
+          type: task.type || existing?.type || "dubbing",
+          title: task.title || existing?.title || "Dự án Studio AI",
+          fileName: task.fileName || existing?.fileName,
+          workflowType: task.workflowType || existing?.workflowType,
+          workflowLabel: task.workflowLabel || existing?.workflowLabel,
+          stage: task.stage || "Hoàn tất xử lý",
+          percent: 100,
+          status: "completed",
+          detail: task.detail || existing?.detail || "Hoàn tất thành công",
+          steps: task.steps || existing?.steps,
+          startedAt: existing?.startedAt || Date.now() - 5000,
+          completedAt: Date.now(),
+          targetTab: "studio",
+          outputPath: task.outputPath || existing?.outputPath,
+        };
+        saveToProcessHistory(completedTask);
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      return;
+    }
+
+    if (task.status === "error") {
+      setGlobalTasks((prev) => {
+        const existing = prev[taskId];
+        const errorTask: AppTaskItem = {
+          id: taskId,
+          type: task.type || existing?.type || "dubbing",
+          title: task.title || existing?.title || "Dự án Studio AI",
+          fileName: task.fileName || existing?.fileName,
+          workflowType: task.workflowType || existing?.workflowType,
+          workflowLabel: task.workflowLabel || existing?.workflowLabel,
+          stage: task.stage || "Lỗi xử lý",
+          percent: task.percent ?? existing?.percent ?? 0,
+          status: "error",
+          error: task.error || "Gặp lỗi trong quá trình xử lý",
+          detail: task.detail || existing?.detail,
+          steps: task.steps || existing?.steps,
+          startedAt: existing?.startedAt || Date.now() - 5000,
+          completedAt: Date.now(),
+          targetTab: "studio",
+        };
+        saveToProcessHistory(errorTask);
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      return;
+    }
+
+    // status: "running"
+    setGlobalTasks((prev) => {
+      const existing = prev[taskId];
+      return {
+        ...prev,
+        [taskId]: {
+          id: taskId,
+          type: task.type || existing?.type || "dubbing",
+          title: task.title || existing?.title || "Dự án Studio AI",
+          fileName: task.fileName || existing?.fileName,
+          workflowType: task.workflowType || existing?.workflowType,
+          workflowLabel: task.workflowLabel || existing?.workflowLabel,
+          stage: task.stage || existing?.stage || "Đang xử lý...",
+          percent: typeof task.percent === "number" ? task.percent : (existing?.percent ?? 0),
+          status: "running",
+          detail: task.detail !== undefined ? task.detail : existing?.detail,
+          steps: task.steps || existing?.steps,
+          startedAt: existing?.startedAt || Date.now(),
+          targetTab: "studio",
+          outputPath: task.outputPath || existing?.outputPath,
+        },
+      };
+    });
   };
 
   useEffect(() => {
@@ -415,11 +526,17 @@ export default function SettingsView() {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
           if (existing) {
+            const finalStage = existing.workflowLabel
+              ? `Hoàn tất ${existing.workflowLabel}`
+              : existing.type === "dubbing"
+              ? "Hoàn tất lồng tiếng"
+              : "Hoàn tất tạo phụ đề";
             saveToProcessHistory({
               ...existing,
               status: "completed",
               percent: 100,
-              stage: "Hoàn tất lồng tiếng",
+              stage: finalStage,
+              detail: existing.detail || (p.total_items > 2 ? `Đã tạo ${p.total_items} câu thoại` : "Hoàn tất thành công"),
               completedAt: Date.now(),
             });
             const next = { ...prev };
@@ -445,20 +562,44 @@ export default function SettingsView() {
           return prev;
         });
       } else {
-        setGlobalTasks((prev) => ({
-          ...prev,
-          [taskId]: {
-            id: taskId,
-            type: "dubbing",
-            title: "Studio Lồng Tiếng AI",
-            stage: p.message || p.stage,
-            percent: p.percent,
-            status: "running",
-            detail: p.total_items > 0 ? `${p.current_item}/${p.total_items} câu thoại` : undefined,
-            startedAt: prev[taskId]?.startedAt || Date.now(),
-            targetTab: "studio",
-          },
-        }));
+        setGlobalTasks((prev) => {
+          const existing = prev[taskId];
+          let stageMsg = p.message || p.stage;
+          // Masking khi người dùng đang chạy phụ đề mà backend gửi thông điệp Sherpa
+          if (
+            (existing?.workflowType === "subtitle_only" || existing?.workflowType === "subtitle_translate" || existing?.type === "file_sub") &&
+            (stageMsg.includes("Sherpa") || stageMsg.includes("phân tích âm sắc") || p.stage === "diarizing")
+          ) {
+            stageMsg = "🎙️ Đang tối ưu câu thoại & căn chỉnh mốc thời gian phụ đề...";
+          }
+
+          let detailText: string | undefined = existing?.detail;
+          if (p.total_items > 2) {
+            detailText = `${p.current_item}/${p.total_items} câu thoại`;
+          } else if (p.total_items <= 2 && p.current_item === 0) {
+            detailText = existing?.detail || "Đang tải mô hình & phân tích...";
+          }
+
+          return {
+            ...prev,
+            [taskId]: {
+              id: taskId,
+              type: existing?.type || "dubbing",
+              title: existing?.title || "Dự án Studio AI",
+              fileName: existing?.fileName,
+              workflowType: existing?.workflowType,
+              workflowLabel: existing?.workflowLabel,
+              stage: stageMsg,
+              percent: p.percent,
+              status: "running",
+              detail: detailText,
+              steps: existing?.steps,
+              startedAt: existing?.startedAt || Date.now(),
+              targetTab: "studio",
+              outputPath: existing?.outputPath,
+            },
+          };
+        });
       }
     });
 
@@ -1040,6 +1181,7 @@ export default function SettingsView() {
           onNavigateTab={(t) => setActiveTab(t)}
           currentTheme={theme}
           onThemeChange={handleThemeChange}
+          onTaskUpdate={handleStudioTaskUpdate}
         />
       </div>
             {/* RIGHT MAIN WORKSPACE */}
@@ -2949,6 +3091,16 @@ export default function SettingsView() {
           (t) => t.status === "running" && t.targetTab !== activeTab
         );
         if (!primaryTask) return null;
+        const iconSymbol =
+          primaryTask.workflowType === "subtitle_only"
+            ? "💬"
+            : primaryTask.workflowType === "subtitle_translate"
+            ? "🌐"
+            : primaryTask.type === "downloader"
+            ? "⬇️"
+            : primaryTask.type === "model"
+            ? "📦"
+            : "🎬";
         return (
           <div
             className="floating-task-toast"
@@ -2957,12 +3109,14 @@ export default function SettingsView() {
             }}
             title="Bấm để chuyển ngay đến tab đang xử lý"
           >
-            <div className="floating-task-toast-icon">⚡</div>
+            <div className="floating-task-toast-icon">{iconSymbol}</div>
             <div className="floating-task-toast-info">
               <div className="floating-task-toast-title">
                 {primaryTask.title} — {primaryTask.percent.toFixed(0)}%
               </div>
-              <div className="floating-task-toast-stage">{primaryTask.stage}</div>
+              <div className="floating-task-toast-stage">
+                {primaryTask.fileName ? `📁 ${primaryTask.fileName} • ` : ""}{primaryTask.stage}
+              </div>
             </div>
             <button
               type="button"

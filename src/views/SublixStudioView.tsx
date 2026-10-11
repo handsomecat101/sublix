@@ -41,6 +41,25 @@ import {
 } from "../icons";
 import "./SublixStudioView.css";
 
+export interface StudioTaskUpdatePayload {
+  id?: string;
+  status: "running" | "completed" | "error" | "idle";
+  type?: "file_sub" | "dubbing" | "downloader" | "model" | "live" | "subtitle";
+  workflowType?: "subtitle_only" | "subtitle_translate" | "dubbing" | "voice_only";
+  workflowLabel?: string;
+  fileName?: string;
+  title?: string;
+  stage?: string;
+  detail?: string;
+  percent?: number;
+  steps?: Array<{ id: string; label: string; status: "done" | "running" | "pending" }>;
+  totalItems?: number;
+  currentItem?: number;
+  outputPath?: string;
+  error?: string;
+  targetTab?: "downloader" | "file_sub" | "dubbing" | "live" | "models" | "studio";
+}
+
 export interface SublixStudioViewProps {
   onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process") => void;
   currentTheme?: string;
@@ -48,6 +67,7 @@ export interface SublixStudioViewProps {
   initialFilePath?: string;
   isActive?: boolean;
   fileNonce?: number;
+  onTaskUpdate?: (task: StudioTaskUpdatePayload) => void;
 }
 
 export interface SpeakerItem {
@@ -110,6 +130,7 @@ export default function SublixStudioView({
   initialFilePath,
   isActive = true,
   fileNonce,
+  onTaskUpdate,
 }: SublixStudioViewProps) {
   // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
   const [cachedProject] = useState<SavedStudioProject | null>(() => {
@@ -132,6 +153,19 @@ export default function SublixStudioView({
       ? (initialFilePath.split(/[\\/]/).pop() || "")
       : (cachedProject?.fileName || "")
   );
+
+  // Helper đồng bộ tiến trình chi tiết sang SettingsView / Process Center
+  const notifyTaskUpdate = (payload: Partial<StudioTaskUpdatePayload>) => {
+    if (!onTaskUpdate) return;
+    const currentName = fileName || (filePath ? filePath.split(/[\\/]/).pop() || "Video" : "Video");
+    onTaskUpdate({
+      id: "dubbing_active",
+      status: "running",
+      fileName: currentName,
+      targetTab: "studio",
+      ...payload,
+    } as StudioTaskUpdatePayload);
+  };
   const [mediaDuration, setMediaDuration] = useState<number>(
     cachedProject?.mediaDuration || 0
   );
@@ -1712,6 +1746,28 @@ export default function SublixStudioView({
     setAnalyzeMessage(startMsg);
     setTimelineProcessMessage(startMsg);
 
+    const isTranslating = workflowOptTranslate;
+    notifyTaskUpdate({
+      status: "running",
+      type: "file_sub",
+      workflowType: isTranslating ? "subtitle_translate" : "subtitle_only",
+      workflowLabel: isTranslating ? "Phụ Đề & Dịch Thuật AI" : "Trích Xuất Phụ Đề Gốc",
+      title: isTranslating ? `Phụ Đề & Dịch Thuật · ${fileName || "Video"}` : `Phụ Đề AI · ${fileName || "Video"}`,
+      stage: startMsg,
+      percent: 10,
+      steps: isTranslating
+        ? [
+            { id: "stt", label: "Whisper STT", status: "running" },
+            { id: "trans", label: "Dịch AI (LLM)", status: "pending" },
+            { id: "done", label: "Xuất Phụ Đề", status: "pending" },
+          ]
+        : [
+            { id: "audio", label: "Tách âm thanh", status: "done" },
+            { id: "stt", label: "Whisper STT", status: "running" },
+            { id: "timeline", label: "Đồng bộ Timeline", status: "pending" },
+          ],
+    });
+
     const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
@@ -1746,6 +1802,23 @@ export default function SublixStudioView({
         setTimelineProgress(pct);
         setAnalyzeMessage(msg);
         setTimelineProcessMessage(msg);
+
+        notifyTaskUpdate({
+          status: "running",
+          stage: msg,
+          percent: isTranslating ? Math.min(60, Math.round(pct * 0.6)) : pct,
+          steps: isTranslating
+            ? [
+                { id: "stt", label: "Whisper STT", status: pct >= 95 ? "done" : "running" },
+                { id: "trans", label: "Dịch AI (LLM)", status: "pending" },
+                { id: "done", label: "Xuất Phụ Đề", status: "pending" },
+              ]
+            : [
+                { id: "audio", label: "Tách âm thanh", status: "done" },
+                { id: "stt", label: "Whisper STT", status: pct >= 95 ? "done" : "running" },
+                { id: "timeline", label: "Đồng bộ Timeline", status: pct >= 95 ? "running" : "pending" },
+              ],
+        });
       });
 
       const project: DubbingProject = await sublix.dubbingAnalyze(
@@ -1806,12 +1879,37 @@ export default function SublixStudioView({
         setAnalyzeMessage("Hoàn tất trích xuất phụ đề!");
         setTimelineProcessMessage("Hoàn tất trích xuất phụ đề!");
         showToast(`✅ Đã trích xuất ${newMappedSegs.length} câu phụ đề!`);
+
+        if (!isTranslating) {
+          notifyTaskUpdate({
+            status: "completed",
+            type: "file_sub",
+            workflowType: "subtitle_only",
+            workflowLabel: "Trích Xuất Phụ Đề Gốc",
+            title: `Phụ Đề AI · ${fileName || "Video"}`,
+            stage: "Hoàn tất trích xuất phụ đề",
+            detail: `Đã tạo ${newMappedSegs.length} câu phụ đề`,
+            percent: 100,
+            outputPath: filePath,
+            steps: [
+              { id: "audio", label: "Tách âm thanh", status: "done" },
+              { id: "stt", label: "Whisper STT", status: "done" },
+              { id: "timeline", label: "Đồng bộ Timeline", status: "done" },
+            ],
+          });
+        }
+
         return finalSegs;
       }
       return null;
     } catch (err) {
       console.error("STT error:", err);
       showToast(`❌ Lỗi nhận dạng phụ đề: ${err}`);
+      notifyTaskUpdate({
+        status: "error",
+        stage: "Lỗi nhận dạng phụ đề",
+        error: String(err),
+      });
       return null;
     } finally {
       if (unlisten) unlisten();
@@ -1852,6 +1950,21 @@ export default function SublixStudioView({
     const initMsg = `Đang dịch ${targetSegs.length} câu thoại sang ${targetLang.toUpperCase()}...`;
     setTimelineProcessMessage(initMsg);
     setAnalyzeMessage(initMsg);
+
+    notifyTaskUpdate({
+      status: "running",
+      type: "file_sub",
+      workflowType: "subtitle_translate",
+      workflowLabel: "Phụ Đề & Dịch Thuật AI",
+      title: `Phụ Đề & Dịch Thuật · ${fileName || "Video"}`,
+      stage: initMsg,
+      percent: 50,
+      steps: [
+        { id: "stt", label: "Whisper STT", status: "done" },
+        { id: "trans", label: "Dịch AI (LLM)", status: "running" },
+        { id: "done", label: "Xuất Phụ Đề", status: "pending" },
+      ],
+    });
 
     try {
       await handleSaveProviderConfig();
@@ -1901,6 +2014,18 @@ export default function SublixStudioView({
         const pct = Math.min(95, Math.round((completedCount / total) * 95));
         setTimelineProgress(pct);
         setAnalyzeProgress(pct);
+
+        notifyTaskUpdate({
+          status: "running",
+          stage: loopMsg,
+          detail: `${Math.min(total, completedCount)}/${total} câu thoại`,
+          percent: Math.min(98, 50 + Math.round(((completedCount) / total) * 48)),
+          steps: [
+            { id: "stt", label: "Whisper STT", status: "done" },
+            { id: "trans", label: "Dịch AI (LLM)", status: "running" },
+            { id: "done", label: "Xuất Phụ Đề", status: "pending" },
+          ],
+        });
       }
 
       setTimelineProgress(100);
@@ -1908,9 +2033,31 @@ export default function SublixStudioView({
       setTimelineProcessMessage("Dịch thuật hoàn tất!");
       setAnalyzeMessage("Dịch thuật phụ đề hoàn tất!");
       showToast(`✅ Đã dịch xong ${total} câu thoại sang ${targetLang.toUpperCase()}!`);
+
+      notifyTaskUpdate({
+        status: "completed",
+        type: "file_sub",
+        workflowType: "subtitle_translate",
+        workflowLabel: "Phụ Đề & Dịch Thuật AI",
+        title: `Phụ Đề & Dịch Thuật · ${fileName || "Video"}`,
+        stage: "Hoàn tất tạo & dịch phụ đề",
+        detail: `Đã dịch ${total} câu thoại sang ${targetLang.toUpperCase()}`,
+        percent: 100,
+        outputPath: filePath,
+        steps: [
+          { id: "stt", label: "Whisper STT", status: "done" },
+          { id: "trans", label: "Dịch AI (LLM)", status: "done" },
+          { id: "done", label: "Xuất Phụ Đề", status: "done" },
+        ],
+      });
     } catch (err) {
       console.error("Translation error:", err);
       showToast(`❌ Lỗi dịch thuật: ${err}`);
+      notifyTaskUpdate({
+        status: "error",
+        stage: "Lỗi dịch thuật phụ đề",
+        error: String(err),
+      });
     } finally {
       setTimeout(() => {
         setIsAnalyzing(false);
@@ -1949,6 +2096,20 @@ export default function SublixStudioView({
     setTimelineProcessMessage(vMsg);
     setAnalyzeMessage(vMsg);
 
+    notifyTaskUpdate({
+      status: "running",
+      type: "dubbing",
+      workflowType: "voice_only",
+      workflowLabel: "Lồng Tiếng TTS",
+      title: `Lồng Tiếng TTS · ${fileName || "Video"}`,
+      stage: vMsg,
+      percent: 10,
+      steps: [
+        { id: "tts", label: "Tổng hợp TTS", status: "running" },
+        { id: "sync", label: "Đồng bộ Audio Track", status: "pending" },
+      ],
+    });
+
     try {
       saveAudioUndo();
       const total = targetSegs.length;
@@ -1961,6 +2122,13 @@ export default function SublixStudioView({
         const lMsg = `Tổng hợp giọng câu ${i + 1}/${total}...`;
         setTimelineProcessMessage(lMsg);
         setAnalyzeMessage(lMsg);
+
+        notifyTaskUpdate({
+          status: "running",
+          stage: lMsg,
+          detail: `${i + 1}/${total} câu thoại`,
+          percent: pct,
+        });
 
         const spk = speakers.find((s) => s.id === seg.speakerId);
         const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
@@ -1980,9 +2148,30 @@ export default function SublixStudioView({
       setTimelineProcessMessage("Hoàn tất tạo giọng đọc!");
       setAnalyzeMessage("Hoàn tất tạo giọng đọc!");
       showToast(`✅ Đã tổng hợp giọng đọc cho ${total} câu thoại!`);
+
+      notifyTaskUpdate({
+        status: "completed",
+        type: "dubbing",
+        workflowType: "voice_only",
+        workflowLabel: "Lồng Tiếng TTS",
+        title: `Lồng Tiếng TTS · ${fileName || "Video"}`,
+        stage: "Hoàn tất tạo giọng đọc TTS",
+        detail: `Đã lồng tiếng ${total} câu thoại`,
+        percent: 100,
+        outputPath: filePath,
+        steps: [
+          { id: "tts", label: "Tổng hợp TTS", status: "done" },
+          { id: "sync", label: "Đồng bộ Audio Track", status: "done" },
+        ],
+      });
     } catch (err) {
       console.error("Voice TTS error:", err);
       showToast(`❌ Lỗi tạo giọng đọc: ${err}`);
+      notifyTaskUpdate({
+        status: "error",
+        stage: "Lỗi tạo giọng đọc TTS",
+        error: String(err),
+      });
     } finally {
       setTimeout(() => {
         setIsAnalyzing(false);
@@ -2006,6 +2195,22 @@ export default function SublixStudioView({
     setAnalyzeMessage("Đang khởi tạo pipeline AI...");
     setTimelineProcessMessage("Đang khởi tạo pipeline AI...");
 
+    notifyTaskUpdate({
+      status: "running",
+      type: "dubbing",
+      workflowType: "dubbing",
+      workflowLabel: "Lồng Tiếng Đa Vai AI",
+      title: `Lồng Tiếng Đa Vai · ${fileName || "Video"}`,
+      stage: "Đang khởi tạo pipeline AI...",
+      percent: 5,
+      steps: [
+        { id: "stt", label: "Whisper STT", status: "running" },
+        { id: "diar", label: "Sherpa Phân Vai", status: "pending" },
+        { id: "trans", label: "Dịch AI", status: "pending" },
+        { id: "tts", label: "Lồng Tiếng TTS", status: "pending" },
+      ],
+    });
+
     const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
@@ -2020,6 +2225,20 @@ export default function SublixStudioView({
         setTimelineProgress(event.payload.percent);
         setAnalyzeMessage(event.payload.message);
         setTimelineProcessMessage(event.payload.message);
+
+        const pStage = event.payload.stage;
+        notifyTaskUpdate({
+          status: "running",
+          stage: event.payload.message || "Đang xử lý...",
+          percent: event.payload.percent,
+          detail: event.payload.total_items > 2 ? `${event.payload.current_item}/${event.payload.total_items} câu thoại` : undefined,
+          steps: [
+            { id: "stt", label: "Whisper STT", status: pStage === "stt" ? "running" : pStage === "diarizing" || pStage === "scripting" || pStage === "translating" || pStage === "tts" ? "done" : "pending" },
+            { id: "diar", label: "Sherpa Phân Vai", status: pStage === "diarizing" ? "running" : pStage === "scripting" || pStage === "translating" || pStage === "tts" ? "done" : "pending" },
+            { id: "trans", label: "Dịch AI", status: pStage === "scripting" || pStage === "translating" ? "running" : pStage === "tts" ? "done" : "pending" },
+            { id: "tts", label: "Lồng Tiếng TTS", status: pStage === "tts" ? "running" : "pending" },
+          ],
+        });
       });
 
       const project: DubbingProject = await sublix.dubbingAnalyze(
@@ -2095,6 +2314,24 @@ export default function SublixStudioView({
         setAnalyzeMessage("Phân tích hoàn tất!");
         setTimelineProcessMessage("Hoàn tất!");
         showToast(`✅ Phân tích xong: ${newMappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật.`);
+
+        notifyTaskUpdate({
+          status: "completed",
+          type: "dubbing",
+          workflowType: "dubbing",
+          workflowLabel: "Lồng Tiếng Đa Vai AI",
+          title: `Lồng Tiếng Đa Vai · ${fileName || "Video"}`,
+          stage: "Hoàn tất toàn trình lồng tiếng",
+          detail: `Đã tạo ${newMappedSegments.length} câu thoại, ${mappedSpeakers.length} nhân vật`,
+          percent: 100,
+          outputPath: filePath,
+          steps: [
+            { id: "stt", label: "Whisper STT", status: "done" },
+            { id: "diar", label: "Sherpa Phân Vai", status: "done" },
+            { id: "trans", label: "Dịch AI", status: "done" },
+            { id: "tts", label: "Lồng Tiếng TTS", status: "done" },
+          ],
+        });
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
@@ -2103,9 +2340,19 @@ export default function SublixStudioView({
         setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
         setTimelineProcessMessage("Đã hủy");
         showToast("🛑 Tiến trình phân tích đã bị hủy.");
+        notifyTaskUpdate({
+          status: "error",
+          stage: "Đã hủy",
+          error: "Người dùng hủy tác vụ",
+        });
       } else {
         setAnalyzeMessage(`Lỗi phân tích: ${errMsg}`);
         showToast(`❌ Lỗi phân tích: ${errMsg}`);
+        notifyTaskUpdate({
+          status: "error",
+          stage: "Lỗi phân tích",
+          error: errMsg,
+        });
       }
       setAnalyzeProgress(0);
       setTimelineProgress(0);

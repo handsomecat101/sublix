@@ -14,9 +14,15 @@ import {
 import { sublix } from "../lib/tauri";
 import "./ProcessCenterModal.css";
 
+export interface TaskStepItem {
+  id: string;
+  label: string;
+  status: "done" | "running" | "pending";
+}
+
 export interface AppTaskItem {
   id: string;
-  type: "file_sub" | "dubbing" | "downloader" | "model" | "live";
+  type: "file_sub" | "dubbing" | "downloader" | "model" | "live" | "subtitle";
   title: string;
   stage: string;
   percent: number;
@@ -29,6 +35,14 @@ export interface AppTaskItem {
   targetTab: "downloader" | "file_sub" | "dubbing" | "live" | "models" | "studio";
   outputPath?: string;
   error?: string;
+  // Metadata mở rộng đồng bộ giữa Studio & Process Center
+  fileName?: string;
+  workflowType?: "subtitle_only" | "subtitle_translate" | "dubbing" | "voice_only" | "downloader" | "model";
+  workflowLabel?: string;
+  steps?: TaskStepItem[];
+  currentStep?: string;
+  totalItems?: number;
+  currentItem?: number;
 }
 
 interface ProcessCenterModalProps {
@@ -80,12 +94,28 @@ export function ProcessCenterModal({
     }
   };
 
-  const getCategoryMeta = (type: AppTaskItem["type"]) => {
-    switch (type) {
+  const getCategoryMeta = (task: AppTaskItem) => {
+    if (task.workflowLabel) {
+      if (task.workflowType === "subtitle_only") {
+        return { label: task.workflowLabel, icon: <IconFilm size={14} />, color: "#38bdf8" };
+      }
+      if (task.workflowType === "subtitle_translate") {
+        return { label: task.workflowLabel, icon: <IconGlobe size={14} />, color: "#f59e0b" };
+      }
+      if (task.workflowType === "voice_only") {
+        return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#ec4899" };
+      }
+      if (task.workflowType === "dubbing") {
+        return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#a855f7" };
+      }
+      return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#8b5cf6" };
+    }
+    switch (task.type) {
       case "file_sub":
-        return { label: "Tạo Phụ Đề File", icon: <IconFilm size={14} />, color: "#f59e0b" };
+      case "subtitle":
+        return { label: "Tạo Phụ Đề AI", icon: <IconFilm size={14} />, color: "#38bdf8" };
       case "dubbing":
-        return { label: "Studio Lồng Tiếng AI", icon: <IconClapper size={14} />, color: "#8b5cf6" };
+        return { label: "Studio Lồng Tiếng AI", icon: <IconClapper size={14} />, color: "#a855f7" };
       case "downloader":
         return { label: "Tải Video", icon: <IconGlobe size={14} />, color: "#3b82f6" };
       case "model":
@@ -149,7 +179,7 @@ export function ProcessCenterModal({
                 </div>
               ) : (
                 activeTasks.map((task) => {
-                  const meta = getCategoryMeta(task.type);
+                  const meta = getCategoryMeta(task);
                   return (
                     <div key={task.id} className="process-task-card running">
                       <div className="process-task-top">
@@ -162,13 +192,44 @@ export function ProcessCenterModal({
                       </div>
 
                       <div className="process-task-main">
-                        <h4 className="process-task-title" title={task.title}>
-                          {task.title}
-                        </h4>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                          <h4 className="process-task-title" style={{ margin: 0 }} title={task.title}>
+                            {task.title}
+                          </h4>
+                          {task.fileName && (
+                            <span className="task-file-chip" title={task.fileName}>
+                              📁 {task.fileName}
+                            </span>
+                          )}
+                        </div>
                         <div className="process-task-stage-line">
                           <span className="stage-tag">{task.stage}</span>
                           {task.detail && <span className="stage-detail">{task.detail}</span>}
                         </div>
+                        {task.steps && task.steps.length > 0 && (
+                          <div className="task-stepper-mini" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", margin: "6px 0 10px" }}>
+                            {task.steps.map((st, idx) => (
+                              <span
+                                key={st.id}
+                                className={`step-mini-pill ${st.status}`}
+                                style={{
+                                  fontSize: 10,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  background: st.status === "done" ? "rgba(16, 185, 129, 0.15)" : st.status === "running" ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                                  color: st.status === "done" ? "#34d399" : st.status === "running" ? "#38bdf8" : "#94a3b8",
+                                  border: `1px solid ${st.status === "running" ? "rgba(56, 189, 248, 0.4)" : "transparent"}`,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                }}
+                              >
+                                {st.status === "done" ? "✓" : st.status === "running" ? "⚡" : "○"} {st.label}
+                                {idx < task.steps!.length - 1 && <span style={{ opacity: 0.5, marginLeft: 2 }}>›</span>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="process-task-bar-wrapper">
@@ -231,7 +292,7 @@ export function ProcessCenterModal({
                 </div>
               ) : (
                 historyTasks.map((task) => {
-                  const meta = getCategoryMeta(task.type);
+                  const meta = getCategoryMeta(task);
                   const isSuccess = task.status === "completed";
                   const elapsedMs = task.completedAt ? task.completedAt - task.startedAt : 0;
                   return (

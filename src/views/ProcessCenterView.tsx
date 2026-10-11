@@ -1,7 +1,7 @@
 //! ProcessCenterView.tsx — Dedicated Process & Activity Center View within StudioShell.
-//! Allows monitoring active and historical background tasks across Sublix.
+//! Allows monitoring active and historical background tasks across Sublix with real-time pipeline status.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   IconFilm,
   IconClapper,
@@ -33,10 +33,10 @@ function formatTime(ts: number): string {
 }
 
 function formatDuration(ms: number): string {
-  const sec = Math.max(1, Math.round(ms / 1000));
+  const sec = Math.max(0, Math.round(ms / 1000));
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  if (m > 0) return `${m}p ${s}s`;
+  if (m > 0) return `${m}p ${s.toString().padStart(2, "0")}s`;
   return `${s}s`;
 }
 
@@ -48,8 +48,18 @@ export function ProcessCenterView({
   sttServerEngine,
   transEnginePref = "auto",
 }: ProcessCenterViewProps) {
-  const [filterType, setFilterType] = useState<"all" | "active" | "dubbing" | "downloader" | "file_sub" | "model">("all");
+  const [filterType, setFilterType] = useState<"all" | "active" | "subtitle" | "dubbing" | "downloader" | "model">("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
+
+  // Live timer tick mỗi giây để đồng hồ thời gian chạy (elapsed timer) cập nhật thời gian thực
+  useEffect(() => {
+    if (activeTasks.length === 0) return;
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeTasks.length]);
 
   const handleCopyPath = (id: string, path: string) => {
     navigator.clipboard.writeText(path);
@@ -65,30 +75,66 @@ export function ProcessCenterView({
     }
   };
 
-  const getCategoryMeta = (type: AppTaskItem["type"]) => {
-    switch (type) {
+  // Trích xuất metadata thông minh theo workflow thực tế
+  const getCategoryMeta = (task: AppTaskItem) => {
+    if (task.workflowLabel) {
+      if (task.workflowType === "subtitle_only") {
+        return { label: task.workflowLabel, icon: <IconFilm size={14} />, color: "#38bdf8", badgeClass: "cat-sub" };
+      }
+      if (task.workflowType === "subtitle_translate") {
+        return { label: task.workflowLabel, icon: <IconGlobe size={14} />, color: "#f59e0b", badgeClass: "cat-trans" };
+      }
+      if (task.workflowType === "voice_only") {
+        return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#ec4899", badgeClass: "cat-tts" };
+      }
+      if (task.workflowType === "dubbing") {
+        return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#a855f7", badgeClass: "cat-dub" };
+      }
+      return { label: task.workflowLabel, icon: <IconClapper size={14} />, color: "#8b5cf6", badgeClass: "cat-general" };
+    }
+
+    switch (task.type) {
       case "file_sub":
-        return { label: "Tạo Phụ Đề File", icon: <IconFilm size={14} />, color: "#f59e0b" };
+      case "subtitle":
+        return { label: "Tạo Phụ Đề AI", icon: <IconFilm size={14} />, color: "#38bdf8", badgeClass: "cat-sub" };
       case "dubbing":
-        return { label: "Studio Lồng Tiếng AI", icon: <IconClapper size={14} />, color: "#8b5cf6" };
+        return { label: "Studio Lồng Tiếng AI", icon: <IconClapper size={14} />, color: "#a855f7", badgeClass: "cat-dub" };
       case "downloader":
-        return { label: "Tải Video", icon: <IconGlobe size={14} />, color: "#3b82f6" };
+        return { label: "Tải Video", icon: <IconGlobe size={14} />, color: "#3b82f6", badgeClass: "cat-dl" };
       case "model":
-        return { label: "Mô Hình AI", icon: <IconBox size={14} />, color: "#10b981" };
+        return { label: "Mô Hình AI", icon: <IconBox size={14} />, color: "#10b981", badgeClass: "cat-model" };
       default:
-        return { label: "Tác Vụ Nền", icon: <IconClock size={14} />, color: "#94a3b8" };
+        return { label: "Tác Vụ Sublix", icon: <IconClock size={14} />, color: "#94a3b8", badgeClass: "cat-general" };
     }
   };
 
-  const filteredActive = activeTasks.filter((t) => {
-    if (filterType === "all" || filterType === "active") return true;
-    return t.type === filterType;
-  });
+  const isTaskMatchFilter = (task: AppTaskItem, filter: typeof filterType) => {
+    if (filter === "all") return true;
+    if (filter === "active") return task.status === "running";
+    if (filter === "subtitle") {
+      return (
+        task.type === "file_sub" ||
+        task.type === "subtitle" ||
+        task.workflowType === "subtitle_only" ||
+        task.workflowType === "subtitle_translate"
+      );
+    }
+    if (filter === "dubbing") {
+      return (
+        task.type === "dubbing" ||
+        task.workflowType === "dubbing" ||
+        task.workflowType === "voice_only"
+      );
+    }
+    if (filter === "downloader") return task.type === "downloader";
+    if (filter === "model") return task.type === "model";
+    return true;
+  };
 
+  const filteredActive = activeTasks.filter((t) => isTaskMatchFilter(t, filterType));
   const filteredHistory = historyTasks.filter((t) => {
-    if (filterType === "all") return true;
     if (filterType === "active") return false;
-    return t.type === filterType;
+    return isTaskMatchFilter(t, filterType);
   });
 
   return (
@@ -153,6 +199,24 @@ export function ProcessCenterView({
 
               <button
                 type="button"
+                className={`settings-btn-secondary ${filterType === "subtitle" ? "active" : ""}`}
+                onClick={() => setFilterType("subtitle")}
+                style={{
+                  justifyContent: "space-between",
+                  background: filterType === "subtitle" ? "var(--ac-soft)" : undefined,
+                  borderColor: filterType === "subtitle" ? "var(--ac)" : undefined,
+                  color: filterType === "subtitle" ? "var(--ac)" : undefined,
+                }}
+              >
+                <span>💬 Phụ đề & Dịch thuật</span>
+                <span style={{ fontSize: 10, opacity: 0.75 }}>
+                  {activeTasks.filter((t) => isTaskMatchFilter(t, "subtitle")).length +
+                    historyTasks.filter((t) => isTaskMatchFilter(t, "subtitle")).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
                 className={`settings-btn-secondary ${filterType === "dubbing" ? "active" : ""}`}
                 onClick={() => setFilterType("dubbing")}
                 style={{
@@ -162,9 +226,10 @@ export function ProcessCenterView({
                   color: filterType === "dubbing" ? "var(--ac)" : undefined,
                 }}
               >
-                <span>🎬 Lồng tiếng & Phân vai</span>
+                <span>🎙️ Lồng tiếng & Phân vai</span>
                 <span style={{ fontSize: 10, opacity: 0.75 }}>
-                  {activeTasks.filter(t => t.type === "dubbing").length + historyTasks.filter(t => t.type === "dubbing").length}
+                  {activeTasks.filter((t) => isTaskMatchFilter(t, "dubbing")).length +
+                    historyTasks.filter((t) => isTaskMatchFilter(t, "dubbing")).length}
                 </span>
               </button>
 
@@ -181,24 +246,8 @@ export function ProcessCenterView({
               >
                 <span>⬇️ Tải video</span>
                 <span style={{ fontSize: 10, opacity: 0.75 }}>
-                  {activeTasks.filter(t => t.type === "downloader").length + historyTasks.filter(t => t.type === "downloader").length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`settings-btn-secondary ${filterType === "file_sub" ? "active" : ""}`}
-                onClick={() => setFilterType("file_sub")}
-                style={{
-                  justifyContent: "space-between",
-                  background: filterType === "file_sub" ? "var(--ac-soft)" : undefined,
-                  borderColor: filterType === "file_sub" ? "var(--ac)" : undefined,
-                  color: filterType === "file_sub" ? "var(--ac)" : undefined,
-                }}
-              >
-                <span>⚡ Phụ đề tự động</span>
-                <span style={{ fontSize: 10, opacity: 0.75 }}>
-                  {activeTasks.filter(t => t.type === "file_sub").length + historyTasks.filter(t => t.type === "file_sub").length}
+                  {activeTasks.filter((t) => isTaskMatchFilter(t, "downloader")).length +
+                    historyTasks.filter((t) => isTaskMatchFilter(t, "downloader")).length}
                 </span>
               </button>
 
@@ -213,9 +262,10 @@ export function ProcessCenterView({
                   color: filterType === "model" ? "var(--ac)" : undefined,
                 }}
               >
-                <span>📦 Tải Mô hình AI</span>
+                <span>📦 Mô hình AI</span>
                 <span style={{ fontSize: 10, opacity: 0.75 }}>
-                  {activeTasks.filter(t => t.type === "model").length + historyTasks.filter(t => t.type === "model").length}
+                  {activeTasks.filter((t) => isTaskMatchFilter(t, "model")).length +
+                    historyTasks.filter((t) => isTaskMatchFilter(t, "model")).length}
                 </span>
               </button>
             </div>
@@ -270,60 +320,125 @@ export function ProcessCenterView({
               }
             >
               {filteredActive.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--t3)", fontSize: 12 }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>☕</div>
-                  <div style={{ fontWeight: 600, color: "var(--t2)", marginBottom: 4 }}>
+                <div style={{ textAlign: "center", padding: "28px 16px", color: "var(--t3)", fontSize: 12 }}>
+                  <div style={{ fontSize: 26, marginBottom: 8 }}>☕</div>
+                  <div style={{ fontWeight: 600, color: "var(--t2)", marginBottom: 4, fontSize: 13 }}>
                     Không có tác vụ nào đang xử lý
                   </div>
-                  <div>Khi bạn chạy phân tích video, tải file, hoặc dịch phụ đề, tiến trình thời gian thực sẽ xuất hiện tại đây.</div>
+                  <div>Khi bạn chạy phân tích video, tạo phụ đề, tải file hoặc dịch thuật, tiến trình thời gian thực sẽ xuất hiện tại đây.</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {filteredActive.map((task) => {
-                    const meta = getCategoryMeta(task.type);
+                    const meta = getCategoryMeta(task);
+                    const elapsedMs = Math.max(0, now - task.startedAt);
+                    const displayName = task.fileName || task.title;
+
                     return (
-                      <div key={task.id} className="process-task-card running">
+                      <div key={task.id} className="process-task-card running cinema-glow">
+                        {/* Top: Category Badge + Status Pulse */}
                         <div className="process-task-top">
                           <span className="process-cat-badge" style={{ color: meta.color, borderColor: meta.color }}>
                             {meta.icon} <span>{meta.label}</span>
                           </span>
                           <span className="process-status-pill running">
-                            <span className="pulse-dot" /> Đang chạy
+                            <span className="pulse-dot" /> Đang chạy ({task.percent.toFixed(1)}%)
                           </span>
                         </div>
 
+                        {/* File Name Chip & Title */}
                         <div className="process-task-main">
-                          <h4 className="process-task-title" title={task.title}>
-                            {task.title}
-                          </h4>
-                          <div className="process-task-stage-line">
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                            <h4 className="process-task-title" style={{ margin: 0, fontSize: 15, fontWeight: 700 }} title={task.title}>
+                              {task.title}
+                            </h4>
+                            {task.fileName && (
+                              <span className="task-file-chip" title={task.fileName}>
+                                🎬 {task.fileName}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Stepper Pipeline Trực Quan */}
+                          {task.steps && task.steps.length > 0 && (
+                            <div className="process-stepper-track">
+                              {task.steps.map((st, idx) => (
+                                <div key={st.id} className={`process-step-node ${st.status}`}>
+                                  <div className="step-node-indicator">
+                                    {st.status === "done" ? "✓" : st.status === "running" ? "⚡" : "○"}
+                                  </div>
+                                  <span className="step-node-label">{st.label}</span>
+                                  {idx < task.steps!.length - 1 && <div className={`step-connector ${st.status === "done" ? "done" : ""}`} />}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Stage & Details */}
+                          <div className="process-task-stage-line" style={{ marginTop: task.steps ? 8 : 4 }}>
                             <span className="stage-tag">{task.stage}</span>
                             {task.detail && <span className="stage-detail">{task.detail}</span>}
                           </div>
                         </div>
 
+                        {/* Cinema Progress Bar với hiệu ứng Shimmer */}
                         <div className="process-task-bar-wrapper">
-                          <div className="process-task-bar">
+                          <div className="process-task-bar cinema-bar">
                             <div
-                              className="process-task-bar-fill"
+                              className="process-task-bar-fill shimmer-fill"
                               style={{ width: `${Math.min(100, Math.max(0, task.percent))}%` }}
                             />
                           </div>
-                          <div className="process-task-bar-meta">
-                            <span className="pct-val">{task.percent.toFixed(1)}%</span>
-                            {task.speed && <span className="speed-val">🚀 {task.speed}</span>}
-                            {task.eta && <span className="eta-val">⏱️ Còn {task.eta}</span>}
-                            <span className="time-val">Bắt đầu: {formatTime(task.startedAt)}</span>
+                        </div>
+
+                        {/* Live Metrics Dashboard: 4 Thẻ Kính Thống Kê */}
+                        <div className="process-live-metrics">
+                          <div className="metric-glass-card">
+                            <span className="metric-label">TIẾN ĐỘ</span>
+                            <span className="metric-val pct-text">{task.percent.toFixed(1)}%</span>
+                          </div>
+                          <div className="metric-glass-card">
+                            <span className="metric-label">THỜI GIAN ĐÃ CHẠY</span>
+                            <span className="metric-val time-text">⏱️ {formatDuration(elapsedMs)}</span>
+                          </div>
+                          <div className="metric-glass-card">
+                            <span className="metric-label">CÔNG ĐOẠN</span>
+                            <span className="metric-val stage-text" title={task.stage}>{task.stage}</span>
+                          </div>
+                          <div className="metric-glass-card">
+                            <span className="metric-label">BẮT ĐẦU LÚC</span>
+                            <span className="metric-val">{formatTime(task.startedAt)}</span>
                           </div>
                         </div>
 
-                        <div className="process-task-actions">
+                        {/* Actions */}
+                        <div className="process-task-actions" style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {task.targetTab === "studio" && (
+                            <button
+                              type="button"
+                              className="process-btn-jump-primary"
+                              onClick={() => onNavigateToTab("studio")}
+                            >
+                              🚀 Mở Studio Làm Việc
+                            </button>
+                          )}
+                          {task.outputPath && (
+                            <button
+                              type="button"
+                              className="process-btn-secondary"
+                              onClick={() => handleReveal(task.outputPath!)}
+                              title="Mở thư mục chứa file"
+                            >
+                              <IconFolder size={12} /> Thư Mục
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="process-btn-jump"
-                            onClick={() => onNavigateToTab(task.targetTab)}
+                            className="process-btn-secondary"
+                            onClick={() => handleCopyPath(task.id, displayName)}
+                            title="Sao chép tên file"
                           >
-                            👉 Mở Trực Tiếp Tab Này
+                            {copiedId === task.id ? "✓ Đã chép" : "📋 Tên File"}
                           </button>
                         </div>
                       </div>
@@ -345,39 +460,50 @@ export function ProcessCenterView({
             }
           >
             {filteredHistory.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--t3)", fontSize: 12 }}>
+              <div style={{ textAlign: "center", padding: "28px 16px", color: "var(--t3)", fontSize: 12 }}>
                 <div>Chưa có tác vụ nào được lưu trong lịch sử.</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {filteredHistory.map((task) => {
-                  const meta = getCategoryMeta(task.type);
+                  const meta = getCategoryMeta(task);
                   const isDone = task.status === "completed";
+                  const elapsedMs = task.completedAt ? task.completedAt - task.startedAt : 0;
+                  const displayTitle = task.fileName ? `${meta.label} · ${task.fileName}` : task.title;
+
                   return (
-                    <div key={task.id} className="process-task-card completed">
+                    <div key={task.id} className="process-task-card completed history-glass">
                       <div className="process-task-top">
                         <span className="process-cat-badge" style={{ color: meta.color, borderColor: meta.color }}>
                           {meta.icon} <span>{meta.label}</span>
                         </span>
-                        <span className={`process-status-pill ${isDone ? "completed" : "error"}`}>
-                          {isDone ? "✓ Hoàn tất" : "✕ Lỗi"}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {elapsedMs > 0 && (
+                            <span style={{ fontSize: 11, color: "var(--t3)" }}>
+                              ⏳ {formatDuration(elapsedMs)}
+                            </span>
+                          )}
+                          <span className={`process-status-pill ${isDone ? "completed" : "error"}`}>
+                            {isDone ? "✓ Hoàn tất" : "✕ Lỗi"}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="process-task-main">
-                        <h4 className="process-task-title" title={task.title}>
-                          {task.title}
+                        <h4 className="process-task-title" style={{ fontSize: 13.5, fontWeight: 600 }} title={displayTitle}>
+                          {displayTitle}
                         </h4>
                         <div className="process-task-stage-line">
                           <span className="stage-tag">{task.stage}</span>
                           {task.detail && <span className="stage-detail">{task.detail}</span>}
+                          {task.error && <span className="stage-detail" style={{ color: "#f87171" }}>⚠️ {task.error}</span>}
                         </div>
                       </div>
 
                       <div className="process-task-history-meta">
                         <span>⏰ Xong lúc: {task.completedAt ? formatTime(task.completedAt) : "—"}</span>
                         {task.completedAt && (
-                          <span>⏳ Thời gian chạy: {formatDuration(task.completedAt - task.startedAt)}</span>
+                          <span>⏳ Thời gian chạy: {formatDuration(elapsedMs)}</span>
                         )}
                       </div>
 
@@ -405,6 +531,19 @@ export function ProcessCenterView({
                           </button>
                         </div>
                       )}
+
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, gap: 6 }}>
+                        {task.targetTab === "studio" && (
+                          <button
+                            type="button"
+                            className="process-btn-jump"
+                            style={{ fontSize: 11, padding: "4px 8px" }}
+                            onClick={() => onNavigateToTab("studio")}
+                          >
+                            🚀 Mở Lại Trong Studio
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

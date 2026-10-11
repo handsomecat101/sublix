@@ -145,3 +145,22 @@
   4. Chuẩn hóa tính toán click/scrub/drag `clientX - rect.left + scrollLeft` không còn trừ lệch `- 40`.
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`.
 - **Build & Git:** `npm run build` PASS (2.04s, 0 errors); Commit `8385133` pushed cleanly to GitHub `origin/master`.
+
+---
+
+### 2026-10-11 18:25 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Round 17: Đồng bộ thông tin Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard)
+- **Tóm tắt:** 
+  1. **Đồng bộ triệt để thông tin giữa Studio ("ở trước") và Tiến trình ("ở trong"):**
+     - Bổ sung `onTaskUpdate` callback từ `SublixStudioView` lên `SettingsView`.
+     - Phản ánh đúng tên file video (`fileName`), loại workflow (`subtitle_only`, `subtitle_translate`, `dubbing`, `voice_only`) và nhãn nghiệp vụ (không còn bị gán cứng `🎬 Studio Lồng Tiếng AI`).
+     - Tự động mask thông điệp raw backend (loại bỏ từ ngữ Sherpa khi người dùng chỉ làm phụ đề) và ngăn chặn hiển thị `0/2 câu thoại` thô thiển.
+     - Tự động sanitize lịch sử cũ trong `localStorage`.
+  2. **Đại tu giao diện tab Tiến trình (Polish Cinema Pro):**
+     - **Interactive Pipeline Stepper:** Trực quan từng bước `[1. Bóc tách âm thanh ✓] ➜ [2. Whisper AI ⚡] ➜ [3. Timeline ○]`.
+     - **Cinema Shimmer Progress Bar:** Gradient animated shimmer stripes rực rỡ cao 9px.
+     - **Live Metrics Dashboard:** 4 thẻ kính thống kê (Tiến độ %, Live Elapsed Timer tự động tick theo giây `⏱️ mm:ss`, Công đoạn AI, Mốc thời gian bắt đầu).
+     - **History Task Cards:** Thẻ kính sang trọng, tên file rõ ràng, thời gian chạy thực tế, kết quả số câu thoại, nút 1-chạm `📂 Mở thư mục`, `📋 Copy đường dẫn`, `🚀 Mở lại trong Studio`.
+     - **Floating Toast (góc phải dưới):** Đồng bộ icon ngữ cảnh (`💬`, `🌐`, `🎙️`, `⬇️`, `📦`), tên file video và tiến độ thời gian thực.
+- **Files đã sửa:** `src/views/ProcessCenterModal.tsx`, `src/views/ProcessCenterView.tsx`, `src/views/ProcessCenterModal.css`, `src/views/SettingsView.tsx`, `src/views/SublixStudioView.tsx`.
+- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (2.87s, Vite bundle sẵn sàng).

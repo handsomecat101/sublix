@@ -801,3 +801,71 @@ sublix/
 - ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
 - ✅ `npm run build`: Vite compile production thành công trong 2.04s.
 - ✅ Git commit: `8385133` đẩy sạch lên branch `master` của repository GitHub.
+
+---
+
+## Session 22 — 2026-10-11 18:05 → 18:25 (≈20 phút)
+
+### User intent & PO Feedback (Anh Tuấn)
+- **Feedback:** "cái tiến trình này bạn làm nhìn nó so sài quá, làm polish lại đi với thông tin rõ ràng chi tiết hơn đi, hiện tại ở trước ghi 1 kiểu ở trong tab quy trình đang chạy ghi 1 kiểu tôi tháy ko đồng nhất"
+- **Ảnh chụp màn hình thực tế đính kèm:** `media_1791716326863_5603bfe4.png` tab `Tiến trình` (ProcessCenterView).
+- **Vấn đề cốt lõi phát hiện:**
+  1. **Không đồng nhất thông tin giữa Studio ("ở trước") và Tiến trình ("ở trong"):**
+     - Khi người dùng ở Studio chỉ chọn làm **Phụ Đề** hoặc **Phụ Đề & Dịch Thuật**, Studio hiển thị quy trình phụ đề. Nhưng trong tab `Tiến trình` và Floating Toast góc phải dưới lại bị gán cứng thành `🎬 Studio Lồng Tiếng AI`.
+     - Thông điệp tiến trình bị lộ raw backend: `Đang phân tích âm sắc giọng nói bằng Sherpa AI (Offline)... 0/323 câu thoại`, trong khi người dùng không chọn lồng tiếng đa vai.
+     - Tên file video (`fileName`) hoàn toàn không được hiển thị trên card tiến trình (chỉ hiện mỗi dòng chữ `Studio Lồng Tiếng AI` lặp lại 2 lần ở cả badge và title).
+     - Trong lịch sử (History cards), tất cả các mục đều ghi `Studio Lồng Tiếng AI` kèm `Hoàn tất lồng tiếng · 0/2 câu thoại` rất ngô nghê và sai lệch.
+  2. **Giao diện quá sơ sài (barebones/crude):**
+     - Card tác vụ chỉ là 1 hộp tối với thanh progress bar 6px mỏng dính, không có các bước quy trình trực quan (Pipeline Stepper).
+     - Thiếu bảng chỉ số thời gian thực (Live elapsed timer, tên file video rõ ràng, số câu thoại xử lý thực tế, bộ máy AI đang chạy).
+     - Card lịch sử thiếu các action hữu ích (mở thư mục, sao chép đường dẫn file kết quả, mở lại trong Studio).
+
+### Giải pháp kỹ thuật đã triển khai (Arch & Implementation)
+1. **Mở rộng `AppTaskItem` & `TaskStepItem` (`src/views/ProcessCenterModal.tsx`):**
+   - Bổ sung các trường metadata: `fileName`, `workflowType` (`"subtitle_only" | "subtitle_translate" | "dubbing" | "voice_only"`), `workflowLabel`, `steps` (`TaskStepItem[]`), `currentStep`, `totalItems`, `currentItem`.
+   - Nâng cấp `getCategoryMeta` nhận biết chính xác từng loại workflow:
+     - `subtitle_only`: Màu Cyan `#38bdf8`, icon Film `Tạo Phụ Đề Gốc`
+     - `subtitle_translate`: Màu Amber `#f59e0b`, icon Globe `Phụ Đề & Dịch Thuật AI`
+     - `voice_only`: Màu Pink `#ec4899`, icon Clapper `Lồng Tiếng TTS`
+     - `dubbing`: Màu Purple `#a855f7`, icon Clapper `Studio Lồng Tiếng Đa Vai`
+     - `downloader`: Màu Blue `#3b82f6`, icon Globe `Tải Video`
+     - `model`: Màu Emerald `#10b981`, icon Box `Mô Hình AI`
+
+2. **Cầu nối đồng bộ Studio ➔ SettingsView ➔ Process Center (`src/views/SublixStudioView.tsx` & `src/views/SettingsView.tsx`):**
+   - Thêm callback `onTaskUpdate?: (task: StudioTaskUpdatePayload) => void` vào `SublixStudioViewProps`.
+   - Trong `SublixStudioView.tsx`: Khi kích hoạt bất kỳ quy trình nào (`handleRunSttOnly`, `handleRunTranslateOnly`, `handleRunVoiceOnly`, `handleRunAnalysis`), phát ngay metadata chính xác gồm `fileName`, `workflowType`, `workflowLabel`, `title` (ví dụ `Phụ Đề AI · kenji_VI.mp4`), chuỗi `steps` Stepper, và các thông điệp đã qua masking an toàn.
+   - Trong `SettingsView.tsx`:
+     - Xử lý `handleStudioTaskUpdate`: Cập nhật `globalTasks["dubbing_active"]` và chuyển đổi sang `processHistory` khi hoàn tất hoặc gặp lỗi mà không làm mất metadata.
+     - Cập nhật listener `dubbing:progress`: Giữ nguyên metadata từ Studio nếu đã có, tự động mask thông điệp raw backend (loại bỏ từ ngữ Sherpa khi đang làm phụ đề), chặn hoàn toàn việc hiển thị `0/2 câu thoại` thô thiển.
+     - Sanitize dữ liệu cũ trong `localStorage` khi khởi tạo (dọn dẹp các mục cũ bị kẹt `0/2 câu thoại`).
+     - Cập nhật Floating Toast góc phải dưới: Hiển thị icon ngữ cảnh (`💬`, `🌐`, `🎙️`, `⬇️`, `📦`), tên file và tiến độ thời gian thực.
+
+3. **Đại tu giao diện Polish Cinema Pro (`src/views/ProcessCenterView.tsx` & `src/views/ProcessCenterModal.css`):**
+   - **Active Task Card:**
+     - Header: Category badge viền màu sang trọng + Live Status Pulse nhịp thở `⚡ ĐANG XỬ LÝ (XX.X%)`.
+     - File chip: `🎬 [fileName]` nổi bật trên nền kính với icon video.
+     - **Interactive Pipeline Stepper:** Thanh quy trình trực quan theo thời gian thực:
+       - `✓ [Done]` màu xanh ngọc `#34d399`
+       - `⚡ [Running]` màu Cyan `#38bdf8` phát sáng neon pulse
+       - `○ [Pending]` màu xám mờ `#64748b`
+       - Đường kết nối `step-connector` chuyển xanh khi hoàn thành.
+     - **Cinema Shimmer Progress Bar:** Chiều cao 9px, bo góc 6px, hiệu ứng Gradient + Shimmer chuyển động liên tục (`shimmerFlow 2s linear infinite`).
+     - **Live Metrics Dashboard (4 thẻ kính mini):**
+       1. 📊 Tiến độ tổng (`38.5%`)
+       2. ⏱️ Thời gian đã chạy (Live elapsed timer bấm giờ tự động tick từng giây!)
+       3. ⚙️ Công đoạn hiện tại (rõ ràng, không lộ raw backend)
+       4. ⏰ Mốc thời gian bắt đầu
+     - Action Buttons: `🚀 Mở Studio Làm Việc` (nổi bật màu hổ phách/cam) + `📁 Thư Mục` + `📋 Sao Chép Tên File`.
+   - **History Task Card:**
+     - Thẻ kính bo tròn với viền hover sáng nhẹ.
+     - Tên file rõ ràng kèm loại workflow.
+     - Badge hoàn tất `✓ Hoàn tất` hoặc `✕ Lỗi`.
+     - Thời gian chạy thực tế `⏳ Thời gian chạy: 02p 14s` • `⏰ Xong lúc: 18:02:15`.
+     - Số lượng câu thoại xử lý thực tế `✓ Đã tạo 323 câu thoại`.
+     - Nút 1-chạm: `📂 Mở Thư Mục`, `📋 Copy Đường Dẫn`, `🚀 Mở Lại Trong Studio`.
+   - **Bộ lọc phân loại thông minh:** Hỗ trợ lọc chuẩn xác: Tất cả, Đang xử lý, Phụ đề & Dịch thuật, Lồng tiếng & Phân vai, Tải video, Mô hình AI.
+
+### Verification
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite build production hoàn tất trong 2.87s, bundle sẵn sàng.
+- ✅ Đảm bảo tính liên kết đồng nhất 100% giữa Studio và Process Center.
