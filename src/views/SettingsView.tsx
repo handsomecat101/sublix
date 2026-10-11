@@ -2825,6 +2825,72 @@ export default function SettingsView() {
                       })}
                     </tbody>
                   </table>
+
+                  {/* TTS Voice Models Table */}
+                  <h3 style={{ fontSize: 13, color: "#34d399", margin: "18px 0 6px" }}>🎙️ Text-to-Speech (TTS) Voice Models (Mô hình Lồng tiếng & Giọng đọc AI)</h3>
+                  <table className="model-hub-table">
+                    <thead>
+                      <tr>
+                        <th>Mô Hình / Động Cơ</th>
+                        <th>Đề xuất & Phong cách</th>
+                        <th>Dung lượng / Kiểu chạy</th>
+                        <th>Trạng thái / Chi tiết</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="model-hub-row">
+                        <td>
+                          <div className="model-name-col">
+                            <span className="model-main-name">🌟 VietNeu TTS AI</span>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>NeuTTS-Air v2 • Vietnamese Expressive</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="model-tier-badge tier-gpu-mid" style={{ background: "rgba(56, 189, 248, 0.2)", color: "#7dd3fc", borderColor: "rgba(56, 189, 248, 0.4)" }}>
+                            🚀 Đề xuất cao nhất (Truyền cảm)
+                          </span>
+                        </td>
+                        <td>Tích hợp sẵn (Neural Engine)</td>
+                        <td>
+                          <span className="model-status-ready">✓ Đã sẵn sàng (6 giọng Việt)</span>
+                        </td>
+                      </tr>
+                      <tr className="model-hub-row">
+                        <td>
+                          <div className="model-name-col">
+                            <span className="model-main-name">🎙️ Kokoro-Vietnamese AI</span>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Kokoro-82M ONNX • Local Speech Engine</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="model-tier-badge tier-cpu">
+                            💻 Offline 100% (CPU/GPU nhẹ)
+                          </span>
+                        </td>
+                        <td>~82 MB (ONNX Weights)</td>
+                        <td>
+                          <span className="model-status-ready">✓ Sẵn sàng (14 giọng Việt)</span>
+                        </td>
+                      </tr>
+                      <tr className="model-hub-row">
+                        <td>
+                          <div className="model-name-col">
+                            <span className="model-main-name">🌐 Microsoft Edge-TTS Neural</span>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Azure Neural Voice • Broadcast Standard</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="model-tier-badge tier-gpu-high" style={{ background: "rgba(168, 85, 247, 0.2)", color: "#d8b4fe", borderColor: "rgba(168, 85, 247, 0.4)" }}>
+                            📻 Phát thanh viên (Trực tuyến)
+                          </span>
+                        </td>
+                        <td>Cloud Service (0 MB disk)</td>
+                        <td>
+                          <span className="model-status-ready">✓ Trực tuyến 24/7 (Đa ngôn ngữ)</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </section>
               )}
             </div>

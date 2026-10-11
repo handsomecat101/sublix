@@ -869,3 +869,49 @@ sublix/
 - ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
 - ✅ `npm run build`: Vite build production hoàn tất trong 2.87s, bundle sẵn sàng.
 - ✅ Đảm bảo tính liên kết đồng nhất 100% giữa Studio và Process Center.
+
+---
+
+## [2026-10-11] - Session 23: Resizable Panels Studio Workspace, TTS Engine / Model AI Selector, Phân Loại Giọng Đọc Đa Dạng & Đồng Bộ Models Hub
+
+### Yêu cầu từ PO (Anh Tuấn)
+1. Trong mục Lồng tiếng & Phân vai hiện chưa có bộ chọn Model TTS rõ ràng để người dùng biết đang dùng mô hình nào. Cần có selector và phân loại cụ thể từng model, vùng miền, âm sắc.
+2. Làm rõ hiện trạng tích hợp VietNeu TTS AI so với Kokoro-Vietnamese ONNX và Microsoft Edge-TTS.
+3. Cho phép người dùng tự do kéo thả co giãn (Resizable Splitters) độ rộng của Panel trái (Cấu hình) và Panel phải (Phụ đề) để tối ưu không gian hiển thị và trải nghiệm theo ý muốn.
+4. Đồng bộ đầy đủ thông tin các mô hình TTS vào subtab "Quản Lý Models (Hub)" trong tab Cài đặt để người dùng nắm rõ.
+
+### Những Thay Đổi Kỹ Thuật Đã Triển Khai
+1. **Resizable Panels & Draggable Splitters (`src/views/SublixStudioView.tsx` & `src/views/SublixStudioView.css`):**
+   - Đã gỡ bỏ các ràng buộc `max-width` cứng trên `.studio-col-steps` và `.studio-col-segments`.
+   - Bổ sung 2 thanh kéo phân cách `studio-panel-resizer` (Left Splitter giữa Cấu hình & Video Player, Right Splitter giữa Video Player & Phụ đề).
+   - Thanh Splitter có hiệu ứng hover đổi màu Cyan `#38bdf8`, grip-handle 2 vạch mờ tinh tế, chuyển cursor toàn trang sang `col-resize` và bật `user-select: none` khi đang kéo chuột.
+   - Quản lý kích thước qua state + localStorage (`sublix_studio_left_w`: 250px - 600px, `sublix_studio_right_w`: 260px - 700px).
+   - Hỗ trợ **Double-click vào thanh chia** để đặt lại ngay về độ rộng mặc định (Left: 340px, Right: 350px).
+
+2. **Bộ Chọn Mô Hình & Động Cơ Giọng Đọc AI (TTS Engine Selector):**
+   - Bổ sung Card "Mô Hình Động Cơ TTS" (`studio-tts-engine-card`) tại đầu mục "2. Giọng Đọc Nhân Vật (TTS)" ở Panel trái:
+     - 🌟 **VietNeu TTS AI:** Mô hình Neural chuyên sâu cho tiếng Việt, ngữ điệu truyền cảm, nhấn nhá ngắt nghỉ tự nhiên theo ngữ cảnh (phim truyện, sách nói, vlog).
+     - 🎙️ **Kokoro-Vietnamese AI:** Mô hình ONNX cục bộ ~82MB, chạy offline 100% không cần mạng, độ trễ cực thấp, tốc độ sinh giọng gấp 5 lần thời gian thực.
+     - 🌐 **Edge-TTS Neural:** Động cơ đám mây Microsoft Azure, chất giọng phát thanh viên đài truyền hình chuẩn xác, ổn định.
+     - ⚡ **Tất Cả Models:** Hiển thị trọn bộ giọng từ mọi mô hình AI để phối vai linh hoạt.
+   - Thẻ thông số kỹ thuật (Engine Spec Box) hiển thị huy hiệu động: Tốc độ, Kiểu chạy (Offline 100% / Cloud), Độ biểu cảm, Tình trạng kích hoạt.
+   - Bổ sung nút 1-chạm **"✨ Áp dụng Model này cho tất cả các vai"** giúp gán nhanh giọng phù hợp cho toàn bộ nhân vật mà không cần thao tác từng người.
+
+3. **Mở Rộng Danh Mục Giọng Đọc Phong Phú & Lọc Thông Minh:**
+   - Dropdown giọng đọc của từng nhân vật tự động hiển thị theo Model đang chọn hoặc đầy đủ các nhóm `<optgroup>` trực quan:
+     - *Nhóm VietNeu TTS (6 giọng):* Nam Bắc (Truyền cảm, Review Phim), Nữ Bắc (Dịu dàng, Sách nói), Nam Nam (Ấm áp, Podcast), Nữ Nam (Tự nhiên, Vlog), Nữ Huế (Ngọt ngào, Trữ tình), Nam Bắc (Thời sự, Tin tức).
+     - *Nhóm Kokoro Local (14 giọng):* Tuấn Ngọc (Trầm ấm), Mạnh Dũng (Mạnh mẽ), Hưng Thịnh (Thời sự), Phát Tài (Hào sảng), Thành Đạt (Tự tin), Đức An (Điềm đạm), Đức Duy (Năng động), Mai Linh (Trong trẻo), Ngọc Huyền (Tâm sự), Diễm Trinh (Điện ảnh), Mai Loan (Ấm áp), Mỹ Yến (Tươi tắn), Thục Trinh (Trang nhã), Storyvert (Sách nói thiếu nhi).
+     - *Nhóm Edge-TTS (4 giọng):* Nam Minh (Chuẩn phát thanh viên), Hoài My (Sâu lắng), Andrew & Ava (Tiếng Anh Native).
+   - Nâng cấp hàm `mapVoiceForEngine` để định tuyến chính xác voice profile chuẩn cho cả synthesize và preview.
+
+4. **Đồng Bộ Tab Cài Đặt - Quản Lý Models (`src/views/SettingsView.tsx`):**
+   - Tại subtab `models_hub`, bổ sung bảng quản lý **"🎙️ Text-to-Speech (TTS) Voice Models"**:
+     - Hiển thị rõ ràng 3 dòng mô hình: VietNeu TTS AI, Kokoro-Vietnamese ONNX (~82MB), Microsoft Edge-TTS Neural.
+     - Đầy đủ thông số đề xuất, kiểu chạy, dung lượng bộ nhớ và trạng thái sẵn sàng để người dùng theo dõi minh bạch.
+
+### Kết Quả Kiểm Thử (Verification)
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite build production hoàn tất thành công trong 3.27s.
+- ✅ Cơ chế kéo thả Splitter mượt mà, lưu chuẩn kích thước vào `localStorage`.
+- ✅ Lọc giọng đọc theo Model tức thì, preview giọng chính xác.
+

@@ -164,3 +164,26 @@
      - **Floating Toast (góc phải dưới):** Đồng bộ icon ngữ cảnh (`💬`, `🌐`, `🎙️`, `⬇️`, `📦`), tên file video và tiến độ thời gian thực.
 - **Files đã sửa:** `src/views/ProcessCenterModal.tsx`, `src/views/ProcessCenterView.tsx`, `src/views/ProcessCenterModal.css`, `src/views/SettingsView.tsx`, `src/views/SublixStudioView.tsx`.
 - **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (2.87s, Vite bundle sẵn sàng).
+
+---
+
+### 2026-10-11 19:40 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Session 23: Resizable Panels Studio Workspace, TTS Engine / Model AI Selector, Phân Loại Giọng Đọc Đa Dạng & Đồng Bộ Models Hub)
+- **Tóm tắt:** 
+  1. **Thanh phân cách kéo co giãn kích thước (Resizable Splitters) cho Studio Workspace:**
+     - Cho phép người dùng tự do kéo chuột thay đổi độ rộng cột Cấu hình (Left Panel: 250px – 600px) và cột Phụ đề (Right Panel: 260px – 700px).
+     - Hiệu ứng hover viền Cyan phát sáng, grip-handle 2 vạch mờ, trạng thái `user-select: none` chống bôi đen văn bản khi drag.
+     - Lưu độ rộng tự động vào `localStorage` (`sublix_studio_left_w` và `sublix_studio_right_w`).
+     - Hỗ trợ Double-click để khôi phục nhanh về độ rộng chuẩn mặc định (340px / 350px).
+  2. **Bộ Chọn Mô Hình & Động Cơ Giọng Đọc AI (TTS Engine Selector):**
+     - Đặt thẻ điều khiển Card chuyên biệt `studio-tts-engine-card` ở đầu mục "2. Giọng Đọc Nhân Vật (TTS)".
+     - Cho phép chọn nhanh giữa 4 chế độ: `🌟 VietNeu TTS AI`, `🎙️ Kokoro Local ONNX`, `🌐 Edge-TTS Cloud`, và `⚡ Tất Cả Models`.
+     - Hiển thị bảng thông số Spec Box trực quan kèm nút 1-chạm "✨ Áp dụng Model này cho tất cả các vai".
+  3. **Mở Rộng Danh Mục Giọng Đọc & Phân Loại Vùng Miền Âm Sắc:**
+     - Bổ sung trọn bộ hơn 20 giọng đọc AI: VietNeu TTS (6 giọng Bắc/Trung/Nam biểu cảm cao), Kokoro-Vietnamese (14 giọng nam nữ offline), Edge-TTS Neural (4 giọng phát thanh viên & tiếng Anh).
+     - Lọc danh sách thông minh theo model đang chọn hoặc phân nhóm `<optgroup>` trực quan.
+     - Nâng cấp routing `mapVoiceForEngine` đảm bảo đồng bộ cho cả synthesis và preview nghe thử.
+  4. **Đồng Bộ Tab Cài Đặt (Subtab Models Hub):**
+     - Bổ sung bảng "🎙️ Text-to-Speech (TTS) Voice Models" trong Hub Models, hiển thị rõ ràng thông số đề xuất, loại engine, dung lượng và trạng thái hoạt động của VietNeu TTS, Kokoro ONNX, Edge-TTS.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `src/views/SettingsView.tsx`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
+- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.27s, Vite bundle thành công).

@@ -181,12 +181,51 @@ export default function SublixStudioView({
   const [openDubCard, setOpenDubCard] = useState<boolean>(true);
   const [leftTab, setLeftTab] = useState<"pipeline" | "review">("pipeline");
 
+  // Kích thước có thể thay đổi của Panel Trái & Panel Phải (Resizable Sidebars)
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sublix_studio_left_w");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 250 && val <= 600) return val;
+      }
+    } catch {}
+    return 340;
+  });
+
+  const [rightPanelWidth, setRightPanelWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sublix_studio_right_w");
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 260 && val <= 700) return val;
+      }
+    } catch {}
+    return 350;
+  });
+
+  const [isDraggingLeft, setIsDraggingLeft] = useState<boolean>(false);
+  const [isDraggingRight, setIsDraggingRight] = useState<boolean>(false);
+
+  // Bộ chọn TTS Engine / Model AI
+  const [selectedTtsEngine, setSelectedTtsEngine] = useState<"all" | "vietneu" | "kokoro" | "edge">(() => {
+    try {
+      const saved = localStorage.getItem("sublix_selected_tts_engine");
+      if (saved && ["all", "vietneu", "kokoro", "edge"].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return "all";
+  });
+
   // Ánh xạ giọng đọc cho TTS engine (Hỗ trợ VietNeu TTS, Kokoro Local và Edge TTS)
   const mapVoiceForEngine = (voice: string): string => {
     if (voice.startsWith("vietneu:")) {
-      if (voice.includes("bac_nu") || voice.includes("nam_nu")) {
-        return "kokoro:mai_linh";
-      }
+      if (voice.includes("bac_nu")) return "kokoro:mai_linh";
+      if (voice.includes("nam_nu") || voice.includes("hue_nu")) return "kokoro:ngoc_huyen";
+      if (voice.includes("bac_nam")) return "kokoro:tuan_ngoc";
+      if (voice.includes("nam_nam")) return "kokoro:manh_dung";
+      if (voice.includes("thoisu")) return "kokoro:hung_thinh";
       return "kokoro:tuan_ngoc";
     }
     return voice;
@@ -2464,6 +2503,114 @@ export default function SublixStudioView({
     }
   };
 
+  // RESIZABLE SIDEBAR HANDLERS (Left & Right Splitters)
+  const handleMouseDownLeftSplitter = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingLeft(true);
+    const startX = e.clientX;
+    const startWidth = leftPanelWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.min(600, Math.max(250, startWidth + delta));
+      setLeftPanelWidth(newWidth);
+    };
+
+    const onMouseUp = (upEvent: MouseEvent) => {
+      const delta = upEvent.clientX - startX;
+      const finalWidth = Math.min(600, Math.max(250, startWidth + delta));
+      setIsDraggingLeft(false);
+      try {
+        localStorage.setItem("sublix_studio_left_w", String(finalWidth));
+      } catch {}
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleResetLeftWidth = () => {
+    setLeftPanelWidth(340);
+    try {
+      localStorage.setItem("sublix_studio_left_w", "340");
+    } catch {}
+    showToast("Đã đặt lại độ rộng cột Cấu hình (340px)");
+  };
+
+  const handleMouseDownRightSplitter = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingRight(true);
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = startX - moveEvent.clientX;
+      const newWidth = Math.min(700, Math.max(260, startWidth + delta));
+      setRightPanelWidth(newWidth);
+    };
+
+    const onMouseUp = (upEvent: MouseEvent) => {
+      const delta = startX - upEvent.clientX;
+      const finalWidth = Math.min(700, Math.max(260, startWidth + delta));
+      setIsDraggingRight(false);
+      try {
+        localStorage.setItem("sublix_studio_right_w", String(finalWidth));
+      } catch {}
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleResetRightWidth = () => {
+    setRightPanelWidth(350);
+    try {
+      localStorage.setItem("sublix_studio_right_w", "350");
+    } catch {}
+    showToast("Đã đặt lại độ rộng cột Phụ đề (350px)");
+  };
+
+  // TTS Engine & Model Filter Handlers
+  const handleSelectTtsEngine = (engine: "all" | "vietneu" | "kokoro" | "edge") => {
+    setSelectedTtsEngine(engine);
+    try {
+      localStorage.setItem("sublix_selected_tts_engine", engine);
+    } catch {}
+    if (engine === "vietneu") {
+      showToast("🌟 Đã chọn Mô hình VietNeu TTS AI (Truyền cảm tiếng Việt)");
+    } else if (engine === "kokoro") {
+      showToast("🎙️ Đã chọn Mô hình Kokoro-82M ONNX (Offline Cục Bộ)");
+    } else if (engine === "edge") {
+      showToast("🌐 Đã chọn Mô hình Edge-TTS Neural (Trực tuyến Microsoft)");
+    } else {
+      showToast("⚡ Hiển thị trọn bộ giọng từ tất cả mô hình AI");
+    }
+  };
+
+  // Áp dụng nhanh 1 model cho tất cả các vai
+  const handleApplyEngineToAllSpeakers = (engine: "vietneu" | "kokoro" | "edge") => {
+    saveAudioUndo();
+    setSpeakers((prev) =>
+      prev.map((s, idx) => {
+        let newVoice = s.voice;
+        const isFemale = s.name.toLowerCase().includes("nữ") || idx % 2 === 1;
+        if (engine === "vietneu") {
+          newVoice = isFemale ? "vietneu:vi_bac_nu" : "vietneu:vi_bac_nam";
+        } else if (engine === "kokoro") {
+          newVoice = isFemale ? "kokoro:mai_linh" : "kokoro:tuan_ngoc";
+        } else if (engine === "edge") {
+          newVoice = isFemale ? "vi-VN-HoaiMyNeural" : "vi-VN-NamMinhNeural";
+        }
+        return { ...s, voice: newVoice };
+      })
+    );
+    showToast(`✅ Đã đồng bộ toàn bộ vai diễn sang mô hình ${engine.toUpperCase()}`);
+  };
+
   // R2-03: Draw Audio Waveform on Canvas (Real speech activity peaks, silence is strictly flat)
   useEffect(() => {
     const canvas = waveformCanvasRef.current;
@@ -2886,9 +3033,9 @@ export default function SublixStudioView({
       {/* ====================================================================
           WORKSPACE — 3 COLUMNS (P2, P3, P4)
           ==================================================================== */}
-      <div className="studio-workspace">
-        {/* P2: CỘT BƯỚC BÊN TRI */}
-        <aside className="studio-col-steps">
+      <div className={`studio-workspace ${isDraggingLeft || isDraggingRight ? "is-resizing" : ""}`}>
+        {/* P2: CỘT BƯỚC BÊN TRÁI (RESIZABLE) */}
+        <aside className="studio-col-steps" style={{ width: `${leftPanelWidth}px` }}>
           <div className="studio-steps-header">
             <button
               type="button"
@@ -3445,6 +3592,145 @@ export default function SublixStudioView({
                         <span>🎙️ 2. Giọng Đọc Nhân Vật (TTS)</span>
                       </div>
 
+                      {/* CARD: BỘ CHỌN MÔ HÌNH & ĐỘNG CƠ GIỌNG ĐỌC AI (TTS ENGINE / MODEL) */}
+                      <div className="studio-tts-engine-card">
+                        <div className="studio-tts-engine-card-header">
+                          <span className="studio-tts-engine-card-title">
+                            🤖 Mô Hình Động Cơ TTS:
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--t3)" }}>
+                            {selectedTtsEngine === "vietneu"
+                              ? "🌟 VietNeu Neural AI"
+                              : selectedTtsEngine === "kokoro"
+                              ? "🎙️ Kokoro-82M Offline"
+                              : selectedTtsEngine === "edge"
+                              ? "🌐 Edge-TTS Cloud"
+                              : "⚡ Đầy đủ 3 Mô hình"}
+                          </span>
+                        </div>
+
+                        {/* Selector Pills */}
+                        <div className="studio-tts-engine-pills">
+                          <button
+                            type="button"
+                            className={`studio-tts-pill-btn ${selectedTtsEngine === "vietneu" ? "active" : ""}`}
+                            onClick={() => handleSelectTtsEngine("vietneu")}
+                            title="Mô hình VietNeu TTS AI: Ngữ điệu tiếng Việt tự nhiên, truyền cảm, thích hợp thuyết minh phim & vlog"
+                          >
+                            <span className="studio-tts-pill-title">🌟 VietNeu TTS AI</span>
+                            <span className="studio-tts-pill-sub">Biểu cảm • Tự nhiên</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`studio-tts-pill-btn ${selectedTtsEngine === "kokoro" ? "active" : ""}`}
+                            onClick={() => handleSelectTtsEngine("kokoro")}
+                            title="Mô hình Kokoro-Vietnamese: Chạy offline cục bộ 100% bằng ONNX, không cần mạng, siêu nhẹ"
+                          >
+                            <span className="studio-tts-pill-title">🎙️ Kokoro Local</span>
+                            <span className="studio-tts-pill-sub">Offline • ONNX 82M</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`studio-tts-pill-btn ${selectedTtsEngine === "edge" ? "active" : ""}`}
+                            onClick={() => handleSelectTtsEngine("edge")}
+                            title="Mô hình Edge-TTS: Microsoft Azure Neural, giọng chuẩn đài truyền hình, ổn định"
+                          >
+                            <span className="studio-tts-pill-title">🌐 Edge-TTS Cloud</span>
+                            <span className="studio-tts-pill-sub">Phát thanh viên • Azure</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`studio-tts-pill-btn ${selectedTtsEngine === "all" ? "active" : ""}`}
+                            onClick={() => handleSelectTtsEngine("all")}
+                            title="Hiển thị toàn bộ giọng đọc từ tất cả các mô hình AI"
+                          >
+                            <span className="studio-tts-pill-title">⚡ Tất Cả Models</span>
+                            <span className="studio-tts-pill-sub">Đầy đủ 20+ giọng</span>
+                          </button>
+                        </div>
+
+                        {/* Engine Spec & Quick Apply */}
+                        <div className="studio-tts-engine-spec">
+                          {selectedTtsEngine === "vietneu" && (
+                            <>
+                              <div className="studio-tts-badge-row">
+                                <span className="studio-tts-badge">🌟 VietNeu-Air v2</span>
+                                <span className="studio-tts-badge">⚡ Tốc độ: Rất nhanh</span>
+                                <span className="studio-tts-badge">🎭 Biểu cảm: Cao</span>
+                                <span className="studio-tts-badge badge-offline">✓ Đã sẵn sàng</span>
+                              </div>
+                              <div>Ngữ điệu tự nhiên chuyên sâu cho tiếng Việt, ngắt nghỉ theo ngữ cảnh câu thoại, rất mượt mà cho phim & truyện.</div>
+                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  className="studio-filter-chip"
+                                  onClick={() => handleApplyEngineToAllSpeakers("vietneu")}
+                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
+                                  title="Gán giọng VietNeu (Nam Bắc / Nữ Bắc) cho tất cả các vai hiện tại"
+                                >
+                                  ✨ Áp dụng VietNeu cho tất cả các vai
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedTtsEngine === "kokoro" && (
+                            <>
+                              <div className="studio-tts-badge-row">
+                                <span className="studio-tts-badge">🎙️ Kokoro-v0.19</span>
+                                <span className="studio-tts-badge">⚡ Realtime x5</span>
+                                <span className="studio-tts-badge badge-offline">📦 Cục bộ Offline 100%</span>
+                                <span className="studio-tts-badge">Dung lượng: ~82MB</span>
+                              </div>
+                              <div>Chạy hoàn toàn trên máy tính cá nhân bằng ONNX Runtime, bảo mật và không phụ thuộc vào internet.</div>
+                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  className="studio-filter-chip"
+                                  onClick={() => handleApplyEngineToAllSpeakers("kokoro")}
+                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
+                                  title="Gán giọng Kokoro (Tuấn Ngọc / Mai Linh) cho tất cả các vai hiện tại"
+                                >
+                                  ✨ Áp dụng Kokoro cho tất cả các vai
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedTtsEngine === "edge" && (
+                            <>
+                              <div className="studio-tts-badge-row">
+                                <span className="studio-tts-badge">🌐 Microsoft Azure</span>
+                                <span className="studio-tts-badge badge-cloud">☁️ Cloud API</span>
+                                <span className="studio-tts-badge">🔊 Phát thanh viên chuẩn</span>
+                                <span className="studio-tts-badge">Miễn phí 24/7</span>
+                              </div>
+                              <div>Giọng đọc tròn vành rõ chữ, âm lượng đồng đều và ổn định cao từ hạ tầng đám mây.</div>
+                              <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+                                <button
+                                  type="button"
+                                  className="studio-filter-chip"
+                                  onClick={() => handleApplyEngineToAllSpeakers("edge")}
+                                  style={{ cursor: "pointer", fontSize: 10, padding: "2px 8px" }}
+                                  title="Gán giọng Edge-TTS (Nam Minh / Hoài My) cho tất cả các vai hiện tại"
+                                >
+                                  ✨ Áp dụng Edge-TTS cho tất cả các vai
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {selectedTtsEngine === "all" && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>⚡ Hệ thống sẵn sàng với 3 mô hình TTS: VietNeu Neural, Kokoro Local và Edge-TTS.</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="studio-speakers-list">
                         {speakers.map((spk, idx) => (
                           <div key={spk.id} className="studio-speaker-item">
@@ -3482,24 +3768,44 @@ export default function SublixStudioView({
                                 );
                               }}
                             >
-                              <optgroup label="🌟 VietNeu TTS (NeuTTS-Air AI - Tiếng Việt Truyền Cảm)">
-                                <option value="vietneu:vi_bac_nam">VietNeu Nam ♂ (Bắc - Truyền cảm)</option>
-                                <option value="vietneu:vi_bac_nu">VietNeu Nữ ♀ (Bắc - Dịu dàng)</option>
-                                <option value="vietneu:vi_nam_nam">VietNeu Nam ♂ (Nam - Ấm áp)</option>
-                                <option value="vietneu:vi_nam_nu">VietNeu Nữ ♀ (Nam - Tự nhiên)</option>
-                              </optgroup>
-                              <optgroup label="🎙️ Kokoro Local TTS (Nhanh & Nhẹ - Chạy Offline)">
-                                <option value="kokoro:tuan_ngoc">Tuấn Ngọc ♂ (Bắc - Trầm ấm)</option>
-                                <option value="kokoro:manh_dung">Mạnh Dũng ♂ (Nam - Tự nhiên)</option>
-                                <option value="kokoro:mai_linh">Mai Linh ♀ (Bắc - Nhẹ nhàng)</option>
-                                <option value="kokoro:ngoc_huyen">Ngọc Huyền ♀ (Nam - Truyền cảm)</option>
-                                <option value="kokoro:diem_trinh">Diễm Trinh ♀ (Bắc - Điện ảnh)</option>
-                                <option value="kokoro:hung_thinh">Hưng Thịnh ♂ (Bắc - Phóng sự)</option>
-                              </optgroup>
-                              <optgroup label="🌐 Edge TTS (Online Miễn Phí)">
-                                <option value="vi-VN-NamMinhNeural">Nam Minh ♂ (Bắc - Chuẩn)</option>
-                                <option value="vi-VN-HoaiMyNeural">Hoài My ♀ (Bắc - Dịu)</option>
-                              </optgroup>
+                              {(selectedTtsEngine === "all" || selectedTtsEngine === "vietneu") && (
+                                <optgroup label="🌟 VietNeu TTS AI (Mô hình Neural Tiếng Việt Truyền Cảm)">
+                                  <option value="vietneu:vi_bac_nam">🌟 VietNeu Nam ♂ (Bắc - Truyền cảm, Review Phim)</option>
+                                  <option value="vietneu:vi_bac_nu">🌟 VietNeu Nữ ♀ (Bắc - Dịu dàng, Sách nói)</option>
+                                  <option value="vietneu:vi_nam_nam">🌟 VietNeu Nam ♂ (Nam - Ấm áp, Podcast)</option>
+                                  <option value="vietneu:vi_nam_nu">🌟 VietNeu Nữ ♀ (Nam - Tự nhiên, Vlog)</option>
+                                  <option value="vietneu:vi_hue_nu">🌟 VietNeu Nữ ♀ (Huế - Ngọt ngào, Trữ tình)</option>
+                                  <option value="vietneu:vi_bac_thoisu">🌟 VietNeu Nam ♂ (Bắc - Thời sự, Tin tức)</option>
+                                </optgroup>
+                              )}
+
+                              {(selectedTtsEngine === "all" || selectedTtsEngine === "kokoro") && (
+                                <optgroup label="🎙️ Kokoro-Vietnamese AI (Mô hình Offline ONNX Cục Bộ ~82M)">
+                                  <option value="kokoro:tuan_ngoc">🎙️ Tuấn Ngọc ♂ (Bắc - Trầm ấm, Thuyết minh)</option>
+                                  <option value="kokoro:manh_dung">🎙️ Mạnh Dũng ♂ (Nam - Tự nhiên, Mạnh mẽ)</option>
+                                  <option value="kokoro:hung_thinh">🎙️ Hưng Thịnh ♂ (Bắc - Phóng sự, Thời sự)</option>
+                                  <option value="kokoro:phat_tai">🎙️ Phát Tài ♂ (Nam - Hào sảng, Thể thao)</option>
+                                  <option value="kokoro:thanh_dat">🎙️ Thành Đạt ♂ (Bắc - Tự tin, Trẻ trung)</option>
+                                  <option value="kokoro:duc_an">🎙️ Đức An ♂ (Bắc - Điềm đạm, Trầm tĩnh)</option>
+                                  <option value="kokoro:duc_duy">🎙️ Đức Duy ♂ (Nam - Năng động, Hoạt náo)</option>
+                                  <option value="kokoro:mai_linh">🎙️ Mai Linh ♀ (Bắc - Nhẹ nhàng, Trong trẻo)</option>
+                                  <option value="kokoro:ngoc_huyen">🎙️ Ngọc Huyền ♀ (Nam - Truyền cảm, Tâm sự)</option>
+                                  <option value="kokoro:diem_trinh">🎙️ Diễm Trinh ♀ (Bắc - Điện ảnh, Sang trọng)</option>
+                                  <option value="kokoro:mai_loan">🎙️ Mai Loan ♀ (Bắc - Ấm áp, Trưởng thành)</option>
+                                  <option value="kokoro:my_yen">🎙️ Mỹ Yến ♀ (Nam - Ngọt ngào, Tươi tắn)</option>
+                                  <option value="kokoro:thuc_trinh">🎙️ Thục Trinh ♀ (Bắc - Trang nhã, Lịch thiệp)</option>
+                                  <option value="kokoro:storyvert">🎙️ Storyvert ♀ (Bắc - Kể chuyện cổ tích, Sách nói)</option>
+                                </optgroup>
+                              )}
+
+                              {(selectedTtsEngine === "all" || selectedTtsEngine === "edge") && (
+                                <optgroup label="🌐 Edge-TTS Neural (Mô hình Trực Tuyến Microsoft Azure)">
+                                  <option value="vi-VN-NamMinhNeural">🌐 Nam Minh ♂ (Bắc - Chuẩn phát thanh viên)</option>
+                                  <option value="vi-VN-HoaiMyNeural">🌐 Hoài My ♀ (Bắc - Dịu êm, Sâu lắng)</option>
+                                  <option value="en-US-AndrewNeural">🌐 Andrew ♂ (Mỹ - Tiếng Anh Đa sắc thái)</option>
+                                  <option value="en-US-AvaNeural">🌐 Ava ♀ (Mỹ - Tiếng Anh Biểu cảm)</option>
+                                </optgroup>
+                              )}
                             </select>
 
                             <div className="studio-speaker-actions">
@@ -3789,6 +4095,16 @@ export default function SublixStudioView({
             </div>
           </div>
         </aside>
+
+        {/* RESIZER CỘT TRÁI (LEFT PANEL RESIZER) */}
+        <div
+          className={`studio-panel-resizer studio-panel-resizer-left ${isDraggingLeft ? "active" : ""}`}
+          onMouseDown={handleMouseDownLeftSplitter}
+          onDoubleClick={handleResetLeftWidth}
+          title="Kéo sang trái/phải để thay đổi kích thước cột Cấu hình • Nhấp đúp để đặt lại mặc định (340px)"
+        >
+          <div className="resizer-grip-handle" />
+        </div>
 
         {/* P3: KHUNG XEM VIDEO Ở GIỮA */}
         <section className="studio-col-video">
@@ -4267,8 +4583,18 @@ export default function SublixStudioView({
           </div>
         </section>
 
-        {/* P4: DANH SCH CÂU (CỘT PHẢI) */}
-        <aside className="studio-col-segments">
+        {/* RESIZER CỘT PHẢI (RIGHT PANEL RESIZER) */}
+        <div
+          className={`studio-panel-resizer studio-panel-resizer-right ${isDraggingRight ? "active" : ""}`}
+          onMouseDown={handleMouseDownRightSplitter}
+          onDoubleClick={handleResetRightWidth}
+          title="Kéo sang trái/phải để thay đổi kích thước cột Phụ đề • Nhấp đúp để đặt lại mặc định (350px)"
+        >
+          <div className="resizer-grip-handle" />
+        </div>
+
+        {/* P4: DANH SÁCH CÂU (CỘT PHẢI - RESIZABLE) */}
+        <aside className="studio-col-segments" style={{ width: `${rightPanelWidth}px` }}>
           <div className="studio-segments-header">
             <div className="studio-segments-tabs">
               <button

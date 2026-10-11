@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-RESIZABLE-TTS-HUB` | Resizable Panels (kéo co giãn cột trái/phải), TTS Engine Selector, VietNeu/Kokoro/Edge giọng đọc phong phú, Đồng bộ Models Hub | **Antigravity** | 2026-10-11 | ✅ Resizable Splitters kèm localStorage/reset, TTS Model Selector Card (VietNeu, Kokoro 82M, Edge-TTS), 20+ giọng đọc chi tiết, Hub Models TTS table |
 | `TSK-PROCESS-POLISH` | Đồng bộ Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard | **Antigravity** | 2026-10-11 | ✅ Đồng bộ metadata (filename, workflow, steps), loại bỏ hardcode 'Studio Lồng Tiếng' & '0/2 câu thoại', Live timer, Stepper |
 | `TSK-TIMELINE-START-ALIGN` | Căn chuẩn gốc Timeline x=0 (xóa offset 40px, Playhead needle & ticks & tracks đồng bộ tại 00:00:00) | **Antigravity** | 2026-10-11 | ✅ Kim tua, ruler tick 00:00, video, sóng âm, phụ đề bắt đầu chuẩn x=0, clip-path cờ khi sát biên, E2E build 100% |
 | `TSK-STUDIO-ROUND-15` | Unified Studio: Bridge Downloader thẳng vào Studio, dọn sạch 2 tab nổ, đồng bộ Master Topbar | **Antigravity** | 2026-10-11 | ✅ Nút `🚀 Đưa Vào Studio`, loại bỏ tab popping `file_sub`/`dubbing`, đồng bộ 6 Master tabs, badge v0.11.29, E2E Playwright pass |

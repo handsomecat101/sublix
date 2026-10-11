@@ -267,16 +267,15 @@
   overflow: hidden;
 }
 
-/* P2 — LEFT COLUMN: STEPS ACCORDION */
+/* P2 — LEFT COLUMN: STEPS ACCORDION (RESIZABLE) */
 .studio-col-steps {
-  width: 325px;
-  min-width: 300px;
-  max-width: 360px;
+  min-width: 250px;
   background: var(--bg-side);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .studio-steps-header {
@@ -723,16 +722,15 @@
   font-family: var(--font-mono);
 }
 
-/* P4 — RIGHT COLUMN: SUBTITLE / SEGMENT LIST */
+/* P4 — RIGHT COLUMN: SUBTITLE / SEGMENT LIST (RESIZABLE) */
 .studio-col-segments {
-  width: 340px;
-  min-width: 310px;
-  max-width: 380px;
+  min-width: 260px;
   background: var(--bg-side);
   border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .studio-segments-header {
@@ -2692,4 +2690,183 @@
   border-top: 2px solid rgba(56, 189, 248, 0.35) !important;
   box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.3);
 }
+
+/* ==========================================================================
+   RESIZABLE STUDIO PANELS (SPLITTERS)
+   ========================================================================== */
+.studio-workspace.is-resizing {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+.studio-panel-resizer {
+  width: 6px;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.studio-panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  transition: all 0.15s ease;
+}
+
+.studio-panel-resizer:hover,
+.studio-panel-resizer.active {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.studio-panel-resizer:hover::after,
+.studio-panel-resizer.active::after {
+  width: 3px;
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+}
+
+.resizer-grip-handle {
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.studio-panel-resizer:hover .resizer-grip-handle,
+.studio-panel-resizer.active .resizer-grip-handle {
+  opacity: 1;
+  background: #38bdf8;
+}
+
+/* ==========================================================================
+   TTS ENGINE / MODEL SELECTOR & SPEC CARD
+   ========================================================================== */
+.studio-tts-engine-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.studio-tts-engine-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.studio-tts-engine-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7dd3fc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-tts-engine-pills {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.studio-tts-pill-btn {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--t2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.studio-tts-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--t1);
+}
+
+.studio-tts-pill-btn.active {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.studio-tts-pill-title {
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.studio-tts-pill-sub {
+  font-size: 9.5px;
+  color: var(--t3);
+  margin-top: 2px;
+}
+
+.studio-tts-pill-btn.active .studio-tts-pill-sub {
+  color: #bae6fd;
+}
+
+.studio-tts-engine-spec {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border-left: 3px solid #38bdf8;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--t2);
+}
+
+.studio-tts-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.studio-tts-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.studio-tts-badge.badge-offline {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.studio-tts-badge.badge-cloud {
+  background: rgba(168, 85, 247, 0.18);
+  color: #d8b4fe;
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
 
