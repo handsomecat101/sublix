@@ -1368,7 +1368,7 @@ export default function SublixStudioView({
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const scrollLeft = container.scrollLeft || 0;
-      const relativeX = moveEvent.clientX - rect.left + scrollLeft - 40;
+      const relativeX = moveEvent.clientX - rect.left + scrollLeft;
       const dur = Math.max(1, mediaDurationRef.current);
       const tw = timelineWidthRef.current || 1200;
       const newTime = Math.max(0, Math.min(dur, (relativeX / tw) * dur));
@@ -1534,7 +1534,7 @@ export default function SublixStudioView({
     if (!container) return;
     const rect = container.getBoundingClientRect();
     const scrollLeft = container.scrollLeft || 0;
-    const relativeX = clientX - rect.left + scrollLeft - 40; // 40px padding left
+    const relativeX = clientX - rect.left + scrollLeft;
     const dur = Math.max(1, mediaDuration);
     const tw = timelineWidthRef.current || 1200;
     const newTime = Math.max(0, Math.min(dur, (relativeX / tw) * dur));
@@ -1592,7 +1592,7 @@ export default function SublixStudioView({
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const scrollLeft = container.scrollLeft || 0;
-      const relativeX = e.clientX - rect.left + scrollLeft - 40;
+      const relativeX = e.clientX - rect.left + scrollLeft;
       const dur = Math.max(1, mediaDurationRef.current);
       const tw = timelineWidthRef.current || 1200;
       const startTime = Number(Math.max(0, Math.min(dur, (relativeX / tw) * dur)).toFixed(2));
@@ -1601,7 +1601,7 @@ export default function SublixStudioView({
       setUseRangeOnly(true);
 
       const handleMove = (ev: MouseEvent | PointerEvent) => {
-        const curRel = ev.clientX - rect.left + container.scrollLeft - 40;
+        const curRel = ev.clientX - rect.left + container.scrollLeft;
         const curTime = Number(Math.max(0, Math.min(dur, (curRel / tw) * dur)).toFixed(2));
         setOutPoint(curTime);
       };
@@ -2429,7 +2429,7 @@ export default function SublixStudioView({
     if (!container) return;
     const rect = container.getBoundingClientRect();
     const scrollLeft = container.scrollLeft || 0;
-    const clickX = e.clientX - rect.left + scrollLeft - 40;
+    const clickX = e.clientX - rect.left + scrollLeft;
     const dur = Math.max(1, mediaDurationRef.current);
     const tw = timelineWidthRef.current || 1200;
     const newTime = Math.max(0, Math.min(dur, (clickX / tw) * dur));
@@ -4789,15 +4789,21 @@ export default function SublixStudioView({
             {/* Playhead Vertical Needle */}
             <div
               className={`studio-timeline-playhead ${isDraggingPlayhead ? "dragging" : ""}`}
-              style={{ left: `${(currentTime / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+              style={{ left: `${(currentTime / Math.max(1, mediaDuration)) * timelineWidth}px` }}
             >
               <div
                 className={`studio-timeline-playhead-head ${isDraggingPlayhead ? "dragging" : ""}`}
+                style={{
+                  left: (currentTime / Math.max(1, mediaDuration)) * timelineWidth < 8 ? "0px" : "-8px",
+                  clipPath: (currentTime / Math.max(1, mediaDuration)) * timelineWidth < 8
+                    ? "polygon(0% 0%, 100% 0%, 100% 65%, 0% 100%)"
+                    : "polygon(0% 0%, 100% 0%, 100% 65%, 50% 100%, 0% 65%)",
+                }}
                 onMouseDown={handlePlayheadMouseDown}
                 onTouchStart={(e) => {
                   if (e.touches.length > 0) startScrubbing(e.touches[0].clientX);
                 }}
-                title="Ko thả đầu kim để tua / chạy video qua timeline (Scrubbing)"
+                title="Kéo thả đầu kim để tua / chạy video qua timeline (Scrubbing)"
               />
             </div>
 
@@ -4809,7 +4815,7 @@ export default function SublixStudioView({
                   <div
                     className="studio-timeline-dimmed-outside"
                     style={{
-                      left: 40,
+                      left: 0,
                       width: `${(Math.min(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
                     }}
                   />
@@ -4819,7 +4825,7 @@ export default function SublixStudioView({
                 <div
                   className="studio-timeline-range-band"
                   style={{
-                    left: `${(Math.min(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth + 40}px`,
+                    left: `${(Math.min(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
                     width: `${(Math.abs(outPoint - inPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
                   }}
                 />
@@ -4829,7 +4835,7 @@ export default function SublixStudioView({
                   <div
                     className="studio-timeline-dimmed-outside"
                     style={{
-                      left: `${(Math.max(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth + 40}px`,
+                      left: `${(Math.max(inPoint, outPoint) / Math.max(1, mediaDuration)) * timelineWidth}px`,
                       width: `${((mediaDuration - Math.max(inPoint, outPoint)) / Math.max(1, mediaDuration)) * timelineWidth}px`,
                     }}
                   />
@@ -4840,7 +4846,7 @@ export default function SublixStudioView({
             {/* Time Ruler */}
             <div
               className="studio-timeline-ruler"
-              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+              style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
               onMouseDown={handleRulerMouseDown}
               onTouchStart={(e) => {
                 if (e.touches.length > 0) startScrubbing(e.touches[0].clientX);
@@ -4852,7 +4858,7 @@ export default function SublixStudioView({
               {inPoint !== null && (
                 <div
                   className="studio-ruler-range-handle in"
-                  style={{ left: `${(inPoint / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+                  style={{ left: `${(inPoint / Math.max(1, mediaDuration)) * timelineWidth}px` }}
                   onMouseDown={(e) => startDraggingRangeHandle(e, "in")}
                   title={`Điểm Vào (In): ${formatTimecode(inPoint)} — Kéo để điều chỉnh`}
                 >
@@ -4862,7 +4868,7 @@ export default function SublixStudioView({
               {outPoint !== null && (
                 <div
                   className="studio-ruler-range-handle out"
-                  style={{ left: `${(outPoint / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+                  style={{ left: `${(outPoint / Math.max(1, mediaDuration)) * timelineWidth}px` }}
                   onMouseDown={(e) => startDraggingRangeHandle(e, "out")}
                   title={`Điểm Ra (Out): ${formatTimecode(outPoint)} — Kéo để điều chỉnh`}
                 >
@@ -4877,7 +4883,11 @@ export default function SublixStudioView({
                   <div
                     key={t}
                     className="studio-timeline-tick"
-                    style={{ left: `${(t / Math.max(1, mediaDuration)) * timelineWidth + 40}px` }}
+                    style={{
+                      left: `${(t / Math.max(1, mediaDuration)) * timelineWidth}px`,
+                      transform: t === 0 ? "none" : "translateX(-50%)",
+                      paddingLeft: t === 0 ? 4 : 0,
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSeek(t);
@@ -4894,7 +4904,7 @@ export default function SublixStudioView({
                   key={idx}
                   style={{
                     position: "absolute",
-                    left: `${(bmTime / Math.max(1, mediaDuration)) * timelineWidth + 40}px`,
+                    left: `${(bmTime / Math.max(1, mediaDuration)) * timelineWidth}px`,
                     top: 2,
                     fontSize: 10,
                     color: "#38bdf8",
@@ -4916,7 +4926,7 @@ export default function SublixStudioView({
             {/* Track 1: Video Filmstrip */}
             <div
               className="studio-track-lane studio-track-media-lane"
-              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px`, cursor: "col-resize" }}
+              style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px`, cursor: "col-resize" }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -4932,7 +4942,7 @@ export default function SublixStudioView({
                 {filmstripThumbs.length > 0 ? (
                   filmstripThumbs.map((thumb, i) => {
                     const nextTime = i < filmstripThumbs.length - 1 ? filmstripThumbs[i + 1].time_sec : mediaDuration;
-                    const left = (thumb.time_sec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                    const left = (thumb.time_sec / Math.max(1, mediaDuration)) * timelineWidth;
                     const w = ((nextTime - thumb.time_sec) / Math.max(1, mediaDuration)) * timelineWidth;
                     return (
                       <div
@@ -4948,7 +4958,7 @@ export default function SublixStudioView({
                           border: "1px solid rgba(255, 255, 255, 0.12)",
                           background: "#0f172a",
                         }}
-                        title={`Khung hnh mốc ${formatTimecode(thumb.time_sec)}`}
+                        title={`Khung hình mốc ${formatTimecode(thumb.time_sec)}`}
                       >
                         <img
                           src={thumb.data_uri}
@@ -4976,7 +4986,7 @@ export default function SublixStudioView({
                   <div
                     style={{
                       position: "absolute",
-                      left: 40,
+                      left: 0,
                       width: `${timelineWidth}px`,
                       height: "32px",
                       background: "linear-gradient(90deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95))",
@@ -4998,7 +5008,7 @@ export default function SublixStudioView({
                     </span>
                   </div>
                 ) : (
-                  <div style={{ padding: "8px 16px", fontSize: 11, color: "var(--t3)", fontStyle: "italic" }}>
+                  <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--t3)", fontStyle: "italic" }}>
                     Chưa nạp video
                   </div>
                 )}
@@ -5008,7 +5018,7 @@ export default function SublixStudioView({
             {/* Track 2: Original Waveform */}
             <div
               className="studio-track-lane studio-track-media-lane"
-              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px`, cursor: "col-resize" }}
+              style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px`, cursor: "col-resize" }}
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -5025,14 +5035,14 @@ export default function SublixStudioView({
                 className="studio-waveform-canvas"
                 width={Math.min(timelineWidth, 8192)}
                 height={32}
-                style={{ width: `${timelineWidth}px`, height: 32, marginLeft: 40 }}
+                style={{ width: `${timelineWidth}px`, height: 32, marginLeft: 0 }}
               />
             </div>
 
             {/* Track 3: Subtitles Block Lane (Progressive Filling) */}
             <div
               className="studio-track-lane studio-track-workspace-lane workspace-start"
-              style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+              style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
               onClick={(e) => {
                 if (timelineToolMode === "scrub") {
                   handleTimelineClick(e);
@@ -5051,7 +5061,7 @@ export default function SublixStudioView({
                   const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
                   const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
                   const totalSec = Math.max(0.1, endSec - startSec);
-                  const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                  const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth;
                   const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
                   const currentWidthPx = totalWidthPx * (timelineProgress / 100);
 
@@ -5076,7 +5086,7 @@ export default function SublixStudioView({
 
               {segments.map((seg) => {
                 const totalDur = Math.max(1, mediaDuration);
-                const left = (seg.start / totalDur) * timelineWidth + 40;
+                const left = (seg.start / totalDur) * timelineWidth;
                 const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                 const isSelected = seg.id === selectedSegId;
                 const isMultiSelected = selectedSegIds.includes(seg.id);
@@ -5104,7 +5114,7 @@ export default function SublixStudioView({
                         e.stopPropagation();
                         handleNudgeSegment(seg.id, "start", -0.2);
                       }}
-                      title="Thu nh/Ko di đầu cu (-0.2s)"
+                      title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
                     />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
                       {seg.translated}
@@ -5115,7 +5125,7 @@ export default function SublixStudioView({
                         e.stopPropagation();
                         handleNudgeSegment(seg.id, "end", 0.2);
                       }}
-                      title="Thu nh/Ko di cuối cu (+0.2s)"
+                      title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
                     />
                   </div>
                 );
@@ -5126,7 +5136,7 @@ export default function SublixStudioView({
             {collapseSpeakerTracks ? (
               <div
                 className="studio-track-lane studio-track-workspace-lane"
-                style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+                style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
                 onClick={(e) => {
                   if (timelineToolMode === "scrub") {
                     handleTimelineClick(e);
@@ -5145,7 +5155,7 @@ export default function SublixStudioView({
                     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
                     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
                     const totalSec = Math.max(0.1, endSec - startSec);
-                    const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                    const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth;
                     const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
                     const currentWidthPx = totalWidthPx * (timelineProgress / 100);
 
@@ -5171,7 +5181,7 @@ export default function SublixStudioView({
                 {segments.map((seg) => {
                   const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
                   const totalDur = Math.max(1, mediaDuration);
-                  const left = (seg.start / totalDur) * timelineWidth + 40;
+                  const left = (seg.start / totalDur) * timelineWidth;
                   const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                   const isSelected = seg.id === selectedSegId;
                   const isMultiSelected = selectedSegIds.includes(seg.id);
@@ -5226,7 +5236,7 @@ export default function SublixStudioView({
                   <div
                     key={spk.id}
                     className="studio-track-lane studio-track-workspace-lane"
-                    style={{ width: `${timelineWidth + 80}px`, minWidth: `${timelineWidth + 80}px` }}
+                    style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
                     onClick={(e) => {
                       if (timelineToolMode === "scrub") {
                         handleTimelineClick(e);
@@ -5245,7 +5255,7 @@ export default function SublixStudioView({
                         const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
                         const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
                         const totalSec = Math.max(0.1, endSec - startSec);
-                        const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth + 40;
+                        const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth;
                         const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
                         const currentWidthPx = totalWidthPx * (timelineProgress / 100);
 
@@ -5270,7 +5280,7 @@ export default function SublixStudioView({
                     )}
                     {spkSegments.map((seg) => {
                       const totalDur = Math.max(1, mediaDuration);
-                      const left = (seg.start / totalDur) * timelineWidth + 40;
+                      const left = (seg.start / totalDur) * timelineWidth;
                       const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
                       const isSelected = seg.id === selectedSegId;
                       const isMultiSelected = selectedSegIds.includes(seg.id);
