@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-TRACK-CLEAR-DYNAMIC-RANGE` | Sửa dứt điểm nút xóa track tiếng bảo toàn phụ đề, Hiển thị động 2 track Timeline & Menu chuột phải AI khoanh vùng | **Antigravity** | 2026-10-11 | ✅ `handleClearTrack` chỉ xóa `hasAudio`, bảo toàn 100% phụ đề, Timeline rỗng chỉ hiện Video & Audio gốc, Timeline Context Menu In/Out AI bóc tách + dịch + lồng tiếng độc lập |
 | `TSK-TRACK-VOICE-DISTINCT` | Sửa dứt điểm nhầm lẫn giữa Track Phụ Đề & Track Tiếng Lồng, đổi tên vai thành Thuyết minh AI, Audio Wave Blocks | **Antigravity** | 2026-10-11 | ✅ Đổi tên vai "Phụ đề" ➔ "Thuyết minh AI", Cột Tracks: `💬 PHỤ ĐỀ (TEXT)` vs `🎙️ TIẾNG LỒNG: [Tên vai]`, Audio Waveform Texture, Laser head Tiếng lồng |
 | `TSK-RESIZABLE-TTS-HUB` | Resizable Panels (kéo co giãn cột trái/phải), TTS Engine Selector, VietNeu/Kokoro/Edge giọng đọc phong phú, Đồng bộ Models Hub | **Antigravity** | 2026-10-11 | ✅ Resizable Splitters kèm localStorage/reset, TTS Model Selector Card (VietNeu, Kokoro 82M, Edge-TTS), 20+ giọng đọc chi tiết, Hub Models TTS table |
 | `TSK-PROCESS-POLISH` | Đồng bộ Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard | **Antigravity** | 2026-10-11 | ✅ Đồng bộ metadata (filename, workflow, steps), loại bỏ hardcode 'Studio Lồng Tiếng' & '0/2 câu thoại', Live timer, Stepper |

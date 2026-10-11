@@ -407,6 +407,33 @@ export default function SublixStudioView({
   const [timelineProgress, setTimelineProgress] = useState<number>(0);
   const [timelineProcessMessage, setTimelineProcessMessage] = useState<string>("");
 
+  // ROUND-25: Timeline Context Menu (Menu Chuột Phải Cho Khoanh Vùng & Toàn Bộ Timeline)
+  interface TimelineContextMenuState {
+    visible: boolean;
+    x: number;
+    y: number;
+    time: number;
+    hasRange: boolean;
+    inPoint: number | null;
+    outPoint: number | null;
+  }
+  const [timelineContextMenu, setTimelineContextMenu] = useState<TimelineContextMenuState | null>(null);
+
+  // ROUND-25: Tự động đóng Context Menu khi click ngoài hoặc bấm Escape
+  useEffect(() => {
+    if (!timelineContextMenu) return;
+    const handleCloseCtx = () => setTimelineContextMenu(null);
+    const handleKeyClose = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTimelineContextMenu(null);
+    };
+    window.addEventListener("click", handleCloseCtx);
+    window.addEventListener("keydown", handleKeyClose);
+    return () => {
+      window.removeEventListener("click", handleCloseCtx);
+      window.removeEventListener("keydown", handleKeyClose);
+    };
+  }, [timelineContextMenu]);
+
   // Bookmarks & Toast notification
   const [bookmarks, setBookmarks] = useState<number[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -1192,7 +1219,7 @@ export default function SublixStudioView({
     showToast(`🗑️ Đã xóa ${ids.length} câu thoại`);
   };
 
-  // ROUND-11: Xóa toàn bộ Track (Toàn bộ phụ đề hoặc toàn bộ câu thoại của vai)
+  // ROUND-11 & ROUND-25: Xóa toàn bộ Track (Toàn bộ phụ đề hoặc chỉ xóa âm thanh lồng tiếng)
   const handleClearTrack = (type: "subtitles" | "speaker", spkId?: string) => {
     saveUndoHistory();
     if (type === "subtitles") {
@@ -1207,21 +1234,30 @@ export default function SublixStudioView({
       setSelectedSegId(0);
       selectedSegIdRef.current = 0;
       showToast(`🗑️ Đã xóa sạch toàn bộ ${count} câu thoại trong track phụ đề`);
-    } else if (type === "speaker" && spkId) {
-      const spk = speakers.find((s) => s.id === spkId);
-      const count = segmentsRef.current.filter((s) => s.speakerId === spkId).length;
-      if (count === 0) {
-        showToast(`ℹ️ Vai ${spk?.name || spkId} hiện không có câu thoại nào.`);
+    } else if (type === "speaker") {
+      // ROUND-25 FIX: Khi xóa track tiếng lồng, CHỈ XÓA ÂM THANH (hasAudio = false), BẢO TOÀN NGUYÊN VẸN 100% PHỤ ĐỀ!
+      const targetSpkId = spkId || "all";
+      const spk = targetSpkId !== "all" ? speakers.find((s) => s.id === targetSpkId) : null;
+      const audioCount = segmentsRef.current.filter(
+        (s) => (targetSpkId === "all" || s.speakerId === targetSpkId) && s.hasAudio
+      ).length;
+
+      if (audioCount === 0) {
+        showToast(`ℹ️ Không có âm thanh lồng tiếng nào ${spk ? `của vai "${spk.name}"` : ""} để xóa.`);
         return;
       }
-      setSegments((prev) => prev.filter((s) => s.speakerId !== spkId));
-      setSelectedSegIds((prev) =>
-        prev.filter((id) => {
-          const s = segmentsRef.current.find((item) => item.id === id);
-          return s && s.speakerId !== spkId;
+
+      setSegments((prev) =>
+        prev.map((s) => {
+          if (targetSpkId === "all" || s.speakerId === targetSpkId) {
+            return { ...s, hasAudio: false, audioUrl: undefined };
+          }
+          return s;
         })
       );
-      showToast(`🗑️ Đã xóa sạch ${count} câu thoại của vai "${spk?.name || spkId}"`);
+      showToast(
+        `🗑️ Đã xóa âm thanh lồng tiếng (${audioCount} câu) ${spk ? `của vai "${spk.name}"` : ""}. Toàn bộ phụ đề vẫn giữ nguyên 100%!`
+      );
     }
   };
 
@@ -1448,6 +1484,35 @@ export default function SublixStudioView({
     setOutPoint(null);
     setUseRangeOnly(false);
     showToast("Đã xóa vùng chọn Timeline");
+  };
+
+  // ROUND-25: Xử lý sự kiện click chuột phải trên Timeline (Hiện Context Menu)
+  const handleTimelineContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!filePath) return;
+
+    const container = timelineTracksBodyRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft || 0;
+    const relativeX = e.clientX - rect.left + scrollLeft;
+    const dur = Math.max(1, mediaDurationRef.current);
+    const tw = timelineWidthRef.current || 1200;
+    const clickTime = Math.max(0, Math.min(dur, (relativeX / tw) * dur));
+
+    const curIn = inPointRef.current;
+    const curOut = outPointRef.current;
+    const hasRange = curIn !== null && curOut !== null;
+
+    setTimelineContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      time: clickTime,
+      hasRange,
+      inPoint: curIn,
+      outPoint: curOut,
+    });
   };
 
   // Dragging Range Handles on Ruler
@@ -1791,7 +1856,7 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
   // =========================================================================
-  const handleRunSttOnly = async (): Promise<SubtitleItem[] | null> => {
+  const handleRunSttOnly = async (forceRange?: boolean): Promise<SubtitleItem[] | null> => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return null;
@@ -1826,7 +1891,7 @@ export default function SublixStudioView({
           ],
     });
 
-    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
     const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
@@ -1916,7 +1981,7 @@ export default function SublixStudioView({
           speakerId: "speaker_0", // Thống nhất 1 speaker khi chỉ làm phụ đề
           original: seg.original_text,
           translated: seg.original_text, // Giữ nguyên câu gốc để duyệt
-          hasAudio: true,
+          hasAudio: false, // ROUND-25 FIX: Khi chỉ làm phụ đề thì chưa có audio giọng đọc!
         }));
 
         saveUndoHistory();
@@ -1981,14 +2046,14 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 2 — CHỈ DỊCH THUẬT (TRANSLATE ONLY / LLM)
   // =========================================================================
-  const handleRunTranslateOnly = async (inputSegs?: SubtitleItem[]) => {
+  const handleRunTranslateOnly = async (inputSegs?: SubtitleItem[], forceRange?: boolean) => {
     const activeSegs = inputSegs && inputSegs.length > 0 ? inputSegs : segments;
     if (activeSegs.length === 0) {
       showToast("⚠ Chưa có câu thoại nào để dịch! Hãy chạy 'Chỉ Làm Sub' trước.");
       return;
     }
 
-    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
@@ -2127,13 +2192,13 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
   // =========================================================================
-  const handleRunVoiceOnly = async () => {
+  const handleRunVoiceOnly = async (forceRange?: boolean) => {
     if (segments.length === 0) {
       showToast("⚠ Chưa có câu thoại nào để tạo giọng đọc!");
       return;
     }
 
-    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
@@ -2241,7 +2306,7 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8: 1-CLICK TOÀN BỘ PIPELINE (STT + DIARIZATION + TRANSLATION + VOICE)
   // =========================================================================
-  const handleRunAnalysis = async () => {
+  const handleRunAnalysis = async (forceRange?: boolean) => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return;
@@ -2269,7 +2334,7 @@ export default function SublixStudioView({
       ],
     });
 
-    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
     const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
@@ -3519,7 +3584,7 @@ export default function SublixStudioView({
                             borderColor: "rgba(168, 85, 247, 0.25)",
                             color: "#c084fc",
                           }}
-                          onClick={handleRunAnalysis}
+                          onClick={() => void handleRunAnalysis()}
                           disabled={isAnalyzing}
                           title="Dò tìm và phân nhóm giọng người nói trong video"
                         >
@@ -3892,7 +3957,7 @@ export default function SublixStudioView({
                           fontWeight: 600,
                         }}
                         disabled={isAnalyzing || segments.length === 0}
-                        onClick={handleRunVoiceOnly}
+                        onClick={() => void handleRunVoiceOnly()}
                         title="Chỉ tạo giọng đọc TTS cho các câu thoại hiện có trên timeline"
                       >
                         <IconPlay size={13} /> 🎙️ Chỉ Chạy Lồng Tiếng (TTS)
@@ -5261,119 +5326,149 @@ export default function SublixStudioView({
           </div>
         </div>
 
-        {/* P5b: Multi-lane Scrollable Timeline */}
-        <div className="studio-timeline-scroll-wrap">
-          {/* Left Track Headers (Fixed) */}
-          <div className="studio-timeline-track-headers">
-            <div className="studio-timeline-ruler-header-spacer">
-              <span>TRACKS</span>
-              {speakers.length > 1 && (
-                <button
-                  type="button"
-                  className={`studio-track-collapse-btn ${collapseSpeakerTracks ? "active" : ""}`}
-                  onClick={() => setCollapseSpeakerTracks(!collapseSpeakerTracks)}
-                  title={collapseSpeakerTracks ? "Mở rộng từng track nhân vật riêng biệt" : "Thu gọn tất cả nhân vật vào 1 track duy nhất"}
-                >
-                  {collapseSpeakerTracks ? "↕ Mở" : "↕ Gọn"}
-                </button>
-              )}
-            </div>
-            <div className="studio-track-header-item">
-              <div className="studio-track-header-left">
-                <span></span>
-                <span>▼ VIDEO</span>
-              </div>
-            </div>
-            <div className="studio-track-header-item">
-              <div className="studio-track-header-left">
-                <span></span>
-                <span>♫ TIẾNG GỐC</span>
-              </div>
-            </div>
-            <div className="studio-track-header-item">
-              <div className="studio-track-header-left">
-                <span>💬 PHỤ ĐỀ (TEXT)</span>
-              </div>
-              <button
-                className="studio-track-clear-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClearTrack("subtitles");
-                }}
-                title="Xóa toàn bộ câu trong track phụ đề"
-              >
-                🗑️
-              </button>
-            </div>
+        {/* ROUND-25: Điều kiện hiển thị động cho Track Phụ Đề & Track Tiếng Lồng */}
+        {(() => {
+          const showSubtitlesTrack =
+            segments.length > 0 ||
+            (isAnalyzing &&
+              (workflowOptStt ||
+                timelineProcessType === "stt" ||
+                timelineProcessType === "translate" ||
+                timelineProcessType === "pipeline"));
 
-            {/* Dynamic Speaker Tracks (TIẾNG LỒNG / DUB AUDIO TRACKS) */}
-            {collapseSpeakerTracks ? (
-              <div className="studio-track-header-item studio-track-header-voice">
-                <div className="studio-track-header-left">
-                  <span className="studio-track-header-dot-stack">
-                    {speakers.slice(0, 3).map((s) => (
-                      <span
-                        key={s.id}
-                        className="studio-track-header-dot"
-                        style={{ background: s.color }}
-                      />
-                    ))}
-                  </span>
-                  <span className="studio-track-voice-tag">🎙️ TIẾNG LỒNG</span>
-                  <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length} vai)</span>
+          const showVoiceTrack =
+            showSubtitlesTrack &&
+            (segments.some((s) => s.hasAudio) ||
+              (isAnalyzing &&
+                (workflowOptVoice ||
+                  timelineProcessType === "voice" ||
+                  timelineProcessType === "pipeline")));
+
+          return (
+            <div className="studio-timeline-scroll-wrap">
+              {/* Left Track Headers (Fixed) */}
+              <div className="studio-timeline-track-headers">
+                <div className="studio-timeline-ruler-header-spacer">
+                  <span>TRACKS</span>
+                  {showVoiceTrack && speakers.length > 1 && (
+                    <button
+                      type="button"
+                      className={`studio-track-collapse-btn ${collapseSpeakerTracks ? "active" : ""}`}
+                      onClick={() => setCollapseSpeakerTracks(!collapseSpeakerTracks)}
+                      title={collapseSpeakerTracks ? "Mở rộng từng track nhân vật riêng biệt" : "Thu gọn tất cả nhân vật vào 1 track duy nhất"}
+                    >
+                      {collapseSpeakerTracks ? "↕ Mở" : "↕ Gọn"}
+                    </button>
+                  )}
                 </div>
-                <button
-                  className="studio-track-clear-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleClearTrack("subtitles");
-                  }}
-                  title="Xóa toàn bộ câu của tất cả vai diễn"
-                >
-                  🗑️
-                </button>
-              </div>
-            ) : (
-              speakers.map((spk) => {
-                const spkName = getSpeakerDisplayName(spk);
-                const engineTag = spk.voice?.startsWith("vietneu:")
-                  ? "VietNeu"
-                  : spk.voice?.startsWith("kokoro:")
-                  ? "Kokoro"
-                  : "Edge";
+                <div className="studio-track-header-item">
+                  <div className="studio-track-header-left">
+                    <span></span>
+                    <span>▼ VIDEO</span>
+                  </div>
+                </div>
+                <div className="studio-track-header-item">
+                  <div className="studio-track-header-left">
+                    <span></span>
+                    <span>♫ TIẾNG GỐC</span>
+                  </div>
+                </div>
 
-                return (
-                  <div key={spk.id} className="studio-track-header-item studio-track-header-voice">
+                {/* Track 3: Phụ Đề (Chỉ hiện khi có phụ đề hoặc đang tạo) */}
+                {showSubtitlesTrack && (
+                  <div className="studio-track-header-item">
                     <div className="studio-track-header-left">
-                      <span
-                        className="studio-track-header-dot"
-                        style={{ background: spk.color }}
-                      />
-                      <span className="studio-track-voice-tag" title="Track âm thanh giọng lồng tiếng">
-                        🎙️ TIẾNG LỒNG:
-                      </span>
-                      <span className="studio-track-voice-name" title={`Vai: ${spkName} • Giọng: ${spk.voice}`}>
-                        {spkName}
-                      </span>
-                      <span className="studio-track-voice-engine-badge">
-                        {engineTag}
-                      </span>
+                      <span>💬 PHỤ ĐỀ (TEXT)</span>
                     </div>
                     <button
                       className="studio-track-clear-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleClearTrack("speaker", spk.id);
+                        handleClearTrack("subtitles");
                       }}
-                      title={`Xóa các câu thoại của vai ${spkName}`}
+                      title="Xóa toàn bộ câu trong track phụ đề"
                     >
                       🗑️
                     </button>
                   </div>
-                );
-              })
-            )}
-          </div>
+                )}
+
+                {/* Track 4: Dynamic Speaker Tracks (Chỉ hiện khi có tiếng lồng hoặc đang tạo) */}
+                {showVoiceTrack && (collapseSpeakerTracks ? (
+                  <div className="studio-track-header-item studio-track-header-voice">
+                    <div className="studio-track-header-left">
+                      <span className="studio-track-header-dot-stack">
+                        {speakers.slice(0, 3).map((s) => (
+                          <span
+                            key={s.id}
+                            className="studio-track-header-dot"
+                            style={{ background: s.color }}
+                          />
+                        ))}
+                      </span>
+                      <span className="studio-track-voice-tag">🎙️ TIẾNG LỒNG</span>
+                      <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length} vai)</span>
+                    </div>
+                    <button
+                      className="studio-track-clear-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleClearTrack("speaker", "all");
+                      }}
+                      title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ) : (
+                  speakers.map((spk) => {
+                    const spkName = getSpeakerDisplayName(spk);
+                    const engineTag = spk.voice?.startsWith("vietneu:")
+                      ? "VietNeu"
+                      : spk.voice?.startsWith("kokoro:")
+                      ? "Kokoro"
+                      : "Edge";
+
+                    return (
+                      <div key={spk.id} className="studio-track-header-item studio-track-header-voice">
+                        <div className="studio-track-header-left">
+                          <span
+                            className="studio-track-header-dot"
+                            style={{ background: spk.color }}
+                          />
+                          <span className="studio-track-voice-tag" title="Track âm thanh giọng lồng tiếng">
+                            🎙️ TIẾNG LỒNG:
+                          </span>
+                          <span className="studio-track-voice-name" title={`Vai: ${spkName} • Giọng: ${spk.voice}`}>
+                            {spkName}
+                          </span>
+                          <span className="studio-track-voice-engine-badge">
+                            {engineTag}
+                          </span>
+                        </div>
+                        <button
+                          className="studio-track-clear-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearTrack("speaker", spk.id);
+                          }}
+                          title={`Xóa âm thanh lồng tiếng của vai ${spkName} (giữ nguyên phụ đề)`}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    );
+                  })
+                ))}
+
+                {!showSubtitlesTrack && (
+                  <div className="studio-track-header-item studio-track-header-empty-hint">
+                    <span style={{ fontSize: 10, color: "var(--t3)", fontStyle: "italic", opacity: 0.7 }}>
+                      (Chưa tạo Sub / Voice)
+                    </span>
+                  </div>
+                )}
+              </div>
 
           {/* Right Tracks Body (Horizontal Scroll) */}
           <div
@@ -5381,6 +5476,7 @@ export default function SublixStudioView({
             className={`studio-timeline-tracks-body ${isDraggingPlayhead ? "scrubbing" : ""}`}
             onMouseDown={handleTimelineMouseDown}
             onWheel={handleTimelineWheel}
+            onContextMenu={handleTimelineContextMenu}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
@@ -5651,101 +5747,103 @@ export default function SublixStudioView({
               />
             </div>
 
-            {/* Track 3: Subtitles Block Lane (Progressive Filling) */}
-            <div
-              className="studio-track-lane studio-track-workspace-lane workspace-start"
-              style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
-              onClick={(e) => {
-                if (timelineToolMode === "scrub") {
-                  handleTimelineClick(e);
-                } else if (!didJustMarqueeRef.current) {
-                  setSelectedSegIds([]);
-                  selectedSegIdsRef.current = [];
-                  setSelectedSegId(0);
-                  selectedSegIdRef.current = 0;
-                }
-              }}
-            >
-              {/* ROUND-8: Visual Progressive Fill Overlay on Subtitles Track */}
-              {timelineProcessType && (
-                (() => {
-                  const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
-                  const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
-                  const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
-                  const totalSec = Math.max(0.1, endSec - startSec);
-                  const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth;
-                  const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
-                  const currentWidthPx = totalWidthPx * (timelineProgress / 100);
+            {/* Track 3: Subtitles Block Lane (Progressive Filling - Chỉ hiện khi có sub hoặc đang tạo) */}
+            {showSubtitlesTrack && (
+              <div
+                className="studio-track-lane studio-track-workspace-lane workspace-start"
+                style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
+                onClick={(e) => {
+                  if (timelineToolMode === "scrub") {
+                    handleTimelineClick(e);
+                  } else if (!didJustMarqueeRef.current) {
+                    setSelectedSegIds([]);
+                    selectedSegIdsRef.current = [];
+                    setSelectedSegId(0);
+                    selectedSegIdRef.current = 0;
+                  }
+                }}
+              >
+                {/* ROUND-8: Visual Progressive Fill Overlay on Subtitles Track */}
+                {timelineProcessType && (
+                  (() => {
+                    const isRange = useRangeOnly && inPoint !== null && outPoint !== null;
+                    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
+                    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+                    const totalSec = Math.max(0.1, endSec - startSec);
+                    const startLeftPx = (startSec / Math.max(1, mediaDuration)) * timelineWidth;
+                    const totalWidthPx = (totalSec / Math.max(1, mediaDuration)) * timelineWidth;
+                    const currentWidthPx = totalWidthPx * (timelineProgress / 100);
+
+                    return (
+                      <div
+                        className={`studio-timeline-progress-fill ${timelineProcessType}`}
+                        style={{
+                          left: `${startLeftPx}px`,
+                          width: `${Math.max(12, currentWidthPx)}px`,
+                        }}
+                      >
+                        <div className="studio-timeline-progress-stripes" />
+                        <div className="studio-timeline-laser-head">
+                          <div className="studio-timeline-laser-badge">
+                            ⚡ {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+
+                {segments.map((seg) => {
+                  const totalDur = Math.max(1, mediaDuration);
+                  const left = (seg.start / totalDur) * timelineWidth;
+                  const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  const isSelected = seg.id === selectedSegId;
+                  const isMultiSelected = selectedSegIds.includes(seg.id);
 
                   return (
                     <div
-                      className={`studio-timeline-progress-fill ${timelineProcessType}`}
+                      key={seg.id}
+                      data-seg-id={seg.id}
+                      className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
                       style={{
-                        left: `${startLeftPx}px`,
-                        width: `${Math.max(12, currentWidthPx)}px`,
+                        left: `${left}px`,
+                        width: `${Math.max(50, width)}px`,
+                        background: "rgba(45, 212, 191, 0.35)",
+                        borderColor: "#2dd4bf",
                       }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectSegmentWithModifier(seg, e);
+                      }}
+                      title={seg.translated}
                     >
-                      <div className="studio-timeline-progress-stripes" />
-                      <div className="studio-timeline-laser-head">
-                        <div className="studio-timeline-laser-badge">
-                          ⚡ {timelineProcessMessage || `${timelineProgress.toFixed(0)}%`}
-                        </div>
-                      </div>
+                      <div
+                        className="studio-timeline-block-handle left"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNudgeSegment(seg.id, "start", -0.2);
+                        }}
+                        title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                      />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
+                        {seg.translated}
+                      </span>
+                      <div
+                        className="studio-timeline-block-handle right"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleNudgeSegment(seg.id, "end", 0.2);
+                        }}
+                        title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                      />
                     </div>
                   );
-                })()
-              )}
+                })}
+              </div>
+            )}
 
-              {segments.map((seg) => {
-                const totalDur = Math.max(1, mediaDuration);
-                const left = (seg.start / totalDur) * timelineWidth;
-                const width = ((seg.end - seg.start) / totalDur) * timelineWidth;
-                const isSelected = seg.id === selectedSegId;
-                const isMultiSelected = selectedSegIds.includes(seg.id);
-
-                return (
-                  <div
-                    key={seg.id}
-                    data-seg-id={seg.id}
-                    className={`studio-timeline-block ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
-                    style={{
-                      left: `${left}px`,
-                      width: `${Math.max(50, width)}px`,
-                      background: "rgba(45, 212, 191, 0.35)",
-                      borderColor: "#2dd4bf",
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectSegmentWithModifier(seg, e);
-                    }}
-                    title={seg.translated}
-                  >
-                    <div
-                      className="studio-timeline-block-handle left"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleNudgeSegment(seg.id, "start", -0.2);
-                      }}
-                      title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                    />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>
-                      {seg.translated}
-                    </span>
-                    <div
-                      className="studio-timeline-block-handle right"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleNudgeSegment(seg.id, "end", 0.2);
-                      }}
-                      title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Track 4..n: Dynamic Speaker Tracks (Progressive Filling per Character) */}
-            {collapseSpeakerTracks ? (
+            {/* Track 4..n: Dynamic Speaker Tracks (Chỉ hiện khi có tiếng lồng hoặc đang tạo) */}
+            {showVoiceTrack && (collapseSpeakerTracks ? (
               <div
                 className="studio-track-lane studio-track-workspace-lane"
                 style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
@@ -5973,10 +6071,30 @@ export default function SublixStudioView({
                   </div>
                 );
               })
+            ))}
+
+            {/* Hint Banner: Khi chưa có Subtitles Track và Voice Track */}
+            {!showSubtitlesTrack && !showVoiceTrack && (
+              <div
+                className="studio-empty-timeline-hint"
+                style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
+              >
+                <div className="studio-empty-timeline-hint-content">
+                  <span className="studio-empty-hint-icon">💡</span>
+                  <div className="studio-empty-hint-text">
+                    <strong>Chưa có track Phụ đề & Tiếng lồng</strong>
+                    <span>
+                      Bấm nút <em>"Bắt Đầu Xử Lý AI"</em> hoặc khoanh vùng trên timeline rồi <em>Bấm chuột phải</em> để tạo phân đoạn mong muốn.
+                    </span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
-      </footer>
+      );
+    })()}
+  </footer>
 
       {/* Export Modal Overlay */}
       {isExporting && (
@@ -6105,6 +6223,288 @@ export default function SublixStudioView({
       {toastMsg && (
         <div className="studio-floating-toast">
           <span>{toastMsg}</span>
+        </div>
+      )}
+
+      {/* ROUND-25: TIMELINE CONTEXT MENU (PREMIERE / NLE CINEMA STYLE) */}
+      {timelineContextMenu && timelineContextMenu.visible && (
+        <div
+          className="studio-timeline-context-menu"
+          style={{
+            left: `${Math.min(timelineContextMenu.x, window.innerWidth - 290)}px`,
+            top: `${Math.min(timelineContextMenu.y, window.innerHeight - 340)}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {timelineContextMenu.hasRange ? (
+            <>
+              {/* Header khi đã có vùng chọn In/Out */}
+              <div className="timeline-ctx-header">
+                <div className="timeline-ctx-title">
+                  <span>🎯</span>
+                  <span>Vùng Chọn: {formatTimecode(Math.min(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!))} ➔ {formatTimecode(Math.max(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!))}</span>
+                </div>
+                <div className="timeline-ctx-sub">
+                  Thời lượng: {(Math.abs(timelineContextMenu.outPoint! - timelineContextMenu.inPoint!)).toFixed(2)}s • Xử lý riêng đoạn này
+                </div>
+              </div>
+
+              {/* Tùy chọn 1: Tạo Phụ Đề Cho Đoạn Này */}
+              <button
+                type="button"
+                className="timeline-ctx-item primary"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  setUseRangeOnly(true);
+                  void handleRunSttOnly(true);
+                }}
+              >
+                <span className="timeline-ctx-icon">💬</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Tạo Phụ Đề Cho Đoạn Này</span>
+                  <span className="timeline-ctx-desc-text">Whisper STT chỉ bóc tách trong vùng chọn</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Sub</span>
+              </button>
+
+              {/* Tùy chọn 2: Dịch Phụ Đề Cho Đoạn Này */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  setUseRangeOnly(true);
+                  void handleRunTranslateOnly(undefined, true);
+                }}
+              >
+                <span className="timeline-ctx-icon">🌐</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Dịch Phụ Đề Đoạn Này</span>
+                  <span className="timeline-ctx-desc-text">Dịch câu thoại sang {targetLang.toUpperCase()}</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Dịch</span>
+              </button>
+
+              {/* Tùy chọn 3: Tạo Tiếng Lồng Cho Đoạn Này */}
+              <button
+                type="button"
+                className="timeline-ctx-item primary"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  setUseRangeOnly(true);
+                  void handleRunVoiceOnly(true);
+                }}
+              >
+                <span className="timeline-ctx-icon">🎙️</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Tạo Tiếng Lồng Cho Đoạn Này</span>
+                  <span className="timeline-ctx-desc-text">Tổng hợp giọng đọc AI cho các câu trong vùng</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Voice</span>
+              </button>
+
+              {/* Tùy chọn 4: Chạy Toàn Bộ Cho Đoạn Này (Full Pipeline) */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  setUseRangeOnly(true);
+                  void handleRunAnalysis(true);
+                }}
+              >
+                <span className="timeline-ctx-icon">⚡</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Chạy Cả Sub & Lồng Tiếng</span>
+                  <span className="timeline-ctx-desc-text">Pipeline hoàn chỉnh cho vùng chọn này</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Full</span>
+              </button>
+
+              <div className="timeline-ctx-divider" />
+
+              {/* Tùy chọn 5: Phát Thử Vùng Chọn */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  const start = Math.min(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!);
+                  handleSeek(start);
+                  if (videoRef.current && videoRef.current.paused) {
+                    handleTogglePlay();
+                  }
+                }}
+              >
+                <span className="timeline-ctx-icon">▶️</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Phát Thử Đoạn Này</span>
+                  <span className="timeline-ctx-desc-text">Tua về mốc In và phát video</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Space</span>
+              </button>
+
+              {/* Tùy chọn 6: Xóa Phụ Đề Trong Vùng Chọn */}
+              <button
+                type="button"
+                className="timeline-ctx-item danger"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  const minT = Math.min(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!);
+                  const maxT = Math.max(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!);
+                  const toDelete = segments.filter((s) => s.end >= minT && s.start <= maxT);
+                  if (toDelete.length === 0) {
+                    showToast("ℹ️ Không có câu thoại nào trong vùng chọn");
+                    return;
+                  }
+                  saveUndoHistory();
+                  setSegments((prev) => prev.filter((s) => s.end < minT || s.start > maxT));
+                  showToast(`🗑️ Đã xóa ${toDelete.length} câu thoại trong vùng chọn`);
+                }}
+              >
+                <span className="timeline-ctx-icon">🗑️</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Xóa Các Câu Trong Đoạn Này</span>
+                  <span className="timeline-ctx-desc-text">Xóa câu thoại nằm trong khoảng In/Out</span>
+                </div>
+                <span className="timeline-ctx-shortcut">Del</span>
+              </button>
+
+              {/* Tùy chọn 7: Bỏ Khoanh Vùng */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  handleClearRange();
+                }}
+              >
+                <span className="timeline-ctx-icon">❌</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Hủy Khoanh Vùng</span>
+                  <span className="timeline-ctx-desc-text">Bỏ điểm In/Out về toàn bộ video</span>
+                </div>
+                <span className="timeline-ctx-shortcut">X</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Header khi click tại mốc thời gian (chưa có vùng chọn) */}
+              <div className="timeline-ctx-header">
+                <div className="timeline-ctx-title">
+                  <span>⏱️</span>
+                  <span>Mốc Thời Gian: {formatTimecode(timelineContextMenu.time)}</span>
+                </div>
+                <div className="timeline-ctx-sub">
+                  Đặt điểm In/Out để khoanh vùng xử lý AI
+                </div>
+              </div>
+
+              {/* Đặt Điểm Vào (In) */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  handleSetInPoint(timelineContextMenu.time);
+                }}
+              >
+                <span className="timeline-ctx-icon">📍</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Đặt Điểm Vào (Mark In) Tại Đây</span>
+                  <span className="timeline-ctx-desc-text">Bắt đầu vùng chọn từ {formatTimecode(timelineContextMenu.time)}</span>
+                </div>
+                <span className="timeline-ctx-shortcut">I</span>
+              </button>
+
+              {/* Đặt Điểm Ra (Out) */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  handleSetOutPoint(timelineContextMenu.time);
+                }}
+              >
+                <span className="timeline-ctx-icon">📍</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Đặt Điểm Ra (Mark Out) Tại Đây</span>
+                  <span className="timeline-ctx-desc-text">Kết thúc vùng chọn tại {formatTimecode(timelineContextMenu.time)}</span>
+                </div>
+                <span className="timeline-ctx-shortcut">O</span>
+              </button>
+
+              {/* Khoanh nhanh đoạn 5s */}
+              <button
+                type="button"
+                className="timeline-ctx-item primary"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  const t = timelineContextMenu.time;
+                  handleSetInPoint(t);
+                  handleSetOutPoint(Math.min(mediaDuration, t + 5));
+                  showToast(`🎯 Đã khoanh vùng nhanh 5 giây [${formatTimecode(t)} ➔ ${formatTimecode(Math.min(mediaDuration, t + 5))}]`);
+                }}
+              >
+                <span className="timeline-ctx-icon">⚡</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Khoanh Nhanh Đoạn 5s Từ Đây</span>
+                  <span className="timeline-ctx-desc-text">Tạo vùng chọn 5 giây để thử nghiệm nhanh</span>
+                </div>
+                <span className="timeline-ctx-shortcut">+5s</span>
+              </button>
+
+              {/* Nhảy Playhead Đến Đây */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  handleSeek(timelineContextMenu.time);
+                }}
+              >
+                <span className="timeline-ctx-icon">▶️</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Di Chuyển Playhead Đến Đây</span>
+                  <span className="timeline-ctx-desc-text">Tua video đến {formatTimecode(timelineContextMenu.time)}</span>
+                </div>
+              </button>
+
+              <div className="timeline-ctx-divider" />
+
+              {/* Tạo Phụ Đề Cho Toàn Bộ Video */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  void handleRunSttOnly(false);
+                }}
+              >
+                <span className="timeline-ctx-icon">💬</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Tạo Phụ Đề Toàn Bộ Video</span>
+                  <span className="timeline-ctx-desc-text">Whisper STT quét toàn bộ video</span>
+                </div>
+              </button>
+
+              {/* Tạo Tiếng Lồng Toàn Bộ Video */}
+              <button
+                type="button"
+                className="timeline-ctx-item"
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  void handleRunVoiceOnly(false);
+                }}
+              >
+                <span className="timeline-ctx-icon">🎙️</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Tạo Tiếng Lồng Toàn Bộ Video</span>
+                  <span className="timeline-ctx-desc-text">Tổng hợp TTS cho tất cả câu thoại</span>
+                </div>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

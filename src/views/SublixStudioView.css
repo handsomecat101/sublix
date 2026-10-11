@@ -2991,5 +2991,201 @@
   opacity: 0.7;
 }
 
+/* ==========================================================================
+   ROUND-25: TIMELINE CONTEXT MENU & DYNAMIC TRACK VISIBILITY
+   ========================================================================== */
+
+/* Timeline Context Menu (Menu Chuột Phải NLE Studio) */
+.studio-timeline-context-menu {
+  position: fixed;
+  z-index: 999999;
+  min-width: 250px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 1px 1px rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: inherit;
+  user-select: none;
+  animation: studioCtxFadeIn 0.12s ease-out;
+}
+
+@keyframes studioCtxFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.timeline-ctx-header {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 3px;
+}
+
+.timeline-ctx-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.timeline-ctx-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.timeline-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  width: 100%;
+}
+
+.timeline-ctx-item:hover {
+  background: rgba(56, 189, 248, 0.16);
+  color: #ffffff;
+  transform: translateX(2px);
+}
+
+.timeline-ctx-item.primary {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.timeline-ctx-item.primary:hover {
+  background: rgba(56, 189, 248, 0.25);
+  color: #7dd3fc;
+}
+
+.timeline-ctx-item.danger {
+  color: #f87171;
+}
+
+.timeline-ctx-item.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.timeline-ctx-icon {
+  font-size: 13px;
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.timeline-ctx-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-ctx-main-text {
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.timeline-ctx-desc-text {
+  font-size: 9.5px;
+  color: #94a3b8;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.timeline-ctx-shortcut {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+
+.timeline-ctx-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 3px 0;
+}
+
+/* Empty Timeline Hint Banner (Khi chưa tạo Sub và Voice) */
+.studio-empty-timeline-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 68px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.3), rgba(15, 23, 42, 0.6));
+  padding: 0 20px;
+}
+
+.studio-empty-timeline-hint-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+}
+
+.studio-empty-hint-icon {
+  font-size: 18px;
+  animation: pulse 2s infinite;
+}
+
+.studio-empty-hint-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.studio-empty-hint-text strong {
+  font-size: 11.5px;
+  color: #f1f5f9;
+}
+
+.studio-empty-hint-text span {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+.studio-empty-hint-text em {
+  color: #38bdf8;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.studio-track-header-empty-hint {
+  justify-content: center !important;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
 
 

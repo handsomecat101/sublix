@@ -955,4 +955,65 @@ sublix/
 - ✅ Cột TRACKS hiển thị phân biệt rõ ràng: `💬 PHỤ ĐỀ (TEXT)` và `🎙️ TIẾNG LỒNG: Thuyết minh AI [VietNeu]`.
 - ✅ Các block trên timeline có sóng âm audio clip, nhãn `🎙️ [Thuyết minh AI]`.
 
+## [2026-10-11] - Session 25: Sửa Dứt Điểm Lỗi Xóa Track Tiếng Mất Phụ Đề, Hiển Thị Động Track Timeline & Menu Chuột Phải Cho Khoanh Vùng AI
 
+### Yêu Cầu Từ PO (Anh Tuấn)
+1. *"Hiện tại tôi mà bấm vào cái xóa đường tiếng, nó xóa luôn cả xóa đường làm sub, bạn kiểm tra lại đi"*:
+   - Yêu cầu: Bấm nút thùng rác 🗑️ ở Track Tiếng Lồng chỉ xóa âm thanh lồng tiếng, **bảo toàn nguyên vẹn 100% câu thoại phụ đề**.
+2. *"Với cả nếu khi nào tạo mới thì mới thêm cái đường tiếng và đường sub vào lúc mà tiến trình tạo để nó lấp đầy vào trong cái timeline chứ, hiện tại bạn code cứng 2 ở đó ko có mà vẫn lù lù ở đó"*:
+   - Yêu cầu: Khi mới nạp video (chưa có phụ đề), timeline chỉ hiện `▼ VIDEO` và `♫ TIẾNG GỐC`. Chỉ khi người dùng bấm tạo mới (hoặc tiến trình AI bắt đầu chạy) thì Track `💬 PHỤ ĐỀ (TEXT)` và Track `🎙️ TIẾNG LỒNG` mới động xuất hiện và được lấp đầy trực quan dần theo thời gian thực.
+3. *"Rồi bạn code thêm cái tôi khoang vùng đoạn timeline nào rồi bấm phải chuột thì sẽ có lựa chọn là tạo phụ đề hoặc tạo lồng tiếng ở đoạn đó đi, chứ hiện tại toàn mặc định tạo cả video luôn"*:
+   - Yêu cầu: Hỗ trợ Timeline Context Menu (Menu chuột phải NLE Studio): Khoanh vùng In/Out rồi click chuột phải để chọn: Tạo phụ đề cho đoạn này, Dịch cho đoạn này, Tạo tiếng lồng cho đoạn này, hoặc Chạy cả Sub & Tiếng lồng đoạn này.
+
+### Các Thay Đổi Kỹ Thuật Đã Triển Khai
+
+1. **Khắc Phục Dứt Điểm Lỗi Xóa Track Tiếng (`src/views/SublixStudioView.tsx`):**
+   - **Bản chất lỗi:** Trước đây `handleClearTrack("speaker", spkId)` gọi `setSegments((prev) => prev.filter((s) => s.speakerId !== spkId))`. Vì mọi câu thoại mặc định gán `speaker_0`, lệnh này xóa sạch toàn bộ mảng `segments`! Thêm vào đó, nút thùng rác khi gộp track (`collapseSpeakerTracks`) gọi nhầm `handleClearTrack("subtitles")`.
+   - **Giải pháp:** Sửa `handleClearTrack("speaker", spkId)` thành chỉ reset cờ âm thanh: `s.hasAudio = false` và `s.audioUrl = undefined`.
+   - Toàn bộ nội dung văn bản, mốc thời gian, bản dịch trong `segments` được **bảo toàn nguyên vẹn 100%**.
+   - Sửa nút thùng rác khi thu gọn track thành `handleClearTrack("speaker", "all")`.
+
+2. **Cơ Chế Hiển Thị Động Cho 2 Track Timeline (Dynamic Track Visibility):**
+   - Khai báo 2 điều kiện động:
+     - `showSubtitlesTrack = segments.length > 0 || (isAnalyzing && (workflowOptStt || timelineProcessType === "stt" || timelineProcessType === "translate" || timelineProcessType === "pipeline"))`
+     - `showVoiceTrack = showSubtitlesTrack && (segments.some((s) => s.hasAudio) || (isAnalyzing && (workflowOptVoice || timelineProcessType === "voice" || timelineProcessType === "pipeline")))`
+   - Áp dụng đồng bộ cho cả **Left Track Headers** (cột trái) và **Right Tracks Body** (cột phải):
+     - Khi mới nạp video hoặc rỗng: Chỉ hiển thị 2 track: `▼ VIDEO` và `♫ TIẾNG GỐC`.
+     - Phía dưới hiển thị banner gợi ý nhẹ nhàng `.studio-empty-timeline-hint`: *"💡 Chưa có track Phụ đề & Tiếng lồng. Bấm 'Bắt Đầu Xử Lý AI' hoặc khoanh vùng trên timeline rồi Bấm chuột phải để tạo phân đoạn mong muốn."*
+     - Khi người dùng bấm chạy tạo phụ đề (hoặc tiến trình STT bắt đầu): Track `💬 PHỤ ĐỀ (TEXT)` xuất hiện lập tức và thanh laser chạy qua lấp đầy từng block câu thoại.
+     - Khi người dùng bấm tạo lồng tiếng (hoặc tiến trình TTS bắt đầu): Track `🎙️ TIẾNG LỒNG` xuất hiện lập tức và lấp đầy từng audio clip có sóng âm mini.
+     - Khi bấm xóa track tiếng lồng: Track tiếng lồng tự động ẩn đi, track phụ đề vẫn hiển thị nguyên vẹn.
+
+3. **Menu Chuột Phải Ngữ Cảnh Cho Timeline (Timeline Context Menu - Premiere Pro Style):**
+   - Thêm state `timelineContextMenu`, handler `handleTimelineContextMenu` gắn vào cả ruler và container tracks body.
+   - Khi có vùng khoanh In/Out:
+     - Header hiển thị mốc thời gian vùng chọn: `🎯 Vùng Chọn [In ➔ Out] • Xs`.
+     - `💬 Tạo Phụ Đề Cho Đoạn Này (Whisper STT)`: Gọi `handleRunSttOnly(true)` bóc tách đúng trong khoảng In/Out và merge vào timeline.
+     - `🌐 Dịch Phụ Đề Đoạn Này (LLM)`: Gọi `handleRunTranslateOnly(undefined, true)` dịch các câu thoại trong vùng chọn.
+     - `🎙️ Tạo Tiếng Lồng Cho Đoạn Này (TTS AI)`: Gọi `handleRunVoiceOnly(true)` tổng hợp giọng đọc AI cho các câu trong vùng chọn.
+     - `⚡ Chạy Cả Sub & Lồng Tiếng Đoạn Này`: Gọi `handleRunAnalysis(true)` chạy Full Pipeline cho đoạn đó.
+     - `▶️ Phát Thử Đoạn Này`: Tua về mốc In và phát video.
+     - `🗑️ Xóa Các Câu Trong Đoạn Này`: Xóa các câu thoại nằm trong khoảng In/Out.
+     - `❌ Hủy Khoanh Vùng`: Reset In/Out points.
+   - Khi chưa có vùng khoanh (click tại mốc bất kỳ):
+     - `📍 Đặt Điểm Vào (Mark In) Tại Đây [I]`.
+     - `📍 Đặt Điểm Ra (Mark Out) Tại Đây [O]`.
+     - `⚡ Khoanh Nhanh Đoạn 5s Từ Đây`.
+     - `▶️ Di Chuyển Playhead Đến Đây`.
+     - `💬 Tạo Phụ Đề Toàn Bộ Video`.
+     - `🎙️ Tạo Tiếng Lồng Toàn Bộ Video`.
+   - Giao diện Cinema Glass: Kính mờ đen `rgba(15, 23, 42, 0.94)`, viền sáng `rgba(56, 189, 248, 0.28)`, bo góc 10px, hiệu ứng fade-in mượt mà, tự động đóng khi click ra ngoài hoặc bấm Escape.
+
+4. **Hỗ Trợ Tham Số `forceRange?: boolean` Cho Cả 4 Hàm Xử Lý AI:**
+   - `handleRunSttOnly(forceRange?: boolean)`
+   - `handleRunTranslateOnly(inputSegs?: SubtitleItem[], forceRange?: boolean)`
+   - `handleRunVoiceOnly(forceRange?: boolean)`
+   - `handleRunAnalysis(forceRange?: boolean)`
+   - Sửa trong `handleRunSttOnly`: Khởi tạo segment với `hasAudio: false` (thay vì `true`), chỉ khi chạy TTS mới gán `hasAudio: true`.
+
+### Kết Quả Kiểm Thử (Verification)
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite production build hoàn tất thành công trong 4.39s.
+- ✅ Track tiếng xóa độc lập, phụ đề được bảo toàn 100%.
+- ✅ Timeline hiển thị động: sạch sẽ khi mới nạp video, chỉ hiện track khi có dữ liệu hoặc đang chạy tiến trình.
+- ✅ Timeline Context Menu hoạt động trơn tru với đầy đủ các tác vụ bóc tách, dịch và lồng tiếng theo vùng chọn.

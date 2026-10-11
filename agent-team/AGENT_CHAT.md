@@ -206,3 +206,26 @@
      - Sửa Laser head quét tiến trình: `🎙️ Tiếng lồng [Tên vai]: Đang sinh giọng câu X/Y...` (xóa triệt để chữ Phụ đề).
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
 - **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.61s, Vite bundle thành công).
+
+---
+
+### 2026-10-11 20:10 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Session 25: Sửa Dứt Điểm Lỗi Xóa Track Tiếng Mất Phụ Đề, Hiển Thị Động Track Timeline & Menu Chuột Phải Cho Khoanh Vùng AI)
+- **Tóm tắt:** 
+  1. **Khắc phục triệt để lỗi xóa track tiếng lồng làm mất cả track phụ đề:**
+     - Sửa `handleClearTrack("speaker", spkId)`: chỉ reset cờ âm thanh `hasAudio = false` và `audioUrl = undefined`, bảo toàn nguyên vẹn 100% mảng `segments`.
+     - Phụ đề (text gốc, bản dịch, timing) không bị mất dù xóa bất kỳ track tiếng nào.
+     - Sửa nút xóa khi thu gọn track thành `handleClearTrack("speaker", "all")`.
+  2. **Hiển thị động 2 track Timeline (Dynamic Track Visibility):**
+     - Khi mới nạp video: Timeline chỉ hiển thị `▼ VIDEO` và `♫ TIẾNG GỐC`. Hai dải `💬 PHỤ ĐỀ (TEXT)` và `🎙️ TIẾNG LỒNG` được ẩn hoàn toàn để timeline sạch sẽ, tinh tế.
+     - Phía dưới có banner gợi ý `.studio-empty-timeline-hint` hướng dẫn bấm tạo hoặc khoanh vùng.
+     - Khi người dùng bấm tạo mới (hoặc tiến trình AI chạy): Dải phụ đề và tiếng lồng xuất hiện và được lấp đầy trực quan dần theo thời gian thực.
+  3. **Menu Chuột Phải Ngữ Cảnh (Timeline Context Menu - Premiere Style):**
+     - Click chuột phải trên Timeline / Vùng chọn In-Out:
+       - Có vùng chọn: Menu hiển thị thời lượng đoạn và các tùy chọn: Tạo phụ đề cho đoạn này (STT), Dịch phụ đề đoạn này, Tạo tiếng lồng cho đoạn này (TTS), Chạy cả Sub & Tiếng lồng (Full pipeline), Phát thử đoạn này, Xóa phụ đề đoạn này, Bỏ khoanh vùng.
+       - Chưa có vùng chọn: Cho phép Đặt điểm Vào (In), Đặt điểm Ra (Out), Khoanh nhanh 5s, Di chuyển playhead, hoặc Tạo cho toàn bộ video.
+  4. **Hỗ trợ tham số `forceRange?: boolean` cho cả 4 quy trình AI:**
+     - `handleRunSttOnly`, `handleRunTranslateOnly`, `handleRunVoiceOnly`, `handleRunAnalysis` đều chạy chuẩn xác trong phân đoạn khoanh vùng khi gọi từ menu chuột phải.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
+- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (4.39s, Vite bundle thành công).
+
