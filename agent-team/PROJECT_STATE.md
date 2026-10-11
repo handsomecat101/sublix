@@ -13,7 +13,7 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.11.29` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `ac735e5` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Git Commit** | `8385133` on `master` (`https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Active (Studio UI Premiere Timeline, VietNeu TTS, Dynamic HUD Banner, Dedicated Subtitle Flow hoàn thành trọn gói E2E) |
 
 ---
@@ -22,7 +22,7 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–14 (Studio Overhaul & Dedicated Subtitle Workflow) |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–15 + Căn chuẩn Timeline x=0 |
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
 | **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
 | **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Nhận bàn giao V2, review code & nghiệm thu |
@@ -35,7 +35,7 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| `TSK-STUDIO-ROUNDS-10-14` | ~~Studio Premiere Timeline, Marquee, VietNeu TTS, Dynamic AI Progress HUD~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành 5 rounds (R10-R14) commit ac735e5, push GitHub | `SublixStudioView.tsx`, `SublixStudioView.css` |
+| - | - | - | - | - | - |
 
 ---
 
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-TIMELINE-START-ALIGN` | Căn chuẩn gốc Timeline x=0 (xóa offset 40px, Playhead needle & ticks & tracks đồng bộ tại 00:00:00) | **Antigravity** | 2026-10-11 | ✅ Kim tua, ruler tick 00:00, video, sóng âm, phụ đề bắt đầu chuẩn x=0, clip-path cờ khi sát biên, E2E build 100% |
 | `TSK-STUDIO-ROUND-15` | Unified Studio: Bridge Downloader thẳng vào Studio, dọn sạch 2 tab nổ, đồng bộ Master Topbar | **Antigravity** | 2026-10-11 | ✅ Nút `🚀 Đưa Vào Studio`, loại bỏ tab popping `file_sub`/`dubbing`, đồng bộ 6 Master tabs, badge v0.11.29, E2E Playwright pass |
 | `TSK-STUDIO-ROUNDS-10-14` | Studio Premiere Timeline Resizer, Marquee, VietNeu TTS, Dynamic HUD, Sub-only Flow | **Antigravity** | 2026-10-10 | ✅ Hoàn tất 5 rounds (R10-R14), commit `ac735e5`, push GitHub xanh, build TS 100% |
 |----|------|-------|-----------|--------------------------------|

@@ -765,3 +765,39 @@ sublix/
 *Last updated: 2026-10-11 — v0.11.29 (Unified Studio Bridge, Fixed Popping Tabs, Master Topbar Synchronization)*
 
 
+
+
+---
+
+## Session 21 — 2026-10-11 17:48 → 18:00 (≈12 phút)
+
+### User intent & PO Feedback (Anh Tuấn)
+- **Feedback:** "cái bắt đầu của timeline còn trước cái cbắt đầu, bạn điều chỉnh lại đi" kèm ảnh chụp màn hình có mũi tên đỏ chỉ vào khoảng trống giữa mép cột `TRACKS` (x=0) và đầu kim Playhead `00:00:00` (x=40px).
+- **Vấn đề phát hiện:**
+  - Trong code cũ, mọi phần tử trên timeline (Playhead needle, ruler tick `00:00:00`, selection range band, filmstrip thumbs, waveform canvas, subtitle blocks, speaker blocks) đều bị gán cứng một khoảng thụt lùi `+ 40px`, trong khi dải track timeline (`.studio-track-lane`) và ruler bắt đầu ngay tại `x = 0`.
+  - Kết quả là có 40px "khoảng chết" vô lý trước mốc thời gian `00:00:00`. Khi video chưa nạp, chữ "Chưa nạp video" nằm ở x=16px trước cả mốc 00:00:00 (Playhead ở x=40px).
+  - Thao tác kéo tua / click / chọn vùng bị trừ `- 40px` lệch pha.
+
+### Giải pháp kỹ thuật đã triển khai (Arch & Implementation)
+1. **Triệt tiêu toàn bộ offset 40px thừa — đưa Timeline về chuẩn x = 0 (Premiere / CapCut Standard):**
+   - **Playhead Needle & Head:**
+     - Kim Playhead tại `currentTime = 0` nằm chính xác tại `left: 0px`.
+     - Đầu kim Playhead (`.studio-timeline-playhead-head`) tự động chuyển dạng cờ / nửa mũi tên hướng phải (`clip-path: polygon(0% 0%, 100% 0%, 100% 65%, 0% 100%)`, `left: 0px`) khi ở sát biên trái (<8px) để không bị xén mép bởi `overflow-x: auto`, và trở về mũi tên cân xứng (`left: -8px`) khi tiến sâu vào timeline.
+   - **Thước đo thời gian (Ruler) & Ticks:**
+     - Tick `00:00:00` (t=0) được căn chuẩn tại `left: 0px` với `transform: none` và `paddingLeft: 4px` (không bị đẩy sang trái -50% gây mất chữ).
+     - Các mốc sau (`t > 0`) giữ nguyên `transform: translateX(-50%)`.
+   - **Dải Video & Sóng âm (Media Tracks):**
+     - Khung hình video (`filmstripThumbs`) và thanh video banner bắt đầu chuẩn từ `left: 0px`.
+     - Chữ "Chưa nạp video" căn gọn tại `padding: 8px 12px` từ mép 0px.
+     - Canvas sóng âm (`waveformCanvasRef`) bắt đầu từ `marginLeft: 0px`.
+   - **Khối Phụ Đề & Vai Diễn (Subtitle & Speaker Blocks):**
+     - Các block câu thoại tại giây 0.0s bắt đầu chuẩn từ `left: (seg.start / totalDur) * timelineWidth`.
+     - Dải laser hiệu ứng Progressive Fill căn chuẩn từ `startLeftPx = (startSec / dur) * timelineWidth`.
+   - **Tương tác Chuột & Scrubbing:**
+     - Các hàm `handleTimelineClick`, `updatePlayheadFromClientX`, `startDraggingRangeHandle`, `handleRulerMouseDown` tính toán tọa độ tương đối sạch: `clientX - rect.left + scrollLeft` (bỏ hoàn toàn phép trừ `- 40`).
+     - Độ rộng các rãnh track đổi thành `timelineWidth + 40px` (đệm 40px ở cuối timeline để tránh cấn thanh cuộn, không đệm ở đầu).
+
+### Verification
+- ✅ `npx tsc --noEmit`: 0 lỗi TypeScript.
+- ✅ `npm run build`: Vite compile production thành công trong 2.04s.
+- ✅ Git commit: `8385133` đẩy sạch lên branch `master` của repository GitHub.

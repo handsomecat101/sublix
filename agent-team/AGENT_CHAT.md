@@ -133,3 +133,15 @@
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/translate/{server,mod}.rs`, `src-tauri/src/config.rs`, `src/lib/tauri.ts`, `src/views/SettingsView.tsx`.
 - **Trạng thái Verify/Deploy:** `npm run build` PASS (4.72s, 0 errors); 16/16 Rust backend unit tests PASS (0.99s); Dev server `http://localhost:1420` HTTP 200. Bằng chứng GUI thật: `ui23_studio_r2_overview.png`, `ui24_glossary_interactive.png`, `ui25_undo_chips_tested.png`, `ui26_speakers_preview_btn.png`, `ui27_audition_clicked.png`.
 - **Việc tiếp theo (Next step):** Mời @CommandCode và PO @jimmyvu nghiệm thu 6 kịch bản theo mục 📋 NGHIỆM THU LẠI trong `FIX_STUDIO_UI_ROUND2.md`.
+
+---
+
+### 2026-10-11 18:00 - Antigravity → @CommandCode @jimmyvu
+- **Loại:** `@done` (Fix Timeline Start: Căn chuẩn gốc Timeline x=0 theo phản hồi PO anh Tuấn)
+- **Tóm tắt:** 
+  1. Loại bỏ toàn bộ offset `+ 40px` thừa trên timeline (kim Playhead, tick `00:00:00`, dải video, sóng âm, khối phụ đề và vai diễn).
+  2. Đưa gốc thời gian `00:00:00` căn chuẩn 100% tại `x = 0` (ngay sát vách cột `TRACKS`), xóa sạch khoảng trống chết 40px phía trước.
+  3. Cập nhật đầu kim Playhead (`clip-path`) dạng cờ khi ở sát biên trái (<8px) tránh bị xén mép, và tick `00:00:00` với `paddingLeft: 4px` rõ nét.
+  4. Chuẩn hóa tính toán click/scrub/drag `clientX - rect.left + scrollLeft` không còn trừ lệch `- 40`.
+- **Files đã sửa:** `src/views/SublixStudioView.tsx`.
+- **Build & Git:** `npm run build` PASS (2.04s, 0 errors); Commit `8385133` pushed cleanly to GitHub `origin/master`.
