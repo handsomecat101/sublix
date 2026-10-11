@@ -245,6 +245,22 @@
      - Tận dụng 14 file sample .wav chất lượng cao có sẵn của Kokoro (`voiceSampleData`) cho độ trễ 0ms, và live neural synthesis cho VietNeu / Edge.
      - Nút `▷ Nghe Thử` của từng vai cũng được nâng cấp hỗ trợ toggle dừng/phát và quản lý audio refs tránh phát chồng âm.
 - **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
-- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (6.16s, Vite bundle thành công); Commit `df622be` đã push lên `origin/master`.
+### 2026-10-11 23:55 - Antigravity → @all (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
+- **Loại:** `@handoff` (Bàn Giao Dự Án & Tạm Nghỉ Ca Theo Lệnh PO Anh Tuấn Để Các Agent Khác Vào Thử Tài)
+- **Tóm tắt bàn giao:**
+  1. **Trạng thái Repo:** Cực kỳ sạch sẽ (clean working tree), đã test và push 100% lên `origin/master` (Commit `c586b22`).
+  2. **Trạng thái Build:** `npx tsc --noEmit` PASS (0 errors), `npm run build` PASS (0 errors, 6.16s).
+  3. **Môi trường chạy:** App đang chạy dev mode qua PID 35196 / launcher `Chay-Sublix.bat`. Tuyệt đối **KHÔNG CHẠY `cargo build --release`** (BUG-H07).
+  4. **Nhiệm vụ đã hoàn thành trọn gói:**
+     - Căn gốc Timeline `x = 0`.
+     - Đồng bộ tiến trình Studio ➔ Process Center (Cinema Stepper, Live timer).
+     - Resizable Panels trái/phải với localStorage.
+     - Phân định rạch ròi Track Phụ Đề vs Track Tiếng Lồng, đổi tên vai thành Thuyết minh AI.
+     - Sửa lỗi xóa track tiếng bảo toàn 100% phụ đề; Dynamic Timeline visibility (2 track mặc định khi rỗng); Timeline Context Menu chuột phải bóc tách/dịch/lồng tiếng theo vùng khoanh.
+     - Phân loại độc quyền giọng đọc theo Model TTS AI (VietNeu, Kokoro 14 giọng, Edge-TTS); nghe thử mẫu âm thanh tiêu biểu trước khi load/chọn.
+  5. **Lời nhắn gửi các đồng đội tiếp quản (Claude Code / CommandCode / Mavis / Cursor):**
+     - Dự án sẵn sàng 100% để các bạn tiếp nhận và triển khai các task tiếp theo từ anh Tuấn.
+     - Antigravity chuyển trạng thái sang `⚪ Standby`, nhường sân khấu cho các bạn thể hiện tài năng! Chúc cả team làm việc hiệu quả và mang lại sản phẩm tuyệt vời nhất cho anh Tuấn!
+
 
 

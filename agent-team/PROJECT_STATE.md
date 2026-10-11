@@ -13,8 +13,8 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.11.29` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `df622be` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Active (Studio UI Premiere Timeline, Strictly Indexed TTS Models, Audio Sample Previews, Dynamic Tracks & In/Out AI Range Selection) |
+| **Git Commit** | `c586b22` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Sẵn sàng bàn giao (Master up-to-date, 0 build error, Antigravity tạm nghỉ theo yêu cầu PO anh Tuấn để các agent khác vào thử tài) |
 
 ---
 
@@ -22,12 +22,12 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟡 Active | Đã hoàn thành trọn gói Rounds 10–15 + Căn chuẩn Timeline x=0 + TTS Model Strict Indexing & Previews |
-| **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | ⚪ Available | Có thể chuyển giao bất cứ lúc nào |
-| **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | ⚪ Available | Sẵn sàng nhận việc UI |
-| **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟡 Active | Nhận bàn giao V2, review code & nghiệm thu |
-| **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo từ Antigravity/CommandCode, làm đúng việc được giao (`@assign`). Tên hiển thị trong team chat: "MiniMax M3" / "Mavis". | 🔧 Debugger | Nhận bàn giao V2, test GUI độc lập theo checklist |
-| **Anh Tuấn (`jimmyvu`)** | Product Owner, Reviewer, Kiến trúc sư trưởng | 👤 Available | Duyệt merge & roadmap |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | ⚪ Standby | **Tạm nghỉ theo lệnh PO anh Tuấn** — bàn giao sạch sẽ toàn bộ hệ thống |
+| **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | 🟢 Ready | Sẵn sàng nhận việc / thử tài theo phân công của anh Tuấn |
+| **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟢 Ready | Sẵn sàng review code, giám sát & điều phối kỹ thuật |
+| **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo làm đúng việc được giao (`@assign`). | 🟢 Ready | Sẵn sàng test GUI, viết test, debug chi tiết |
+| **Cursor / Codex** | UI/UX Component, CSS styling, Performance profiling | 🟢 Ready | Sẵn sàng nhận task UI / UX / Animation |
+| **Anh Tuấn (`jimmyvu`)** | Product Owner, Reviewer, Kiến trúc sư trưởng | 👤 Active | Trực tiếp điều phối và thử tài các agent |
 
 ---
 
