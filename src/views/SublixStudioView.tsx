@@ -88,6 +88,8 @@ export interface SubtitleItem {
   original: string;
   translated: string;
   hasAudio?: boolean;
+  audioUrl?: string; // R32: data URI clip tiếng lồng (data:audio/mp3;base64,...)
+  audioDuration?: number; // R32: độ dài thật của clip (giây) — dùng để vẽ khối lồng
 }
 
 const SPEAKER_COLORS = [
@@ -1079,15 +1081,100 @@ export default function SublixStudioView({
   };
 
   const lastNativeTimeUpdateRef = useRef<number>(0);
+  // R32: Đồng bộ phát TIẾNG LỒNG theo playhead (không đụng logic video — chỉ thêm lớp âm thanh)
+  const voicePlayRef = useRef<HTMLAudioElement | null>(null);
+  const activeVoiceSegRef = useRef<number | null>(null);
+  const finishedVoiceSegRef = useRef<number | null>(null);
+  const videoVolumeBeforeDuckRef = useRef<number | null>(null);
+
+  const stopVoicePlayback = () => {
+    const va = voicePlayRef.current;
+    if (va) {
+      try {
+        va.pause();
+        va.currentTime = 0;
+      } catch {
+        /* noop */
+      }
+    }
+    activeVoiceSegRef.current = null;
+    const v = videoRef.current;
+    if (v && videoVolumeBeforeDuckRef.current !== null) {
+      v.volume = videoVolumeBeforeDuckRef.current;
+      videoVolumeBeforeDuckRef.current = null;
+    }
+  };
+
+  const syncVoicePlayback = (now: number, paused: boolean) => {
+    const v = videoRef.current;
+    if (paused || !v) {
+      if (activeVoiceSegRef.current !== null) stopVoicePlayback();
+      return;
+    }
+    const seg = segmentsRef.current.find((s) => s.audioUrl && now >= s.start && now < s.end);
+    if (!seg) {
+      if (activeVoiceSegRef.current !== null) stopVoicePlayback();
+      finishedVoiceSegRef.current = null;
+      return;
+    }
+    if (activeVoiceSegRef.current === seg.id) return; // đang phát đúng câu — để yên
+    if (finishedVoiceSegRef.current === seg.id) return; // câu này vừa hết — không phát lại lặp
+    stopVoicePlayback();
+    const va = voicePlayRef.current ?? new Audio();
+    voicePlayRef.current = va;
+    activeVoiceSegRef.current = seg.id;
+    va.src = seg.audioUrl!;
+    try {
+      va.currentTime = Math.max(0, now - seg.start);
+    } catch {
+      /* noop */
+    }
+    if (videoVolumeBeforeDuckRef.current === null) {
+      videoVolumeBeforeDuckRef.current = v.volume;
+      v.volume = Math.min(v.volume, 0.25);
+    }
+    va.onended = () => {
+      if (activeVoiceSegRef.current === seg.id) {
+        finishedVoiceSegRef.current = seg.id;
+        stopVoicePlayback();
+      }
+    };
+    va.play().catch((e) => console.warn("R32: voice play failed:", e));
+  };
+
   const handleTimeUpdate = () => {
     if (!videoRef.current || videoRef.current.paused) return;
     const now = performance.now();
     // Throttle native timeupdate xuống 120ms (~8fps) để đồng bộ mượt mà với React Virtual DOM
     if (now - lastNativeTimeUpdateRef.current > 120) {
       lastNativeTimeUpdateRef.current = now;
-      setCurrentTime(videoRef.current.currentTime);
+      const t = videoRef.current.currentTime;
+      setCurrentTime(t);
+      syncVoicePlayback(t, false);
     }
   };
+
+  // R32: Dừng tiếng lồng khi pause/ended/seek (native listeners — theo Note 3 của Antigravity)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onStop = () => stopVoicePlayback();
+    const onSeeked = () => {
+      activeVoiceSegRef.current = null;
+      finishedVoiceSegRef.current = null;
+      syncVoicePlayback(v.currentTime, v.paused);
+    };
+    v.addEventListener("pause", onStop);
+    v.addEventListener("ended", onStop);
+    v.addEventListener("seeked", onSeeked);
+    return () => {
+      v.removeEventListener("pause", onStop);
+      v.removeEventListener("ended", onStop);
+      v.removeEventListener("seeked", onSeeked);
+      stopVoicePlayback();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isPlayingRef = useRef<boolean>(isPlaying);
   isPlayingRef.current = isPlaying;
@@ -2738,14 +2825,33 @@ export default function SublixStudioView({
 
         const spk = speakers.find((s) => s.id === seg.speakerId);
         const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
+        // R32: LƯU clip tiếng lồng thật + đo độ dài thật (trước đây vứt kết quả, chỉ giơ cờ hasAudio)
+        let clipDataUri: string | undefined;
         try {
-          await sublix.dubbingPreviewTts(seg.translated, voice);
+          clipDataUri = await sublix.dubbingPreviewTts(seg.translated, voice);
         } catch {
           // ignore individual tts error
         }
+        let clipDur: number | undefined;
+        if (clipDataUri) {
+          clipDur = await new Promise<number | undefined>((resolve) => {
+            const probe = new Audio();
+            const done = (v?: number) => resolve(v);
+            probe.preload = "metadata";
+            probe.onloadedmetadata = () =>
+              done(Number.isFinite(probe.duration) ? probe.duration : undefined);
+            probe.onerror = () => done(undefined);
+            setTimeout(() => done(undefined), 4000);
+            probe.src = clipDataUri!;
+          });
+        }
 
         setSegments((prev) =>
-          prev.map((s) => (s.id === seg.id ? { ...s, hasAudio: true } : s))
+          prev.map((s) =>
+            s.id === seg.id
+              ? { ...s, hasAudio: !!clipDataUri, audioUrl: clipDataUri, audioDuration: clipDur }
+              : s
+          )
         );
       }
 
@@ -6547,7 +6653,11 @@ export default function SublixStudioView({
                   const spkName = getSpeakerDisplayName(spk);
                   const totalDur = Math.max(1, mediaDuration);
                   const left = (seg.start / totalDur) * timelineWidth;
-                  const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                  // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (hết "dài tít"); không có dữ liệu thì giữ như cũ
+                  const voiceDur = seg.audioDuration && seg.audioDuration > 0
+                    ? Math.min(seg.audioDuration, Math.max(0.3, seg.end - seg.start))
+                    : seg.end - seg.start;
+                  const rawWidth = (voiceDur / totalDur) * timelineWidth;
                   const width = Math.max(3, rawWidth);
                   const isCompact = width < 30;
                   const isSelected = seg.id === selectedSegId;
@@ -6667,7 +6777,11 @@ export default function SublixStudioView({
                     {spkSegments.map((seg) => {
                       const totalDur = Math.max(1, mediaDuration);
                       const left = (seg.start / totalDur) * timelineWidth;
-                      const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
+                      // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (hết "dài tít"); không có dữ liệu thì giữ như cũ
+                      const voiceDur = seg.audioDuration && seg.audioDuration > 0
+                        ? Math.min(seg.audioDuration, Math.max(0.3, seg.end - seg.start))
+                        : seg.end - seg.start;
+                      const rawWidth = (voiceDur / totalDur) * timelineWidth;
                       const width = Math.max(3, rawWidth);
                       const isCompact = width < 30;
                       const isSelected = seg.id === selectedSegId;

@@ -35,7 +35,7 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| - | - | - | - | - | - |
+| `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | **CommandCode** | 🔴 HIGH | 🟡 Đang làm (khóa 2026-10-12) | `src-tauri/src/lib.rs`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/downloader/mod.rs` (dự kiến) |
 
 ---
 
