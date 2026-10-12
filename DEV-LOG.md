@@ -1239,6 +1239,20 @@ sublix/
 - ✅ Tab Tải video phân định rõ ràng giữa `🚀 Xem Trong Studio` và `🖥️ Player Ngoài`.
 - ✅ Timeline 323 câu thoại trên video 25 phút hoạt động siêu mượt, loại bỏ hoàn toàn hiện tượng treo đơ sau khi làm sub.
 
+### ⚠️ Lưu Ý Bắt Buộc Cho Các Agent / Developer Tiếp Quản (Tránh Mắc Lại Lỗi):
+1. **Quy Tắc Timeline Memoization (Hiệu Năng Render):**
+   - Với các video dài từ 10–30+ phút (chứa 200–500 câu thoại), tuyệt đối **KHÔNG** render inline các JSX thẻ phụ đề mà không có `React.memo`.
+   - `StudioSegmentCard` và `StudioTimelineSubtitleBlock` phải luôn được memoize. Khi truyền props (callbacks), đảm bảo các hàm như `onSelect`, `onUpdate`, `onDelete` dùng `useCallback` ổn định, không truyền lambda closure mới mỗi lần render cha.
+2. **Quy Tắc Throttling State Video:**
+   - Sự kiện native `onTimeUpdate` của thẻ `<video>` phát ra liên tục. Chỉ cập nhật React state `currentTime` ở tần số tối đa 8–10fps (throttle 100–120ms).
+   - Kim Playhead và bộ đếm giờ tua (60fps) phải chạy qua **Direct DOM manipulation** (`ref.style.transform`), không được setState ở 60fps vì sẽ bóp nghẹt JavaScript event loop.
+3. **Quy Tắc Video Playback & Transcode:**
+   - Tránh kiểm tra `v.paused` bên trong `requestAnimationFrame` để hủy vòng lặp, vì `video.play()` là hàm bất đồng bộ (trả về Promise). Lắng nghe native event `onPlay`/`onPause`/`onEnded` trực tiếp trên thẻ `<video>`.
+   - Không tự ý kích hoạt chạy ngầm `ffmpeg` transcode trừ khi video thực sự bị lỗi không thể giải mã (`videoWidth === 0` hoặc thẻ video phát sinh sự kiện `onError`).
+4. **Quy Tắc Build:**
+   - TUYỆT ĐỐI **KHÔNG CHẠY `cargo build --release`** (BUG-H07).
+
+
 
 
 

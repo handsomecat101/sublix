@@ -119,6 +119,12 @@
 | `BUG-V095-01` | Chọn "MAX" nhưng mọi video chỉ tải được 640x360 — ép `youtube:player_client=android,web_safari,ios` làm YouTube ẩn hết format DASH (SABR-only) | `downloader/mod.rs` (`build_download_command`, `fetch_video_info`) | KHÔNG ép player_client cũ cho YouTube — để yt-dlp tự chọn client (kèm js-runtime + ejs solver); kiểm tra bằng `-F` | ✅ Fixed |
 | `BUG-V095-02` | Tải video gặp `ERROR: unable to download video data: HTTP Error 403: Forbidden` (yt-dlp thiếu impersonation target) | Môi trường Python (không phải code) | Cài `curl_cffi` (`python -m pip install curl_cffi`) — máy mới BẮT BUỘC có | ✅ Fixed |
 
+### 🧾 2 Lỗi Fix Tại v0.11.30 (Antigravity — 2026-10-12):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-059` | Nút "Chạy Video" làm Windows Media Player ngoài Desktop bật lên thay vì phát trong Studio | `src/views/DownloaderView.tsx` | Nút chính mặc định phải là "🚀 Xem Trong Studio" (`handlePlayInStudio`); nút mở ngoài đổi thành "🖥️ Player Ngoài" | ✅ Fixed |
+| `BUG-060` | Video 25 phút (323 câu) làm treo timeline + bấm Play đứng im + ffmpeg transcode ngầm 100% CPU | `src/views/SublixStudioView.tsx` | Memoize SegmentCard/TimelineBlock (`React.memo`), throttle `onTimeUpdate` 120ms, cấm transcode khi video đang pause, native video listeners | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -284,4 +290,31 @@
 - **File:** Môi trường Python313 của máy (không phải code dự án)
 - **Root Cause:** yt-dlp cần impersonation (giả danh trình duyệt) cho một số request media; máy chưa cài `curl_cffi` nên in warning "The extractor specified to use impersonation ... no impersonate target is available" ⇒ media URL trả 403.
 - **Cách fix & Bài học:** `python -m pip install curl_cffi` (đã cài, warning hết; BBB retry tải OK 1280x720). *Máy mới/agent mới setup môi trường PHẢI cài kèm `curl_cffi` — ghi vào checklist cài đặt.*
+
+---
+
+### [BUG-059] Bấm "Chạy Video" làm Windows Media Player ngoài Desktop bật lên thay vì phát trong Studio
+- **Ngày:** 2026-10-12 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Antigravity | **Status:** ✅ Fixed
+- **File:** `src/views/DownloaderView.tsx` (`handlePlayInStudio`, `handleOpenFile`)
+- **Root Cause:** Nút tải xong trước đây có nhãn `▶ Chạy Video`, gọi lệnh Win32 `ShellExecuteW("open", path)` qua IPC `downloader_open_file`. Người dùng hiểu nhầm là app sẽ phát video trong giao diện nội bộ, nhưng Windows lại bật Media Player ngoài màn hình Desktop.
+- **Cách fix & Bài học cho Dev sau:**
+  1. Nút hành động chính mặc định sau khi tải xong **BẮT BUỘC** là `🚀 Xem Trong Studio` (gọi `handlePlayInStudio` nạp video vào Studio nội bộ).
+  2. Nút mở bằng Windows Media Player chuyển thành nút phụ `🖥️ Player Ngoài` với tooltip cảnh báo rõ ràng.
+  *Nguyên tắc UX: Các hành động phát media trong desktop app phải ưu tiên player nội bộ của app trước; mở player hệ điều hành chỉ là tùy chọn phụ.*
+
+---
+
+### [BUG-060] Video 25 phút (323 câu thoại) làm treo timeline + bấm Play đứng im + ffmpeg transcode ngầm 100% CPU
+- **Ngày:** 2026-10-12 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Antigravity | **Status:** ✅ Fixed
+- **File:** `src/views/SublixStudioView.tsx` (`StudioSegmentCard`, `StudioTimelineSubtitleBlock`, `tick`, `handleTimeUpdate`, `handleLoadedMetadata`)
+- **Root Cause:**
+  1. *Video Play đứng im ngay khi bấm:* Vòng lặp `requestAnimationFrame(tick)` kiểm tra `v.paused` ở 1–2 frame đầu tiên khi Promise của `video.play()` chưa kịp resolve trên WebView2 → `tick()` tự ép `setIsPlaying(false)` và hủy animation playhead.
+  2. *Transcode ngầm 100% CPU:* Timer RVFC (`stillNoFrame`) kiểm tra sau 1.2s trên video đang tạm dừng (pause). Khi pause, RVFC không bắn frame → code tưởng nhầm codec bị lỗi và âm thầm gọi `ffmpeg` transcode cả video 25 phút ngốn 100% CPU mọi nhân.
+  3. *Treo/Đơ Timeline khi có nhiều câu thoại:* `timeupdate` kích hoạt `setCurrentTime` liên tục không throttle làm React re-render toàn bộ component 7.200 dòng cùng lúc 323 card danh sách và 323 timeline block (hơn 2.500 DOM nodes mỗi tick).
+- **Cách fix & Bài học QUAN TRỌNG cho Dev/Agent sau (CẤM VI PHẠM):**
+  1. **Tuyệt đối KHÔNG kiểm tra `v.paused` để dừng sớm trong `requestAnimationFrame`:** Playback là bất đồng bộ; phải lắng nghe native event trực tiếp (`onPlay`, `onPause`, `onEnded`) trên thẻ `<video>` để đồng bộ state.
+  2. **CẤM kích hoạt `ffmpeg transcode` khi video đang tạm dừng:** Chỉ transcode khi `videoWidth === 0` sau khi nạp metadata hoặc khi thẻ `<video>` bắn sự kiện `onError`.
+  3. **BẮT BUỘC memoize các component lặp lại:** `StudioSegmentCard` và `StudioTimelineSubtitleBlock` phải được bọc `React.memo`. Không truyền anonymous inline functions hay mutable object vào props nếu không cần thiết. Khi playhead chạy qua, **chỉ đúng 2 card re-render** (card cũ và card mới).
+  4. **Throttling React State:** Throttling `onTimeUpdate` xuống mỗi 120ms (~8fps) cho React state, trong khi kim Playhead chạy mượt mà 60fps qua direct DOM ref.
+
 

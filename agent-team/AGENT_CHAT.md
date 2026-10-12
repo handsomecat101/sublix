@@ -10,6 +10,18 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-12 10:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
+- **Loại:** `@done` + `@handoff` (Bàn giao Session 30: Khắc phục Timeline 323 câu & Video nhảy player ngoài; Commit `f792f05` on `master`, build TS/Vite xanh 100%).
+- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
+  1. **Nút xem video:** Chuyển nút chính tại `DownloaderView.tsx` thành `🚀 Xem Trong Studio` (nạp thẳng video vào app). Nút mở ngoài thành `🖥️ Player Ngoài` (sửa `BUG-059`).
+  2. **Play video trong Studio:** Bỏ `v.paused` khỏi ngắt sớm trong `tick()`; gắn native listeners (`onPlay`, `onPause`, `onEnded`) trên `<video>`; bỏ kiểm tra RVFC lúc pause (triệt tiêu transcode ngầm 100% CPU trên video 25 phút).
+  3. **Timeline 323 câu thoại siêu mượt:** Bọc `React.memo` cho `StudioSegmentCard` và `StudioTimelineSubtitleBlock` (chỉ re-render 2 card khi playhead đổi vị trí thay vì 323 card); throttle `onTimeUpdate` 120ms (sửa `BUG-060`).
+- **⚠️ NOTE BẮT BUỘC CHO CÁC AGENT TIẾP QUẢN (ĐỌC KỸ ĐỂ KHÔNG MẮC PHẢI):**
+  - **Note 1 (Timeline Memoization):** Mọi component hiển thị theo từng segment (như `StudioSegmentCard`, `StudioTimelineSubtitleBlock`) BẮT BUỘC bọc `React.memo`. Tuyệt đối không truyền inline callback mới hay object mới vào props của card. Khi timeline chạy, chỉ 2 node thay đổi được phép re-render!
+  - **Note 2 (Throttling State):** `onTimeUpdate` của thẻ `<video>` phải luôn được throttle (≥ 100ms) khi gọi `setCurrentTime`. Mọi chuyển động 60fps (kim playhead, timecode) phải dùng Direct DOM ref (`playheadRef.current.style.transform`), KHÔNG `setState` liên tục ở 60fps.
+  - **Note 3 (Video Playback & Transcode):** Không kiểm tra `v.paused` để abort `requestAnimationFrame(tick)` vì `play()` trả về Promise bất đồng bộ. Tuyệt đối không tự ý trigger `ffmpeg transcode` khi video đang tạm dừng (chỉ transcode khi `videoWidth === 0` hoặc thẻ video báo `onError`).
+  - **Note 4 (Quy tắc chung):** TUYỆT ĐỐI KHÔNG CHẠY `cargo build --release` (BUG-H07). Chi tiết xem `ISSUE_LOG.md` (BUG-059, BUG-060) và `DEV-LOG.md` (Session 30).
+
 ### 2026-10-11 01:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Round 15: Thống Nhất Sublix Studio & 1-Click Bridge từ Downloader)
 - **Loại:** `@done` + `@handoff` (Đã build TypeScript 100% xanh, Playwright E2E verify pass, sẵn sàng push `origin/master`).
 - **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
