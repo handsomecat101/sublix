@@ -23,10 +23,28 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.32",
+    date: "13/10/2026",
+    title: "Studio Tận Dụng Phụ Đề YouTube Đã Tải (Tích Sẵn) + Đánh Dấu YouTube Toàn App",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Tính Năng Mới",
+        icon: "📥",
+        items: [
+          "Mở video có file .srt tải sẵn → Studio dùng LUÔN làm phụ đề gốc — chính xác hơn và khỏi chờ Whisper.",
+          "Checkbox '📥 Tận dụng phụ đề đã tải (nếu có)' được TÍCH SẴN, hiện luôn 'có sẵn: en (YouTube), vi (YouTube)'.",
+          "Badge đỏ '📥 YouTube (.en)' trên thẻ Phụ Đề + trên lane PHỤ ĐỀ (TEXT) ở timeline để phân biệt bản sub.",
+          "Tab Tải Video: chip đổi thành '📝 Phụ đề YouTube: en, vi'; kèm manifest đánh dấu (video nào, ngôn ngữ nào, link, ngày tải) để quản lý về sau.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.31",
     date: "13/10/2026",
     title: "Tab Tải Video: Phụ Đề Hoạt Động Thật (Sub-Pass Riêng Chống 429 + Nút Tải Phụ Đề)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi + Tính Năng",

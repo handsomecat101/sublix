@@ -12,7 +12,7 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.31` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Bản Build Hiện Tại** | `v0.11.32` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
 | **Git Commit** | `21a7028` on `master` (`https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Sẵn sàng làm việc (Master up-to-date, 0 build error, Antigravity online trở lại cùng team) |
 
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-SUBS-YOUTUBE-REUSE-2026-10-13` | Studio tận dụng phụ đề YouTube đã tải (checkbox TÍCH SẴN) + marking "YouTube" (badge timeline + chip Downloader + manifest quản lý) | **CommandCode** | 2026-10-13 | ✅ E2E StarCraft: whisper=0 process, 49 câu từ .srt, badge "📥 YouTube (.en)", manifest 2 entry; v0.11.32 |
 | `TSK-FIX-SUBS-2026-10-13` | Fix phụ đề Tab Tải Video (bật checkbox mà không ra file): tách sub-pass riêng chống 429 + nút "📝 Tải phụ đề" + chip langs + backfill item cũ | **CommandCode** | 2026-10-13 | ✅ E2E thật: StarCraft ra `en.srt`+`vi.srt` (9:29), video mới tự ra `en.srt`, chip UI đo được; `BUG-061`; v0.11.31 |
 | `TSK-STUDIO-PERF-TIMELINE-FIX` | Sửa video nhảy player ngoài (thay bằng 🚀 Xem Trong Studio) & Khắc phục triệt để đơ timeline 323 câu / transcode ngầm 100% CPU | **Antigravity** | 2026-10-12 | ✅ Memoize 323 cards/blocks (`React.memo`), throttle onTimeUpdate 120ms, native video listeners, fix transcode oan |
 | `TSK-TTS-STRICT-INDEX-SAMPLE-PREVIEW` | Phân loại độc quyền giọng đọc theo từng Model TTS AI + Nghe thử mẫu giọng tiêu biểu trước khi load chọn (VietNeu, Kokoro 14 giọng sample WAV, Edge-TTS Cloud) | **Antigravity** | 2026-10-11 | ✅ Bỏ nút Tất cả models; dropdown của vai chỉ hiện voice của Model đang chọn; Nút ▶️ Mẫu trên từng card & spec; toggle dừng/phát chuẩn xác |

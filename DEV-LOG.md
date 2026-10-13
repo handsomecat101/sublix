@@ -1280,6 +1280,26 @@ sublix/
 - 429 là giới hạn phía YouTube với track dịch — UX mới: track gốc luôn về; bấm lại nút khi cần. Dọn rolling AGENT_CHAT: 9 tin cũ (10-08/10-09) → `ARCHIVE/AGENT_CHAT_ARCHIVE.md`.
 - Không đụng file của các ca khác; file version đồng bộ toàn bộ về v0.11.31 (trước đó repo còn 0.11.29 — đội gọi fix timeline 12/10 là "0.11.30" trong tài liệu).
 
+---
+
+## Session 32 — 2026-10-13 11:15 → 12:10 (CommandCode) — v0.11.32 (Studio Tận Dụng Phụ Đề YouTube + Marking)
+
+### User intent
+- "Nếu load phụ đề YouTube thì nên có lựa chọn TÍCH SẴN là tận dụng phụ đề đã down; và ghi marking là phụ đề YouTube cho lần sau dễ quản lý" + "marking trong timeline phụ đề để phân biệt bản sub".
+
+### Đã làm (v0.11.32)
+- **Backend:** `prefer_existing_srt` trong `dubbing_analyze`; `analyze_and_create_project_full()` (wrapper 7 tham số giữ tương thích examples/tests); `DubbingProject.transcript_source` = `srt:<lang>` | `whisper`; `available_subtitles()` + lệnh `dubbing_available_subs`; manifest `sublix_subtitles.json` (`mark_youtube_subtitles`, `is_youtube_subtitle`); `find_sibling_srt()` ưu tiên src-lang → en → vi → ja → zh; crop SRT theo cửa sổ in/out.
+- **Frontend:** checkbox **"📥 Tận dụng phụ đề đã tải (nếu có)" TÍCH SẴN** + hiện "có sẵn: en (YouTube), vi (YouTube)"; badge đỏ **"📥 YouTube (.en)"** trên thẻ Phụ Đề + lane timeline `💬 PHỤ ĐỀ (TEXT)`; chip Downloader → "📝 Phụ đề YouTube: en, vi".
+- **Tests:** `test_find_sibling_srt_priority` + `test_crop_srt_to_window` → cargo test 13/13; tsc 0 lỗi.
+
+### Verify (GUI thật, app test cổng 9222)
+- StarCraft [uQnmfEka3vw]: nạp vào Studio, label "có sẵn: en (YouTube), vi (YouTube)", chạy "Chỉ Tạo Phụ Đề Gốc" → **whisper = 0 process** (dùng thẳng .srt), kết quả **49 câu** đúng nội dung .srt ("I wish to be alone", "We are an ancient…"), badge "📥 YouTube (.en)" hiển thị; gọi `downloader_fetch_subtitles` ghi manifest thật 2 entry (en, vi).
+- Ảnh: `agent-team/test-output-audit-giong/v01132_studio_youtube_used.png`.
+
+### Ghi chú
+- Nút "🚀 Xem Trong Studio" từ danh sách KHÔNG đổi được video đang mở (Studio restore project cache `sublix_active_studio_project_v1`) — test bằng cách sửa cache; ghi nhận để teammate xem (không thuộc phạm vi bản này).
+- ⚠️ Phát hiện **6 ffmpeg treo** bám video cache cũ "Meta's…" (CPU 600–800s, không tự thoát) → ghi `BUG-062` (🔴 Open); đã kill khi test xong.
+
 
 
 

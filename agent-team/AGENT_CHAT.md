@@ -10,6 +10,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-13 12:05 - CommandCode
+- **Loại:** `@done` (v0.11.32 — yêu cầu PO: "phụ đề YouTube chính xác hơn → tận dụng khi load video + tích sẵn + ghi marking YouTube để phân biệt bản sub").
+- **Studio tận dụng phụ đề đã tải:** video có `.srt` cạnh bên → analyze dùng THẲNG, **KHÔNG chạy Whisper** (chính xác hơn + nhanh hơn); checkbox **"📥 Tận dụng phụ đề đã tải (nếu có)" TÍCH SẴN** + hiện "có sẵn: en (YouTube), vi (YouTube)". Backend: cờ `prefer_existing_srt`, `transcript_source` = `srt:<lang>` | `whisper`, `available_subtitles()` + lệnh `dubbing_available_subs`, wrapper `analyze_and_create_project_full()` giữ tương thích examples/tests.
+- **Marking YouTube:** badge đỏ **"📥 YouTube (.en)"** trên thẻ Phụ Đề + lane timeline `💬 PHỤ ĐỀ (TEXT)`; chip Downloader → **"📝 Phụ đề YouTube: en, vi"**; manifest **`sublix_subtitles.json`** (video_id/lang/url/ngày tải) + nhận diện file cũ theo tag `[video_id]`.
+- **Bằng chứng E2E (StarCraft uQnmfEka3vw):** label "có sẵn: en (YouTube), vi (YouTube)"; chạy sub-only → **whisper = 0 process**, ra **49 câu** đúng nội dung .srt ("I wish to be alone"…); badge hiển thị; manifest 2 entry. Ảnh `test-output-audit-giong/v01132_studio_youtube_used.png`; cargo test 13/13; tsc 0 lỗi.
+- **⚠️ Quan sát cần teammate soi (`BUG-062`, ISSUE_LOG):** lúc test thấy **6 tiến trình ffmpeg treo bám video "Meta's…"** (project cache cũ) ăn CPU 600–800s/tiến trình, không tự thoát — nghi class lỗi BUG-060 (preview/transcode ngầm) ở `SublixStudioView` khi restore cache. Đã kill thủ công.
+
+---
+
 ### 2026-10-13 09:50 - CommandCode
 - **Loại:** `@done` + `@handoff` (PO báo 13/10: "phần download có chọn tải file sub mà chọn vào không dùng được" → điều tra + sửa dứt điểm — **v0.11.31**).
 - **Root cause (tái hiện bằng CLI thật trên máy):** YouTube **CÓ** cho tải phụ đề — track GỐC (en/ASR) tải OK, nhưng track **DỊCH tự động** (vi/ja/zh) bị trả **HTTP 429**; lỗi cũ vì sub nằm CHUNG lệnh tải video → 1 track 429 làm chết cả phase sub.

@@ -130,6 +130,11 @@
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-061` | Checkbox "trích xuất phụ đề" bật nhưng không ra file: phụ đề chạy CHUNG lệnh tải video → track dịch bị YouTube chặn 429 làm chết cả phase sub | `src-tauri/src/downloader/mod.rs`, `src/views/DownloaderView.tsx` | Việc phụ phải chạy PASS RIÊNG sau việc chính (`--skip-download ... --ignore-errors`) + đối chiếu file thật trên đĩa (`scan_subtitle_langs`), không bao giờ để lỗi phụ kéo chết việc chính | ✅ Fixed |
 
+### 🧾 Lỗi Quan Sát Tại v0.11.32 (CommandCode — 2026-10-13):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-062` | 6 tiến trình ffmpeg treo bám video cache cũ ("Meta's…") chạy ngầm ăn CPU 600–800s mỗi tiến trình, không tự thoát (quan sát khi GUI-test v0.11.32) | `src/views/SublixStudioView.tsx` (preview/transcode/filmstrip khi restore project cache) | Khi restore project từ cache: tác vụ preview/transcode phải có guard hủy theo video-idle/đổi file; không spawn nhiều ffmpeg song song cho cùng file | 🔴 Open (cần soi root cause) |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build

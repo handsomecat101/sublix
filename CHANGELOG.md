@@ -1,4 +1,22 @@
 
+## v0.11.32 — 2026-10-13
+### Studio: Tận Dụng Phụ Đề YouTube Đã Tải (Tích Sẵn) + Đánh Dấu "YouTube" Mọi Nơi
+
+**Bối cảnh (Anh Tuấn):** "Phụ đề YouTube chính xác hơn phụ đề của mình" → khi mở video trong Studio phải tự dùng file .srt đã tải; lựa chọn này phải **tích sẵn**; và phải **ghi marking "phụ đề YouTube"** để dễ phân biệt/quản lý (trên timeline + khi tải).
+
+**Tính năng v0.11.32:**
+- **Studio dùng thẳng phụ đề đã tải:** mở video có `.srt` nằm cạnh bên (sinh ra từ nút "📝 Tải phụ đề") → phân tích **KHÔNG chạy Whisper nữa**, lấy luôn nội dung .srt (chính xác hơn, nhanh hơn nhiều). Không có .srt → Whisper như cũ. Backend: cờ `prefer_existing_srt`; `DubbingProject.transcript_source` = `"srt:<lang>"` hoặc `"whisper"`.
+- **Checkbox TÍCH SẴN:** "📥 Tận dụng phụ đề đã tải (nếu có)" trong thẻ 💬 Phụ Đề & Dịch Thuật — hiện kèm danh sách "có sẵn: en (YouTube), vi (YouTube)" ngay khi chọn video.
+- **Marking YouTube khắp nơi:** badge đỏ "📥 YouTube (.en)" trên thẻ Phụ Đề **và trên lane "💬 PHỤ ĐỀ (TEXT)" ở timeline**; chip ở Tab Tải Video đổi thành "📝 Phụ đề YouTube: en, vi"; **manifest `sublix_subtitles.json`** (trong thư mục downloads) ghi video_id / lang / url / ngày tải mỗi khi tải phụ đề — file tải trước bản này nhận diện theo quy cách tên `[video_id]`.
+- Kỹ thuật: lệnh `dubbing_available_subs`; `available_subtitles()`; `analyze_and_create_project_full()` (giữ wrapper 7-tham-số tương thích examples/tests); `find_sibling_srt()` ưu tiên đúng ngôn ngữ nguồn → en → vi → ja → zh.
+
+**Bằng chứng E2E (StarCraft uQnmfEka3vw):**
+- Label "có sẵn: en (YouTube), vi (YouTube)"; chạy "Chỉ Tạo Phụ Đề" → **0 tiến trình whisper** chạy; kết quả **49 câu** đúng nội dung .srt (vd "I wish to be alone", "We are an ancient…"); badge "📥 YouTube (.en)" hiển thị (tự đo DOM + ảnh).
+- Manifest thật: `sublix_subtitles.json` 2 entry (en, vi có source "youtube").
+- Ảnh: `agent-team/test-output-audit-giong/v01132_studio_youtube_used.png`; unit test mới (find_sibling_srt + crop_srt_to_window) pass; `tsc` 0 lỗi.
+
+---
+
 ## v0.11.31 — 2026-10-13
 ### Tab Tải Video: Phụ Đề "Chọn Mà Không Ra File" — Đã Sửa Dứt Điểm (Sub-Pass Riêng Chống 429)
 
