@@ -3452,14 +3452,12 @@
   box-shadow: 0 0 6px rgba(244, 114, 182, 0.4);
 }
 
-/* v0.11.32 (PO): badge nguồn phụ đề "YouTube" trên timeline + thẻ Phụ Đề */
+/* v0.11.32 (PO): badge nguồn phụ đề đặt ở ĐƯỜNG TRACK (không gắn từng câu cho đỡ rối) */
 .studio-track-src-badge,
 .studio-src-badge {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.4px;
-  color: #fff;
-  background: #e11d48;
   border-radius: 999px;
   padding: 1px 7px;
   margin-left: 6px;
@@ -3470,6 +3468,18 @@
 .studio-src-badge {
   font-size: 10px;
   padding: 2px 8px;
+}
+
+.studio-track-src-badge.src-yt,
+.studio-src-badge.src-yt {
+  color: #fff;
+  background: #e11d48;
+}
+
+.studio-track-src-badge.src-ai,
+.studio-src-badge.src-ai {
+  color: #052e16;
+  background: #22c55e;
 }
 
 

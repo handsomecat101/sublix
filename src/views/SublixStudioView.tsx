@@ -90,6 +90,9 @@ export interface SubtitleItem {
   hasAudio?: boolean;
   audioUrl?: string; // R32: data URI clip tiếng lồng (data:audio/mp3;base64,...)
   audioDuration?: number; // R32: độ dài thật của clip (giây) — dùng để vẽ khối lồng
+  // v0.11.32b (PO): nguồn từng câu — "youtube" = lấy từ file .srt tải sẵn,
+  // "whisper" = phần mềm tự nhận dạng → hiện badge nhỏ trên timeline để phân biệt.
+  source?: "youtube" | "whisper";
 }
 
 const SPEAKER_COLORS = [
@@ -296,7 +299,7 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
         borderColor: "#2dd4bf",
       }}
       onClick={(e) => onBlockClick(seg, e)}
-      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
+      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}${seg.source ? `  •  Nguồn: ${seg.source === "youtube" ? "Phụ đề YouTube (đã tải)" : "AI tự nhận dạng (Whisper)"}` : ""}`}
     >
       {!isCompact && (
         <div
@@ -2590,6 +2593,7 @@ export default function SublixStudioView({
           original: seg.original_text,
           translated: seg.original_text, // Giữ nguyên câu gốc để duyệt
           hasAudio: false, // ROUND-25 FIX: Khi chỉ làm phụ đề thì chưa có audio giọng đọc!
+          source: (project.transcript_source?.startsWith("srt:") ? "youtube" : "whisper") as "youtube" | "whisper",
         }));
 
         saveUndoHistory();
@@ -3111,6 +3115,7 @@ export default function SublixStudioView({
             original: seg.original_text,
             translated: seg.dubbed_text || seg.original_text,
             hasAudio: dubImmediately, // Nếu quét trước thì chưa có audio để user review & chọn giọng
+            source: (project.transcript_source?.startsWith("srt:") ? "youtube" : "whisper") as "youtube" | "whisper",
           };
         });
 
@@ -4017,14 +4022,22 @@ export default function SublixStudioView({
                       <span className="studio-step-card-status">
                         {segments.length} câu • {sttLang.toUpperCase()}{workflowOptTranslate ? ` ➔ ${targetLang.toUpperCase()}` : " (Gốc)"}
                       </span>
-                      {transcriptSource?.startsWith("srt:") && (
-                        <span
-                          className="studio-src-badge"
-                          title={`Phụ đề gốc đang dùng từ file YouTube (.${transcriptSource.split(":")[1]}.srt) — bật/tắt tại mục "📥 Tận dụng phụ đề đã tải"`}
-                        >
-                          📥 YouTube (.{transcriptSource.split(":")[1]})
-                        </span>
-                      )}
+                      {transcriptSource &&
+                        (transcriptSource.startsWith("srt:") ? (
+                          <span
+                            className="studio-src-badge src-yt"
+                            title={`Phụ đề gốc đang dùng lấy từ file YouTube (.${transcriptSource.split(":")[1]}.srt đã tải)`}
+                          >
+                            📥 YouTube (.{transcriptSource.split(":")[1]})
+                          </span>
+                        ) : (
+                          <span
+                            className="studio-src-badge src-ai"
+                            title="Phụ đề gốc đang dùng do phần mềm tự nhận dạng (Whisper STT)"
+                          >
+                            🎙 AI tự tạo
+                          </span>
+                        ))}
                       {openSubCard ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                     </div>
                   </div>
@@ -6235,14 +6248,22 @@ export default function SublixStudioView({
                   <div className="studio-track-header-item">
                     <div className="studio-track-header-left">
                       <span>💬 PHỤ ĐỀ (TEXT)</span>
-                      {transcriptSource?.startsWith("srt:") && (
-                        <span
-                          className="studio-track-src-badge"
-                          title={`Phụ đề gốc đang dùng từ file YouTube (.${transcriptSource.split(":")[1]}.srt) — bật/tắt tại mục "📥 Tận dụng phụ đề đã tải"`}
-                        >
-                          📥 YOUTUBE (.{transcriptSource.split(":")[1]})
-                        </span>
-                      )}
+                      {transcriptSource &&
+                        (transcriptSource.startsWith("srt:") ? (
+                          <span
+                            className="studio-track-src-badge src-yt"
+                            title={`Phụ đề GỐC đang dùng lấy từ file YouTube (.${transcriptSource.split(":")[1]}.srt đã tải) — bật/tắt tại mục "📥 Tận dụng phụ đề đã tải"`}
+                          >
+                            📥 PHỤ ĐỀ YOUTUBE (.{transcriptSource.split(":")[1]})
+                          </span>
+                        ) : (
+                          <span
+                            className="studio-track-src-badge src-ai"
+                            title="Phụ đề GỐC đang dùng do phần mềm tự nhận dạng bằng Whisper STT (video không có file .srt tải sẵn)"
+                          >
+                            🎙 AI TỰ TẠO
+                          </span>
+                        ))}
                     </div>
                     <button
                       className="studio-track-clear-btn"

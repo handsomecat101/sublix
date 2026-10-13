@@ -34,7 +34,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
         items: [
           "Mở video có file .srt tải sẵn → Studio dùng LUÔN làm phụ đề gốc — chính xác hơn và khỏi chờ Whisper.",
           "Checkbox '📥 Tận dụng phụ đề đã tải (nếu có)' được TÍCH SẴN, hiện luôn 'có sẵn: en (YouTube), vi (YouTube)'.",
-          "Badge đỏ '📥 YouTube (.en)' trên thẻ Phụ Đề + trên lane PHỤ ĐỀ (TEXT) ở timeline để phân biệt bản sub.",
+          "Badge nguồn phụ đề đặt ở ĐƯỜNG TRACK (không gắn từng câu cho đỡ rối): đỏ '📥 PHỤ ĐỀ YOUTUBE (.en)' khi lấy từ YouTube — xanh '🎙 AI TỰ TẠO' khi phần mềm tự nhận dạng.",
           "Tab Tải Video: chip đổi thành '📝 Phụ đề YouTube: en, vi'; kèm manifest đánh dấu (video nào, ngôn ngữ nào, link, ngày tải) để quản lý về sau.",
         ],
       },

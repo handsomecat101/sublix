@@ -1300,6 +1300,10 @@ sublix/
 - Nút "🚀 Xem Trong Studio" từ danh sách KHÔNG đổi được video đang mở (Studio restore project cache `sublix_active_studio_project_v1`) — test bằng cách sửa cache; ghi nhận để teammate xem (không thuộc phạm vi bản này).
 - ⚠️ Phát hiện **6 ffmpeg treo** bám video cache cũ "Meta's…" (CPU 600–800s, không tự thoát) → ghi `BUG-062` (🔴 Open); đã kill khi test xong.
 
+### Cập nhật v0.11.32b (sau phản hồi PO)
+- PO chốt: **KHÔNG gắn badge từng câu** (rối) — gỡ badge per-block/per-card; marking đặt ở **ĐƯỜNG TRACK**: `💬 PHỤ ĐỀ (TEXT)` + badge 2 phiên bản — **đỏ "📥 PHỤ ĐỀ YOUTUBE (.en)"** khi dùng .srt tải sẵn, **xanh "🎙 AI TỰ TẠO"** khi Whisper nhận dạng. `SubtitleItem.source` vẫn lưu per-câu (dùng cho tooltip hover, không hiện badge).
+- Verify lại GUI cả 2 case: StarCraft → badge đỏ + 49 câu + 0 badge per-câu; `dialogue_2spk.wav` (không có .srt) → Whisper 5 câu + badge xanh. Ảnh `v01132b_track_badge_youtube.png` + `v01132b_track_badge_ai.png`.
+
 
 
 
