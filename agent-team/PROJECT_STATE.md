@@ -12,7 +12,7 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.30` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Bản Build Hiện Tại** | `v0.11.31` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
 | **Git Commit** | `f792f05` on `master` (`https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Sẵn sàng bàn giao (Master up-to-date, 0 build error, Antigravity tạm nghỉ theo yêu cầu PO anh Tuấn để các agent khác vào thử tài) |
 
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-SUBS-2026-10-13` | Fix phụ đề Tab Tải Video (bật checkbox mà không ra file): tách sub-pass riêng chống 429 + nút "📝 Tải phụ đề" + chip langs + backfill item cũ | **CommandCode** | 2026-10-13 | ✅ E2E thật: StarCraft ra `en.srt`+`vi.srt` (9:29), video mới tự ra `en.srt`, chip UI đo được; `BUG-061`; v0.11.31 |
 | `TSK-STUDIO-PERF-TIMELINE-FIX` | Sửa video nhảy player ngoài (thay bằng 🚀 Xem Trong Studio) & Khắc phục triệt để đơ timeline 323 câu / transcode ngầm 100% CPU | **Antigravity** | 2026-10-12 | ✅ Memoize 323 cards/blocks (`React.memo`), throttle onTimeUpdate 120ms, native video listeners, fix transcode oan |
 | `TSK-TTS-STRICT-INDEX-SAMPLE-PREVIEW` | Phân loại độc quyền giọng đọc theo từng Model TTS AI + Nghe thử mẫu giọng tiêu biểu trước khi load chọn (VietNeu, Kokoro 14 giọng sample WAV, Edge-TTS Cloud) | **Antigravity** | 2026-10-11 | ✅ Bỏ nút Tất cả models; dropdown của vai chỉ hiện voice của Model đang chọn; Nút ▶️ Mẫu trên từng card & spec; toggle dừng/phát chuẩn xác |
 | `TSK-TRACK-CLEAR-DYNAMIC-RANGE` | Sửa dứt điểm nút xóa track tiếng bảo toàn phụ đề, Hiển thị động 2 track Timeline & Menu chuột phải AI khoanh vùng | **Antigravity** | 2026-10-11 | ✅ `handleClearTrack` chỉ xóa `hasAudio`, bảo toàn 100% phụ đề, Timeline rỗng chỉ hiện Video & Audio gốc, Timeline Context Menu In/Out AI bóc tách + dịch + lồng tiếng độc lập |

@@ -501,6 +501,11 @@ export const sublix = {
     return await invoke<FileMeta | null>("downloader_file_meta", { path });
   },
 
+  /** v0.9.11: fetch subtitle (.srt) files for an already-downloaded video. */
+  async downloaderFetchSubtitles(url: string, videoFilename: string): Promise<string[]> {
+    return await invoke<string[]>("downloader_fetch_subtitles", { url, videoFilename });
+  },
+
   // BUG-051: how many bytes are free on the volume that would hold
   // a download at `path` (defaults to the internal downloads dir).
   async downloaderCheckDisk(path?: string): Promise<number> {
@@ -623,12 +628,16 @@ export interface DownloadMetaPayload {
   id: string;
   size_text?: string | null;
   resolution?: string | null;
+  /** v0.9.11: subtitle langs that actually landed on disk (null = not asked). */
+  subs_langs?: string[] | null;
 }
 
 // v0.9.6: on-demand probe result for a finished file.
 export interface FileMeta {
   size_text?: string | null;
   resolution?: string | null;
+  /** v0.9.11: subtitle langs sitting next to the file. */
+  subs_langs?: string[] | null;
 }
 
 export async function downloaderGetInfo(url: string): Promise<VideoInfo> {

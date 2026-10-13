@@ -1,4 +1,27 @@
 
+## v0.11.31 — 2026-10-13
+### Tab Tải Video: Phụ Đề "Chọn Mà Không Ra File" — Đã Sửa Dứt Điểm (Sub-Pass Riêng Chống 429)
+
+**Vấn đề (Anh Tuấn báo 13/10):** checkbox "Tự động trích xuất phụ đề (.srt)" bật lên nhưng không ra file phụ đề nào.
+
+**Điều tra bằng chạy thật (CLI + GUI):**
+- YouTube **CÓ** cho tải phụ đề: track gốc của video (ASR/uploader, vd `en`) tải bình thường — nhưng track **DỊCH tự động** (vd `vi`, `zh` trên video tiếng Anh) bị YouTube trả **HTTP 429 (Too Many Requests)**.
+- Lỗi cũ: phụ đề nằm CHUNG trong lệnh tải video → một track 429 làm chết luôn phase phụ đề (thậm chí kéo cả job).
+
+**Fix v0.11.31:**
+- **Sub-pass riêng:** video tải xong → chạy thêm một lượt yt-dlp độc lập `--skip-download --write-subs --write-auto-subs --convert-subs srt --ignore-errors` → track nào tải được thì về, track bị chặn tự bỏ qua, **video không bao giờ bị ảnh hưởng**.
+- **Nút "📝 Tải phụ đề"** trên mỗi video đã tải (bấm lúc nào cũng được, khỏi tải lại video) + chip **"📝 Phụ đề: en, vi"** khi có file; chip vàng "📝 Chưa có phụ đề" khi track đang bị chặn.
+- File `.srt` nằm **cùng thư mục video**; kết quả đối chiếu file THẬT trên đĩa (không tin log); command mới `downloader_fetch_subtitles`; `downloader:meta` thêm `subs_langs`.
+
+**Bằng chứng E2E (chạy thật):**
+- StarCraft `[uQnmfEka3vw]`: bấm "📝 Tải phụ đề" → ra `en.srt` (11.555B) + `vi.srt` (16.415B — "Nhiệt. Nhiệt.") lúc 9:29; chip "📝 Phụ đề: en, vi" hiện trên card.
+- Video mới "Me at the zoo" (checkbox BẬT khi tải): video xong → sub-pass tự chạy → ra `en.srt` (416B) + chip "📝 Phụ đề: en".
+- Ảnh: `agent-team/test-output-audit-giong/v01131_subs_chips.png`; unit test mới pass (scan `.srt` + tách id); `tsc` 0 lỗi.
+
+*(Ghi chú version: đội đã gọi các fix timeline 12/10 là "v0.11.30" trong tài liệu — bản này đánh số **v0.11.31** để không trùng; file version trong repo trước đó còn 0.11.29.)*
+
+---
+
 ## v0.11.29  2026-10-10
 ### Khi Phục SublixStudioView.tsx Sạch UTF-8 (Mất R5-R7 UI ở Studio, Giữ R5-R7 ở Rust)
 

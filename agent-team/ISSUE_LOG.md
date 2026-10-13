@@ -125,6 +125,11 @@
 | `BUG-059` | Nút "Chạy Video" làm Windows Media Player ngoài Desktop bật lên thay vì phát trong Studio | `src/views/DownloaderView.tsx` | Nút chính mặc định phải là "🚀 Xem Trong Studio" (`handlePlayInStudio`); nút mở ngoài đổi thành "🖥️ Player Ngoài" | ✅ Fixed |
 | `BUG-060` | Video 25 phút (323 câu) làm treo timeline + bấm Play đứng im + ffmpeg transcode ngầm 100% CPU | `src/views/SublixStudioView.tsx` | Memoize SegmentCard/TimelineBlock (`React.memo`), throttle `onTimeUpdate` 120ms, cấm transcode khi video đang pause, native video listeners | ✅ Fixed |
 
+### 🧾 Lỗi Fix Tại v0.11.31 (CommandCode — 2026-10-13):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-061` | Checkbox "trích xuất phụ đề" bật nhưng không ra file: phụ đề chạy CHUNG lệnh tải video → track dịch bị YouTube chặn 429 làm chết cả phase sub | `src-tauri/src/downloader/mod.rs`, `src/views/DownloaderView.tsx` | Việc phụ phải chạy PASS RIÊNG sau việc chính (`--skip-download ... --ignore-errors`) + đối chiếu file thật trên đĩa (`scan_subtitle_langs`), không bao giờ để lỗi phụ kéo chết việc chính | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build

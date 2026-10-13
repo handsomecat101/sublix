@@ -192,6 +192,7 @@ pub fn run() {
             downloader_reveal_file,
             downloader_open_file,
             downloader_downloads_dir,
+            downloader_fetch_subtitles,
             open_thanh_pham_folder,
             downloader_file_meta,
             transcode_for_preview,
@@ -1229,6 +1230,20 @@ fn downloader_open_file(path: String) -> Result<(), String> {
 #[tauri::command]
 fn downloader_downloads_dir(app: tauri::AppHandle) -> String {
     downloader::get_downloads_dir(&app).to_string_lossy().to_string()
+}
+
+/// v0.9.11 (PO bug "chọn phụ đề không dùng được"): fetch subtitle files for an
+/// already-downloaded video as a separate, 429-tolerant yt-dlp pass.
+#[tauri::command]
+async fn downloader_fetch_subtitles(
+    app: tauri::AppHandle,
+    url: String,
+    video_filename: String,
+) -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(move || downloader::fetch_subtitles_now(&app, &url, &video_filename))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// v0.9.10 (PO): open the ONE folder that holds both downloaded videos and

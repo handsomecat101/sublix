@@ -61,6 +61,8 @@ interface DownloadItem {
   error?: string | null;
   // v0.9.6: video resolution like "1920x1080" (filled at completion).
   resolution?: string | null;
+  // v0.9.11: subtitle langs actually on disk (meta event / backfill / retry).
+  subsLangs?: string[] | null;
   createdAt: number;
 }
 
@@ -168,6 +170,10 @@ export default function DownloaderView({
   // v0.9.4: default OFF — the owner only needs the video; subtitle fetching
   // is optional and YouTube can rate-limit it (429).
   const [extractSubtitles, setExtractSubtitles] = useState<boolean>(false);
+  // v0.9.11: item id whose subtitle fetch is running ("📝 Tải phụ đề").
+  const [subsBusyId, setSubsBusyId] = useState<string | null>(null);
+  // v0.9.11: one-line feedback for the subtitle fetch (success/warning).
+  const [subsNotice, setSubsNotice] = useState<string | null>(null);
   // v0.9.4: where downloads are stored on disk (shown in the header).
   const [dlDir, setDlDir] = useState<string>("");
 
@@ -257,12 +263,11 @@ export default function DownloaderView({
   // One probe per item per session.
   useEffect(() => {
     items.forEach((item) => {
-      if (
+      const needsMeta =
         item.status === "completed" &&
-        item.filePath &&
-        !item.resolution &&
-        !metaProbedRef.current[item.id]
-      ) {
+        !!item.filePath &&
+        (!item.resolution || item.subsLangs === undefined);
+      if (needsMeta && item.filePath && !metaProbedRef.current[item.id]) {
         metaProbedRef.current[item.id] = true;
         sublix
           .downloaderFileMeta(item.filePath)
@@ -275,6 +280,7 @@ export default function DownloaderView({
                       ...i,
                       sizeText: meta.size_text || i.sizeText,
                       resolution: meta.resolution ?? i.resolution,
+                      subsLangs: meta.subs_langs ?? i.subsLangs,
                     }
                   : i
               )
@@ -347,6 +353,7 @@ export default function DownloaderView({
                 ...item,
                 sizeText: p.size_text || item.sizeText,
                 resolution: p.resolution ?? item.resolution,
+                subsLangs: p.subs_langs ?? item.subsLangs,
               }
             : item
         )
@@ -358,6 +365,34 @@ export default function DownloaderView({
       pMeta.then((u) => u()).catch(() => {});
     };
   }, []);
+
+  // v0.9.11 (PO bug "chọn phụ đề không dùng được"): tải file phụ đề cho video
+  // đã tải — chạy pass riêng với --ignore-errors (track dịch bị YouTube chặn
+  // 429 sẽ tự bị bỏ qua, track gốc vẫn về đủ).
+  async function handleFetchSubs(item: DownloadItem) {
+    if (subsBusyId) return;
+    setSubsBusyId(item.id);
+    setSubsNotice(null);
+    try {
+      const langs = await sublix.downloaderFetchSubtitles(item.url, item.filename || "");
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, subsLangs: langs } : i))
+      );
+      if (langs.length > 0) {
+        setSubsNotice(
+          `📝 Đã tải phụ đề: ${langs.join(", ")} (${langs.length} file .srt — nằm cùng thư mục với video).`
+        );
+      } else {
+        setSubsNotice(
+          "⚠️ YouTube không trả về track phụ đề nào cho video này (các track dịch đang bị chặn tạm thời — thử lại sau vài phút)."
+        );
+      }
+    } catch (err) {
+      setSubsNotice(`⚠️ Không tải được phụ đề: ${err}`);
+    } finally {
+      setSubsBusyId(null);
+    }
+  }
 
   const currentPlatform = detectPlatform(url);
   const currentPlatformMeta = PLATFORM_META[currentPlatform] || PLATFORM_META.generic_video;
@@ -835,6 +870,8 @@ export default function DownloaderView({
               <span>💬 Tự động trích xuất phụ đề (.srt) nếu có (vi, en, ja, zh)</span>
             </label>
           </div>
+
+          {subsNotice && <div className="downloader-sub-note">{subsNotice}</div>}
         </div>
 
         {/* ACTION ROW */}
@@ -971,6 +1008,18 @@ export default function DownloaderView({
                             <span className="meta-chip">🎞 {resolutionLabel(item.resolution)}</span>
                           )}
                           {item.sizeText && <span className="meta-chip">💾 {item.sizeText}</span>}
+                          {item.subsLangs && item.subsLangs.length > 0 ? (
+                            <span className="meta-chip">
+                              📝 Phụ đề: {item.subsLangs.join(", ")}
+                            </span>
+                          ) : item.extractSubtitles && item.status === "completed" ? (
+                            <span
+                              className="meta-chip meta-chip-warn"
+                              title="YouTube có thể đang chặn tạm thời các track phụ đề dịch (429) — bấm 'Tải phụ đề' để thử lại."
+                            >
+                              📝 Chưa có phụ đề
+                            </span>
+                          ) : null}
                           {item.filePath && (
                             <span className="meta-chip item-file-path" title={item.filePath}>
                               📁 {item.filePath}
@@ -1115,6 +1164,20 @@ export default function DownloaderView({
                           title="Mở file trong Windows Explorer"
                         >
                           <IconFolder size={14} /> Mở Thư Mục
+                        </button>
+
+                        <button
+                          type="button"
+                          className="item-btn secondary"
+                          disabled={subsBusyId === item.id}
+                          onClick={() => handleFetchSubs(item)}
+                          title="Tải/cập nhật file phụ đề (.srt) từ YouTube — chạy riêng, không đụng video. Track gốc tải được; track dịch có thể bị YouTube chặn tạm thời."
+                        >
+                          {subsBusyId === item.id
+                            ? "⏳ Đang tải sub..."
+                            : item.subsLangs && item.subsLangs.length > 0
+                            ? "📝 Tải lại phụ đề"
+                            : "📝 Tải phụ đề"}
                         </button>
                       </div>
                     )}

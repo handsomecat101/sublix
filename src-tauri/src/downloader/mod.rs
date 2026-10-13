@@ -800,27 +800,14 @@ fn build_download_command(
         cmd.arg("--cookies").arg(cf);
     }
 
-    if req.extract_subtitles {
-        cmd.arg("--write-subs")
-            .arg("--write-auto-subs")
-            .arg("--convert-subs")
-            .arg("srt")
-            // v0.9.2 (429 bug): requesting several subtitle languages in a
-            // burst trips YouTube's rate limit (HTTP 429). Let yt-dlp
-            // throttle between subtitle requests. 2s was not enough during
-            // back-to-back runs — 5s passed cleanly in CLI verification.
-            .arg("--sleep-subtitles")
-            .arg("5");
-        if let Some(ref langs) = req.subtitle_langs {
-            if !langs.is_empty() {
-                cmd.arg("--sub-langs").arg(langs.join(","));
-            } else {
-                cmd.arg("--sub-langs").arg("vi,en,ja,zh");
-            }
-        } else {
-            cmd.arg("--sub-langs").arg("vi,en,ja,zh");
-        }
-    }
+    // v0.9.11 (PO bug "chọn phụ đề không dùng được"): subtitles are NO LONGER
+    // fetched inside the main download command. Real-world verification on
+    // YouTube: uploader/ASR tracks (e.g. `en`) download fine, but the
+    // auto-TRANSLATED tracks (`vi`, `zh` on an English video) answer
+    // HTTP 429, and one 429 used to abort the whole subtitle phase. They are
+    // now fetched by a separate pass (`fetch_subtitles_pass`) after the video
+    // is safely on disk, where `--ignore-errors` skips blocked translated
+    // tracks and the video stays untouched.
 
     let is_audio = req.format.starts_with("audio");
     if !is_audio {
@@ -847,6 +834,150 @@ fn build_download_command(
     cmd.creation_flags(CREATE_NO_WINDOW);
 
     cmd
+}
+
+/// v0.9.11: extract the `[video_id]` tag from a yt-dlp output filename.
+/// `Ti [abc def] ghi [uQnmfEka3vw].mp4` → `uQnmfEka3vw`.
+fn extract_bracketed_video_id(filename: &str) -> Option<String> {
+    let start = filename.rfind('[')?;
+    let end = filename[start..].find(']')? + start;
+    let id = filename[start + 1..end].trim();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+/// v0.9.11: langs of the `.srt` files that sit next to the video
+/// (`... [<video_id>].<lang>.srt`), sorted and de-duplicated.
+pub fn scan_subtitle_langs(save_dir: &Path, video_filename: &str) -> Vec<String> {
+    let Some(id) = extract_bracketed_video_id(video_filename) else {
+        return Vec::new();
+    };
+    let tag = format!("[{id}].");
+    let mut langs: Vec<String> = fs::read_dir(save_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.ends_with(".srt") {
+                        return None;
+                    }
+                    let pos = name.find(&tag)?;
+                    let lang = name[pos + tag.len()..].trim_end_matches(".srt");
+                    if lang.is_empty() {
+                        None
+                    } else {
+                        Some(lang.to_string())
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    langs.sort();
+    langs.dedup();
+    langs
+}
+
+/// v0.9.11 (PO bug "chọn phụ đề không dùng được"): fetch subtitle tracks in a
+/// SEPARATE yt-dlp run. Verified against real YouTube: uploader/ASR tracks
+/// download fine, while auto-translated tracks answer HTTP 429.
+/// `--ignore-errors` lets the good tracks land even when some are blocked.
+/// Returns the langs found on disk (empty vec = ran fine, nothing available),
+/// None when yt-dlp itself could not be executed.
+fn fetch_subtitles_pass(
+    ytdlp_bin: &Path,
+    save_dir: &Path,
+    url: &str,
+    video_filename: &str,
+    js_runtime: Option<&str>,
+    langs: &[String],
+) -> Option<Vec<String>> {
+    let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
+    let mut cmd = Command::new(ytdlp_bin);
+    if let Some(token) = js_runtime {
+        cmd.arg("--js-runtimes").arg(token);
+    }
+    if get_platform(url) == "youtube" {
+        cmd.arg("--remote-components").arg("ejs:github");
+    }
+    let ffmpeg_bin = crate::dubbing::find_ffmpeg();
+    if ffmpeg_bin.exists() {
+        if let Some(ffmpeg_dir) = ffmpeg_bin.parent() {
+            cmd.arg("--ffmpeg-location").arg(ffmpeg_dir);
+        }
+    }
+    cmd.arg("-o")
+        .arg(&out_template)
+        .arg("--skip-download")
+        .arg("--write-subs")
+        .arg("--write-auto-subs")
+        .arg("--convert-subs")
+        .arg("srt")
+        // YouTube 429s the auto-translated tracks — skip them, keep the rest.
+        .arg("--ignore-errors")
+        .arg("--sleep-subtitles")
+        .arg("2")
+        .arg("--sub-langs")
+        .arg(langs.join(","))
+        .arg("--no-colors")
+        .arg("--no-warnings")
+        .arg("--no-playlist")
+        .arg("--")
+        .arg(url);
+    cmd.env("PYTHONIOENCODING", "utf-8");
+    cmd.env("PYTHONUTF8", "1");
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = match cmd.output() {
+        Ok(o) => o,
+        Err(e) => {
+            warn!("⚠️ subtitle pass could not run for {}: {}", url, e);
+            return None;
+        }
+    };
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.trim().is_empty() {
+        info!("📝 subtitle pass stderr for {}: {}", url, stderr.trim());
+    }
+    Some(scan_subtitle_langs(save_dir, video_filename))
+}
+
+/// v0.9.11: on-demand subtitle fetch for an already-downloaded video
+/// (the "📝 Tải phụ đề" button + CLI path). Runs the same separate pass the
+/// download flow uses; never touches the video file.
+pub fn fetch_subtitles_now(app: &AppHandle, url: &str, video_filename: &str) -> Result<Vec<String>> {
+    if !is_valid_http_url(url) {
+        anyhow::bail!("Link không hợp lệ: chỉ chấp nhận URL http(s)://");
+    }
+    let cfg = crate::config::AppConfig::load(app);
+    let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
+    let js_runtime_token: Option<String> = match find_js_runtime() {
+        Ok(Some((runtime, path))) => Some(format!("{}:{}", runtime, path.display())),
+        Ok(None) | Err(_) => None,
+    };
+    let save_dir = get_downloads_dir(app);
+    fs::create_dir_all(&save_dir)?;
+    let langs = vec![
+        "vi".to_string(),
+        "en".to_string(),
+        "ja".to_string(),
+        "zh".to_string(),
+    ];
+    fetch_subtitles_pass(
+        &ytdlp_bin,
+        &save_dir,
+        url,
+        video_filename,
+        js_runtime_token.as_deref(),
+        &langs,
+    )
+    .ok_or_else(|| anyhow::anyhow!("Không chạy được yt-dlp để tải phụ đề (kiểm tra Python/yt-dlp)"))
 }
 
 struct DrainResult {
@@ -1372,6 +1503,51 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             final_res.detected_filename.clone()
         };
 
+        // v0.9.11: separate subtitle pass — the video is already on disk, so a
+        // YouTube 429 on translated tracks can never hurt the download result.
+        let subs_langs: Option<Vec<String>> = if final_res.is_success
+            && req_clone.extract_subtitles
+            && effective_output.is_some()
+        {
+            let video_fname = effective_output
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| effective_name.clone());
+            let langs: Vec<String> = req_clone
+                .subtitle_langs
+                .clone()
+                .filter(|l| !l.is_empty())
+                .unwrap_or_else(|| {
+                    vec![
+                        "vi".to_string(),
+                        "en".to_string(),
+                        "ja".to_string(),
+                        "zh".to_string(),
+                    ]
+                });
+            info!(
+                "🎬 job {}: fetching subtitle tracks (separate pass) for {}",
+                job_id, video_fname
+            );
+            match fetch_subtitles_pass(
+                &ytdlp_bin_clone,
+                &save_dir_clone,
+                &req_clone.url,
+                &video_fname,
+                js_runtime_token.as_deref(),
+                &langs,
+            ) {
+                Some(found) => {
+                    info!("📝 job {}: subtitle langs on disk: {:?}", job_id, found);
+                    Some(found)
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+
         // v0.9.6: ground-truth size + resolution of the finished file, used
         // for the completed row and the `downloader:meta` event.
         let (probed_size, probed_resolution) = effective_output
@@ -1402,6 +1578,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     id: job_id.clone(),
                     size_text: probed_size.clone(),
                     resolution: probed_resolution.clone(),
+                    subs_langs: subs_langs.clone(),
                 },
             );
         } else if is_subtitle_only_failure(req_clone.extract_subtitles, &final_res.stderr_text, has_own_output) {
@@ -1431,6 +1608,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                     id: job_id.clone(),
                     size_text: probed_size.clone(),
                     resolution: probed_resolution.clone(),
+                    subs_langs: None,
                 },
             );
         } else {
@@ -1623,6 +1801,9 @@ pub struct DownloadMetaPayload {
     pub size_text: Option<String>,
     #[serde(default)]
     pub resolution: Option<String>,
+    /// v0.9.11: subtitle langs that actually landed on disk (None = not asked).
+    #[serde(default)]
+    pub subs_langs: Option<Vec<String>>,
 }
 
 /// v0.9.6: on-demand metadata for the download list (lazy backfill for
@@ -1631,6 +1812,9 @@ pub struct DownloadMetaPayload {
 pub struct FileMeta {
     pub size_text: Option<String>,
     pub resolution: Option<String>,
+    /// v0.9.11: subtitle langs sitting next to this file (None when none).
+    #[serde(default)]
+    pub subs_langs: Option<Vec<String>>,
 }
 
 pub fn file_meta(path_str: &str) -> Option<FileMeta> {
@@ -1639,9 +1823,18 @@ pub fn file_meta(path_str: &str) -> Option<FileMeta> {
         return None;
     }
     let (size_text, resolution) = probe_media_meta(p);
+    let file_name = p
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let subs_langs = p
+        .parent()
+        .map(|dir| scan_subtitle_langs(dir, &file_name))
+        .filter(|langs| !langs.is_empty());
     Some(FileMeta {
         size_text,
         resolution,
+        subs_langs,
     })
 }
 
@@ -2040,6 +2233,26 @@ mod tests {
         assert!(!is_subtitle_only_failure(true, sub_429, false)); // no media output on disk
         assert!(!is_subtitle_only_failure(true, "ERROR: Video unavailable", true));
         assert!(!is_subtitle_only_failure(true, "", true));
+    }
+
+    #[test]
+    fn test_scan_subtitle_langs_and_filename_id() {
+        let dir = std::env::temp_dir().join(format!("sublix_subs_scan_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        fs::write(dir.join("Video [uQnmfEka3vw].en.srt"), b"x").expect("write en");
+        fs::write(dir.join("Video [uQnmfEka3vw].vi.srt"), b"x").expect("write vi");
+        fs::write(dir.join("Video [uQnmfEka3vw].ja.vtt"), b"x").expect("write vtt decoy");
+        fs::write(dir.join("Other [AAAAAAAAAAA].en.srt"), b"x").expect("write decoy");
+        let langs = scan_subtitle_langs(&dir, "Video [uQnmfEka3vw].mp4");
+        assert_eq!(langs, vec!["en".to_string(), "vi".to_string()]);
+        assert_eq!(
+            extract_bracketed_video_id("Ti [abc] ghi [uQnmfEka3vw].mp4").as_deref(),
+            Some("uQnmfEka3vw")
+        );
+        assert_eq!(extract_bracketed_video_id("no-brackets.mp4"), None);
+        assert!(scan_subtitle_langs(&dir, "no-brackets.mp4").is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

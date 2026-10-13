@@ -23,10 +23,29 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.31",
+    date: "13/10/2026",
+    title: "Tab Tải Video: Phụ Đề Hoạt Động Thật (Sub-Pass Riêng Chống 429 + Nút Tải Phụ Đề)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi + Tính Năng",
+        icon: "📝",
+        items: [
+          "Checkbox 'Tự động trích xuất phụ đề (.srt)' giờ hoạt động thật — trước đây bật lên nhưng không ra file.",
+          "Nguyên nhân gốc: track GỐC của YouTube (en/ASR) tải được, nhưng track DỊCH tự động (vi/ja/zh) có thể bị YouTube chặn 429 — lỗi cũ nằm chung lệnh tải video nên chết cả phase phụ đề.",
+          "Giờ phụ đề tải bằng lượt RIÊNG sau khi video xong (--ignore-errors): track nào về được thì về, video luôn an toàn.",
+          "Nút mới '📝 Tải phụ đề' / '📝 Tải lại phụ đề' trên từng video đã tải — lấy/thử lại phụ đề bất cứ lúc nào.",
+          "Chip '📝 Phụ đề: en, vi' khi có file .srt (nằm cạnh video); chip vàng 'Chưa có phụ đề' khi YouTube đang chặn tạm thời.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.29",
     date: "10/10/2026",
     title: "Khôi Phục SublixStudioView.tsx Sạch UTF-8 (Trade-off: Mất R5-R7 UI ở Studio)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Nghiêm Trọng",

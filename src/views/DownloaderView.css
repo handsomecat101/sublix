@@ -782,3 +782,21 @@
   font-size: 0.68rem;
   flex-shrink: 0;
 }
+
+/* v0.9.11 — phụ đề: chip cảnh báo + dòng thông báo dưới checkbox */
+.item-file-meta .meta-chip.meta-chip-warn {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.downloader-sub-note {
+  margin-top: 8px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+}

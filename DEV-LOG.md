@@ -1252,6 +1252,34 @@ sublix/
 4. **Quy Tắc Build:**
    - TUYỆT ĐỐI **KHÔNG CHẠY `cargo build --release`** (BUG-H07).
 
+---
+
+## Session 31 — 2026-10-13 09:20 → 10:30 (CommandCode) — v0.11.31 (Tab Tải Video: Phụ Đề Hoạt Động Thật — Sub-Pass Riêng + Nút "📝 Tải Phụ Đề")
+
+### User intent (Telegram 13/10)
+- "Phần download có lựa chọn download cả file sub nhưng chọn vào không dùng được. Liệu YouTube có cho download file sub không? Nghiên cứu rồi hoàn thiện tính năng đó."
+
+### Điều tra (chạy thật, có bằng chứng)
+- yt-dlp 2026.08.19 trên máy: `--list-subs` cho video StarCraft cho thấy ~150+ auto-caption (đa số là track DỊCH tự động).
+- Test riêng từng loại track: `en`/`en-orig` (track GỐC) → tải OK (ra `.srt` 11.555B); `vi`/`zh-Hans` (track DỊCH) → **HTTP 429 Too Many Requests**. Tái hiện đúng lỗi PO.
+- Kết luận: YouTube CÓ cho tải phụ đề (track gốc), nhưng track dịch bị chặn; lỗi cũ do sub chạy CHUNG lệnh tải video → 1 track 429 làm chết cả phase sub.
+
+### Fix (v0.11.31)
+- Bỏ sub khỏi lệnh tải chính; thêm `fetch_subtitles_pass()` chạy RIÊNG sau khi video xong (`--skip-download --write-subs --write-auto-subs --convert-subs srt --ignore-errors --sleep-subtitles 2`).
+- Scan file `.srt` THẬT trên đĩa theo tag `[video_id]` (`scan_subtitle_langs`) → meta event gửi `subs_langs` → chip "📝 Phụ đề: en, vi"; `FileMeta` thêm `subs_langs` (backfill cho item cũ).
+- Nút "📝 Tải phụ đề"/"Tải lại phụ đề" trên mỗi item (command mới `downloader_fetch_subtitles`) + dòng notice kết quả dưới checkbox.
+- UI: `DownloaderView.tsx/.css`, `tauri.ts`; backend: `downloader/mod.rs`, `lib.rs`.
+
+### Verify (LUẬT CHẠY THẬT)
+- StarCraft: bấm nút → `en.srt` + `vi.srt` ("Nhiệt. Nhiệt.") ra đĩa lúc 9:29 — chip "📝 Phụ đề: en, vi" visible (đo `getBoundingClientRect` x:657 y:230).
+- Video mới "Me at the zoo" (checkbox BẬT): video xong → sub-pass tự chạy → `en.srt` (416B) + chip "📝 Phụ đề: en"; item test đã xoá khỏi lịch sử sau nghiệm thu.
+- `cargo test` 11/11 (2 test mới: scan langs + tách id), `tsc` 0 lỗi. Debug port đã đóng, app sạch đã mở lại cho PO.
+- Ảnh: `test-output-audit-giong/v01131_subs_chips.png`.
+
+### Ghi chú ca
+- 429 là giới hạn phía YouTube với track dịch — UX mới: track gốc luôn về; bấm lại nút khi cần. Dọn rolling AGENT_CHAT: 9 tin cũ (10-08/10-09) → `ARCHIVE/AGENT_CHAT_ARCHIVE.md`.
+- Không đụng file của các ca khác; file version đồng bộ toàn bộ về v0.11.31 (trước đó repo còn 0.11.29 — đội gọi fix timeline 12/10 là "0.11.30" trong tài liệu).
+
 
 
 
