@@ -380,7 +380,7 @@ export default function DownloaderView({
       );
       if (langs.length > 0) {
         setSubsNotice(
-          `📝 Đã tải phụ đề: ${langs.join(", ")} (${langs.length} file .srt — nằm cùng thư mục với video).`
+          `📝 Đã tải phụ đề YouTube: ${langs.join(", ")} (${langs.length} file .srt — nằm cùng thư mục với video, Studio sẽ tự tận dụng).`
         );
       } else {
         setSubsNotice(
@@ -1010,7 +1010,7 @@ export default function DownloaderView({
                           {item.sizeText && <span className="meta-chip">💾 {item.sizeText}</span>}
                           {item.subsLangs && item.subsLangs.length > 0 ? (
                             <span className="meta-chip">
-                              📝 Phụ đề: {item.subsLangs.join(", ")}
+                              📝 Phụ đề YouTube: {item.subsLangs.join(", ")}
                             </span>
                           ) : item.extractSubtitles && item.status === "completed" ? (
                             <span

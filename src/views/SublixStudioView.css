@@ -3452,5 +3452,25 @@
   box-shadow: 0 0 6px rgba(244, 114, 182, 0.4);
 }
 
+/* v0.11.32 (PO): badge nguồn phụ đề "YouTube" trên timeline + thẻ Phụ Đề */
+.studio-track-src-badge,
+.studio-src-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #fff;
+  background: #e11d48;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.studio-src-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
 
 

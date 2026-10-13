@@ -176,6 +176,7 @@ pub fn run() {
             play_in_vlc,
             dubbing_pick_media_file,
             dubbing_get_voices,
+            dubbing_available_subs,
             dubbing_analyze,
             dubbing_preview_tts,
             dubbing_export,
@@ -1057,6 +1058,13 @@ fn dubbing_get_voices() -> Vec<dubbing::VoicePreset> {
     dubbing::get_preset_voices()
 }
 
+/// v0.11.32 (PO): liệt kê phụ đề có sẵn cạnh video (đánh dấu file nào là YouTube)
+/// để Studio hiện "có sẵn: en (YouTube), vi" trước khi chạy phân tích.
+#[tauri::command]
+fn dubbing_available_subs(file_path: String) -> Vec<dubbing::AvailableSubtitle> {
+    dubbing::available_subtitles(&file_path)
+}
+
 #[tauri::command]
 async fn dubbing_analyze(
     app: tauri::AppHandle,
@@ -1066,9 +1074,10 @@ async fn dubbing_analyze(
     time_limit_sec: Option<f64>,
     start_offset_sec: Option<f64>,
     expected_speakers: Option<usize>,
+    prefer_existing_srt: Option<bool>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::analyze_and_create_project(
+        dubbing::analyze_and_create_project_full(
             Some(&app),
             &file_path,
             source_lang,
@@ -1076,6 +1085,7 @@ async fn dubbing_analyze(
             time_limit_sec,
             start_offset_sec,
             expected_speakers,
+            prefer_existing_srt,
         )
     })
     .await

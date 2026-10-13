@@ -634,6 +634,34 @@ export default function SublixStudioView({
   const [workflowOptTranslate, setWorkflowOptTranslate] = useState<boolean>(true);
   const [workflowOptVoice, setWorkflowOptVoice] = useState<boolean>(false);
 
+  // v0.11.32 (PO): tận dụng phụ đề đã tải (YouTube .srt cạnh video) — mặc định BẬT.
+  const [preferExistingSrt, setPreferExistingSrt] = useState<boolean>(true);
+  const [availableSubs, setAvailableSubs] = useState<Array<{ lang: string; source: string }>>([]);
+  // v0.11.32 (PO): nguồn phụ đề đang dùng — có giá trị "srt:<lang>" khi lấy từ
+  // file YouTube tải sẵn → hiện badge "📥 YouTube" trên timeline để phân biệt.
+  const [transcriptSource, setTranscriptSource] = useState<string | null>(null);
+
+  // v0.11.32: khi đổi video → dò phụ đề có sẵn cạnh video để hiển thị lựa chọn.
+  useEffect(() => {
+    setTranscriptSource(null);
+    if (!filePath) {
+      setAvailableSubs([]);
+      return;
+    }
+    let alive = true;
+    sublix
+      .dubbingAvailableSubs(filePath)
+      .then((subs) => {
+        if (alive) setAvailableSubs(subs);
+      })
+      .catch(() => {
+        if (alive) setAvailableSubs([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [filePath]);
+
   const [speakerFilter, setSpeakerFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -2520,7 +2548,8 @@ export default function SublixStudioView({
         undefined, // Chỉ bóc tách sub gốc, không dịch
         durLimit,
         startOffset,
-        1 // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
+        1, // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
+        preferExistingSrt
       );
 
       if (project) {
@@ -2530,6 +2559,15 @@ export default function SublixStudioView({
         }
         if (project.filmstrip_thumbs && project.filmstrip_thumbs.length > 0) {
           setFilmstripThumbs(project.filmstrip_thumbs);
+        }
+
+        // v0.11.32 (PO): backend dùng phụ đề có sẵn cạnh video (YouTube .srt)
+        // thì báo rõ — chính xác hơn và không tốn thời gian chạy Whisper.
+        setTranscriptSource(project.transcript_source ?? null);
+        if (project.transcript_source?.startsWith("srt:")) {
+          showToast(
+            `📝 Đã dùng phụ đề có sẵn (.${project.transcript_source.split(":")[1]}.srt) — chuẩn hơn nhận dạng giọng nói, khỏi chờ Whisper`
+          );
         }
 
         // Tạo vai thuyết minh chuẩn "Thuyết minh AI" cho toàn bộ timeline lồng tiếng
@@ -2959,7 +2997,8 @@ export default function SublixStudioView({
         targetLang,
         durLimit,
         startOffset,
-        expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined
+        expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined,
+        preferExistingSrt
       );
 
       if (project) {
@@ -2969,6 +3008,14 @@ export default function SublixStudioView({
         }
         if (project.filmstrip_thumbs && project.filmstrip_thumbs.length > 0) {
           setFilmstripThumbs(project.filmstrip_thumbs);
+        }
+
+        // v0.11.32 (PO): báo khi transcript lấy từ phụ đề có sẵn cạnh video.
+        setTranscriptSource(project.transcript_source ?? null);
+        if (project.transcript_source?.startsWith("srt:")) {
+          showToast(
+            `📝 Đã dùng phụ đề có sẵn (.${project.transcript_source.split(":")[1]}.srt) — chuẩn hơn nhận dạng giọng nói, khỏi chờ Whisper`
+          );
         }
 
         let mappedSpeakers: SpeakerItem[] = [];
@@ -3970,6 +4017,14 @@ export default function SublixStudioView({
                       <span className="studio-step-card-status">
                         {segments.length} câu • {sttLang.toUpperCase()}{workflowOptTranslate ? ` ➔ ${targetLang.toUpperCase()}` : " (Gốc)"}
                       </span>
+                      {transcriptSource?.startsWith("srt:") && (
+                        <span
+                          className="studio-src-badge"
+                          title={`Phụ đề gốc đang dùng từ file YouTube (.${transcriptSource.split(":")[1]}.srt) — bật/tắt tại mục "📥 Tận dụng phụ đề đã tải"`}
+                        >
+                          📥 YouTube (.{transcriptSource.split(":")[1]})
+                        </span>
+                      )}
                       {openSubCard ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                     </div>
                   </div>
@@ -4006,6 +4061,26 @@ export default function SublixStudioView({
                           <option value="large-v3-turbo">Whisper Large-v3-Turbo (GPU Siêu Nhanh)</option>
                           <option value="base">Whisper Base (Nhẹ & Nhanh)</option>
                         </select>
+                      </div>
+
+                      {/* v0.11.32 (PO): tận dụng phụ đề đã tải — TÍCH SẴN mặc định */}
+                      <div className="studio-toggle-row" style={{ padding: "6px 8px", background: "rgba(56, 189, 248, 0.06)", borderRadius: 6 }}>
+                        <span className="studio-toggle-label" style={{ fontWeight: 600 }}>
+                          📥 Tận dụng phụ đề đã tải (nếu có)
+                          {availableSubs.length > 0 && (
+                            <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 6 }}>
+                              — có sẵn: {availableSubs.map((s) => `${s.lang}${s.source === "youtube" ? " (YouTube)" : ""}`).join(", ")}
+                            </span>
+                          )}
+                        </span>
+                        <label className="studio-switch" title="Khi bật: nếu video có file .srt tải sẵn (YouTube), Studio dùng luôn làm phụ đề gốc — chính xác hơn và nhanh hơn chạy Whisper">
+                          <input
+                            type="checkbox"
+                            checked={preferExistingSrt}
+                            onChange={(e) => setPreferExistingSrt(e.target.checked)}
+                          />
+                          <span className="studio-slider" />
+                        </label>
                       </div>
 
                       {/* Section 1.2: Tùy chọn dịch thuật phụ đề */}
@@ -6160,6 +6235,14 @@ export default function SublixStudioView({
                   <div className="studio-track-header-item">
                     <div className="studio-track-header-left">
                       <span>💬 PHỤ ĐỀ (TEXT)</span>
+                      {transcriptSource?.startsWith("srt:") && (
+                        <span
+                          className="studio-track-src-badge"
+                          title={`Phụ đề gốc đang dùng từ file YouTube (.${transcriptSource.split(":")[1]}.srt) — bật/tắt tại mục "📥 Tận dụng phụ đề đã tải"`}
+                        >
+                          📥 YOUTUBE (.{transcriptSource.split(":")[1]})
+                        </span>
+                      )}
                     </div>
                     <button
                       className="studio-track-clear-btn"

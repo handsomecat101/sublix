@@ -838,7 +838,7 @@ fn build_download_command(
 
 /// v0.9.11: extract the `[video_id]` tag from a yt-dlp output filename.
 /// `Ti [abc def] ghi [uQnmfEka3vw].mp4` → `uQnmfEka3vw`.
-fn extract_bracketed_video_id(filename: &str) -> Option<String> {
+pub(crate) fn extract_bracketed_video_id(filename: &str) -> Option<String> {
     let start = filename.rfind('[')?;
     let end = filename[start..].find(']')? + start;
     let id = filename[start + 1..end].trim();
@@ -879,6 +879,60 @@ pub fn scan_subtitle_langs(save_dir: &Path, video_filename: &str) -> Vec<String>
     langs.sort();
     langs.dedup();
     langs
+}
+
+/// v0.11.32 (PO — "ghi marking phụ đề YouTube cho dễ quản lý"): tên file
+/// manifest nằm trong thư mục downloads, ghi dấu mọi phụ đề do app tải từ YouTube.
+pub const SUBTITLE_MANIFEST_FILENAME: &str = "sublix_subtitles.json";
+
+fn read_subtitle_manifest(save_dir: &Path) -> Vec<serde_json::Value> {
+    fs::read_to_string(save_dir.join(SUBTITLE_MANIFEST_FILENAME))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<serde_json::Value>>(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Kiểm tra cặp (video_id, lang) có được ĐÁNH DẤU là phụ đề tải từ YouTube không.
+pub fn is_youtube_subtitle(save_dir: &Path, video_id: &str, lang: &str) -> bool {
+    read_subtitle_manifest(save_dir).iter().any(|entry| {
+        entry.get("video_id").and_then(|v| v.as_str()) == Some(video_id)
+            && entry.get("lang").and_then(|v| v.as_str()) == Some(lang)
+            && entry.get("source").and_then(|v| v.as_str()) == Some("youtube")
+    })
+}
+
+/// Ghi/refresh manifest đánh dấu các file `.srt` vừa tải từ YouTube
+/// (video nào, ngôn ngữ nào, link gốc, tải lúc nào) để lần sau dễ quản lý.
+fn mark_youtube_subtitles(save_dir: &Path, video_filename: &str, url: &str, langs: &[String]) {
+    if langs.is_empty() {
+        return;
+    }
+    let Some(video_id) = extract_bracketed_video_id(video_filename) else {
+        return;
+    };
+    let stem = Path::new(video_filename)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| video_filename.to_string());
+    let mut entries = read_subtitle_manifest(save_dir);
+    entries.retain(|entry| entry.get("video_id").and_then(|v| v.as_str()) != Some(video_id.as_str()));
+    let downloaded_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    for lang in langs {
+        entries.push(serde_json::json!({
+            "video_id": video_id,
+            "lang": lang,
+            "source": "youtube",
+            "url": url,
+            "file": format!("{stem}.{lang}.srt"),
+            "downloaded_at": downloaded_at,
+        }));
+    }
+    if let Ok(text) = serde_json::to_string_pretty(&entries) {
+        let _ = fs::write(save_dir.join(SUBTITLE_MANIFEST_FILENAME), text);
+    }
 }
 
 /// v0.9.11 (PO bug "chọn phụ đề không dùng được"): fetch subtitle tracks in a
@@ -945,7 +999,9 @@ fn fetch_subtitles_pass(
     if !stderr.trim().is_empty() {
         info!("📝 subtitle pass stderr for {}: {}", url, stderr.trim());
     }
-    Some(scan_subtitle_langs(save_dir, video_filename))
+    let langs_found = scan_subtitle_langs(save_dir, video_filename);
+    mark_youtube_subtitles(save_dir, video_filename, url, &langs_found);
+    Some(langs_found)
 }
 
 /// v0.9.11: on-demand subtitle fetch for an already-downloaded video

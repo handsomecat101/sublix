@@ -13,8 +13,8 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.11.31` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `f792f05` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Sẵn sàng bàn giao (Master up-to-date, 0 build error, Antigravity tạm nghỉ theo yêu cầu PO anh Tuấn để các agent khác vào thử tài) |
+| **Git Commit** | `21a7028` on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Sẵn sàng làm việc (Master up-to-date, 0 build error, Antigravity online trở lại cùng team) |
 
 ---
 

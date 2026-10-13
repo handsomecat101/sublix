@@ -398,6 +398,11 @@ export const sublix = {
     return await invoke<VoicePreset[]>("dubbing_get_voices");
   },
 
+  /** v0.11.32: phụ đề có sẵn cạnh video (đánh dấu file nào là phụ đề YouTube). */
+  async dubbingAvailableSubs(filePath: string): Promise<AvailableSubtitle[]> {
+    return await invoke<AvailableSubtitle[]>("dubbing_available_subs", { filePath });
+  },
+
   async voiceModelList(): Promise<VoiceModelStatus[]> {
     return await invoke<VoiceModelStatus[]>("voice_model_list");
   },
@@ -424,7 +429,8 @@ export const sublix = {
     targetLang?: string,
     timeLimitSec?: number,
     startOffsetSec?: number,
-    expectedSpeakers?: number
+    expectedSpeakers?: number,
+    preferExistingSrt?: boolean
   ): Promise<DubbingProject> {
     return await invoke<DubbingProject>("dubbing_analyze", {
       filePath,
@@ -433,6 +439,7 @@ export const sublix = {
       timeLimitSec: timeLimitSec && timeLimitSec > 0 ? timeLimitSec : null,
       startOffsetSec: startOffsetSec && startOffsetSec > 0 ? startOffsetSec : null,
       expectedSpeakers: expectedSpeakers && expectedSpeakers > 0 ? expectedSpeakers : null,
+      preferExistingSrt: preferExistingSrt === undefined ? null : preferExistingSrt,
     });
   },
 
@@ -570,8 +577,16 @@ export interface DubbingProject {
   time_limit_sec?: number | null;
   /** v0.10.0: "sherpa" | "heuristic" | "minimax" */
   diarization_engine?: "sherpa" | "heuristic" | string;
+  /** v0.11.32: "whisper" hoặc "srt:<lang>" khi dùng phụ đề có sẵn cạnh video. */
+  transcript_source?: string | null;
   peaks?: number[];
   filmstrip_thumbs?: Array<{ time_sec: number; data_uri: string }>;
+}
+
+/** v0.11.32: phụ đề có sẵn cạnh video — source "youtube" nếu do app tải từ YouTube. */
+export interface AvailableSubtitle {
+  lang: string;
+  source: "youtube" | "file" | string;
 }
 
 export interface MediaPreviewPayload {

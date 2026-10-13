@@ -210,6 +210,10 @@ pub struct DubbingProject {
     /// v0.10.0: "sherpa" | "heuristic" | "minimax"
     #[serde(default)]
     pub diarization_engine: Option<String>,
+    /// v0.11.32 (PO): nguồn transcript — "whisper" hoặc "srt:<lang>" khi dùng
+    /// file phụ đề có sẵn cạnh video (tải từ YouTube — chính xác hơn STT).
+    #[serde(default)]
+    pub transcript_source: Option<String>,
     #[serde(default)]
     pub peaks: Option<Vec<f32>>,
     #[serde(default)]
@@ -1622,7 +1626,158 @@ pub fn diarize_and_script_via_minimax(
     Ok(speakers)
 }
 
-/// Analyze media, extract transcript, cluster speakers, and generate translated dubbing script
+/// v0.11.32 (PO — "sub YouTube chính xác hơn STT của mình"): tìm file phụ đề
+/// `.srt` có sẵn NGAY CẠNH video (dạng `<tên video>.<lang>.srt` do nút
+/// "📝 Tải phụ đề" sinh ra). Ưu tiên: đúng ngôn ngữ nguồn → bản gốc en → vi
+/// → ja → zh → còn lại. Trả về (đường dẫn, mã ngôn ngữ).
+fn find_sibling_srt(video: &Path, src_lang: Option<&str>) -> Option<(PathBuf, String)> {
+    let dir = video.parent()?;
+    let stem = video.file_stem()?.to_string_lossy().to_string();
+    let prefix = format!("{stem}.");
+    let mut candidates: Vec<(String, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(dir).ok()?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.to_lowercase().ends_with(".srt") {
+            continue;
+        }
+        let Some(rest) = name.strip_prefix(&prefix) else {
+            continue;
+        };
+        // Cắt đuôi ".srt" (4 ký tự) — phần còn lại là mã ngôn ngữ ("en", "en-orig", "vi"…).
+        if rest.len() <= 4 {
+            continue;
+        }
+        let lang = rest[..rest.len() - 4].to_string();
+        candidates.push((lang, entry.path()));
+    }
+    if candidates.is_empty() {
+        return None;
+    }
+    let priority = |lang: &str| -> u8 {
+        let l = lang.to_lowercase();
+        if let Some(src) = src_lang {
+            let s = src.trim().to_lowercase();
+            if !s.is_empty() && s != "auto" {
+                if l == s {
+                    return 0;
+                }
+                if l == format!("{s}-orig") {
+                    return 1;
+                }
+            }
+        }
+        match l.as_str() {
+            "en-orig" => 2,
+            "en" => 3,
+            "vi" => 4,
+            "ja" => 5,
+            "zh" | "zh-hans" | "zh-hant" => 6,
+            _ => 7,
+        }
+    };
+    candidates.sort_by(|a, b| (priority(&a.0), a.0.clone()).cmp(&(priority(&b.0), b.0.clone())));
+    candidates.into_iter().next().map(|(lang, path)| (path, lang))
+}
+
+/// v0.11.32: file .srt ngoài phủ TOÀN BỘ video (mốc thời gian tuyệt đối),
+/// còn chuỗi xử lý hiện tại làm việc trên hệ toạ độ "đã cắt audio". Hàm này
+/// lọc theo cửa sổ [offset, offset+limit] rồi trừ offset — nhờ đó nhánh dùng
+/// SRT sẵn và nhánh Whisper cho ra cùng một hệ toạ độ (offset được cộng lại
+/// ở bước sau, giống hệt nhau).
+fn crop_srt_to_window(
+    segments: Vec<crate::file_sub::SubtitleSegment>,
+    offset: f64,
+    limit: Option<f64>,
+) -> Vec<crate::file_sub::SubtitleSegment> {
+    let end_cap = limit.filter(|l| *l > 0.0).map(|l| offset + l);
+    if offset <= 0.0 && end_cap.is_none() {
+        return segments;
+    }
+    segments
+        .into_iter()
+        .filter_map(|mut s| {
+            let st = parse_srt_time_to_seconds(&s.start_time);
+            let en = parse_srt_time_to_seconds(&s.end_time);
+            if end_cap.map(|cap| st >= cap).unwrap_or(false) || en <= offset {
+                return None;
+            }
+            let new_st = (st - offset).max(0.0);
+            let new_en = (en - offset).max(new_st + 0.05);
+            s.start_time = fmt_srt_time(new_st);
+            s.end_time = fmt_srt_time(new_en);
+            Some(s)
+        })
+        .collect()
+}
+
+/// v0.11.32 (PO): thông tin phụ đề có sẵn cạnh video (để Studio hiển thị
+/// "có sẵn: en (YouTube), vi" và bật checkbox tận dụng).
+#[derive(Debug, Clone, Serialize)]
+pub struct AvailableSubtitle {
+    pub lang: String,
+    pub source: String, // "youtube" | "file"
+}
+
+/// v0.11.32: liệt kê phụ đề có sẵn cạnh video + đánh dấu file nào là phụ đề YouTube.
+pub fn available_subtitles(file_path: &str) -> Vec<AvailableSubtitle> {
+    let p = Path::new(file_path);
+    let Some(dir) = p.parent() else {
+        return Vec::new();
+    };
+    let Some(stem) = p.file_stem().map(|s| s.to_string_lossy().to_string()) else {
+        return Vec::new();
+    };
+    let prefix = format!("{stem}.");
+    let video_id = crate::downloader::extract_bracketed_video_id(&stem);
+    let mut out = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.to_lowercase().ends_with(".srt") {
+                continue;
+            }
+            let Some(rest) = name.strip_prefix(&prefix) else {
+                continue;
+            };
+            if rest.len() <= 4 {
+                continue;
+            }
+            let lang = rest[..rest.len() - 4].to_string();
+            // Đánh dấu YouTube: tên có cùng tag [video_id] với video (quy cách tải
+            // của app — backfill cả file tải TRƯỚC v0.11.32) HOẶC manifest xác nhận.
+            let name_tag = crate::downloader::extract_bracketed_video_id(&name);
+            let is_youtube = match (video_id.as_deref(), name_tag.as_deref()) {
+                (Some(vid), Some(tag)) if vid == tag => true,
+                (Some(vid), _) => crate::downloader::is_youtube_subtitle(dir, vid, &lang),
+                _ => false,
+            };
+            out.push(AvailableSubtitle {
+                lang,
+                source: if is_youtube {
+                    "youtube".to_string()
+                } else {
+                    "file".to_string()
+                },
+            });
+        }
+    }
+    out.sort_by(|a, b| a.lang.cmp(&b.lang));
+    out
+}
+
+/// v0.11.32: định dạng giây → "HH:MM:SS,mmm" (chuẩn SRT).
+fn fmt_srt_time(secs: f64) -> String {
+    let total_ms = (secs.max(0.0) * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let m = (total_s / 60) % 60;
+    let h = total_s / 3600;
+    format!("{h:02}:{m:02}:{s:02},{ms:03}")
+}
+
+/// v0.11.32: bản cũ 7 tham số — giữ tương thích cho examples/tests (mặc định
+/// tận dụng phụ đề có sẵn cạnh video).
 pub fn analyze_and_create_project(
     app: Option<&AppHandle>,
     input_path: &str,
@@ -1631,6 +1786,31 @@ pub fn analyze_and_create_project(
     time_limit_sec: Option<f64>,
     start_offset_sec: Option<f64>,
     expected_speakers: Option<usize>,
+) -> Result<DubbingProject> {
+    analyze_and_create_project_full(
+        app,
+        input_path,
+        source_lang,
+        target_lang,
+        time_limit_sec,
+        start_offset_sec,
+        expected_speakers,
+        None,
+    )
+}
+
+/// Analyze media, extract transcript, cluster speakers, and generate translated dubbing script.
+/// `prefer_existing_srt`: None/Some(true) = tận dụng file .srt có sẵn cạnh video
+/// (phụ đề YouTube tải trước đó — chính xác hơn Whisper); Some(false) = luôn chạy Whisper.
+pub fn analyze_and_create_project_full(
+    app: Option<&AppHandle>,
+    input_path: &str,
+    source_lang: Option<String>,
+    target_lang: Option<String>,
+    time_limit_sec: Option<f64>,
+    start_offset_sec: Option<f64>,
+    expected_speakers: Option<usize>,
+    prefer_existing_srt: Option<bool>,
 ) -> Result<DubbingProject> {
     let my_gen = start_new_generation();
 
@@ -1711,68 +1891,102 @@ pub fn analyze_and_create_project(
 
     emit("transcribing", 15.0, "Đang nhận diện giọng nói & gán mốc thời gian...", 0, 100);
 
-    // 2. Transcribe with Whisper CLI
+    // 2. Transcript source. v0.11.32 (PO — "sub YouTube chính xác hơn"):
+    // nếu cạnh video có file .srt (do nút "📝 Tải phụ đề" sinh ra) thì DÙNG LUÔN
+    // — chính xác hơn và nhanh hơn nhiều so với chạy Whisper. Không có thì chạy
+    // Whisper như cũ.
     let cfg = match app {
         Some(a) => AppConfig::load(a),
         None => AppConfig::load_or_default(),
     };
-    let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
-    let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
-        .context("Không tìm thấy model Whisper")?;
-    let (whisper_bin, _engine) = crate::stt::whisper_local::ensure_binary_with_engine()
-        .context("Không tìm thấy whisper binary")?;
+    let src_lang = source_lang.clone().unwrap_or_else(|| "auto".to_string());
 
-    let src_lang = source_lang.unwrap_or_else(|| "auto".to_string());
+    let sibling_srt = if prefer_existing_srt.unwrap_or(true) {
+        find_sibling_srt(input, source_lang.as_deref())
+    } else {
+        None
+    };
+    let (raw_srt_content, transcript_source) =
+        if let Some((srt_path, srt_lang)) = sibling_srt {
+            info!(
+                "📝 Using existing subtitle file ({} — lang: {})",
+                srt_path.display(),
+                srt_lang
+            );
+            emit(
+                "transcribing",
+                15.0,
+                &format!("📝 Dùng phụ đề có sẵn (.{srt_lang}.srt từ YouTube) — chuẩn hơn nhận dạng giọng nói..."),
+                0,
+                100,
+            );
+            let content = fs::read_to_string(&srt_path)
+                .with_context(|| format!("Đọc phụ đề có sẵn {}", srt_path.display()))?;
+            (content, format!("srt:{srt_lang}"))
+        } else {
+            // 2b. Transcribe with Whisper CLI (không có .srt cạnh video)
+            let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
+            let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
+                .context("Không tìm thấy model Whisper")?;
+            let (whisper_bin, _engine) = crate::stt::whisper_local::ensure_binary_with_engine()
+                .context("Không tìm thấy whisper binary")?;
 
-    let mut whisper_cmd = Command::new(&whisper_bin);
-    if let Some(bin_dir) = whisper_bin.parent() {
-        whisper_cmd.current_dir(bin_dir);
+            let mut whisper_cmd = Command::new(&whisper_bin);
+            if let Some(bin_dir) = whisper_bin.parent() {
+                whisper_cmd.current_dir(bin_dir);
+            }
+            whisper_cmd
+                .arg("-m")
+                .arg(&model_path)
+                .arg("-f")
+                .arg(&temp_wav)
+                .arg("-l")
+                .arg(&src_lang)
+                .arg("-osrt")
+                .arg("-of")
+                .arg(&temp_srt_stem)
+                .arg("-sns")
+                .arg("-nth")
+                .arg("0.65")
+                .arg("-bo")
+                .arg("1")
+                .arg("-bs")
+                .arg("1")
+                .arg("-t")
+                .arg("8");
+
+            if _engine == crate::stt::SttEngine::Cuda {
+                whisper_cmd.arg("-fa");
+            }
+
+            #[cfg(windows)]
+            whisper_cmd.creation_flags(CREATE_NO_WINDOW);
+
+            let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
+                .context("Lỗi thực thi whisper-cli")?;
+
+            if is_generation_cancelled(my_gen) {
+                let _ = fs::remove_file(&temp_wav);
+                let _ = fs::remove_file(&temp_srt_file);
+                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+            }
+
+            if !whisper_res.success() || !temp_srt_file.exists() {
+                let _ = fs::remove_file(&temp_wav);
+                return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
+            }
+
+            let content = fs::read_to_string(&temp_srt_file).context("Đọc SRT tạm")?;
+            let _ = fs::remove_file(&temp_srt_file);
+            (content, "whisper".to_string())
+        };
+
+    let mut raw_segments = crate::file_sub::parse_srt_content(&raw_srt_content);
+    // File .srt ngoài phủ TOÀN BỘ video (mốc tuyệt đối) — cắt theo cửa sổ đang
+    // phân tích rồi trừ offset để cùng hệ toạ độ với đầu ra Whisper (đã cắt audio).
+    if transcript_source.starts_with("srt:") {
+        raw_segments = crop_srt_to_window(raw_segments, offset, time_limit_sec);
     }
-    whisper_cmd
-        .arg("-m")
-        .arg(&model_path)
-        .arg("-f")
-        .arg(&temp_wav)
-        .arg("-l")
-        .arg(&src_lang)
-        .arg("-osrt")
-        .arg("-of")
-        .arg(&temp_srt_stem)
-        .arg("-sns")
-        .arg("-nth")
-        .arg("0.65")
-        .arg("-bo")
-        .arg("1")
-        .arg("-bs")
-        .arg("1")
-        .arg("-t")
-        .arg("8");
-
-    if _engine == crate::stt::SttEngine::Cuda {
-        whisper_cmd.arg("-fa");
-    }
-
-    #[cfg(windows)]
-    whisper_cmd.creation_flags(CREATE_NO_WINDOW);
-
-    let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
-        .context("Lỗi thực thi whisper-cli")?;
-
-    if is_generation_cancelled(my_gen) {
-        let _ = fs::remove_file(&temp_wav);
-        let _ = fs::remove_file(&temp_srt_file);
-        return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
-    }
-
-    if !whisper_res.success() || !temp_srt_file.exists() {
-        let _ = fs::remove_file(&temp_wav);
-        return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
-    }
-
-    let raw_srt_content = fs::read_to_string(&temp_srt_file).context("Đọc SRT tạm")?;
-    let _ = fs::remove_file(&temp_srt_file);
-
-    let raw_segments = crate::file_sub::parse_srt_content(&raw_srt_content);
     if raw_segments.is_empty() {
         let _ = fs::remove_file(&temp_wav);
         return Err(anyhow::anyhow!("Không nhận diện được giọng nói trong tệp này."));
@@ -1995,6 +2209,7 @@ pub fn analyze_and_create_project(
         dubbing_mode: "ducking".to_string(),
         time_limit_sec,
         diarization_engine: Some(diarization_engine_used),
+        transcript_source: Some(transcript_source),
         peaks,
         filmstrip_thumbs,
     })
@@ -2737,6 +2952,69 @@ mod tests {
                 println!("❌ Analysis failed: {:#}", e);
             }
         }
+    }
+
+    #[test]
+    fn test_find_sibling_srt_priority() {
+        let dir = std::env::temp_dir().join(format!("sublix_srt_find_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        let video = dir.join("Movie [abc123def45].mp4");
+        fs::write(&video, b"x").expect("write video");
+        fs::write(dir.join("Movie [abc123def45].vi.srt"), b"x").expect("write vi");
+        fs::write(dir.join("Movie [abc123def45].en.srt"), b"x").expect("write en");
+        fs::write(dir.join("Movie [abc123def45].en-orig.srt"), b"x").expect("write en-orig");
+        fs::write(dir.join("Movie [abc123def45].mp4.srt"), b"x").expect("decoy ext");
+        fs::write(dir.join("Other [zzz].en.srt"), b"x").expect("decoy stem");
+
+        // Không chỉ định ngôn ngữ nguồn (auto) → ưu tiên bản gốc en
+        let picked = find_sibling_srt(&video, None);
+        assert_eq!(
+            picked
+                .as_ref()
+                .map(|(p, _)| p.file_name().unwrap().to_string_lossy().to_string())
+                .as_deref(),
+            Some("Movie [abc123def45].en-orig.srt")
+        );
+        assert_eq!(picked.as_ref().map(|(_, l)| l.as_str()), Some("en-orig"));
+
+        // Chỉ định "vi" → phải chọn đúng bản vi
+        let picked_vi = find_sibling_srt(&video, Some("vi"));
+        assert_eq!(picked_vi.as_ref().map(|(_, l)| l.as_str()), Some("vi"));
+
+        // Chỉ định "en" → chọn "en" (khớp chính xác) chứ không phải en-orig
+        let picked_en = find_sibling_srt(&video, Some("en"));
+        assert_eq!(picked_en.as_ref().map(|(_, l)| l.as_str()), Some("en"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_crop_srt_to_window() {
+        let seg = |st: &str, en: &str| crate::file_sub::SubtitleSegment {
+            index: 0,
+            start_time: st.to_string(),
+            end_time: en.to_string(),
+            original: "x".to_string(),
+            translated: None,
+        };
+        let segs = vec![
+            seg("00:00:01,000", "00:00:02,000"), // trước cửa sổ → bỏ
+            seg("00:00:10,000", "00:00:12,000"), // trong cửa sổ → 5–7
+            seg("00:00:14,000", "00:00:16,000"), // chạm cận trên → 9–11
+            seg("00:00:20,000", "00:00:22,000"), // sau cửa sổ → bỏ
+        ];
+        let cropped = crop_srt_to_window(segs, 5.0, Some(10.0));
+        assert_eq!(cropped.len(), 2);
+        assert_eq!(cropped[0].start_time, "00:00:05,000");
+        assert_eq!(cropped[0].end_time, "00:00:07,000");
+        assert_eq!(cropped[1].start_time, "00:00:09,000");
+        assert_eq!(cropped[1].end_time, "00:00:11,000");
+
+        // Không cắt gì thì giữ nguyên
+        let untouched = crop_srt_to_window(vec![seg("00:00:01,000", "00:00:02,000")], 0.0, None);
+        assert_eq!(untouched.len(), 1);
+        assert_eq!(untouched[0].start_time, "00:00:01,000");
     }
 }
 
