@@ -1182,6 +1182,10 @@ export default function SettingsView() {
           currentTheme={theme}
           onThemeChange={handleThemeChange}
           onTaskUpdate={handleStudioTaskUpdate}
+          onClearPendingFile={() => {
+            setPendingStudioPath("");
+            setPendingDubbingPath("");
+          }}
         />
       </div>
             {/* RIGHT MAIN WORKSPACE */}

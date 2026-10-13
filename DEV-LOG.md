@@ -1304,7 +1304,37 @@ sublix/
 - PO chốt: **KHÔNG gắn badge từng câu** (rối) — gỡ badge per-block/per-card; marking đặt ở **ĐƯỜNG TRACK**: `💬 PHỤ ĐỀ (TEXT)` + badge 2 phiên bản — **đỏ "📥 PHỤ ĐỀ YOUTUBE (.en)"** khi dùng .srt tải sẵn, **xanh "🎙 AI TỰ TẠO"** khi Whisper nhận dạng. `SubtitleItem.source` vẫn lưu per-câu (dùng cho tooltip hover, không hiện badge).
 - Verify lại GUI cả 2 case: StarCraft → badge đỏ + 49 câu + 0 badge per-câu; `dialogue_2spk.wav` (không có .srt) → Whisper 5 câu + badge xanh. Ảnh `v01132b_track_badge_youtube.png` + `v01132b_track_badge_ai.png`.
 
+---
 
+## Session 33 — 2026-10-13 12:00 → 12:45 (Antigravity) — v0.11.33 (Fix Không Đổi Được Video & Xuất Softsub / Multi-track Audio Chuẩn VLC)
 
+### User intent (Anh Tuấn - PO)
+1. *"hiện tại tôi ko bỏ file khác vào để dùng được"* — Khi đang mở 1 video trong Studio, người dùng không thể đổi sang file khác (mở file mới, kéo thả file mới, hoặc đóng video đều bị văng/dội ngược lại video cũ).
+2. *"rồi bạn làm thêm cái chế độ xuất video nếu mà có sub thì chọn là video có file sub đính kèm, cái này code trước đa xcó rồi sao, còn nếu mà đừng tiếng thì cũng thế nhé, cũng 1 đường tiếng kèm có lựa chọn xem như ở trong vlc ấy"* — Bổ sung chế độ xuất video đa dạng:
+   - **Phụ đề:** Softsub (nhúng track `-c:s mov_text` vào MP4, bật/tắt trong VLC/TV) vs Hardsub (khắc cứng) vs Không nhúng (chỉ file .srt rời).
+   - **Đường tiếng (Audio tracks):** Multi-track Audio (VLC: Track 1 = Tiếng gốc, Track 2 = Thuyết minh AI) vs Mixed (1 track ducking) vs Original only (siêu tốc).
 
+### Root cause & Implementation (v0.11.33)
+1. **Lỗi không đổi được video (`BUG-063`):**
+   - *Nguyên nhân:* Effect đồng bộ `initialFilePath` trong `SublixStudioView.tsx` chứa chính `filePath` trong dependency array! Khi người dùng từng bấm "Xem Trong Studio", `pendingStudioPath` ở `SettingsView` lưu path đó. Khi đổi file/kéo thả/bấm `✕` đóng video, `filePath` đổi làm effect chạy lại → thấy `initialFilePath !== filePath` → tự động ép `setFilePath(initialFilePath)` dội ngược lại video cũ.
+   - *Giải pháp:*
+     - Bỏ `filePath` ra khỏi dependency array của effect; chỉ sync khi `initialFilePath` hoặc `fileNonce` thực sự đổi giá trị so với ref.
+     - Tạo hàm tập trung `handleLoadNewVideoFile(newPath)`: reset sạch sẽ segments, speakers, audioPeaks, filmstripThumbs, undo stacks, localStorage cache cũ.
+     - Truyền prop `onClearPendingFile` từ `SettingsView` xuống `SublixStudioView`: khi nạp video mới hoặc đóng video (`handleCloseCurrentVideo`), gọi `onClearPendingFile()` để xóa sạch `pendingStudioPath` ở component cha.
+     - Cập nhật cả 4 nguồn nạp file: nút Mở video (`dubbingPickMediaFile`), Tauri drag & drop native (`onDragDropEvent`), HTML input ẩn (`onChange`), và HTML5 drag & drop fallback (`onDrop`).
+2. **Xuất video Softsub & Multi-track Audio chuẩn VLC:**
+   - *Rust Backend (`src-tauri/src/dubbing/mod.rs`):*
+     - Bổ sung trường `sub_export_mode` ("softsub" | "hardsub" | "none"), `audio_export_mode` ("multitrack" | "mixed" | "original"), `target_lang` vào `DubbingProject`.
+     - Thêm helper `format_seconds_to_srt` tạo nội dung SRT chuẩn. Khi xuất, luôn ghi kèm file companion `.srt` (`<video_stem>.<lang>.srt`) cạnh video thành phẩm.
+     - Softsub: Remux phụ đề mềm vào MP4 qua `-c:s mov_text -metadata:s:s:0 title="Phụ đề Tiếng Việt" -metadata:s:s:0 language={lang} -disposition:s:0 default`.
+     - Multi-track Audio: Tách 2 audio streams riêng biệt `-map 0:a:0?` (Track 1: Tiếng gốc) + `-map [final_audio]` (Track 2: Thuyết minh AI) với ISO metadata đầy đủ cho VLC/TV.
+     - Hardsub: Khắc cứng `-vf subtitles=... -c:v libx264`.
+   - *Frontend UI (`SublixStudioView.tsx`, `SublixStudioView.css`, `tauri.ts`):*
+     - Nút "Xuất video" trên Topbar mở Modal Cấu hình xuất video (`showExportModal`) với 2 nhóm card tùy chọn rõ ràng, badge khuyên dùng cho VLC.
+     - Modal Tiến trình (`isExporting`) hiển thị % và message xử lý.
+     - Modal Hoàn tất thành phẩm (`exportDonePath`) hiển thị đường dẫn file, kèm nút `▶ Mở Bằng VLC / Player Ngoài` (sử dụng IPC `sublix.downloaderOpenFile`), nút `📁 Mở Thư Mục Thành Phẩm`, và nút `Đóng`.
 
+### Verification
+- `cargo test --lib`: 18/18 passed 100%.
+- `npx tsc --noEmit`: 0 errors.
+- `npm run build`: built in 4.40s, 0 errors.

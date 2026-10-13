@@ -10,7 +10,14 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-13 12:05 - CommandCode
+### 2026-10-13 12:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
+- **Loại:** `@done` + `@handoff` (v0.11.33: Khắc phục lỗi không đổi được video & Bổ sung chế độ xuất Softsub / Multi-track Audio chuẩn VLC).
+- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
+  1. **Sửa dứt điểm lỗi không đổi được video (`BUG-063`):** Bỏ `filePath` ra khỏi dependency array của effect; tạo hàm tập trung `handleLoadNewVideoFile(newPath)` reset sạch state cũ và cache; thêm prop `onClearPendingFile` từ `SettingsView` để xóa `pendingStudioPath` ở cha tránh dội ngược lại video cũ. Cả 4 cổng nạp file (Mở video, kéo thả native, kéo thả web, nút đóng chip `✕`) đều hoạt động trơn tru.
+  2. **Xuất video Softsub & Multi-track Audio:** Backend FFmpeg hỗ trợ Softsub (`-c:s mov_text` nhúng MP4 bật/tắt trong VLC + luôn xuất kèm file `.srt` rời cạnh video) vs Hardsub vs None; và Multi-track Audio (Track 1 = Gốc, Track 2 = Thuyết minh AI chuẩn ISO) vs Mixed vs Original only.
+  3. **UI Modal Cấu Hình & Hoàn Tất:** Modal cấu hình trực quan trước khi xuất; Modal hoàn tất có nút `▶ Mở Bằng VLC / Player Ngoài` và `📁 Mở Thư Mục Thành Phẩm`.
+- **Kiểm thử:** `cargo test --lib` 18/18 pass 100%, `npx tsc --noEmit` 0 lỗi, `npm run build` thành công.
+
 - **Loại:** `@done` (v0.11.32 — yêu cầu PO: "phụ đề YouTube chính xác hơn → tận dụng khi load video + tích sẵn + ghi marking YouTube để phân biệt bản sub").
 - **Studio tận dụng phụ đề đã tải:** video có `.srt` cạnh bên → analyze dùng THẲNG, **KHÔNG chạy Whisper** (chính xác hơn + nhanh hơn); checkbox **"📥 Tận dụng phụ đề đã tải (nếu có)" TÍCH SẴN** + hiện "có sẵn: en (YouTube), vi (YouTube)". Backend: cờ `prefer_existing_srt`, `transcript_source` = `srt:<lang>` | `whisper`, `available_subtitles()` + lệnh `dubbing_available_subs`, wrapper `analyze_and_create_project_full()` giữ tương thích examples/tests.
 - **Marking nguồn ở ĐƯỜNG TRACK (PO chốt — KHÔNG gắn badge từng câu cho đỡ rối):** lane `💬 PHỤ ĐỀ (TEXT)` + thẻ Phụ Đề hiện badge **đỏ "📥 PHỤ ĐỀ YOUTUBE (.en)"** khi dùng .srt tải sẵn / **xanh "🎙 AI TỰ TẠO"** khi Whisper nhận dạng; chip Downloader → **"📝 Phụ đề YouTube: en, vi"**; manifest **`sublix_subtitles.json`** (video_id/lang/url/ngày tải) + nhận diện file cũ theo tag `[video_id]`.

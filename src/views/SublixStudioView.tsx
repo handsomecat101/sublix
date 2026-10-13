@@ -68,6 +68,7 @@ export interface SublixStudioViewProps {
   isActive?: boolean;
   fileNonce?: number;
   onTaskUpdate?: (task: StudioTaskUpdatePayload) => void;
+  onClearPendingFile?: () => void;
 }
 
 export interface SpeakerItem {
@@ -453,6 +454,7 @@ export default function SublixStudioView({
   isActive = true,
   fileNonce,
   onTaskUpdate,
+  onClearPendingFile,
 }: SublixStudioViewProps) {
   // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
   const [cachedProject] = useState<SavedStudioProject | null>(() => {
@@ -690,6 +692,9 @@ export default function SublixStudioView({
   const [exportProgress, setExportProgress] = useState<number>(0);
   const [exportMessage, setExportMessage] = useState<string>("");
   const [exportDonePath, setExportDonePath] = useState<string>("");
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportSubMode, setExportSubMode] = useState<"softsub" | "hardsub" | "none">("softsub");
+  const [exportAudioMode, setExportAudioMode] = useState<"multitrack" | "mixed" | "original">("multitrack");
   // Video Stage & Player (P3) & Master Studio Playback Engine
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0.0);
@@ -826,22 +831,20 @@ export default function SublixStudioView({
     });
   }, []);
 
-  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (cập nhật khi có path mới hoặc nonce mới)
+  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (chỉ cập nhật khi initialFilePath thực sự đổi hoặc có nonce mới)
   const lastLoadedNonceRef = useRef<number | undefined>(undefined);
+  const lastLoadedInitialPathRef = useRef<string | undefined>(initialFilePath || undefined);
   useEffect(() => {
     if (initialFilePath) {
       const isNewNonce = fileNonce !== undefined && fileNonce !== lastLoadedNonceRef.current;
-      if (initialFilePath !== filePath || isNewNonce) {
+      const isNewInitialPath = initialFilePath !== lastLoadedInitialPathRef.current;
+      if (isNewInitialPath || isNewNonce) {
         lastLoadedNonceRef.current = fileNonce;
-        setTranscodedPath(null); // ROUND-4 R4-01: reset transcode cache khi đổi file
-        setFilePath(initialFilePath);
-        const name = initialFilePath.split(/[\\/]/).pop() || initialFilePath;
-        setFileName(name);
-        setVideoPlayError(false);
-        handleSeek(0);
+        lastLoadedInitialPathRef.current = initialFilePath;
+        handleLoadNewVideoFile(initialFilePath);
       }
     }
-  }, [initialFilePath, fileNonce, filePath]);
+  }, [initialFilePath, fileNonce]);
 
   // Tự động tạm dừng phát video khi người dùng chuyển sang tab khác
   useEffect(() => {
@@ -971,12 +974,10 @@ export default function SublixStudioView({
             const droppedPaths = event.payload.paths;
             if (droppedPaths && droppedPaths.length > 0) {
               const p = droppedPaths[0];
-              setTranscodedPath(null); // ROUND-4 R4-01
-              setFilePath(p);
-              const name = p.split(/[\\/]/).pop() || p;
-              setFileName(name);
-              setVideoPlayError(false);
-              handleSeek(0);
+              lastLoadedInitialPathRef.current = p;
+              onClearPendingFile?.();
+              handleLoadNewVideoFile(p);
+              showToast(`Đã nạp video: ${p.split(/[\\/]/).pop()}`);
             } else {
               // R4-09: ko thả nhưng khng c path → bo user (khng ngậm tăm)
               showToast("⚠ Kéo thả không khả dụng — hãy dùng nút 'Mở video' để chọn file.");
@@ -1627,6 +1628,76 @@ export default function SublixStudioView({
         console.warn("Seek error:", e);
       }
     }
+  };
+
+  // Xử lý nạp tệp video mới: Reset sạch trạng thái cũ, bộ đệm preview, timeline, phân vai & undo
+  const handleLoadNewVideoFile = (newPath: string) => {
+    if (!newPath) return;
+    setTranscodedPath(null);
+    setFilePath(newPath);
+    const name = newPath.split(/[\\/]/).pop() || newPath;
+    setFileName(name);
+    setMediaDuration(0);
+    mediaDurationRef.current = 0;
+    setCurrentTime(0.0);
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setSegments([]);
+    setSpeakers([]);
+    setAudioPeaks([]);
+    setFilmstripThumbs([]);
+    setVideoPlayError(false);
+    setUndoStack([]);
+    setUndoSubtitleStack([]);
+    setUndoTranslationStack([]);
+    setUndoAudioStack([]);
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } catch (e) {
+        console.warn("Video reset error:", e);
+      }
+    }
+    try {
+      localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
+    } catch {}
+    handleSeek(0);
+  };
+
+  // Đóng video hiện tại
+  const handleCloseCurrentVideo = () => {
+    setFilePath("");
+    setFileName("Chưa mở video");
+    setMediaDuration(0);
+    mediaDurationRef.current = 0;
+    setCurrentTime(0);
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setSegments([]);
+    setSpeakers([]);
+    setAudioPeaks([]);
+    setFilmstripThumbs([]);
+    setUndoStack([]);
+    setUndoSubtitleStack([]);
+    setUndoTranslationStack([]);
+    setUndoAudioStack([]);
+    setTranscodedPath(null);
+    setVideoPlayError(false);
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.src = "";
+      } catch (e) {
+        console.warn("Video clear error:", e);
+      }
+    }
+    try {
+      localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
+    } catch {}
+    lastLoadedInitialPathRef.current = "";
+    onClearPendingFile?.();
+    showToast("Đã đóng video hiện tại");
   };
 
   // R2-02: Master Studio Playback Clock (strictly synchronized to real video element, Hardware-accelerated)
@@ -2388,12 +2459,10 @@ export default function SublixStudioView({
       try {
         const picked = await sublix.dubbingPickMediaFile();
         if (picked) {
-          setTranscodedPath(null); // ROUND-4 R4-01
-          setFilePath(picked);
-          const name = picked.split(/[\\/]/).pop() || picked;
-          setFileName(name);
-          setVideoPlayError(false);
-          handleSeek(0);
+          lastLoadedInitialPathRef.current = picked;
+          onClearPendingFile?.();
+          handleLoadNewVideoFile(picked);
+          showToast(`Đã mở video: ${picked.split(/[\\/]/).pop()}`);
         }
       } catch (err) {
         console.error("Pick file error:", err);
@@ -3694,14 +3763,23 @@ export default function SublixStudioView({
     }
   };
 
-  const handleExportVideo = async () => {
+  const handleOpenExportModal = () => {
     if (!filePath) {
-      showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phát");
+      showToast("⚠️ Vui lòng mở hoặc kéo thả video trước khi xuất video");
       return;
     }
+    setShowExportModal(true);
+  };
+
+  const handleConfirmExportVideo = async () => {
+    if (!filePath) {
+      showToast("⚠️ Vui lòng mở hoặc kéo thả video trước khi xuất");
+      return;
+    }
+    setShowExportModal(false);
     setIsExporting(true);
-    setExportProgress(10);
-    setExportMessage("Đang đng gi kịch bản v audio tracks...");
+    setExportProgress(5);
+    setExportMessage("Đang chuẩn bị kịch bản, phụ đề và audio tracks...");
     setExportDonePath("");
 
     let unlisten: (() => void) | null = null;
@@ -3729,6 +3807,9 @@ export default function SublixStudioView({
         })),
         bgm_volume: 0.8,
         voice_volume: 1.0,
+        sub_export_mode: exportSubMode,
+        audio_export_mode: exportAudioMode,
+        target_lang: targetLang || "vi",
       };
 
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
@@ -3738,11 +3819,12 @@ export default function SublixStudioView({
 
       const outPath = await sublix.dubbingExport(project);
       setExportProgress(100);
-      setExportMessage("Xuất video thnh cng!");
+      setExportMessage("Xuất video thành công!");
       setExportDonePath(outPath);
+      showToast("🎉 Xuất video hoàn tất!");
     } catch (err) {
       console.error("Export error:", err);
-      showToast(" Lỗi xuất video: " + err);
+      showToast("❌ Lỗi xuất video: " + err);
     } finally {
       if (unlisten) unlisten();
       setIsExporting(false);
@@ -3852,10 +3934,10 @@ export default function SublixStudioView({
               const file = e.target.files?.[0];
               if (file) {
                 const p = (file as any).path || file.name;
-                setFilePath(p);
-                setFileName(file.name);
-                setVideoPlayError(false);
-                handleSeek(0);
+                lastLoadedInitialPathRef.current = p;
+                onClearPendingFile?.();
+                handleLoadNewVideoFile(p);
+                showToast(`Đã mở video: ${file.name}`);
               }
             }}
           />
@@ -3863,7 +3945,7 @@ export default function SublixStudioView({
             type="button"
             className="studio-btn-import-pill"
             onClick={handlePickMediaFile}
-            title="Nhập video từ my tnh (Phím tắt: Ctrl + I)"
+            title="Nhập video từ máy tính (Phím tắt: Ctrl + I)"
             style={{
               display: "flex",
               alignItems: "center",
@@ -3888,29 +3970,8 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-file-chip-close"
-              onClick={() => {
-                setFilePath("");
-                setFileName("Chưa mở video");
-                setMediaDuration(0);
-                setCurrentTime(0);
-                setIsPlaying(false);
-                setSegments([]);
-                setSpeakers([]);
-                setAudioPeaks([]);
-                setFilmstripThumbs([]);
-                if (videoRef.current) {
-                  try {
-                    videoRef.current.pause();
-                    videoRef.current.src = "";
-                  } catch (e) {
-                    console.warn("Video clear error:", e);
-                  }
-                }
-                try {
-                  localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
-                } catch {}
-                showToast("Đã đóng video hiện tại");
-              }}
+              onClick={handleCloseCurrentVideo}
+              title="Đóng video hiện tại"
             >
               ✕
             </button>
@@ -3957,8 +4018,8 @@ export default function SublixStudioView({
           <button
             type="button"
             className="studio-btn-export-video"
-            onClick={handleExportVideo}
-            title="Xuất video hon chỉnh"
+            onClick={handleOpenExportModal}
+            title="Cấu hình và xuất video hoàn chỉnh"
           >
             <IconClapper size={13} /> Xuất video
           </button>
@@ -5406,7 +5467,21 @@ export default function SublixStudioView({
             className={`studio-video-stage ${isDraggingFile ? "drag-over" : ""}`}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
-            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDraggingFile(false);
+              const file = e.dataTransfer?.files?.[0];
+              if (file) {
+                const p = (file as any).path || file.name;
+                if (p) {
+                  lastLoadedInitialPathRef.current = p;
+                  onClearPendingFile?.();
+                  handleLoadNewVideoFile(p);
+                  showToast(`Đã nạp video: ${file.name}`);
+                }
+              }
+            }}
           >
             <div
               className={`studio-video-frame ${isDraggingFile ? "drag-over" : ""}`}
@@ -5508,7 +5583,21 @@ export default function SublixStudioView({
                   onClick={handlePickMediaFile}
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(true); }}
                   onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
-                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingFile(false);
+                    const file = e.dataTransfer?.files?.[0];
+                    if (file) {
+                      const p = (file as any).path || file.name;
+                      if (p) {
+                        lastLoadedInitialPathRef.current = p;
+                        onClearPendingFile?.();
+                        handleLoadNewVideoFile(p);
+                        showToast(`Đã nạp video: ${file.name}`);
+                      }
+                    }
+                  }}
                   style={{
                     width: "100%",
                     height: "100%",
@@ -6364,7 +6453,21 @@ export default function SublixStudioView({
             onContextMenu={handleTimelineContextMenu}
             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDraggingFile(false); }}
-            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFile(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDraggingFile(false);
+              const file = e.dataTransfer?.files?.[0];
+              if (file) {
+                const p = (file as any).path || file.name;
+                if (p) {
+                  lastLoadedInitialPathRef.current = p;
+                  onClearPendingFile?.();
+                  handleLoadNewVideoFile(p);
+                  showToast(`Đã nạp video: ${file.name}`);
+                }
+              }
+            }}
           >
             {/* ROUND-11: Marquee Box Selection Overlay */}
             {marqueeBox && (
@@ -6974,36 +7077,263 @@ export default function SublixStudioView({
     })()}
   </footer>
 
-      {/* Export Modal Overlay */}
+      {/* ROUND-16: Modal Cấu Hình Xuất Video (Softsub/Hardsub & Multi-track VLC) */}
+      {showExportModal && (
+        <div className="studio-modal-backdrop" onClick={() => setShowExportModal(false)}>
+          <div className="studio-modal-box studio-export-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="studio-modal-title">
+              <IconClapper size={18} />
+              <span>Cấu Hình Xuất Video & Đóng Gói Media</span>
+              <button
+                type="button"
+                className="studio-modal-close-btn"
+                onClick={() => setShowExportModal(false)}
+                title="Đóng cửa sổ"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div className="studio-export-dialog-content">
+              {/* PHẦN 1: ĐƯỜNG TIẾNG (AUDIO TRACKS) */}
+              <div className="studio-export-section">
+                <div className="studio-export-section-title">
+                  <span>🎧 Chế độ Đường tiếng (Audio Tracks)</span>
+                  <span className="studio-export-badge-note">Chuẩn phát đa kênh VLC</span>
+                </div>
+                <div className="studio-export-options-grid">
+                  {/* Option 1: multitrack */}
+                  <div
+                    className={`studio-export-option-card ${exportAudioMode === "multitrack" ? "selected" : ""}`}
+                    onClick={() => setExportAudioMode("multitrack")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_audio_mode"
+                        checked={exportAudioMode === "multitrack"}
+                        onChange={() => setExportAudioMode("multitrack")}
+                      />
+                      <strong>Đa đường tiếng (Multi-track)</strong>
+                      <span className="studio-export-pill-rec">Khuyên dùng cho VLC</span>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      Đóng gói cả 2 đường tiếng vào file MP4 (Track 1 = Tiếng gốc, Track 2 = Thuyết minh AI).
+                      Khi mở trong VLC hoặc TV, bạn có thể bấm chuột phải chọn/đổi đường tiếng bất cứ lúc nào như phim chiếu rạp.
+                    </p>
+                  </div>
+
+                  {/* Option 2: mixed */}
+                  <div
+                    className={`studio-export-option-card ${exportAudioMode === "mixed" ? "selected" : ""}`}
+                    onClick={() => setExportAudioMode("mixed")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_audio_mode"
+                        checked={exportAudioMode === "mixed"}
+                        onChange={() => setExportAudioMode("mixed")}
+                      />
+                      <strong>Trộn 1 đường tiếng (Mixed / Ducking)</strong>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      Hòa trộn tiếng gốc và giọng thuyết minh AI thành 1 track duy nhất (tự động giảm nhỏ nhạc nền khi có lời nói). Thích hợp đăng lên Facebook, YouTube, TikTok.
+                    </p>
+                  </div>
+
+                  {/* Option 3: original */}
+                  <div
+                    className={`studio-export-option-card ${exportAudioMode === "original" ? "selected" : ""}`}
+                    onClick={() => setExportAudioMode("original")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_audio_mode"
+                        checked={exportAudioMode === "original"}
+                        onChange={() => setExportAudioMode("original")}
+                      />
+                      <strong>Chỉ giữ tiếng gốc (Original Only)</strong>
+                      <span className="studio-export-pill-fast">Siêu tốc</span>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      Không kèm giọng đọc AI, giữ nguyên vẹn âm thanh gốc của video. Tối ưu khi bạn chỉ muốn làm phụ đề và xuất video nhanh.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 2: PHỤ ĐỀ (SUBTITLES) */}
+              <div className="studio-export-section" style={{ marginTop: 14 }}>
+                <div className="studio-export-section-title">
+                  <span>💬 Chế độ Phụ đề (Subtitles)</span>
+                  <span className="studio-export-badge-note">Kèm file .srt rời</span>
+                </div>
+                <div className="studio-export-options-grid">
+                  {/* Option 1: softsub */}
+                  <div
+                    className={`studio-export-option-card ${exportSubMode === "softsub" ? "selected" : ""}`}
+                    onClick={() => setExportSubMode("softsub")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_sub_mode"
+                        checked={exportSubMode === "softsub"}
+                        onChange={() => setExportSubMode("softsub")}
+                      />
+                      <strong>Phụ đề mềm nhúng (Softsub)</strong>
+                      <span className="studio-export-pill-rec">Bật/Tắt tùy ý</span>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      Nhúng phụ đề vào container MP4 (-c:s mov_text). Tự do Bật / Tắt hoặc đổi ngôn ngữ trong VLC/TV. Luôn tự động xuất kèm 1 file <code>.srt</code> rời bên cạnh video.
+                    </p>
+                  </div>
+
+                  {/* Option 2: hardsub */}
+                  <div
+                    className={`studio-export-option-card ${exportSubMode === "hardsub" ? "selected" : ""}`}
+                    onClick={() => setExportSubMode("hardsub")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_sub_mode"
+                        checked={exportSubMode === "hardsub"}
+                        onChange={() => setExportSubMode("hardsub")}
+                      />
+                      <strong>Khắc cứng vào video (Hardsub)</strong>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      In thẳng phụ đề vào khung hình video (-vf subtitles). Chạy mượt trên mọi thiết bị và MXH (Shorts, Reels, TikTok) không lo lỗi font chữ.
+                    </p>
+                  </div>
+
+                  {/* Option 3: none */}
+                  <div
+                    className={`studio-export-option-card ${exportSubMode === "none" ? "selected" : ""}`}
+                    onClick={() => setExportSubMode("none")}
+                  >
+                    <div className="studio-export-option-header">
+                      <input
+                        type="radio"
+                        name="export_sub_mode"
+                        checked={exportSubMode === "none"}
+                        onChange={() => setExportSubMode("none")}
+                      />
+                      <strong>Không nhúng phụ đề</strong>
+                    </div>
+                    <p className="studio-export-option-desc">
+                      Video xuất ra sạch hoàn toàn không chữ, chỉ có file <code>.srt</code> rời bên cạnh nếu dự án có phụ đề.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="studio-export-dialog-footer">
+              <button
+                type="button"
+                className="studio-btn-subtle"
+                onClick={() => setShowExportModal(false)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="studio-btn-action-primary"
+                onClick={handleConfirmExportVideo}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <IconClapper size={14} /> Bắt đầu xuất video
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tiến Trình Đang Xuất Video */}
       {isExporting && (
         <div className="studio-modal-backdrop">
           <div className="studio-modal-box">
             <div className="studio-modal-title">
               <IconClapper size={18} />
-              <span>{exportDonePath ? "Xuất Video Hon Tất!" : "Đang Xuất Video Lồng Tiếng..."}</span>
+              <span>Đang Xuất Video & Đóng Gói Media...</span>
             </div>
             <div className="studio-progress-bar-bg">
               <div className="studio-progress-bar-fill" style={{ width: `${exportProgress}%` }} />
             </div>
-            <div style={{ fontSize: 12, color: "var(--t2)" }}>{exportMessage}</div>
-            {exportDonePath ? (
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="studio-btn-action-primary"
-                  onClick={() => sublix.dubbingOpenOutputFolder(exportDonePath)}
-                >
-                   Mở Thư Mục Thnh Phẩm
-                </button>
-                <button
-                  type="button"
-                  className="studio-btn-subtle"
-                  onClick={() => setIsExporting(false)}
-                >
-                  Đng
-                </button>
+            <div style={{ fontSize: 13, color: "var(--t1)", fontWeight: 600, marginTop: 4 }}>
+              {exportProgress}% — {exportMessage}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 6 }}>
+              Vui lòng không đóng cửa sổ trong lúc FFmpeg đang xử lý và đóng gói video...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thông Báo Xuất Hoàn Tất */}
+      {!isExporting && Boolean(exportDonePath) && (
+        <div className="studio-modal-backdrop" onClick={() => setExportDonePath("")}>
+          <div className="studio-modal-box studio-export-success-box" onClick={(e) => e.stopPropagation()}>
+            <div className="studio-modal-title" style={{ color: "#22c55e" }}>
+              <IconCheck size={20} />
+              <span>Xuất Video Hoàn Tất!</span>
+              <button
+                type="button"
+                className="studio-modal-close-btn"
+                onClick={() => setExportDonePath("")}
+                title="Đóng cửa sổ"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.5 }}>
+              Video thành phẩm đã được đóng gói hoàn tất tại:
+              <div
+                style={{
+                  background: "rgba(0,0,0,0.35)",
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  fontFamily: "monospace",
+                  fontSize: 11.5,
+                  color: "var(--ac)",
+                  wordBreak: "break-all",
+                  marginTop: 6,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {exportDonePath}
               </div>
-            ) : null}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="studio-btn-subtle"
+                onClick={() => sublix.downloaderOpenFile(exportDonePath)}
+                title="Mở video bằng trình phát mặc định của hệ điều hành (VLC/Media Player)"
+                style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              >
+                ▶ Mở Bằng VLC / Player Ngoài
+              </button>
+              <button
+                type="button"
+                className="studio-btn-action-primary"
+                onClick={() => sublix.dubbingOpenOutputFolder(exportDonePath)}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                📁 Mở Thư Mục Thành Phẩm
+              </button>
+              <button
+                type="button"
+                className="studio-btn-subtle"
+                onClick={() => setExportDonePath("")}
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

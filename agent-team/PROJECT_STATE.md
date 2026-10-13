@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.32` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | `21a7028` on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Sẵn sàng làm việc (Master up-to-date, 0 build error, Antigravity online trở lại cùng team) |
+| **Bản Build Hiện Tại** | `v0.11.33` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Git Commit** | on `master` (`https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Sẵn sàng làm việc (0 build error, Antigravity hoàn thành fix đổi file & xuất VLC multitrack) |
 
 ---
 
@@ -22,7 +22,7 @@
 
 | Agent / IDE | Vai trò chính | Status | Ghi chú |
 |-------------|---------------|--------|---------|
-| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | ⚪ Standby | **Tạm nghỉ theo lệnh PO anh Tuấn** — bàn giao sạch sẽ toàn bộ hệ thống |
+| **Antigravity** | Kiến trúc hệ thống, Full-stack Rust + React, AI Model Integration | 🟢 Active | Đã xử lý dứt điểm BUG-063 & xuất video đa đường tiếng theo yêu cầu PO |
 | **Claude Code** | Logic Audio, Pipeline Scripting, Bug Fixes | 🟢 Ready | Sẵn sàng nhận việc / thử tài theo phân công của anh Tuấn |
 | **CommandCode** | Code Reviewer, Audit 25+ bugs, Debug systematic | 🟢 Ready | Sẵn sàng review code, giám sát & điều phối kỹ thuật |
 | **Mavis (MiniMax-M3)** | **Thợ code (Worker)** — nhận chỉ đạo làm đúng việc được giao (`@assign`). | 🟢 Ready | Sẵn sàng test GUI, viết test, debug chi tiết |
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-STUDIO-REPLACE-EXPORT-VLC` | Sửa lỗi không đổi được video trong Studio (dội ngược file cũ) & Xuất Softsub / Multi-track Audio chuẩn VLC | **Antigravity** | 2026-10-13 | ✅ Bỏ deps filePath, tập trung handleLoadNewVideoFile + onClearPendingFile; FFmpeg Softsub & Multi-track VLC; Modal UI cấu hình xuất; v0.11.33 |
 | `TSK-SUBS-YOUTUBE-REUSE-2026-10-13` | Studio tận dụng phụ đề YouTube đã tải (checkbox TÍCH SẴN) + marking "YouTube" (badge timeline + chip Downloader + manifest quản lý) | **CommandCode** | 2026-10-13 | ✅ E2E StarCraft: whisper=0 process, 49 câu từ .srt, badge "📥 YouTube (.en)", manifest 2 entry; v0.11.32 |
 | `TSK-FIX-SUBS-2026-10-13` | Fix phụ đề Tab Tải Video (bật checkbox mà không ra file): tách sub-pass riêng chống 429 + nút "📝 Tải phụ đề" + chip langs + backfill item cũ | **CommandCode** | 2026-10-13 | ✅ E2E thật: StarCraft ra `en.srt`+`vi.srt` (9:29), video mới tự ra `en.srt`, chip UI đo được; `BUG-061`; v0.11.31 |
 | `TSK-STUDIO-PERF-TIMELINE-FIX` | Sửa video nhảy player ngoài (thay bằng 🚀 Xem Trong Studio) & Khắc phục triệt để đơ timeline 323 câu / transcode ngầm 100% CPU | **Antigravity** | 2026-10-12 | ✅ Memoize 323 cards/blocks (`React.memo`), throttle onTimeUpdate 120ms, native video listeners, fix transcode oan |

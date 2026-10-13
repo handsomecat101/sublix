@@ -218,10 +218,27 @@ pub struct DubbingProject {
     pub peaks: Option<Vec<f32>>,
     #[serde(default)]
     pub filmstrip_thumbs: Option<Vec<FilmstripThumb>>,
+    /// v0.11.33: Chế độ xuất phụ đề: "softsub" (mặc định - nhúng track phụ đề vào MP4 bật/tắt trong VLC) | "hardsub" | "none"
+    #[serde(default = "default_sub_export_mode")]
+    pub sub_export_mode: Option<String>,
+    /// v0.11.33: Chế độ xuất âm thanh: "multitrack" (mặc định - VLC chọn Track 1: Gốc, Track 2: Thuyết minh) | "mixed" | "original"
+    #[serde(default = "default_audio_export_mode")]
+    pub audio_export_mode: Option<String>,
+    /// Ngôn ngữ target (ISO code: "vi", "en",...)
+    #[serde(default)]
+    pub target_lang: Option<String>,
 }
 
 fn default_dubbing_mode() -> String {
     "ducking".to_string()
+}
+
+fn default_sub_export_mode() -> Option<String> {
+    Some("softsub".to_string())
+}
+
+fn default_audio_export_mode() -> Option<String> {
+    Some("multitrack".to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2045,7 +2062,7 @@ pub fn analyze_and_create_project_full(
         }
     }
 
-    let tgt_lang = target_lang.unwrap_or_else(|| "vi".to_string());
+    let tgt_lang = target_lang.clone().unwrap_or_else(|| "vi".to_string());
 
     // 4. Multi-Speaker Diarization & Cinematic Scripting
     let mut speakers = Vec::new();
@@ -2212,6 +2229,9 @@ pub fn analyze_and_create_project_full(
         transcript_source: Some(transcript_source),
         peaks,
         filmstrip_thumbs,
+        sub_export_mode: Some("softsub".to_string()),
+        audio_export_mode: Some("multitrack".to_string()),
+        target_lang: target_lang.clone(),
     })
 }
 
@@ -2593,25 +2613,83 @@ pub fn export_dubbed_video(
         dir.join(format!("{}_dubbed.mp4", stem))
     };
 
-    // 3. Run master FFmpeg command using pre-rendered tracks (at most 3 inputs, < 300 chars CMD)
+    // Determine subtitle & audio export modes
+    let sub_mode = project.sub_export_mode.as_deref().unwrap_or("softsub");
+    let audio_mode = project.audio_export_mode.as_deref().unwrap_or("multitrack");
+
+    // Build subtitle file if segments exist and sub_mode is not "none"
+    let mut srt_content = String::new();
+    let mut srt_valid_count = 0;
+    for seg in &project.segments {
+        let text = if !seg.dubbed_text.trim().is_empty() {
+            seg.dubbed_text.trim()
+        } else if !seg.original_text.trim().is_empty() {
+            seg.original_text.trim()
+        } else {
+            continue;
+        };
+        let start_str = format_seconds_to_srt(seg.start_sec);
+        let end_str = format_seconds_to_srt(seg.end_sec);
+        srt_content.push_str(&format!("{}\n{} --> {}\n{}\n\n", srt_valid_count + 1, start_str, end_str, text));
+        srt_valid_count += 1;
+    }
+
+    let srt_path_opt = if srt_valid_count > 0 && sub_mode != "none" {
+        let p = temp_dir.join("subtitles.srt");
+        if fs::write(&p, &srt_content).is_ok() {
+            // Đồng thời xuất file .srt rời ngay cạnh video thành phẩm để người dùng tiện sử dụng
+            let out_stem = out_file.file_stem().unwrap_or_default().to_string_lossy();
+            let parent_dir = out_file.parent().unwrap_or_else(|| Path::new("."));
+            let companion_srt = parent_dir.join(format!("{}.{}.srt", out_stem, target_lang));
+            let _ = fs::write(&companion_srt, &srt_content);
+            Some(p)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // 3. Run master FFmpeg command using pre-rendered tracks & subtitle/audio options
     let mut remux = Command::new(&ffmpeg_bin);
     remux.arg("-y");
     remux.arg("-i").arg(&project.input_path); // Input 0
 
-    let mix_filter = match (&speech_track_opt, &isolated_bgm_path) {
-        (Some(speech_wav), Some(bgm_file)) => {
-            remux.arg("-i").arg(speech_wav); // Input 1
-            remux.arg("-i").arg(bgm_file);   // Input 2
-            "[2:a]volume=1.0[bgm];[bgm][1:a]amix=inputs=2:normalize=0[final_audio]".to_string()
+    let mut current_input_idx: usize = 1;
+    let mut speech_input_idx = None;
+    let mut bgm_input_idx = None;
+
+    if let Some(speech_wav) = &speech_track_opt {
+        remux.arg("-i").arg(speech_wav);
+        speech_input_idx = Some(current_input_idx);
+        current_input_idx += 1;
+    }
+    if let Some(bgm_file) = &isolated_bgm_path {
+        remux.arg("-i").arg(bgm_file);
+        bgm_input_idx = Some(current_input_idx);
+        current_input_idx += 1;
+    }
+
+    // Subtitle input (if softsub):
+    let mut srt_input_idx = None;
+    if sub_mode == "softsub" {
+        if let Some(ref srt_file) = srt_path_opt {
+            remux.arg("-i").arg(srt_file);
+            srt_input_idx = Some(current_input_idx);
         }
-        (Some(speech_wav), None) => {
-            remux.arg("-i").arg(speech_wav); // Input 1
+    }
+
+    let has_speech = speech_track_opt.is_some();
+    let mix_filter = match (speech_input_idx, bgm_input_idx) {
+        (Some(s_idx), Some(b_idx)) => {
+            format!("[{b_idx}:a]volume=1.0[bgm];[bgm][{s_idx}:a]amix=inputs=2:normalize=0[final_audio]")
+        }
+        (Some(s_idx), None) => {
             let bgm_vol = project.bgm_volume;
-            format!("[0:a]volume={bgm_vol}[bgm];[bgm][1:a]amix=inputs=2:normalize=0[final_audio]")
+            format!("[0:a]volume={bgm_vol}[bgm];[bgm][{s_idx}:a]amix=inputs=2:normalize=0[final_audio]")
         }
-        (None, Some(bgm_file)) => {
-            remux.arg("-i").arg(bgm_file);   // Input 1
-            "[1:a]volume=1.0[final_audio]".to_string()
+        (None, Some(b_idx)) => {
+            format!("[{b_idx}:a]volume=1.0[final_audio]")
         }
         (None, None) => {
             "[0:a]anull[final_audio]".to_string()
@@ -2622,24 +2700,52 @@ pub fn export_dubbed_video(
     fs::write(&filter_script_path, &mix_filter)
         .context("Failed to write filter_complex_script")?;
 
-    remux
-        .arg("-filter_complex_script")
-        .arg(&filter_script_path)
-        .arg("-map")
-        .arg("0:v?") // Map original video if present
-        .arg("-map")
-        .arg("[final_audio]") // Map mixed audio
-        .arg("-c:v")
-        .arg("copy") // Fast video copy, no re-encoding
-        .arg("-c:a")
-        .arg("aac")
-        .arg("-b:a")
-        .arg("192k")
-        // R5-10: tag audio track language theo target_lang thật (bám theo ngôn ngữ
-        // đích của dự án), thay vì hardcode "vie" như trước. Player (VLC, mpv) sẽ
-        // hiển thị đúng ngôn ngữ + tự chọn track khi user đổi audio.
-        .arg("-metadata:s:a:0")
-        .arg(format!("language={}", target_lang));
+    remux.arg("-filter_complex_script").arg(&filter_script_path);
+
+    // Video mapping & encoding
+    if sub_mode == "hardsub" && srt_path_opt.is_some() {
+        let srt_file = srt_path_opt.as_ref().unwrap();
+        let srt_escaped = srt_file.to_string_lossy().replace('\\', "/").replace(':', "\\:");
+        remux.arg("-vf").arg(format!("subtitles='{}'", srt_escaped));
+        remux.arg("-c:v").arg("libx264").arg("-preset").arg("fast").arg("-crf").arg("22");
+    } else {
+        remux.arg("-map").arg("0:v?");
+        remux.arg("-c:v").arg("copy");
+    }
+
+    // Audio mapping
+    if audio_mode == "multitrack" && has_speech {
+        // Multi-track audio (VLC: Track 1 = Tiếng gốc, Track 2 = Thuyết minh AI)
+        remux.arg("-map").arg("0:a:0?");
+        remux.arg("-map").arg("[final_audio]");
+        remux.arg("-c:a").arg("aac").arg("-b:a").arg("192k");
+        remux.arg("-metadata:s:a:0").arg("title=Tiếng gốc (Original)");
+        remux.arg("-metadata:s:a:0").arg("language=und");
+        remux.arg("-metadata:s:a:1").arg("title=Thuyết minh AI");
+        remux.arg("-metadata:s:a:1").arg(format!("language={}", target_lang));
+    } else if has_speech || audio_mode == "mixed" {
+        // Single mixed track
+        remux.arg("-map").arg("[final_audio]");
+        remux.arg("-c:a").arg("aac").arg("-b:a").arg("192k");
+        remux.arg("-metadata:s:a:0").arg("title=Thuyết minh AI (Đã trộn)");
+        remux.arg("-metadata:s:a:0").arg(format!("language={}", target_lang));
+    } else {
+        // Original audio only
+        remux.arg("-map").arg("0:a:0?");
+        remux.arg("-c:a").arg("copy");
+        remux.arg("-metadata:s:a:0").arg("title=Tiếng gốc");
+    }
+
+    // Subtitle mapping (Softsub)
+    if sub_mode == "softsub" {
+        if let Some(s_idx) = srt_input_idx {
+            remux.arg("-map").arg(format!("{}:s", s_idx));
+            remux.arg("-c:s").arg("mov_text");
+            remux.arg("-metadata:s:s:0").arg("title=Phụ đề Tiếng Việt");
+            remux.arg("-metadata:s:s:0").arg(format!("language={}", target_lang));
+            remux.arg("-disposition:s:0").arg("default");
+        }
+    }
 
     if let Some(limit) = project.time_limit_sec {
         if limit > 0.0 {
@@ -2674,6 +2780,16 @@ pub fn export_dubbed_video(
 
     emit("done", 100.0, "Xuất video lồng tiếng thành công!", 100, 100);
     Ok(out_file.to_string_lossy().to_string())
+}
+
+/// Helper to format floating seconds into standard SRT timestamp HH:MM:SS,mmm
+pub fn format_seconds_to_srt(seconds: f64) -> String {
+    let secs = seconds.max(0.0);
+    let hours = (secs / 3600.0).floor() as u64;
+    let mins = ((secs % 3600.0) / 60.0).floor() as u64;
+    let rem_secs = (secs % 60.0).floor() as u64;
+    let millis = ((secs.fract()) * 1000.0).round() as u64;
+    format!("{:02}:{:02}:{:02},{:03}", hours, mins, rem_secs, millis.min(999))
 }
 
 /// Helper to get audio duration in seconds via FFmpeg

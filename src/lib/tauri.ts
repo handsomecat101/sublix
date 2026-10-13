@@ -581,6 +581,11 @@ export interface DubbingProject {
   transcript_source?: string | null;
   peaks?: number[];
   filmstrip_thumbs?: Array<{ time_sec: number; data_uri: string }>;
+  /** v0.11.33: "softsub" (mặc định - nhúng track phụ đề vào MP4 bật/tắt trong VLC) | "hardsub" | "none" */
+  sub_export_mode?: "softsub" | "hardsub" | "none";
+  /** v0.11.33: "multitrack" (mặc định - VLC chọn Track 1: Gốc, Track 2: Thuyết minh) | "mixed" | "original" */
+  audio_export_mode?: "multitrack" | "mixed" | "original";
+  target_lang?: string;
 }
 
 /** v0.11.32: phụ đề có sẵn cạnh video — source "youtube" nếu do app tải từ YouTube. */

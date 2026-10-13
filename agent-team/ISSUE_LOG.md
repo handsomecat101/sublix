@@ -20,6 +20,7 @@
 | `BUG-H06` | Phân vai Diarization bị gán 1 người nói do mốc SRT Whisper liên tục (`pause = 0`) | `src-tauri/src/dubbing/mod.rs` | Kích hoạt đổi vai khi câu trước kết thúc bằng dấu chấm/chấm than/hỏi (`prev_ends_terminal`) | ✅ Fixed |
 | `BUG-H07` | Lỗi WebView2 `ERR_CONNECTION_REFUSED` do build bằng `cargo build` thô | Tauri Build / Config | CẤM dùng `cargo build --release` để build app; bắt buộc dùng `npx tauri build --no-bundle` (hoặc chạy dev mode `npm run tauri dev`) | ✅ Fixed |
 | `BUG-H08` | Dev mode: app ghi file runtime (samples/model) vào `src-tauri/models/...` → `tauri dev` watcher tưởng đổi code → **tự restart & giết tiến trình đang chạy** (tạo mẫu nghe thử tạo ra 0 file) | `config.rs` app_base_dir (dev = `CARGO_MANIFEST_DIR`) + tauri dev watcher | GUI-test tính năng ghi model: chạy `npm run tauri dev -- --no-watch`; release không dính | 🟡 Workaround |
+| `BUG-063` | Studio không đổi được video khác do effect dính `filePath` & Thiếu xuất Softsub / Multi-track Audio | `SublixStudioView.tsx`, `dubbing/mod.rs` | Bỏ state nội bộ khỏi deps của prop sync effect, tập trung reset state qua `handleLoadNewVideoFile` và gọi `onClearPendingFile` | ✅ Fixed |
 
 ---
 
@@ -326,5 +327,19 @@
   2. **CẤM kích hoạt `ffmpeg transcode` khi video đang tạm dừng:** Chỉ transcode khi `videoWidth === 0` sau khi nạp metadata hoặc khi thẻ `<video>` bắn sự kiện `onError`.
   3. **BẮT BUỘC memoize các component lặp lại:** `StudioSegmentCard` và `StudioTimelineSubtitleBlock` phải được bọc `React.memo`. Không truyền anonymous inline functions hay mutable object vào props nếu không cần thiết. Khi playhead chạy qua, **chỉ đúng 2 card re-render** (card cũ và card mới).
   4. **Throttling React State:** Throttling `onTimeUpdate` xuống mỗi 120ms (~8fps) cho React state, trong khi kim Playhead chạy mượt mà 60fps qua direct DOM ref.
+
+---
+
+### [BUG-063] Studio không đổi được video khác (bị dội ngược lại video cũ do useEffect dính filePath) & Thiếu tùy chọn xuất Softsub / Multi-track Audio VLC
+- **Ngày:** 2026-10-13 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Antigravity | **Status:** ✅ Fixed
+- **File:** `src/views/SublixStudioView.tsx`, `src/views/SettingsView.tsx`, `src-tauri/src/dubbing/mod.rs`, `src/lib/tauri.ts`
+- **Root Cause:**
+  1. *Không đổi được video:* `useEffect` đồng bộ `initialFilePath` chứa `filePath` trong dependency array (`[initialFilePath, fileNonce, filePath]`) và điều kiện `if (initialFilePath !== filePath)`. Khi người dùng từng bấm "Xem Trong Studio", `pendingStudioPath` ở cha lưu path video cũ. Khi người dùng mở file mới/kéo thả/đóng file trong Studio, `filePath` đổi → `useEffect` tự động chạy lại → thấy `initialFilePath !== filePath` → tự động ép `setFilePath(initialFilePath)` dội ngược lại video cũ.
+  2. *Thiếu chế độ xuất video:* Hệ thống chỉ hỗ trợ 1 kiểu remux cứng, không cho người dùng chọn phụ đề mềm (Softsub `-c:s mov_text` bật/tắt trong VLC) vs Hardsub, và không có tùy chọn Đa đường tiếng (Multi-track Audio: Track 1 Tiếng gốc, Track 2 Thuyết minh AI) chuẩn xem VLC.
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Bỏ `filePath` ra khỏi dependency array của effect:** Chỉ sync khi `initialFilePath` hoặc `fileNonce` thực sự thay đổi giá trị so với ref (`lastLoadedInitialPathRef`, `lastLoadedNonceRef`).
+  2. **Tập trung hóa nạp file & giải phóng state cha:** Viết hàm tập trung `handleLoadNewVideoFile(newPath)` reset sạch `segments`, `speakers`, `undoStack`, `audioPeaks`, `filmstripThumbs`, `localStorage` cache cũ; đồng thời gọi `onClearPendingFile?.()` để cha reset `pendingStudioPath = ""` tránh bị dội ngược.
+  3. **FFmpeg Multi-track Audio & Softsub:** Triển khai mapping đa track âm thanh (`-map 0:a:0?` + `-map [final_audio]`) và phụ đề mềm (`-map {srt}:s -c:s mov_text`) với ISO language metadata đầy đủ cho VLC/TV; kèm UI modal cấu hình trực quan trước khi xuất.
+
 
 
