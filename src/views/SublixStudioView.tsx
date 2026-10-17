@@ -1136,6 +1136,36 @@ export default function SublixStudioView({
   const finishedVoiceSegRef = useRef<number | null>(null);
   const videoVolumeBeforeDuckRef = useRef<number | null>(null);
 
+  // Premiere Pro-style Track Mute Toggles (Tắt/Bật tiếng riêng biệt cho Tiếng Gốc & Tiếng Lồng)
+  const [isOriginalMuted, setIsOriginalMuted] = useState<boolean>(false);
+  const isOriginalMutedRef = useRef<boolean>(false);
+  isOriginalMutedRef.current = isOriginalMuted;
+
+  const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
+  const isVoiceMutedRef = useRef<boolean>(false);
+  isVoiceMutedRef.current = isVoiceMuted;
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) {
+      v.muted = isOriginalMuted;
+    }
+  }, [isOriginalMuted]);
+
+  useEffect(() => {
+    if (isVoiceMuted) {
+      stopVoicePlayback();
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+          previewAudioRef.current.currentTime = 0;
+        } catch {
+          /* noop */
+        }
+      }
+    }
+  }, [isVoiceMuted]);
+
   const stopVoicePlayback = () => {
     const va = voicePlayRef.current;
     if (va) {
@@ -1156,11 +1186,15 @@ export default function SublixStudioView({
         v.volume = videoVolumeBeforeDuckRef.current;
         videoVolumeBeforeDuckRef.current = null;
       }
-      v.muted = false;
+      v.muted = isOriginalMutedRef.current;
     }
   };
 
   const syncVoicePlayback = (now: number, paused: boolean) => {
+    if (isVoiceMutedRef.current) {
+      if (activeVoiceSegRef.current !== null) stopVoicePlayback();
+      return;
+    }
     const v = videoRef.current;
     if (paused || !v) {
       if (activeVoiceSegRef.current !== null) stopVoicePlayback();
@@ -3806,10 +3840,22 @@ export default function SublixStudioView({
             /* noop */
           }
         }
-        const wavData = await sublix.dubbingPreviewTts(seg.translated, voice);
+        const textToSpeak = (seg.translated || seg.original || "").trim();
+        const wavData = await sublix.dubbingPreviewTts(textToSpeak, voice);
         if (wavData) {
           const audio = new Audio(wavData);
           previewAudioRef.current = audio;
+          audio.onloadedmetadata = () => {
+            const dur = audio.duration;
+            if (dur && isFinite(dur) && dur > 0) {
+              setSegments((prev) =>
+                prev.map((s) => (s.id === seg.id ? { ...s, hasAudio: true, audioUrl: wavData, audioDuration: dur } : s))
+              );
+            }
+          };
+          setSegments((prev) =>
+            prev.map((s) => (s.id === seg.id ? { ...s, hasAudio: true, audioUrl: wavData } : s))
+          );
           await audio.play();
           showToast(`🎧 Đang phát câu thoại bằng giọng ${voice}`);
         }
@@ -3822,6 +3868,45 @@ export default function SublixStudioView({
       showToast(`⚠ Không thể nghe thử giọng: ${err}`);
     } finally {
       setPreviewingSegId(null);
+    }
+  };
+
+  const handleVoiceBlockClick = async (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => {
+    if (timelineToolMode === "scrub") {
+      handleTimelineClick(e);
+      return;
+    }
+    e.stopPropagation();
+    handleSelectSegmentWithModifier(seg, e);
+    handleSeek(seg.start);
+
+    if (isVoiceMutedRef.current) {
+      showToast("⚠️ Track tiếng lồng đang tắt tiếng (Mute) — Bấm nút 'M' trên header để nghe lại");
+      return;
+    }
+
+    if (seg.hasAudio && seg.audioUrl) {
+      try {
+        stopVoicePlayback();
+        if (previewAudioRef.current) {
+          try {
+            previewAudioRef.current.pause();
+            previewAudioRef.current.currentTime = 0;
+            previewAudioRef.current.removeAttribute("src");
+            previewAudioRef.current.load();
+          } catch {
+            /* noop */
+          }
+        }
+        const audio = new Audio(seg.audioUrl);
+        previewAudioRef.current = audio;
+        await audio.play();
+        showToast(`🎧 Đang phát lồng tiếng câu #${seg.id}`);
+      } catch (err) {
+        console.warn("Failed to play voice clip:", err);
+      }
+    } else {
+      await handlePreviewSegmentTts(seg);
     }
   };
 
@@ -6383,9 +6468,19 @@ export default function SublixStudioView({
                 </div>
                 <div className="studio-track-header-item">
                   <div className="studio-track-header-left">
-                    <span></span>
                     <span>♫ TIẾNG GỐC</span>
                   </div>
+                  <button
+                    type="button"
+                    className={`studio-track-mute-btn ${isOriginalMuted ? "muted" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOriginalMuted((prev) => !prev);
+                    }}
+                    title={isOriginalMuted ? "Đang TẮT tiếng video gốc (Mute) — Bấm để BẬT lại (Unmute)" : "Bấm để TẮT tiếng video gốc (Mute)"}
+                  >
+                    M
+                  </button>
                 </div>
 
                 {/* Track 3: Phụ Đề (Chỉ hiện khi có phụ đề hoặc đang tạo) */}
@@ -6439,18 +6534,31 @@ export default function SublixStudioView({
                       <span className="studio-track-voice-tag">🎙️ TIẾNG LỒNG</span>
                       <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length > 0 ? `${speakers.length} vai` : "Thuyết minh AI"})</span>
                     </div>
-                    {segments.some((s) => s.hasAudio) && (
+                    <div className="studio-track-header-actions">
                       <button
-                        className="studio-track-clear-btn"
+                        type="button"
+                        className={`studio-track-mute-btn ${isVoiceMuted ? "muted" : ""}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleClearTrack("speaker", "all");
+                          setIsVoiceMuted((prev) => !prev);
                         }}
-                        title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
+                        title={isVoiceMuted ? "Đang TẮT tiếng lồng AI (Mute) — Bấm để BẬT lại (Unmute)" : "Bấm để TẮT tiếng lồng AI (Mute)"}
                       >
-                        🗑️
+                        M
                       </button>
-                    )}
+                      {segments.some((s) => s.hasAudio) && (
+                        <button
+                          className="studio-track-clear-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearTrack("speaker", "all");
+                          }}
+                          title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   speakers.map((spk) => {
@@ -6478,16 +6586,29 @@ export default function SublixStudioView({
                             {engineTag}
                           </span>
                         </div>
-                        <button
-                          className="studio-track-clear-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleClearTrack("speaker", spk.id);
-                          }}
-                          title={`Xóa âm thanh lồng tiếng của vai ${spkName} (giữ nguyên phụ đề)`}
-                        >
-                          🗑️
-                        </button>
+                        <div className="studio-track-header-actions">
+                          <button
+                            type="button"
+                            className={`studio-track-mute-btn ${isVoiceMuted ? "muted" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsVoiceMuted((prev) => !prev);
+                            }}
+                            title={isVoiceMuted ? "Đang TẮT tiếng lồng AI (Mute) — Bấm để BẬT lại (Unmute)" : "Bấm để TẮT tiếng lồng AI (Mute)"}
+                          >
+                            M
+                          </button>
+                          <button
+                            className="studio-track-clear-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearTrack("speaker", spk.id);
+                            }}
+                            title={`Xóa âm thanh lồng tiếng của vai ${spkName} (giữ nguyên phụ đề)`}
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                     );
                   })
@@ -6913,78 +7034,91 @@ export default function SublixStudioView({
                     );
                   })()
                 )}
-                {segments.map((seg) => {
-                  const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
-                  const spkName = getSpeakerDisplayName(spk);
-                  const totalDur = Math.max(1, mediaDuration);
-                  const left = (seg.start / totalDur) * timelineWidth;
-                  // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
-                  const voiceDur = computeVoiceBlockDur(seg, totalDur);
-                  const rawWidth = (voiceDur / totalDur) * timelineWidth;
-                  const width = Math.max(3, rawWidth);
-                  const isCompact = width < 30;
-                  const isSelected = seg.id === selectedSegId;
-                  const isMultiSelected = selectedSegIds.includes(seg.id);
-                  const spkColor = spk?.color || "#38bdf8";
+                {(() => {
+                  const hasAnyAudio = segments.some((s) => s.hasAudio);
+                  const isGeneratingVoice = timelineProcessType === "voice" || timelineProcessType === "pipeline";
 
-                  return (
-                    <div
-                      key={seg.id}
-                      data-seg-id={seg.id}
-                      className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
-                      style={{
-                        left: `${left}px`,
-                        width: `${width}px`,
-                        background: `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)`,
-                        borderColor: spkColor,
-                      }}
-                      onClick={(e) => {
-                        if (timelineToolMode === "scrub") {
-                          handleTimelineClick(e);
-                          return;
+                  if (!hasAnyAudio && !isGeneratingVoice) {
+                    return (
+                      <div className="studio-track-empty-placeholder">
+                        <span>🎙️ Track tiếng lồng trống — Bấm "3. Lồng tiếng (TTS)" ở cột trái hoặc bấm vào câu để tạo giọng đọc AI</span>
+                      </div>
+                    );
+                  }
+
+                  const voiceSegments = segments.filter((s) => s.hasAudio || s.id === selectedSegId);
+
+                  return voiceSegments.map((seg) => {
+                    const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
+                    const spkName = getSpeakerDisplayName(spk);
+                    const totalDur = Math.max(1, mediaDuration);
+                    const left = (seg.start / totalDur) * timelineWidth;
+                    // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
+                    const voiceDur = computeVoiceBlockDur(seg, totalDur);
+                    const rawWidth = (voiceDur / totalDur) * timelineWidth;
+                    const width = Math.max(3, rawWidth);
+                    const isCompact = width < 30;
+                    const isSelected = seg.id === selectedSegId;
+                    const isMultiSelected = selectedSegIds.includes(seg.id);
+                    const spkColor = spk?.color || "#38bdf8";
+                    const hasAudio = !!seg.hasAudio;
+
+                    return (
+                      <div
+                        key={seg.id}
+                        data-seg-id={seg.id}
+                        className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
+                        style={{
+                          left: `${left}px`,
+                          width: `${width}px`,
+                          background: hasAudio ? `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)` : `rgba(255, 255, 255, 0.04)`,
+                          borderColor: hasAudio ? spkColor : `rgba(255, 255, 255, 0.25)`,
+                          borderStyle: hasAudio ? "solid" : "dashed",
+                        }}
+                        onClick={(e) => handleVoiceBlockClick(seg, e)}
+                        title={hasAudio
+                          ? `[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.start + voiceDur)}] Bấm để nghe lại`
+                          : `[Chưa lồng tiếng: ${spkName}] Bấm để tạo & nghe thử câu này`
                         }
-                        e.stopPropagation();
-                        handleSelectSegmentWithModifier(seg, e);
-                      }}
-                      title={`[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
-                    >
-                      <div className="studio-voice-wave-texture" />
-                      {!isCompact && (
-                        <div
-                          className="studio-timeline-block-handle left"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "start", -0.2);
-                          }}
-                          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                        />
-                      )}
-                      {!isCompact && (
-                        <div className="studio-voice-block-inner">
-                          <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                            🎙️
-                          </span>
-                          <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
-                            [{spkName}]:
-                          </strong>
-                          <span className="studio-voice-block-text">
-                            {seg.translated || seg.original}
-                          </span>
-                        </div>
-                      )}
-                      {!isCompact && (
-                        <div
-                          className="studio-timeline-block-handle right"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNudgeSegment(seg.id, "end", 0.2);
-                          }}
-                          title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                      >
+                        {hasAudio && <div className="studio-voice-wave-texture" />}
+                        {!isCompact && hasAudio && (
+                          <div
+                            className="studio-timeline-block-handle left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNudgeSegment(seg.id, "start", -0.2);
+                            }}
+                            title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                          />
+                        )}
+                        {!isCompact && (
+                          <div className="studio-voice-block-inner">
+                            <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                              🎙️
+                            </span>
+                            <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
+                              [{spkName}]:
+                            </strong>
+                            <span className="studio-voice-block-text" style={{ opacity: hasAudio ? 1 : 0.7 }}>
+                              {seg.translated || seg.original}
+                            </span>
+                          </div>
+                        )}
+                        {!isCompact && hasAudio && (
+                          <div
+                            className="studio-timeline-block-handle right"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNudgeSegment(seg.id, "end", 0.2);
+                            }}
+                            title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                          />
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : (
               speakers.map((spk) => {
@@ -7041,72 +7175,85 @@ export default function SublixStudioView({
                         );
                       })()
                     )}
-                    {spkSegments.map((seg) => {
-                      const totalDur = Math.max(1, mediaDuration);
-                      const left = (seg.start / totalDur) * timelineWidth;
-                      // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
-                      const voiceDur = computeVoiceBlockDur(seg, totalDur);
-                      const rawWidth = (voiceDur / totalDur) * timelineWidth;
-                      const width = Math.max(3, rawWidth);
-                      const isCompact = width < 30;
-                      const isSelected = seg.id === selectedSegId;
-                      const isMultiSelected = selectedSegIds.includes(seg.id);
+                    {(() => {
+                      const hasSpkAudio = spkSegments.some((s) => s.hasAudio);
+                      const isGeneratingVoice = timelineProcessType === "voice" || timelineProcessType === "pipeline";
 
-                      return (
-                        <div
-                          key={seg.id}
-                          data-seg-id={seg.id}
-                          className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${seg.hasAudio ? "has-audio" : ""}`}
-                          style={{
-                            left: `${left}px`,
-                            width: `${width}px`,
-                            background: `linear-gradient(180deg, ${spk.color}30, ${spk.color}65)`,
-                            borderColor: spk.color,
-                          }}
-                          onClick={(e) => {
-                            if (timelineToolMode === "scrub") {
-                              handleTimelineClick(e);
-                              return;
+                      if (!hasSpkAudio && !isGeneratingVoice) {
+                        return (
+                          <div className="studio-track-empty-placeholder">
+                            <span>🎙️ Track trống (chưa có câu nào lồng tiếng của vai {spkName})</span>
+                          </div>
+                        );
+                      }
+
+                      const voiceSegments = spkSegments.filter((s) => s.hasAudio || s.id === selectedSegId);
+
+                      return voiceSegments.map((seg) => {
+                        const totalDur = Math.max(1, mediaDuration);
+                        const left = (seg.start / totalDur) * timelineWidth;
+                        // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
+                        const voiceDur = computeVoiceBlockDur(seg, totalDur);
+                        const rawWidth = (voiceDur / totalDur) * timelineWidth;
+                        const width = Math.max(3, rawWidth);
+                        const isCompact = width < 30;
+                        const isSelected = seg.id === selectedSegId;
+                        const isMultiSelected = selectedSegIds.includes(seg.id);
+                        const hasAudio = !!seg.hasAudio;
+
+                        return (
+                          <div
+                            key={seg.id}
+                            data-seg-id={seg.id}
+                            className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
+                            style={{
+                              left: `${left}px`,
+                              width: `${width}px`,
+                              background: hasAudio ? `linear-gradient(180deg, ${spk.color}30, ${spk.color}65)` : `rgba(255, 255, 255, 0.04)`,
+                              borderColor: hasAudio ? spk.color : `rgba(255, 255, 255, 0.25)`,
+                              borderStyle: hasAudio ? "solid" : "dashed",
+                            }}
+                            onClick={(e) => handleVoiceBlockClick(seg, e)}
+                            title={hasAudio
+                              ? `[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.start + voiceDur)}] Bấm để nghe lại`
+                              : `[Chưa lồng tiếng: ${spkName}] Bấm để tạo & nghe thử câu này`
                             }
-                            e.stopPropagation();
-                            handleSelectSegmentWithModifier(seg, e);
-                          }}
-                          title={`[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}`}
-                        >
-                          <div className="studio-voice-wave-texture" />
-                          {!isCompact && (
-                            <div
-                              className="studio-timeline-block-handle left"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNudgeSegment(seg.id, "start", -0.2);
-                              }}
-                              title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                            />
-                          )}
-                          {!isCompact && (
-                            <div className="studio-voice-block-inner">
-                              <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                                🎙️
-                              </span>
-                              <span className="studio-voice-block-text">
-                                {seg.translated || seg.original}
-                              </span>
-                            </div>
-                          )}
-                          {!isCompact && (
-                            <div
-                              className="studio-timeline-block-handle right"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNudgeSegment(seg.id, "end", 0.2);
-                              }}
-                              title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                          >
+                            {hasAudio && <div className="studio-voice-wave-texture" />}
+                            {!isCompact && hasAudio && (
+                              <div
+                                className="studio-timeline-block-handle left"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleNudgeSegment(seg.id, "start", -0.2);
+                                }}
+                                title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+                              />
+                            )}
+                            {!isCompact && (
+                              <div className="studio-voice-block-inner">
+                                <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+                                  🎙️
+                                </span>
+                                <span className="studio-voice-block-text" style={{ opacity: hasAudio ? 1 : 0.7 }}>
+                                  {seg.translated || seg.original}
+                                </span>
+                              </div>
+                            )}
+                            {!isCompact && hasAudio && (
+                              <div
+                                className="studio-timeline-block-handle right"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleNudgeSegment(seg.id, "end", 0.2);
+                                }}
+                                title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
+                              />
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 );
               })

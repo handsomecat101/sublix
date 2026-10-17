@@ -3081,6 +3081,80 @@
   opacity: 0.7;
 }
 
+/* Premiere Pro-style Track Mute Button (M) */
+.studio-track-mute-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #181e29;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  padding: 0;
+  margin-left: auto;
+}
+
+.studio-track-mute-btn:hover {
+  background: #242f42;
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.studio-track-mute-btn.muted {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.studio-track-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* Empty Audio Track Lane Placeholder */
+.studio-track-empty-placeholder {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+  pointer-events: none;
+  font-size: 11px;
+  font-style: italic;
+  color: rgba(148, 163, 184, 0.55);
+  user-select: none;
+}
+
+/* Voice block placeholder (chưa có audio - viền đứt, mờ) */
+.studio-timeline-voice-block.is-placeholder {
+  border-style: dashed !important;
+  border-width: 1.5px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: none !important;
+  opacity: 0.75;
+}
+
+.studio-timeline-voice-block.is-placeholder:hover {
+  background: rgba(56, 189, 248, 0.12) !important;
+  border-color: #38bdf8 !important;
+  opacity: 1;
+}
+
 /* ==========================================================================
    ROUND-25: TIMELINE CONTEXT MENU & DYNAMIC TRACK VISIBILITY
    ========================================================================== */
