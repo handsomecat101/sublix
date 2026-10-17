@@ -341,5 +341,32 @@
   2. **Tập trung hóa nạp file & giải phóng state cha:** Viết hàm tập trung `handleLoadNewVideoFile(newPath)` reset sạch `segments`, `speakers`, `undoStack`, `audioPeaks`, `filmstripThumbs`, `localStorage` cache cũ; đồng thời gọi `onClearPendingFile?.()` để cha reset `pendingStudioPath = ""` tránh bị dội ngược.
   3. **FFmpeg Multi-track Audio & Softsub:** Triển khai mapping đa track âm thanh (`-map 0:a:0?` + `-map [final_audio]`) và phụ đề mềm (`-map {srt}:s -c:s mov_text`) với ISO language metadata đầy đủ cho VLC/TV; kèm UI modal cấu hình trực quan trước khi xuất.
 
+---
+
+### [BUG-064] Track Tiếng Lồng ("🎙️ TIẾNG LỒNG") chập chờn lúc có lúc không trên Timeline
+- **Ngày:** 2026-10-17 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Antigravity & Subagent QA | **Status:** ✅ Fixed (Verified 100% via CDP GUI Test)
+- **File:** `src/views/SublixStudioView.tsx` (`showVoiceTrack`, `collapseSpeakerTracks`, `spkSegments`)
+- **Root Cause:**
+  1. *Điều kiện hiển thị quá phụ thuộc vào trạng thái audio:* `showVoiceTrack` trước đây phụ thuộc vào `segments.some(s => s.hasAudio) || workflowOptVoice`. Khi người dùng mở video có sẵn phụ đề nhưng chưa tạo tiếng, hoặc khi TTS chưa xong/gặp lỗi, toàn bộ lane tiếng lồng biến mất khỏi DOM gây hoang mang.
+  2. *Bẫy `speakers.length === 0`:* Khi `collapseSpeakerTracks = false` và `speakers.length === 0`, biểu thức `speakers.map(...)` trả về mảng rỗng `[]`, khiến cả Header lẫn Lane timeline bị mất hoàn toàn dù câu thoại vẫn có trên timeline.
+  3. *Lạc mất phân đoạn chưa gán vai:* Khi phân đoạn có `speakerId` không khớp vai nào trong danh sách `speakers`, câu thoại bị lọc mất khỏi lane.
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Đồng bộ hiển thị Track Tiếng Lồng theo Track Phụ Đề:** Đặt `const showVoiceTrack = showSubtitlesTrack;` để Track Tiếng Lồng luôn hiện diện song hành cùng Track Phụ Đề, không bao giờ biến mất chập chờn.
+  2. **Fallback hiển thị khi danh sách vai rỗng:** Cập nhật điều kiện `collapseSpeakerTracks || speakers.length === 0` để luôn render lane tiếng lồng dự phòng với nhãn "Thuyết minh AI" khi chưa chia vai.
+  3. **Bảo toàn phân đoạn mồ côi:** Các câu thoại chưa gán vai hợp lệ tự động gán hiển thị trên lane của `speakers[0]`, đảm bảo 100% câu thoại hiển thị trên timeline.
+
+---
+
+### [BUG-065] Lỗi "nhân đôi tiếng" (echo / 2 giọng nói đè lên nhau) khi phát video kèm tiếng lồng
+- **Ngày:** 2026-10-17 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Antigravity & Subagent QA | **Status:** ✅ Fixed (Verified 100% via CDP Telemetry Test)
+- **File:** `src/views/SublixStudioView.tsx` (`syncVoicePlayback`, `stopVoicePlayback`, native listeners)
+- **Root Cause:**
+  1. *Ducking âm lượng mềm không đủ tách giọng:* Cơ chế cũ chỉ hạ âm lượng video xuống 25% (`v.volume = 0.25`). Vì video gốc chứa giọng diễn viên nói cùng thời điểm, mức 25% vẫn phát to và đè trực tiếp lên giọng đọc TTS của AI, tạo cảm giác bị nhân đôi / echo 2 giọng.
+  2. *Audio element không được reset buffer triệt để:* Khi chuyển câu hoặc tua, `HTMLAudioElement` cũ chưa được hủy `src` và gọi `load()`, dẫn đến race condition phát lặp hoặc phát chồng chéo.
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Tự động mute video gốc khi AI nói:** Trong `syncVoicePlayback`, khi câu thoại AI bắt đầu phát, lưu âm lượng gốc và kích hoạt `v.muted = true`. Khi câu thoại AI kết thúc hoặc người dùng bấm dừng/tua, hàm `stopVoicePlayback` tự động phục hồi `v.muted = false` và âm lượng ban đầu.
+  2. **Lắng nghe native event `play`:** Thêm `v.addEventListener("play", onPlay)` để đồng bộ tiếng lồng ngay lập tức khi người dùng bấm phát, tránh phụ thuộc vào interval `timeupdate`.
+  3. **Hủy triệt để buffer audio cũ:** Gọi `va.onended = null; va.removeAttribute("src"); va.load();` trước khi gán clip mới để WebView2 giải phóng hoàn toàn bộ giải mã âm thanh.
+
 
 
