@@ -1115,6 +1115,7 @@ export default function SublixStudioView({
   const lastNativeTimeUpdateRef = useRef<number>(0);
   // R32: Đồng bộ phát TIẾNG LỒNG theo playhead (không đụng logic video — chỉ thêm lớp âm thanh)
   const voicePlayRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeVoiceSegRef = useRef<number | null>(null);
   const finishedVoiceSegRef = useRef<number | null>(null);
   const videoVolumeBeforeDuckRef = useRef<number | null>(null);
@@ -1124,16 +1125,22 @@ export default function SublixStudioView({
     if (va) {
       try {
         va.pause();
+        va.onended = null;
         va.currentTime = 0;
+        va.removeAttribute("src");
+        va.load();
       } catch {
         /* noop */
       }
     }
     activeVoiceSegRef.current = null;
     const v = videoRef.current;
-    if (v && videoVolumeBeforeDuckRef.current !== null) {
-      v.volume = videoVolumeBeforeDuckRef.current;
-      videoVolumeBeforeDuckRef.current = null;
+    if (v) {
+      if (videoVolumeBeforeDuckRef.current !== null) {
+        v.volume = videoVolumeBeforeDuckRef.current;
+        videoVolumeBeforeDuckRef.current = null;
+      }
+      v.muted = false;
     }
   };
 
@@ -1163,7 +1170,8 @@ export default function SublixStudioView({
     }
     if (videoVolumeBeforeDuckRef.current === null) {
       videoVolumeBeforeDuckRef.current = v.volume;
-      v.volume = Math.min(v.volume, 0.25);
+      // Tránh nhân đôi tiếng: tắt tiếng gốc video khi câu lồng tiếng đang phát
+      v.muted = true;
     }
     va.onended = () => {
       if (activeVoiceSegRef.current === seg.id) {
@@ -1190,16 +1198,22 @@ export default function SublixStudioView({
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
+    const onPlay = () => {
+      activeVoiceSegRef.current = null;
+      syncVoicePlayback(v.currentTime, false);
+    };
     const onStop = () => stopVoicePlayback();
     const onSeeked = () => {
       activeVoiceSegRef.current = null;
       finishedVoiceSegRef.current = null;
       syncVoicePlayback(v.currentTime, v.paused);
     };
+    v.addEventListener("play", onPlay);
     v.addEventListener("pause", onStop);
     v.addEventListener("ended", onStop);
     v.addEventListener("seeked", onSeeked);
     return () => {
+      v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onStop);
       v.removeEventListener("ended", onStop);
       v.removeEventListener("seeked", onSeeked);
@@ -2873,19 +2887,22 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
   // =========================================================================
-  const handleRunVoiceOnly = async (forceRange?: boolean) => {
-    if (segments.length === 0) {
+  const handleRunVoiceOnly = async (forceRange?: boolean, overrideSegs?: SubtitleItem[]) => {
+    const allSegs = overrideSegs || segmentsRef.current || segments;
+    if (allSegs.length === 0) {
       showToast("⚠ Chưa có câu thoại nào để tạo giọng đọc!");
       return;
     }
+
+    setWorkflowOptVoice(true);
 
     const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
     const targetSegs = isRange
-      ? segments.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
-      : segments;
+      ? allSegs.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
+      : allSegs;
 
     if (targetSegs.length === 0) {
       showToast("⚠ Không có câu thoại nào trong vùng chọn!");
@@ -3228,7 +3245,7 @@ export default function SublixStudioView({
         if (dubImmediately) {
           showToast(`⚡ Đã phân tích xong ${newMappedSegments.length} câu thoại. Bắt đầu tổng hợp giọng đọc...`);
           setTimeout(() => {
-            void handleRunVoiceOnly(forceRange);
+            void handleRunVoiceOnly(forceRange, newMappedSegments);
           }, 350);
         } else {
           showToast(`✅ Đã phân tích xong ${newMappedSegments.length} câu & ${mappedSpeakers.length} vai! Vui lòng xem lại vai diễn, chọn giọng rồi bấm "Bắt Đầu Lồng Tiếng".`);
@@ -3747,9 +3764,21 @@ export default function SublixStudioView({
     try {
       const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       if (isTauriEnv) {
+        stopVoicePlayback();
+        if (previewAudioRef.current) {
+          try {
+            previewAudioRef.current.pause();
+            previewAudioRef.current.currentTime = 0;
+            previewAudioRef.current.removeAttribute("src");
+            previewAudioRef.current.load();
+          } catch {
+            /* noop */
+          }
+        }
         const wavData = await sublix.dubbingPreviewTts(seg.translated, voice);
         if (wavData) {
           const audio = new Audio(wavData);
+          previewAudioRef.current = audio;
           await audio.play();
           showToast(`🎧 Đang phát câu thoại bằng giọng ${voice}`);
         }
@@ -6296,13 +6325,7 @@ export default function SublixStudioView({
                 timelineProcessType === "translate" ||
                 timelineProcessType === "pipeline"));
 
-          const showVoiceTrack =
-            showSubtitlesTrack &&
-            (workflowOptVoice ||
-              segments.some((s) => s.hasAudio) ||
-              (isAnalyzing &&
-                (timelineProcessType === "voice" ||
-                  timelineProcessType === "pipeline")));
+          const showVoiceTrack = showSubtitlesTrack;
 
           return (
             <div className="studio-timeline-scroll-wrap">
@@ -6370,11 +6393,11 @@ export default function SublixStudioView({
                 )}
 
                 {/* Track 4: Dynamic Speaker Tracks (Chỉ hiện khi có tiếng lồng hoặc đang tạo) */}
-                {showVoiceTrack && (collapseSpeakerTracks ? (
+                {showVoiceTrack && (collapseSpeakerTracks || speakers.length === 0 ? (
                   <div className="studio-track-header-item studio-track-header-voice">
                     <div className="studio-track-header-left">
                       <span className="studio-track-header-dot-stack">
-                        {speakers.slice(0, 3).map((s) => (
+                        {(speakers.length > 0 ? speakers.slice(0, 3) : [{ id: "def", color: "#38bdf8" }]).map((s) => (
                           <span
                             key={s.id}
                             className="studio-track-header-dot"
@@ -6383,18 +6406,20 @@ export default function SublixStudioView({
                         ))}
                       </span>
                       <span className="studio-track-voice-tag">🎙️ TIẾNG LỒNG</span>
-                      <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length} vai)</span>
+                      <span style={{ fontSize: 10, color: "var(--t3)" }}>({speakers.length > 0 ? `${speakers.length} vai` : "Thuyết minh AI"})</span>
                     </div>
-                    <button
-                      className="studio-track-clear-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleClearTrack("speaker", "all");
-                      }}
-                      title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
-                    >
-                      🗑️
-                    </button>
+                    {segments.some((s) => s.hasAudio) && (
+                      <button
+                        className="studio-track-clear-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClearTrack("speaker", "all");
+                        }}
+                        title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 ) : (
                   speakers.map((spk) => {
@@ -6812,7 +6837,7 @@ export default function SublixStudioView({
             )}
 
             {/* Track 4..n: Dynamic Speaker Tracks (Chỉ hiện khi có tiếng lồng hoặc đang tạo) */}
-            {showVoiceTrack && (collapseSpeakerTracks ? (
+            {showVoiceTrack && (collapseSpeakerTracks || speakers.length === 0 ? (
               <div
                 className="studio-track-lane studio-track-workspace-lane"
                 style={{ width: `${timelineWidth + 40}px`, minWidth: `${timelineWidth + 40}px` }}
@@ -6934,7 +6959,11 @@ export default function SublixStudioView({
               </div>
             ) : (
               speakers.map((spk) => {
-                const spkSegments = segments.filter((s) => s.speakerId === spk.id);
+                const spkSegments = segments.filter((s) => {
+                  if (s.speakerId === spk.id) return true;
+                  const hasValidSpeaker = speakers.some((other) => other.id === s.speakerId);
+                  return !hasValidSpeaker && spk.id === speakers[0]?.id;
+                });
                 const spkName = getSpeakerDisplayName(spk);
 
                 return (
