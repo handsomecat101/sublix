@@ -592,6 +592,22 @@ export default function SublixStudioView({
     return spk.name;
   };
 
+  // R32: Tính toán độ dài hiển thị của khối tiếng lồng trên timeline.
+  // Khi đã có TTS thật: dùng đúng audioDuration (chặn không vượt quá cuối video).
+  // Khi chưa tạo TTS (hoặc mới nạp SRT): ước tính thời lượng phát âm thực tế (~3.5 từ/giây + 0.4s đệm)
+  // thay vì lấy nguyên khung SRT seg.end - seg.start (vốn có thể dài 20-30s cho câu 2 từ gây cảm giác track lồng tiếng dài ngoằng).
+  const computeVoiceBlockDur = (seg: SubtitleItem, totalDur: number): number => {
+    const maxAllowed = Math.max(0.3, totalDur - seg.start);
+    if (seg.audioDuration && seg.audioDuration > 0) {
+      return Math.min(seg.audioDuration, maxAllowed);
+    }
+    const text = (seg.translated || seg.original || "").trim();
+    const wordCount = text.length > 0 ? text.split(/\s+/).length : 0;
+    const slotDur = Math.max(0.3, seg.end - seg.start);
+    const estimatedDur = Math.max(0.8, Math.min(slotDur, wordCount * 0.35 + 0.4));
+    return Math.min(estimatedDur, maxAllowed);
+  };
+
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(() => {
     const raw = cachedProject?.speakers || [];
     return raw.map((s) => (s.name.trim().toLowerCase() === "phụ đề" ? { ...s, name: "Thuyết minh AI" } : s));
@@ -2639,7 +2655,14 @@ export default function SublixStudioView({
       );
 
       if (project) {
-        setMediaDuration(project.media_duration_sec);
+        const vidDur = videoRef.current?.duration;
+        const durToUse = (vidDur && !isNaN(vidDur) && vidDur > 0)
+          ? vidDur
+          : (project.media_duration_sec > 0 ? project.media_duration_sec : 0);
+        if (durToUse > 0) {
+          setMediaDuration(durToUse);
+          mediaDurationRef.current = durToUse;
+        }
         if (project.peaks && project.peaks.length > 0) {
           setAudioPeaks(project.peaks);
         }
@@ -3092,7 +3115,14 @@ export default function SublixStudioView({
       );
 
       if (project) {
-        setMediaDuration(project.media_duration_sec);
+        const vidDur = videoRef.current?.duration;
+        const durToUse = (vidDur && !isNaN(vidDur) && vidDur > 0)
+          ? vidDur
+          : (project.media_duration_sec > 0 ? project.media_duration_sec : 0);
+        if (durToUse > 0) {
+          setMediaDuration(durToUse);
+          mediaDurationRef.current = durToUse;
+        }
         if (project.peaks && project.peaks.length > 0) {
           setAudioPeaks(project.peaks);
         }
@@ -3201,6 +3231,7 @@ export default function SublixStudioView({
             original: seg.original_text,
             translated: seg.dubbed_text || seg.original_text,
             hasAudio: dubImmediately, // Nếu quét trước thì chưa có audio để user review & chọn giọng
+            audioDuration: seg.audio_duration_sec ?? undefined,
             source: (project.transcript_source?.startsWith("srt:") ? "youtube" : "whisper") as "youtube" | "whisper",
           };
         });
@@ -6887,10 +6918,8 @@ export default function SublixStudioView({
                   const spkName = getSpeakerDisplayName(spk);
                   const totalDur = Math.max(1, mediaDuration);
                   const left = (seg.start / totalDur) * timelineWidth;
-                  // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (hết "dài tít"); không có dữ liệu thì giữ như cũ
-                  const voiceDur = seg.audioDuration && seg.audioDuration > 0
-                    ? Math.min(seg.audioDuration, Math.max(0.3, seg.end - seg.start))
-                    : seg.end - seg.start;
+                  // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
+                  const voiceDur = computeVoiceBlockDur(seg, totalDur);
                   const rawWidth = (voiceDur / totalDur) * timelineWidth;
                   const width = Math.max(3, rawWidth);
                   const isCompact = width < 30;
@@ -7015,10 +7044,8 @@ export default function SublixStudioView({
                     {spkSegments.map((seg) => {
                       const totalDur = Math.max(1, mediaDuration);
                       const left = (seg.start / totalDur) * timelineWidth;
-                      // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (hết "dài tít"); không có dữ liệu thì giữ như cũ
-                      const voiceDur = seg.audioDuration && seg.audioDuration > 0
-                        ? Math.min(seg.audioDuration, Math.max(0.3, seg.end - seg.start))
-                        : seg.end - seg.start;
+                      // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
+                      const voiceDur = computeVoiceBlockDur(seg, totalDur);
                       const rawWidth = (voiceDur / totalDur) * timelineWidth;
                       const width = Math.max(3, rawWidth);
                       const isCompact = width < 30;

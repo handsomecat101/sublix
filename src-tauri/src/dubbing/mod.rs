@@ -2205,8 +2205,17 @@ pub fn analyze_and_create_project_full(
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
 
+    let probed_media_duration = get_audio_duration(input).unwrap_or(0.0);
     let media_duration = if let Some(limit) = time_limit_sec {
-        if limit > 0.0 { limit } else { parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0) }
+        if limit > 0.0 {
+            if probed_media_duration > 0.0 { limit.min(probed_media_duration) } else { limit }
+        } else if probed_media_duration > 0.0 {
+            probed_media_duration
+        } else {
+            parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0)
+        }
+    } else if probed_media_duration > 0.0 {
+        probed_media_duration
     } else {
         parsed_segments.last().map(|s| s.end_sec).unwrap_or(0.0)
     };
@@ -2459,6 +2468,16 @@ pub fn export_dubbed_video(
             continue;
         }
 
+        // R32: Nếu câu bắt đầu sau khi video đã kết thúc -> bỏ qua để không làm phình track audio
+        if project.media_duration_sec > 0.0 && seg.start_sec >= project.media_duration_sec {
+            warn!(
+                "⏭️ Bỏ qua câu {} ('{}') vì bắt đầu sau khi video đã kết thúc ({:.2}s >= {:.2}s)",
+                seg.id, seg.dubbed_text, seg.start_sec, project.media_duration_sec
+            );
+            skipped_segments.push(seg.id);
+            continue;
+        }
+
         let slot_duration = (seg.end_sec - seg.start_sec).max(0.5);
 
         // Get actual duration of generated audio via ffprobe/ffmpeg
@@ -2489,8 +2508,38 @@ pub fn export_dubbed_video(
             seg_audio
         };
 
-        if final_audio.exists() {
-            speech_inputs.push((final_audio, seg.start_sec));
+        // R32: Nếu thời lượng câu sau khi stretch vẫn tràn qua thời lượng video gốc, trim vừa đúng video kết thúc
+        let final_audio_fitted = if project.media_duration_sec > 0.0 {
+            let remaining = project.media_duration_sec - seg.start_sec;
+            let current_dur = get_audio_duration(&final_audio).unwrap_or(actual_dur);
+            if remaining > 0.1 && current_dur > remaining + 0.05 {
+                let trimmed = temp_dir.join(format!("seg_trimmed_{}.wav", i));
+                let mut trim_cmd = Command::new(&ffmpeg_bin);
+                trim_cmd
+                    .arg("-y")
+                    .arg("-i")
+                    .arg(&final_audio)
+                    .arg("-t")
+                    .arg(format!("{:.3}", remaining))
+                    .arg(&trimmed);
+
+                #[cfg(windows)]
+                trim_cmd.creation_flags(CREATE_NO_WINDOW);
+
+                if run_child_with_cancel(trim_cmd, my_gen).map(|s| s.success()).unwrap_or(false) {
+                    trimmed
+                } else {
+                    final_audio
+                }
+            } else {
+                final_audio
+            }
+        } else {
+            final_audio
+        };
+
+        if final_audio_fitted.exists() {
+            speech_inputs.push((final_audio_fitted, seg.start_sec));
         }
     }
 
@@ -2682,11 +2731,11 @@ pub fn export_dubbed_video(
     let has_speech = speech_track_opt.is_some();
     let mix_filter = match (speech_input_idx, bgm_input_idx) {
         (Some(s_idx), Some(b_idx)) => {
-            format!("[{b_idx}:a]volume=1.0[bgm];[bgm][{s_idx}:a]amix=inputs=2:normalize=0[final_audio]")
+            format!("[{b_idx}:a]volume=1.0[bgm];[bgm][{s_idx}:a]amix=inputs=2:duration=first:normalize=0[final_audio]")
         }
         (Some(s_idx), None) => {
             let bgm_vol = project.bgm_volume;
-            format!("[0:a]volume={bgm_vol}[bgm];[bgm][{s_idx}:a]amix=inputs=2:normalize=0[final_audio]")
+            format!("[0:a]volume={bgm_vol}[bgm];[bgm][{s_idx}:a]amix=inputs=2:duration=first:normalize=0[final_audio]")
         }
         (None, Some(b_idx)) => {
             format!("[{b_idx}:a]volume=1.0[final_audio]")
@@ -2752,6 +2801,10 @@ pub fn export_dubbed_video(
             info!("⏱️ Remuxing sample video limited to {:.1}s", limit);
             remux.arg("-t").arg(format!("{:.1}", limit));
         }
+    } else {
+        // R32: Đảm bảo audio track và video remux không bao giờ dài hơn video gốc.
+        // Tránh tình trạng câu thoại cuối hoặc TTS kéo dài làm file thành phẩm dài hơn video gốc.
+        remux.arg("-shortest");
     }
 
     remux.arg(&out_file);
@@ -3012,6 +3065,85 @@ mod tests {
             spks.insert(t.speaker);
         }
         assert_eq!(spks.len(), 2, "Must detect exactly 2 speakers on dialogue_2spk.wav!");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_dubbing_duration_never_exceeds_video() {
+        let test_video = PathBuf::from(r"H:\AI Project\sublix\test_dubbing_input\multi_speaker_scene.mp4");
+        if !test_video.exists() {
+            println!("Test fixture multi_speaker_scene.mp4 not found, skipping");
+            return;
+        }
+
+        let orig_duration = get_audio_duration(&test_video).expect("Original video duration must be readable");
+        assert!(orig_duration > 0.0, "Original video duration must be > 0");
+
+        let temp_dir = std::env::temp_dir().join(format!("sublix_test_dur_{}", gen_unique_id()));
+        let _ = fs::create_dir_all(&temp_dir);
+        let out_file = temp_dir.join("dubbed_output.mp4");
+
+        let project = DubbingProject {
+            input_path: test_video.to_string_lossy().to_string(),
+            media_duration_sec: orig_duration,
+            speakers: vec![
+                DubbingSpeaker {
+                    id: "speaker_0".to_string(),
+                    label: "Nam".to_string(),
+                    voice: "vi-VN-NamMinhNeural".to_string(),
+                    pitch: "+0Hz".to_string(),
+                    rate: "+0%".to_string(),
+                    gender: "male".to_string(),
+                    sample_audio_data: None,
+                }
+            ],
+            segments: vec![
+                DubbingSegment {
+                    id: 1,
+                    speaker_id: "speaker_0".to_string(),
+                    start_sec: 1.0,
+                    end_sec: 3.0,
+                    original_text: "Hello world".to_string(),
+                    dubbed_text: "Xin chào".to_string(),
+                    audio_duration_sec: None,
+                    status: "ready".to_string(),
+                },
+                DubbingSegment {
+                    id: 2,
+                    speaker_id: "speaker_0".to_string(),
+                    start_sec: (orig_duration - 1.5).max(0.0),
+                    end_sec: orig_duration + 5.0,
+                    original_text: "Final line that would have overflowed".to_string(),
+                    dubbed_text: "Đây là câu kết thúc rất dài nhằm kiểm tra xem âm thanh có bị kéo dài quá video gốc không".to_string(),
+                    audio_duration_sec: None,
+                    status: "ready".to_string(),
+                },
+            ],
+            bgm_volume: 0.5,
+            voice_volume: 1.0,
+            dubbing_mode: "ducking".to_string(),
+            time_limit_sec: None,
+            diarization_engine: None,
+            transcript_source: None,
+            peaks: None,
+            filmstrip_thumbs: None,
+            sub_export_mode: Some("none".to_string()),
+            audio_export_mode: Some("mixed".to_string()),
+            target_lang: Some("vi".to_string()),
+        };
+
+        let res = export_dubbed_video(None, project, Some(out_file.to_string_lossy().to_string()));
+        if let Ok(path) = res {
+            let out_p = PathBuf::from(&path);
+            assert!(out_p.exists(), "Output video must exist");
+            let out_dur = get_audio_duration(&out_p).expect("Output video duration must be readable");
+            println!("ORIG DURATION: {:.3}s, OUTPUT DURATION: {:.3}s", orig_duration, out_dur);
+            assert!(out_dur <= orig_duration + 0.05, "Output duration ({:.3}s) MUST NOT exceed original video duration ({:.3}s)!", out_dur, orig_duration);
+            let _ = fs::remove_file(&out_p);
+        } else {
+            println!("export_dubbed_video skipped or error: {:?}", res.err());
+        }
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

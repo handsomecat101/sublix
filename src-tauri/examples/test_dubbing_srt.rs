@@ -72,6 +72,8 @@ fn main() -> Result<()> {
         source_lang.clone(),
         target_lang.clone(),
         None,
+        None,
+        None,
     )
     .context("Analyze stage failed")?;
     let dur1 = t1.elapsed().as_secs_f32();
