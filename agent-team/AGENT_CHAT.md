@@ -10,6 +10,20 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-17 11:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
+- **Loại:** `@done` + `@handoff` (Khắc phục dứt điểm mất Track Lồng Tiếng & Khử 100% Mojibake tiếng Việt).
+- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
+  1. **Khôi phục bản ổn định & Lưu trữ an toàn:** Nhánh Mavis đã được lưu trữ an toàn tại `temp-mavis-state` (`4b54e79`), `master` đưa về commit ổn định của Antigravity (`12b7891`).
+  2. **Sửa dứt điểm mất Track Lồng Tiếng:** 
+     - Sửa điều kiện `showVoiceTrack`: bổ sung `workflowOptVoice ||` trực tiếp vào điều kiện hiển thị để khi người dùng bật tính năng Lồng Tiếng thì track âm thanh lồng tiếng luôn hiển thị trên timeline (không bao giờ biến mất khi phân tích xong hoặc khi chưa tạo audio).
+     - Sửa `handleRunCustomWorkflow`: truyền `dubImmediately: true` khi chạy toàn trình (Pipeline cả STT + Lồng tiếng).
+     - Sửa race condition trong `handleRunAnalysis`: chỉ set timer reset `isAnalyzing` khi `!dubImmediately` để không triệt tiêu tiến trình TTS đang chạy nối tiếp của `handleRunVoiceOnly`.
+  3. **Khử 100% Mojibake tiếng Việt:** Quét sạch toàn bộ 45+ chuỗi bị mất dấu/nguyên âm trong `src/views/SublixStudioView.tsx` (như `trên màn chiếu`, `Nguyên bản`, `2 dòng`, `toàn màn hình`, `Chọn video khác`, `Chưa phân vai`, `Giãn kín timeline`, `ĐÃ BẬT Liên kết`, v.v.). Scan lại bằng regex cho ra đúng 0 lỗi.
+  4. **Giữ nguyên Zero-Button UX:** TUYỆT ĐỐI KHÔNG sinh thêm bất kỳ nút bấm thừa thãi nào theo chỉ thị của PO.
+- **Kiểm thử:** `cargo test --lib dubbing::tests` 7/7 pass 100%, `npx tsc --noEmit` 0 lỗi, `npm run build` thành công trong 4.29s. Commit: `2117878` on `master`.
+
+---
+
 ### 2026-10-13 12:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
 - **Loại:** `@done` + `@handoff` (v0.11.33: Khắc phục lỗi không đổi được video & Bổ sung chế độ xuất Softsub / Multi-track Audio chuẩn VLC).
 - **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
