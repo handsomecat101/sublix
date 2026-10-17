@@ -979,7 +979,7 @@ export default function SublixStudioView({
               handleLoadNewVideoFile(p);
               showToast(`Đã nạp video: ${p.split(/[\\/]/).pop()}`);
             } else {
-              // R4-09: ko thả nhưng khng c path → bo user (khng ngậm tăm)
+              // R4-09: kéo thả nhưng không có path → báo user (không ngậm tăm)
               showToast("⚠ Kéo thả không khả dụng — hãy dùng nút 'Mở video' để chọn file.");
             }
           } else {
@@ -987,7 +987,7 @@ export default function SublixStudioView({
           }
         });
       } catch (err) {
-        // R4-09: ko thả fail hon ton → toast cho user biết, khng im lặng
+        // R4-09: kéo thả fail hoàn toàn → toast cho user biết, không im lặng
         console.warn("Tauri drag-drop in SublixStudioView failed:", err);
         showToast("⚠ Kéo thả không khả dụng trên hệ thống này — hãy dùng nút 'Mở video'.");
         return () => {};
@@ -1043,8 +1043,8 @@ export default function SublixStudioView({
 
   // Video metadata & time update
   // R5-01: ref tới handleLoadedMetadata để R5-01 detect video im lặng
-  // (WebView2 hng codec kiểu im lặng: chạy gi, pht tiếng, KHUNG TRNG,
-  // khng error event). Pht hiện bằng videoWidth=0 sau ~800ms.
+  // (WebView2 hỏng codec kiểu im lặng: chạy giả, phát tiếng, KHUNG TRẮNG,
+  // không error event). Phát hiện bằng videoWidth=0 sau ~800ms.
   const loadedMetadataTimerRef = useRef<number | null>(null);
 
   const handleLoadedMetadata = () => {
@@ -1294,7 +1294,7 @@ export default function SublixStudioView({
   const handleUndoSubtitles = () => {
     const stack = undoSubtitleStackRef.current;
     if (stack.length === 0) {
-      showToast("ℹ Khng c thao tc phụ đ no để hon tc");
+      showToast("ℹ Không có thao tác phụ đề nào để hoàn tác");
       return;
     }
     const previous = stack[stack.length - 1];
@@ -1310,13 +1310,13 @@ export default function SublixStudioView({
         };
       });
     });
-    showToast("↶ Đ hon tc mốc thi gian / cấu trc phụ đ (giữ nguyn bản dịch)");
+    showToast("↶ Đã hoàn tác mốc thời gian / cấu trúc phụ đề (giữ nguyên bản dịch)");
   };
 
   const handleUndoTranslation = () => {
     const stack = undoTranslationStackRef.current;
     if (stack.length === 0) {
-      showToast("ℹ Khng c thao tc dịch no để hon tc");
+      showToast("ℹ Không có thao tác dịch nào để hoàn tác");
       return;
     }
     const previous = stack[stack.length - 1];
@@ -1327,7 +1327,7 @@ export default function SublixStudioView({
         return match ? { ...s, translated: match.translated } : s;
       })
     );
-    showToast("↶ Đ hon tc nội dung bản dịch");
+    showToast("↶ Đã hoàn tác nội dung bản dịch");
   };
 
   const handleUndoAudio = () => {
@@ -2299,8 +2299,8 @@ export default function SublixStudioView({
   const pxPerSec = (TIMELINE_VIEWPORT_WIDTH * (zoomLevel / 100)) / Math.max(1, mediaDuration);
   const timelineWidth = Math.max(TIMELINE_VIEWPORT_WIDTH, Math.round(mediaDuration * pxPerSec));
 
-  // v0.11.3: chn tick interval đẹp (~100px giữa 2 tick) theo zoom hiện tại.
-  // Trả v số giy giữa 2 mốc (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200).
+  // v0.11.3: chọn tick interval đẹp (~100px giữa 2 tick) theo zoom hiện tại.
+  // Trả về số giây giữa 2 mốc (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200).
   const chooseTickInterval = (pps: number): number => {
     const targetPx = 100;
     const rawSec = targetPx / Math.max(0.001, pps);
@@ -2490,7 +2490,7 @@ export default function SublixStudioView({
 
     // Trường hợp 1: Bật cả Phụ Đề & Lồng Tiếng ➔ Chạy Toàn Trình (Pipeline)
     if (workflowOptStt && workflowOptVoice) {
-      await handleRunAnalysis();
+      await handleRunAnalysis(undefined, true);
       return;
     }
 
@@ -3261,10 +3261,12 @@ export default function SublixStudioView({
       if (unlisten) {
         unlisten();
       }
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        setTimelineProcessType(null);
-      }, 500);
+      if (!dubImmediately) {
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          setTimelineProcessType(null);
+        }, 500);
+      }
     }
   };
 
@@ -3726,14 +3728,14 @@ export default function SublixStudioView({
   const handlePreviewSegmentTts = async (seg: SubtitleItem) => {
     const spk = speakers.find((s) => s.id === seg.speakerId);
     const rawVoice = spk?.voice || "kokoro:tuan_ngoc";
-    // R6-05: chuẩn ha voice id theo contract THẬT của backend `synthesize_speech` (dubbing/mod.rs:922-929).
-    // Backend CHỈ parse prefix `kokoro:` → Kokoro local; MỌI THỨ KHC → Edge-TTS raw.
-    // V vậy KHNG ĐƯỢC bịa thm prefix `edge:` / `minimax:` / `azure:` / `google:` / `clone:` v
-    // backend khng parse → Edge-TTS sẽ thử dng raw lm voice name (fail).
-    // Logic đng:
-    //   1. Đ c `kokoro:` → Kokoro local, giữ nguyn.
-    //   2. Match BCP-47 (vd "vi-VN-HoaiMyNeural", "en-US-AriaNeural", "ja-JP-NanamiNeural") → Edge raw, giữ nguyn.
-    //   3. Ngược lại → mặc định `kokoro:` (giả định l tn Kokoro viết tắt, vd "tuan_ngoc").
+    // R6-05: chuẩn hóa voice id theo contract THẬT của backend `synthesize_speech` (dubbing/mod.rs:922-929).
+    // Backend CHỈ parse prefix `kokoro:` → Kokoro local; MỌI THỨ KHÁC → Edge-TTS raw.
+    // Vì vậy KHÔNG ĐƯỢC bịa thêm prefix `edge:` / `minimax:` / `azure:` / `google:` / `clone:` vì
+    // backend không parse → Edge-TTS sẽ thử dùng raw làm voice name (fail).
+    // Logic đúng:
+    //   1. Đã có `kokoro:` → Kokoro local, giữ nguyên.
+    //   2. Match BCP-47 (vd "vi-VN-HoaiMyNeural", "en-US-AriaNeural", "ja-JP-NanamiNeural") → Edge raw, giữ nguyên.
+    //   3. Ngược lại → mặc định `kokoro:` (giả định là tên Kokoro viết tắt, vd "tuan_ngoc").
     const KOKORO_PREFIX = "kokoro:";
     // BCP-47: lang (2-3 chữ thường) + optional region (2 chữ hoa) + optional sub-tags (vd "-HoaiMyNeural")
     const BCP47_PATTERN = /^[a-z]{2,3}(-[A-Z]{2})?(-[a-zA-Z0-9-]+)*$/;
@@ -3749,15 +3751,15 @@ export default function SublixStudioView({
         if (wavData) {
           const audio = new Audio(wavData);
           await audio.play();
-          showToast(`🎧 Đang pht cu thoại bằng ging ${voice}`);
+          showToast(`🎧 Đang phát câu thoại bằng giọng ${voice}`);
         }
       } else {
-        // R4-03: KHÔNG pht beep giả — bo trung thực.
-        showToast(`⚠ Chưa c mẫu ging "${voice}"  bấm 🔊 Nghe ging gốc để tạo.`);
+        // R4-03: KHÔNG phát beep giả — báo trung thực.
+        showToast(`⚠ Chưa có mẫu giọng "${voice}" — bấm 🔊 Nghe giọng gốc để tạo.`);
       }
     } catch (err) {
       console.warn("Preview TTS error:", err);
-      showToast(`⚠ Khng thể nghe thử ging: ${err}`);
+      showToast(`⚠ Không thể nghe thử giọng: ${err}`);
     } finally {
       setPreviewingSegId(null);
     }
@@ -4960,15 +4962,15 @@ export default function SublixStudioView({
               <div className="studio-review-stat-grid">
                 <div className="studio-review-stat-item">
                   <span className="studio-review-stat-val">{segments.length}</span>
-                  <span className="studio-review-stat-label">Tổng cu thoại</span>
+                  <span className="studio-review-stat-label">Tổng câu thoại</span>
                 </div>
                 <div className="studio-review-stat-item">
                   <span className="studio-review-stat-val">{mediaDuration.toFixed(1)}s</span>
-                  <span className="studio-review-stat-label">Thi lượng video</span>
+                  <span className="studio-review-stat-label">Thời lượng video</span>
                 </div>
                 <div className="studio-review-stat-item">
                   <span className="studio-review-stat-val">{speakers.length} vai</span>
-                  <span className="studio-review-stat-label">Nhn vật tham gia</span>
+                  <span className="studio-review-stat-label">Nhân vật tham gia</span>
                 </div>
                 <div className="studio-review-stat-item">
                   <span className="studio-review-stat-val">
@@ -4981,18 +4983,18 @@ export default function SublixStudioView({
 
             <div className="studio-review-card">
               <div className="studio-review-title">
-                <span> Tm Tắt Cốt Truyện & Thoại</span>
+                <span>📖 Tóm Tắt Cốt Truyện & Thoại</span>
               </div>
               <p style={{ fontSize: 11.5, color: "var(--t2)", lineHeight: 1.5, margin: 0 }}>
                 {segments.length > 0
-                  ? `Dự n gồm ${segments.length} câu thoại, tổng ${totalSpeechSeconds.toFixed(1)}s thi lượng thoại của ${speakers.length} nhn vật (${speakers.map((s) => s.name).join(", ")}).`
-                  : "Chưa c kịch bản để tm tắt cốt truyện."}
+                  ? `Dự án gồm ${segments.length} câu thoại, tổng ${totalSpeechSeconds.toFixed(1)}s thời lượng thoại của ${speakers.length} nhân vật (${speakers.map((s) => s.name).join(", ")}).`
+                  : "Chưa có kịch bản để tóm tắt cốt truyện."}
               </p>
             </div>
 
             <div className="studio-review-card">
               <div className="studio-review-title">
-                <span>🛡 Đnh Gi Chất Lượng Kịch Bản</span>
+                <span>🛡 Đánh Giá Chất Lượng Kịch Bản</span>
                 {reviewScore !== null && (
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: reviewScore >= 80 ? "#10b981" : "#f59e0b" }}>
                     {reviewScore}/100
@@ -5010,15 +5012,15 @@ export default function SublixStudioView({
                   <>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#10b981" }}>
                       <span>✓</span>
-                      <span>Phn vai: {speakers.length} vai diễn độc lập trn timeline.</span>
+                      <span>Phân vai: {speakers.length} vai diễn độc lập trên timeline.</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#10b981" }}>
                       <span>✓</span>
-                      <span>Đồng bộ mốc thi gian: {segments.length} cu thoại sẵn sng.</span>
+                      <span>Đồng bộ mốc thời gian: {segments.length} câu thoại sẵn sàng.</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ac)" }}>
                       <span>⚡</span>
-                      <span>Phong cch: {transStyle === "theatrical" ? "Điện Ảnh (Theatrical)" : "Thuyết Minh Chuẩn"}</span>
+                      <span>Phong cách: {transStyle === "theatrical" ? "Điện Ảnh (Theatrical)" : "Thuyết Minh Chuẩn"}</span>
                     </div>
                   </>
                 )}
@@ -5030,8 +5032,8 @@ export default function SublixStudioView({
                 onClick={() => {
                   if (segments.length === 0) {
                     setReviewScore(0);
-                    setReviewNotes(["Chưa c phn đoạn thoại no để đnh gi."]);
-                    showToast("ℹ Chưa c kịch bản để đnh gi");
+                    setReviewNotes(["Chưa có phân đoạn thoại nào để đánh giá."]);
+                    showToast("ℹ Chưa có kịch bản để đánh giá");
                     return;
                   }
                   let s = 100;
@@ -5039,31 +5041,31 @@ export default function SublixStudioView({
                   const emptyTrans = segments.filter((seg) => !seg.translated.trim()).length;
                   if (emptyTrans > 0) {
                     s -= Math.min(30, emptyTrans * 5);
-                    notes.push(`⚠ C ${emptyTrans} cu chưa c nội dung dịch`);
+                    notes.push(`⚠ Có ${emptyTrans} câu chưa có nội dung dịch`);
                   } else {
-                    notes.push("✓ 100% cu đ c bản dịch hon chỉnh");
+                    notes.push("✓ 100% câu đã có bản dịch hoàn chỉnh");
                   }
                   const unusedSpeakers = speakers.filter((spk) => !segments.some((seg) => seg.speakerId === spk.id)).length;
                   if (unusedSpeakers > 0) {
                     s -= Math.min(20, unusedSpeakers * 5);
-                    notes.push(`⚠ C ${unusedSpeakers} vai chưa được gn cu thoại no`);
+                    notes.push(`⚠ Có ${unusedSpeakers} vai chưa được gán câu thoại nào`);
                   } else if (speakers.length > 0) {
-                    notes.push(`✓ Ton bộ ${speakers.length} nhn vật đu c cu thoại`);
+                    notes.push(`✓ Toàn bộ ${speakers.length} nhân vật đều có câu thoại`);
                   }
                   const longSegs = segments.filter((seg) => seg.end - seg.start > 12).length;
                   if (longSegs > 0) {
                     s -= Math.min(15, longSegs * 3);
-                    notes.push(`⚠ C ${longSegs} cu thoại di hơn 12s (cần ngắt)`);
+                    notes.push(`⚠ Có ${longSegs} câu thoại dài hơn 12s (cần ngắt)`);
                   } else {
-                    notes.push("✓ Mốc thi gian thoại tự nhin (<12s/cu)");
+                    notes.push("✓ Mốc thời gian thoại tự nhiên (<12s/câu)");
                   }
                   const finalScore = Math.max(0, s);
                   setReviewScore(finalScore);
                   setReviewNotes(notes);
-                  showToast(`✅ Đ đnh gi kịch bản: ${finalScore}/100`);
+                  showToast(`✅ Đã đánh giá kịch bản: ${finalScore}/100`);
                 }}
               >
-                ✨ Đnh gi lại kịch bản
+                ✨ Đánh giá lại kịch bản
               </button>
             </div>
           </div>
@@ -5223,17 +5225,17 @@ export default function SublixStudioView({
                 className="studio-video-select-subtle"
                 value={subtitleDisplayMode}
                 onChange={(e) => setSubtitleDisplayMode(e.target.value as any)}
-                title="Chế độ hiển thị phụ đ trn mn chiếu (Bản dịch / Gốc / Song ngữ)"
+                title="Chế độ hiển thị phụ đề trên màn chiếu (Bản dịch / Gốc / Song ngữ)"
               >
-                <option value="translated">Original (Bản dịch)</option>
-                <option value="original">Nguyn bản (Gốc)</option>
-                <option value="bilingual">Song ngữ (2 dng)</option>
+                <option value="translated">Bản dịch (Tiếng Việt)</option>
+                <option value="original">Nguyên bản (Gốc)</option>
+                <option value="bilingual">Song ngữ (2 dòng)</option>
               </select>
               <select
                 className="studio-video-select-subtle"
                 value={videoScale}
                 onChange={(e) => setVideoScale(Number(e.target.value))}
-                title="Thu phng kch thước khung xem video"
+                title="Thu phóng kích thước khung xem video"
               >
                 <option value={100}>100% Fit</option>
                 <option value={75}>75%</option>
@@ -5248,11 +5250,11 @@ export default function SublixStudioView({
                 style={{ width: 24, height: 24 }}
                 onClick={() => {
                   setVideoScale((prev) => Math.max(50, prev - 10));
-                  showToast("Thu nh khung xem video");
+                  showToast("Thu nhỏ khung xem video");
                 }}
-                title="Thu nh khung video (-10%)"
+                title="Thu nhỏ khung video (-10%)"
               >
-                
+                -
               </button>
               <button
                 type="button"
@@ -5260,9 +5262,9 @@ export default function SublixStudioView({
                 style={{ width: 24, height: 24 }}
                 onClick={() => {
                   setVideoScale((prev) => Math.min(100, prev + 10));
-                  showToast("Phng to khung xem video");
+                  showToast("Phóng to khung xem video");
                 }}
-                title="Phng to khung video (+10%)"
+                title="Phóng to khung video (+10%)"
               >
                 +
               </button>
@@ -5275,13 +5277,13 @@ export default function SublixStudioView({
                     if (document.fullscreenElement) {
                       document.exitFullscreen();
                     } else {
-                      videoRef.current.requestFullscreen().catch(() => showToast("Chế độ ton mn hnh video"));
+                      videoRef.current.requestFullscreen().catch(() => showToast("Chế độ toàn màn hình video"));
                     }
                   } else {
                     showToast("Toàn màn hình: Nhấn để xem toàn màn hình video");
                   }
                 }}
-                title="Xem ton mn hnh (Fullscreen)"
+                title="Xem toàn màn hình (Fullscreen)"
               >
                 <IconMaximize size={12} />
               </button>
@@ -5520,14 +5522,14 @@ export default function SublixStudioView({
                   }}
                   onError={async () => {
                     if (!transcodedPath && filePath) {
-                      // ROUND-4 R4-01: WebView2 khng giải m được codec gốc (VP9/AV1/HEVC/H.264 high).
-                      // Tự chạy ffmpeg chuyển sang H.264 baseline + AAC rồi pht bản tạm.
+                      // ROUND-4 R4-01: WebView2 không giải mã được codec gốc (VP9/AV1/HEVC/H.264 high).
+                      // Tự chạy ffmpeg chuyển sang H.264 baseline + AAC rồi phát bản tạm.
                       // Nếu transcoding cũng fail → mới fallback Cinema Visualizer.
                       console.warn(
                         "Video element could not decode in WebView2, attempting ffmpeg transcode to H.264/AAC baseline…"
                       );
-                      // R6-06: thm toast cho user (trước chỉ console.log, user khng biết đang lm g)
-                      showToast("⏳ WebView2 khng giải m được codec  đang chuyển tạm sang H.264");
+                      // R6-06: thêm toast cho user (trước chỉ console.log, user không biết đang làm gì)
+                      showToast("⏳ WebView2 không giải mã được codec — đang chuyển tạm sang H.264");
                       // R7-02: lưu currentTime + isPlaying TRƯỚC khi transcode để resume sau
                       const curV = videoRef.current;
                       const resumeTime = curV?.currentTime ?? 0;
@@ -5551,20 +5553,20 @@ export default function SublixStudioView({
                             v2.play().catch((e) => console.warn("R7-02: play() failed:", e));
                           }
                         }, 250);
-                        // R7-03: sửa toast ni qu  khng hứa "Đang phát"
-                        showToast("✅ Đ chuyển sang dạng xem được");
+                        // R7-03: sửa toast nói quá — không hứa "Đang phát"
+                        showToast("✅ Đã chuyển sang dạng xem được");
                         return;
                       } catch (transcodeErr) {
                         const errMsg = (transcodeErr as Error)?.message ?? String(transcodeErr);
                         console.error("ffmpeg transcode failed, falling back:", transcodeErr);
-                        console.error(`Khng thể chuyển tạm video: ${errMsg}`);
-                        // R6-06: bo lỗi cho user thay v im lặng
-                        showToast(`❌ Khng thể chuyển tạm video: ${errMsg}`);
+                        console.error(`Không thể chuyển tạm video: ${errMsg}`);
+                        // R6-06: báo lỗi cho user thay vì im lặng
+                        showToast(`❌ Không thể chuyển tạm video: ${errMsg}`);
                       }
                     }
                     console.warn("Falling back to Cinema Visualizer.");
                     setVideoPlayError(true);
-                    // R6-06: bo cho user biết app chuyển sang Cinema Visualizer (an ton nhất)
+                    // R6-06: báo cho user biết app chuyển sang Cinema Visualizer (an toàn nhất)
                     showToast("⚠ Không phát được video — chuyển sang Cinema Visualizer.");
                   }}
                   style={{
@@ -5670,10 +5672,10 @@ export default function SublixStudioView({
                 >
                   <div style={{ fontSize: 32 }}>⚠</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>
-                    Khng thể pht tệp video ny trực tiếp trong trnh xem
+                    Không thể phát tệp video này trực tiếp trong trình xem
                   </div>
                   <div style={{ fontSize: 12, color: "var(--t3)", maxWidth: 440 }}>
-                    Tệp c thể bị hng, đưng dẫn khng tồn tại hoặc sử dụng codec khng được hỗ trợ bởi WebView2.
+                    Tệp có thể bị hỏng, đường dẫn không tồn tại hoặc sử dụng codec không được hỗ trợ bởi WebView2.
                   </div>
                   <button
                     type="button"
@@ -5681,7 +5683,7 @@ export default function SublixStudioView({
                     onClick={handlePickMediaFile}
                     style={{ marginTop: 8 }}
                   >
-                    Chn video khc (Ctrl+I)
+                    Chọn video khác (Ctrl+I)
                   </button>
                 </div>
               )}
@@ -5725,7 +5727,7 @@ export default function SublixStudioView({
                   )}
                   <span className="studio-video-subtitle-chip">
                     {formatTimecode(activeSubtitle.start)} → {formatTimecode(activeSubtitle.end)} •{" "}
-                    {speakers.find((s) => s.id === activeSubtitle.speakerId)?.name || "Chưa phn vai"}
+                    {speakers.find((s) => s.id === activeSubtitle.speakerId)?.name || "Chưa phân vai"}
                   </span>
                 </div>
               )}
@@ -5857,7 +5859,7 @@ export default function SublixStudioView({
         <div className="studio-properties-panel">
           <div className="studio-prop-card">
             <div className="studio-prop-title">
-              <span>🔤 Kiểu Dng Phụ Đ Mn Chiếu</span>
+              <span>🔤 Kiểu Dáng Phụ Đề Màn Chiếu</span>
             </div>
 
             <div className="studio-prop-row">
@@ -5873,14 +5875,14 @@ export default function SublixStudioView({
             </div>
 
             <div className="studio-prop-row">
-              <span>Mu chữ:</span>
+              <span>Màu chữ:</span>
               <div className="studio-prop-swatches">
                 {[
-                  { name: "Vng", color: "#e8a33d" },
+                  { name: "Vàng", color: "#e8a33d" },
                   { name: "Trắng", color: "#ffffff" },
                   { name: "Xanh", color: "#38bdf8" },
-                  { name: "Xanh l", color: "#4ade80" },
-                  { name: "Đ", color: "#f87171" },
+                  { name: "Xanh lá", color: "#4ade80" },
+                  { name: "Đỏ", color: "#f87171" },
                 ].map((c) => (
                   <div
                     key={c.color}
@@ -5888,7 +5890,7 @@ export default function SublixStudioView({
                     style={{ background: c.color }}
                     onClick={() => {
                       setSubFontColor(c.color);
-                      showToast(`Đ chn mu phụ đ: ${c.name}`);
+                      showToast(`Đã chọn màu phụ đề: ${c.name}`);
                     }}
                     title={c.name}
                   />
@@ -5897,12 +5899,12 @@ export default function SublixStudioView({
             </div>
 
             <div className="studio-prop-row">
-              <span>Vị tr:</span>
+              <span>Vị trí:</span>
               <div style={{ display: "flex", gap: 4 }}>
                 {[
-                  { id: "bottom", label: "Dưới đy" },
+                  { id: "bottom", label: "Dưới đáy" },
                   { id: "center", label: "Ở giữa" },
-                  { id: "top", label: "Trn đỉnh" },
+                  { id: "top", label: "Trên đỉnh" },
                 ].map((pos) => (
                   <button
                     key={pos.id}
@@ -5910,7 +5912,7 @@ export default function SublixStudioView({
                     className={`studio-filter-chip ${subPosition === pos.id ? "active" : ""}`}
                     onClick={() => {
                       setSubPosition(pos.id as any);
-                      showToast(`Vị tr phụ đ: ${pos.label}`);
+                      showToast(`Vị trí phụ đề: ${pos.label}`);
                     }}
                   >
                     {pos.label}
@@ -5920,14 +5922,14 @@ export default function SublixStudioView({
             </div>
 
             <div className="studio-prop-row">
-              <span>Đổ bng tương phản:</span>
+              <span>Đổ bóng tương phản:</span>
               <label className="studio-switch">
                 <input
                   type="checkbox"
                   checked={subShowShadow}
                   onChange={(e) => {
                     setSubShowShadow(e.target.checked);
-                    showToast(e.target.checked ? "Đ bật bng chữ" : "Đ tắt bng chữ");
+                    showToast(e.target.checked ? "Đã bật bóng chữ" : "Đã tắt bóng chữ");
                   }}
                 />
                 <span className="studio-slider" />
@@ -5937,7 +5939,7 @@ export default function SublixStudioView({
 
           <div className="studio-prop-card">
             <div className="studio-prop-title">
-              <span>📹 Thng Tin & Thuộc Tnh Video</span>
+              <span>📹 Thông Tin & Thuộc Tính Video</span>
             </div>
             <div className="studio-prop-row">
               <span>Tệp đang mở:</span>
@@ -5946,17 +5948,17 @@ export default function SublixStudioView({
               </span>
             </div>
             <div className="studio-prop-row">
-              <span>Thi lượng:</span>
+              <span>Thời lượng:</span>
               <span style={{ color: "var(--ac)", fontWeight: 700 }}>
                 {formatTimecode(mediaDuration)} ({mediaDuration.toFixed(1)}s)
               </span>
             </div>
             <div className="studio-prop-row">
-              <span>Số cu thoại:</span>
-              <span>{segments.length} cu</span>
+              <span>Số câu thoại:</span>
+              <span>{segments.length} câu</span>
             </div>
             <div className="studio-prop-row">
-              <span>Số nhn vật:</span>
+              <span>Số nhân vật:</span>
               <span>{speakers.length} vai</span>
             </div>
             <div className="studio-prop-row">
@@ -6059,7 +6061,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-timeline-tool-btn"
               onClick={handleFitTimeline}
-              title="Gin kn timeline — phủ ton bộ chiu di video (Fit)"
+              title="Giãn kín timeline — phủ toàn bộ chiều dài video (Fit)"
             >
               <IconArrowsHorizontal size={13} />
             </button>
@@ -6070,9 +6072,9 @@ export default function SublixStudioView({
               onClick={() => {
                 const next = !magnetSnap;
                 setMagnetSnap(next);
-                showToast(next ? "🧲 Đ BẬT Tự động bắt dnh Playhead vo mp cu thoại" : "Đ TẮT Bắt dnh");
+                showToast(next ? "🧲 ĐÃ BẬT Tự động bắt dính Playhead vào mép câu thoại" : "ĐÃ TẮT Bắt dính");
               }}
-              title="Tự động bắt dnh — căn vo playhead v mp gần nhất (N)"
+              title="Tự động bắt dính — căn vào playhead và mép gần nhất (N)"
             >
               <IconMagnet size={13} />
             </button>
@@ -6082,19 +6084,19 @@ export default function SublixStudioView({
               onClick={() => {
                 const next = !linkTracks;
                 setLinkTracks(next);
-                showToast(next ? "🔗 Đ BẬT Lin kết đồng bộ clip & phụ đ" : "Đ TẮT Lin kết rnh");
+                showToast(next ? "🔗 ĐÃ BẬT Liên kết đồng bộ clip & phụ đề" : "ĐÃ TẮT Liên kết rãnh");
               }}
-              title="Lin kết — di chuyển hoặc xa nội dung đi km clip trn rnh chnh (P)"
+              title="Liên kết — di chuyển hoặc xóa nội dung đi kèm clip trên rãnh chính (P)"
             >
               <IconLink size={13} />
             </button>
             <button
               type="button"
               className="studio-timeline-tool-btn"
-              title="Đnh dấu mốc thi gian (Bookmark)"
+              title="Đánh dấu mốc thời gian (Bookmark)"
               onClick={() => {
                 setBookmarks((prev) => [...prev, currentTime]);
-                showToast(`🔖 Đ ghim Bookmark tại mốc ${formatTimecode(currentTime)}`);
+                showToast(`🔖 Đã ghim Bookmark tại mốc ${formatTimecode(currentTime)}`);
               }}
             >
               <IconBookmark size={13} />
@@ -6152,15 +6154,15 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-transport"
               onClick={() => handleSeek(0)}
-              title="V đầu (Home)"
+              title="Về đầu (Home)"
             >
-              
+              ⏮
             </button>
             <button
               type="button"
               className="studio-btn-transport"
               onClick={() => handleSeek(currentTime - 1)}
-              title="Li 1 giy"
+              title="Lùi 1 giây"
             >
               ◀
             </button>
@@ -6168,7 +6170,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-transport-play"
               onClick={handleTogglePlay}
-              title="Pht / Dừng (Phm Cch)"
+              title="Phát / Dừng (Phím Cách)"
             >
               {isPlaying ? <IconPause size={16} /> : <IconPlay size={16} />}
             </button>
@@ -6176,7 +6178,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-btn-transport"
               onClick={() => handleSeek(currentTime + 1)}
-              title="Tiến 1 giy"
+              title="Tiến 1 giây"
             >
               ▶
             </button>
@@ -6186,7 +6188,7 @@ export default function SublixStudioView({
               onClick={() => handleSeek(mediaDuration)}
               title="Đến cuối (End)"
             >
-              
+              ⏭
             </button>
 
             <div className="studio-timeline-timecode">
@@ -6198,7 +6200,7 @@ export default function SublixStudioView({
           <div
             className={`studio-timeline-batch-toggle ${batchMode ? "active" : ""}`}
             onClick={() => setBatchMode(!batchMode)}
-            title="Batch Mode: Tự động chạy hng loạt cho nhiu tập phim"
+            title="Batch Mode: Tự động chạy hàng loạt cho nhiều tập phim"
           >
             <input type="checkbox" checked={batchMode} readOnly style={{ cursor: "pointer" }} />
             <span>Batch Mode {batchMode ? "BẬT" : "TẮT"}</span>
@@ -6216,9 +6218,9 @@ export default function SublixStudioView({
                 if (videoRef.current) {
                   videoRef.current.playbackRate = nextSpeed;
                 }
-                showToast(`⚡ Tốc độ pht video: ${nextSpeed}x`);
+                showToast(`⚡ Tốc độ phát video: ${nextSpeed}x`);
               }}
-              title="Nhấn để đổi tốc độ pht (0.5x, 1.0x, 1.25x, 1.5x, 2.0x)"
+              title="Nhấn để đổi tốc độ phát (0.5x, 1.0x, 1.25x, 1.5x, 2.0x)"
               style={{ fontSize: 11, padding: "2px 6px", cursor: "pointer" }}
             >
               Tốc độ: {playbackSpeed}x
@@ -6296,10 +6298,10 @@ export default function SublixStudioView({
 
           const showVoiceTrack =
             showSubtitlesTrack &&
-            (segments.some((s) => s.hasAudio) ||
+            (workflowOptVoice ||
+              segments.some((s) => s.hasAudio) ||
               (isAnalyzing &&
-                (workflowOptVoice ||
-                  timelineProcessType === "voice" ||
+                (timelineProcessType === "voice" ||
                   timelineProcessType === "pipeline")));
 
           return (
