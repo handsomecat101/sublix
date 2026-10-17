@@ -23,10 +23,27 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.33",
+    date: "17/10/2026",
+    title: "Khớp Hoàn Toàn Độ Dài Audio Track & Video Xuất (Chống Tràn Đuôi Video & Thu Gọn Khối Lồng Tiếng)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Cốt Lõi",
+        icon: "🎙️",
+        items: [
+          "Sửa triệt để lỗi audio track dài hơn video gốc khi xuất file: thêm `duration=first` vào amix và `-shortest` vào remux, tự động trim các câu thoại đuôi video khớp 100% thời lượng.",
+          "Timeline Studio: khối Tiếng Lồng co gọn theo thời lượng phát âm thật (audioDuration thật hoặc ước tính theo từ vựng), không còn bị phình to 20-30s theo khung phụ đề SRT.",
+          "Khắc phục triệt để lỗi mất track lồng tiếng và tắt tiếng gốc video (mute) khi câu lồng tiếng đang phát để chống nhân đôi tiếng.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.11.32",
     date: "13/10/2026",
     title: "Studio Tận Dụng Phụ Đề YouTube Đã Tải (Tích Sẵn) + Đánh Dấu YouTube Toàn App",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Tính Năng Mới",

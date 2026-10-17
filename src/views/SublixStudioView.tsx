@@ -3930,7 +3930,7 @@ export default function SublixStudioView({
               <IconClapper size={15} />
             </div>
             <span className="studio-brand-title">SUBLIX STUDIO</span>
-            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v0.11.29</span>
+            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v0.11.33</span>
           </div>
 
           <nav className="studio-nav-tabs">
