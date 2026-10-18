@@ -43,6 +43,7 @@ echo ============================================================
 echo.
 
 rem 5) Chay che do dev: luon dong bo voi code hien tai trong may
+set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222"
 call npm run tauri dev
 
 echo.

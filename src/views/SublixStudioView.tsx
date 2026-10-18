@@ -18,6 +18,7 @@ import {
   IconPlay,
   IconPause,
   IconVolume2,
+  IconVolumeX,
   IconSearch,
   IconPlus,
   IconChevronDown,
@@ -127,6 +128,7 @@ interface StudioSegmentCardProps {
   onPreviewTts: (seg: SubtitleItem) => void;
   onSplit: (segId: number) => void;
   onDelete: (segId: number) => void;
+  onClearVoice?: (segId: number) => void;
   onPreFocus: () => void;
   onSaveUndoIfChanged: () => void;
 }
@@ -144,6 +146,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
   onPreviewTts,
   onSplit,
   onDelete,
+  onClearVoice,
   onPreFocus,
   onSaveUndoIfChanged,
 }: StudioSegmentCardProps) {
@@ -222,18 +225,44 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
       />
 
       <div className="studio-segment-bottom-row">
-        <button
-          type="button"
-          className={`studio-segment-tts-preview-btn ${previewingSegId === seg.id ? "loading" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPreviewTts(seg);
-          }}
-          title="Nghe thử giọng đọc câu thoại này (Kokoro TTS)"
-        >
-          <IconVolume2 size={11} />
-          {previewingSegId === seg.id ? "Đang tạo..." : "Nghe câu"}
-        </button>
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          <button
+            type="button"
+            className={`studio-segment-tts-preview-btn ${previewingSegId === seg.id ? "loading" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreviewTts(seg);
+            }}
+            title="Nghe thử giọng đọc câu thoại này (Kokoro TTS)"
+          >
+            <IconVolume2 size={11} />
+            {previewingSegId === seg.id ? "Đang tạo..." : "Nghe câu"}
+          </button>
+
+          {seg.hasAudio && onClearVoice && (
+            <button
+              type="button"
+              className="studio-segment-sub-btn"
+              style={{
+                color: "#f87171",
+                background: "rgba(239, 68, 68, 0.1)",
+                borderColor: "rgba(239, 68, 68, 0.3)",
+                fontSize: 10,
+                padding: "3px 6px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClearVoice(seg.id);
+              }}
+              title="Xóa âm thanh lồng tiếng câu này (giữ nguyên phụ đề chữ)"
+            >
+              <IconVolumeX size={11} /> Xóa tiếng
+            </button>
+          )}
+        </div>
 
         <div className="studio-segment-item-actions">
           <button
@@ -254,7 +283,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
               e.stopPropagation();
               onDelete(seg.id);
             }}
-            title="Xóa câu"
+            title="Xóa toàn bộ câu này (cả phụ đề chữ & âm thanh)"
           >
             <IconTrash size={11} />
           </button>
@@ -292,7 +321,7 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
     <div
       key={seg.id}
       data-seg-id={seg.id}
-      className={`studio-timeline-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+      className={`studio-timeline-block studio-timeline-subtitle-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
       style={{
         left: `${left}px`,
         width: `${width}px`,
@@ -1166,6 +1195,8 @@ export default function SublixStudioView({
     }
   }, [isVoiceMuted]);
 
+  const selectedTrackTypeRef = useRef<"subtitles" | "voice">("subtitles");
+
   const stopVoicePlayback = () => {
     const va = voicePlayRef.current;
     if (va) {
@@ -1182,6 +1213,7 @@ export default function SublixStudioView({
     activeVoiceSegRef.current = null;
     const v = videoRef.current;
     if (v) {
+      // Khôi phục âm lượng video gốc về mức ban đầu trước khi ducking
       if (videoVolumeBeforeDuckRef.current !== null) {
         v.volume = videoVolumeBeforeDuckRef.current;
         videoVolumeBeforeDuckRef.current = null;
@@ -1200,29 +1232,56 @@ export default function SublixStudioView({
       if (activeVoiceSegRef.current !== null) stopVoicePlayback();
       return;
     }
-    const seg = segmentsRef.current.find((s) => s.audioUrl && now >= s.start && now < s.end);
-    if (!seg) {
+
+    const totalDur = Math.max(1, mediaDurationRef.current || mediaDuration);
+    // R32 FIX: Tìm câu lồng tiếng theo ĐỘ DÀI ÂM THANH THẬT (voiceDur), KHÔNG bám s.end (vốn có thể chỉ dài 0.02s)
+    const seg = segmentsRef.current.find((s) => {
+      if (!s.hasAudio) return false;
+      const vDur = (s.audioDuration && s.audioDuration > 0) ? s.audioDuration : computeVoiceBlockDur(s, totalDur);
+      return now >= s.start && now < s.start + vDur;
+    });
+
+    if (!seg || !seg.audioUrl) {
       if (activeVoiceSegRef.current !== null) stopVoicePlayback();
       finishedVoiceSegRef.current = null;
       return;
     }
-    if (activeVoiceSegRef.current === seg.id) return; // đang phát đúng câu — để yên
+
+    if (activeVoiceSegRef.current === seg.id) {
+      // Đang phát đúng câu — kiểm tra lệch pha (desync) và đồng bộ lại nếu lệch > 0.35s
+      const va = voicePlayRef.current;
+      if (va) {
+        const expectedTime = Math.max(0, now - seg.start);
+        if (Math.abs(va.currentTime - expectedTime) > 0.35) {
+          try {
+            va.currentTime = expectedTime;
+          } catch {
+            /* noop */
+          }
+        }
+      }
+      return;
+    }
+
     if (finishedVoiceSegRef.current === seg.id) return; // câu này vừa hết — không phát lại lặp
+
     stopVoicePlayback();
     const va = voicePlayRef.current ?? new Audio();
     voicePlayRef.current = va;
     activeVoiceSegRef.current = seg.id;
-    va.src = seg.audioUrl!;
+    va.src = seg.audioUrl;
     try {
       va.currentTime = Math.max(0, now - seg.start);
     } catch {
       /* noop */
     }
+
+    // AUDIO DUCKING CHUẨN: Giảm nhỏ âm lượng video gốc xuống 20% khi có giọng lồng tiếng, KHÔNG tắt hẳn tiếng nền!
     if (videoVolumeBeforeDuckRef.current === null) {
-      videoVolumeBeforeDuckRef.current = v.volume;
-      // Tránh nhân đôi tiếng: tắt tiếng gốc video khi câu lồng tiếng đang phát
-      v.muted = true;
+      videoVolumeBeforeDuckRef.current = v.volume > 0 ? v.volume : 1.0;
+      v.volume = Math.max(0.05, Math.min(videoVolumeBeforeDuckRef.current * 0.25, 0.20));
     }
+
     va.onended = () => {
       if (activeVoiceSegRef.current === seg.id) {
         finishedVoiceSegRef.current = seg.id;
@@ -1233,14 +1292,15 @@ export default function SublixStudioView({
   };
 
   const handleTimeUpdate = () => {
-    if (!videoRef.current || videoRef.current.paused) return;
+    const v = videoRef.current;
+    if (!v || v.paused) return;
+    const t = v.currentTime;
+    syncVoicePlayback(t, false);
+
     const now = performance.now();
-    // Throttle native timeupdate xuống 120ms (~8fps) để đồng bộ mượt mà với React Virtual DOM
-    if (now - lastNativeTimeUpdateRef.current > 120) {
+    if (now - lastNativeTimeUpdateRef.current > 100) {
       lastNativeTimeUpdateRef.current = now;
-      const t = videoRef.current.currentTime;
       setCurrentTime(t);
-      syncVoicePlayback(t, false);
     }
   };
 
@@ -1684,6 +1744,10 @@ export default function SublixStudioView({
       timecodeElementRef.current.textContent = formatTimecode(clamped);
     }
 
+    finishedVoiceSegRef.current = null;
+    activeVoiceSegRef.current = null;
+    stopVoicePlayback();
+
     setCurrentTime(clamped);
     if (videoRef.current) {
       try {
@@ -1691,6 +1755,10 @@ export default function SublixStudioView({
       } catch (e) {
         console.warn("Seek error:", e);
       }
+    }
+
+    if (isPlayingRef.current) {
+      syncVoicePlayback(clamped, false);
     }
   };
 
@@ -1893,7 +1961,47 @@ export default function SublixStudioView({
     showToast("📋 Đã nhân bản câu thoại");
   };
 
+  const handleClearVoiceAudioForSegment = (segId: number) => {
+    saveUndoHistory();
+    setSegments((prev) =>
+      prev.map((s) =>
+        s.id === segId
+          ? { ...s, hasAudio: false, audioUrl: undefined, audioDuration: undefined }
+          : s
+      )
+    );
+    if (activeVoiceSegRef.current === segId) {
+      stopVoicePlayback();
+    }
+    showToast(`🔇 Đã xóa âm thanh lồng tiếng câu #${segId} (phụ đề vẫn giữ nguyên 100%)`);
+  };
+
   const handleDeleteSegment = (idToDelete?: number) => {
+    // Nếu người dùng đang chọn khối trên Track lồng tiếng (Voice track) và nhấn Delete / nút xóa thanh công cụ timeline
+    if (selectedTrackTypeRef.current === "voice") {
+      const ids = idToDelete
+        ? [idToDelete]
+        : selectedSegIdsRef.current.length > 0
+        ? selectedSegIdsRef.current
+        : selectedSegIdRef.current > 0
+        ? [selectedSegIdRef.current]
+        : [];
+      if (ids.length === 0) return;
+      saveUndoHistory();
+      setSegments((prev) =>
+        prev.map((s) =>
+          ids.includes(s.id)
+            ? { ...s, hasAudio: false, audioUrl: undefined, audioDuration: undefined }
+            : s
+        )
+      );
+      if (ids.some((id) => activeVoiceSegRef.current === id)) {
+        stopVoicePlayback();
+      }
+      showToast(`🔇 Đã xóa âm thanh lồng tiếng cho ${ids.length} câu đã chọn (giữ nguyên 100% phụ đề)`);
+      return;
+    }
+
     const ids = idToDelete
       ? [idToDelete]
       : selectedSegIdsRef.current.length > 0
@@ -1909,23 +2017,30 @@ export default function SublixStudioView({
     selectedSegIdsRef.current = [];
     setSelectedSegId(0);
     selectedSegIdRef.current = 0;
+    if (ids.some((id) => activeVoiceSegRef.current === id)) {
+      stopVoicePlayback();
+    }
     showToast(`🗑️ Đã xóa ${ids.length} câu thoại`);
   };
 
   // ROUND-11 & ROUND-25: Xóa toàn bộ Track (Toàn bộ phụ đề hoặc chỉ xóa âm thanh lồng tiếng)
   const handleClearTrack = (type: "subtitles" | "speaker", spkId?: string) => {
-    saveUndoHistory();
     if (type === "subtitles") {
       const count = segmentsRef.current.length;
       if (count === 0) {
         showToast("ℹ️ Track phụ đề hiện đang trống.");
         return;
       }
+      if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xóa TOÀN BỘ ${count} câu phụ đề không?\n(Thao tác này sẽ xóa cả phụ đề chữ & âm thanh. Có thể hoàn tác bằng Ctrl+Z)`)) {
+        return;
+      }
+      saveUndoHistory();
       setSegments([]);
       setSelectedSegIds([]);
       selectedSegIdsRef.current = [];
       setSelectedSegId(0);
       selectedSegIdRef.current = 0;
+      stopVoicePlayback();
       showToast(`🗑️ Đã xóa sạch toàn bộ ${count} câu thoại trong track phụ đề`);
     } else if (type === "speaker") {
       // ROUND-25 FIX: Khi xóa track tiếng lồng, CHỈ XÓA ÂM THANH (hasAudio = false), BẢO TOÀN NGUYÊN VẸN 100% PHỤ ĐỀ!
@@ -1940,14 +2055,16 @@ export default function SublixStudioView({
         return;
       }
 
+      saveUndoHistory();
       setSegments((prev) =>
         prev.map((s) => {
           if (targetSpkId === "all" || s.speakerId === targetSpkId) {
-            return { ...s, hasAudio: false, audioUrl: undefined };
+            return { ...s, hasAudio: false, audioUrl: undefined, audioDuration: undefined };
           }
           return s;
         })
       );
+      stopVoicePlayback();
       showToast(
         `🗑️ Đã xóa âm thanh lồng tiếng (${audioCount} câu) ${spk ? `của vai "${spk.name}"` : ""}. Toàn bộ phụ đề vẫn giữ nguyên 100%!`
       );
@@ -3760,6 +3877,7 @@ export default function SublixStudioView({
 
   // Timeline Action Handlers (EZMAX Standard)
   const handleSelectSegment = (seg: SubtitleItem) => {
+    selectedTrackTypeRef.current = "subtitles";
     setSelectedSegId(seg.id);
     handleSeek(seg.start);
   };
@@ -3877,6 +3995,7 @@ export default function SublixStudioView({
       return;
     }
     e.stopPropagation();
+    selectedTrackTypeRef.current = "voice";
     handleSelectSegmentWithModifier(seg, e);
     handleSeek(seg.start);
 
@@ -5988,10 +6107,14 @@ export default function SublixStudioView({
                   onUpdateSpeaker={handleUpdateSegmentSpeaker}
                   onUpdateTranslated={handleUpdateTranslated}
                   onPreviewTts={handlePreviewSegmentTts}
+                  onClearVoice={handleClearVoiceAudioForSegment}
                   onSplit={handleSplitSegment}
                   onDelete={(id) => {
                     saveSubtitleUndo();
                     setSegments((prev) => prev.filter((s) => s.id !== id));
+                    if (activeVoiceSegRef.current === id) {
+                      stopVoicePlayback();
+                    }
                   }}
                   onPreFocus={handlePreFocusText}
                   onSaveUndoIfChanged={saveTranslationUndoIfChanged}
@@ -6979,6 +7102,7 @@ export default function SublixStudioView({
                           return;
                         }
                         e.stopPropagation();
+                        selectedTrackTypeRef.current = "subtitles";
                         handleSelectSegmentWithModifier(s, e);
                       }}
                       onNudge={handleNudgeSegment}
