@@ -12,9 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.33` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Bản Build Hiện Tại** | `v0.11.34` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
 | **Git Commit** | on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Sẵn sàng làm việc (0 build error, Antigravity hoàn thành fix đổi file & xuất VLC multitrack) |
+| **Trạng Thái** | 🟢 Sẵn sàng làm việc (version đồng bộ `0.11.34` ở 4 nguồn + 2 tiêu đề cửa sổ native; guard `npm run verify:version` PASS exit 0; `npx tsc --noEmit` 0 lỗi) |
 
 ---
 
@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-VERSION-DRIFT-073` | Đồng bộ version 4 nguồn + 2 tiêu đề cửa sổ native (drift `v0.11.32` còn sót trong `tauri.conf.json`) & tạo lại guard `scripts/check_version.ps1` + npm `verify:version` | **Mavis (MiniMax-M3)** | 2026-10-20 | ✅ 4 nguồn = `0.11.34`; guard PASS exit 0 / negative test `[LECH]` exit 1; `tsc` 0 lỗi; `BUG-073` |
 | `TSK-FIX-STUDIO-REPLACE-EXPORT-VLC` | Sửa lỗi không đổi được video trong Studio (dội ngược file cũ) & Xuất Softsub / Multi-track Audio chuẩn VLC | **Antigravity** | 2026-10-13 | ✅ Bỏ deps filePath, tập trung handleLoadNewVideoFile + onClearPendingFile; FFmpeg Softsub & Multi-track VLC; Modal UI cấu hình xuất; v0.11.33 |
 | `TSK-SUBS-YOUTUBE-REUSE-2026-10-13` | Studio tận dụng phụ đề YouTube đã tải (checkbox TÍCH SẴN) + marking "YouTube" (badge timeline + chip Downloader + manifest quản lý) | **CommandCode** | 2026-10-13 | ✅ E2E StarCraft: whisper=0 process, 49 câu từ .srt, badge "📥 YouTube (.en)", manifest 2 entry; v0.11.32 |
 | `TSK-FIX-SUBS-2026-10-13` | Fix phụ đề Tab Tải Video (bật checkbox mà không ra file): tách sub-pass riêng chống 429 + nút "📝 Tải phụ đề" + chip langs + backfill item cũ | **CommandCode** | 2026-10-13 | ✅ E2E thật: StarCraft ra `en.srt`+`vi.srt` (9:29), video mới tự ra `en.srt`, chip UI đo được; `BUG-061`; v0.11.31 |

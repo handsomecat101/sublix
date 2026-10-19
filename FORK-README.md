@@ -25,11 +25,11 @@ Phiên Mavis trước (2026-10-17) sửa BUG-071/072 xong, **chưa commit**, và
 
 | Đường dẫn | Vai trò | Ghi chú |
 |---|---|---|
-| `H:\AI Project\sublix` | **BẢN GỐC — ĐỪNG SỬA** | App đang chạy. `master` @ `51f73fe` |
-| `H:\AI Project\sub-lix-fork-2026-10-19` | **FORK — sửa ở đây** | Branch `fix/voice-timeline-mojibake` @ `432f1ce` |
+| `H:\AI Project\sub-lix` | **BẢN GỐC — ĐỪNG SỬA** | App đang chạy. `master` @ `51f73fe` |
+| `H:\AI Project\sub-lix-fork-2026-10-19` | **FORK — sửa ở đây** | Branch `fix/voice-timeline-mojibabe` @ `3694d64` |
+| `H:\AI Project\sub-lix-fork-build-2026-10-19` | Thư mục build Rust của fork (`CARGO_TARGET_DIR`) | Tách biệt hoàn toàn khỏi bản gốc |
 | `D:\sublix-fork-2026-10-19` | Bản sao dự phòng #2 (git thuần) | Cùng nội dung, khác ổ đĩa |
 | `D:\sublix-history-2026-10-19.bundle` | Toàn bộ lịch sử git trong 1 file | 71.7 MB, copy đi đâu cũng được |
-| `D:\sublix-fork-target-2026-10-19` | Thư mục build Rust của fork (junction) | Build tách khỏi bản gốc |
 
 ### Junction trong fork (dùng chung, chỉ đọc)
 
@@ -38,9 +38,9 @@ Phiên Mavis trước (2026-10-17) sửa BUG-071/072 xong, **chưa commit**, và
 | `src-tauri\models` | `H:\AI Project\sublix\src-tauri\models` | **KHÔNG bấm "Tải model" trong fork** — sẽ ghi đè model của bản gốc |
 | `src-tauri\binaries` | `H:\AI Project\sublix\src-tauri\binaries` | Tương tự — chỉ đọc |
 | `models` | `H:\AI Project\sublix\models` | Tương tự |
-| `src-tauri\target` | `D:\sublix-fork-target-2026-10-19` | **Build tách biệt hoàn toàn** ✅ |
+| `src-tauri\target` | `D:\sublix-fork-target-2026-10-19` | ⚠️ **ĐÃ BỎ** — D: báo lỗi I/O (os error 1117) khi cargo build. Giờ build ra `H:\AI Project\sub-lix-fork-build-2026-10-19` qua `CARGO_TARGET_DIR` |
 
-Source code, `node_modules`, `dist`, git history → **hoàn toàn riêng**.
+Source code, `node_modules`, `dist`, git history, **build output** → **hoàn toàn riêng**.
 
 ## Trạng thái fork lúc tạo
 
@@ -94,7 +94,84 @@ git clone 'D:\sublix-history-2026-10-19.bundle' sublix-khoi-phuc
 
 ## Rủi ro đĩa (quan trọng)
 
-- **Ổ H: còn ~9 GB trống.** Bản gốc đang chiếm **101 GB**, trong đó `src-tauri/target` = **84.6 GB** (cache build tích luỹ nhiều phiên).
-- `src-tauri/target` **xoá được an toàn** (không mất source) — sẽ giải phóng 84 GB nhưng lần build sau phải compile lại từ đầu.
-- **Chưa tự xoá** — cần user đồng ý.
-- Build của fork nằm ở D: (còn 122.8 GB) nên không đụng giới hạn này.
+- ~~**Ổ H: còn ~9 GB trống**~~ → **ĐÃ XOÁ `src-tauri/target` của bản gốc** (`cargo clean`: 71.722 file / 82.6 GiB). **H: còn 121.4 GB trống.**
+- Build của fork nằm ở `H:\AI Project\sub-lix-fork-build-2026-10-19` (tách biệt) và `...-w1-...` (target riêng cho worker verify song song).
+
+---
+
+# KẾT QUẢ ĐÃ LÀM TRONG FORK (v0.11.34)
+
+## Bug gốc — parser SRT mất 106/155 cue
+
+`src-tauri/src/file_sub.rs` → `parse_srt_content()` dùng `normalized.split("\n\n")`.
+File SRT kiểu **rolling-caption** có dòng trống NGAY SAU dòng timestamp →
+mỗi cue bị tách làm đôi, block chứa timestamp không còn text → **bị bỏ**.
+
+Kết quả: file có **155 cue** nhưng app chỉ nạp **49** → timeline trống, track lồng tiếng cũng trống theo.
+
+> Fix này **đã từng được viết ở phiên 2026-10-17 nhưng bị mất** khi cây làm việc bị rollback. Đây là lý do bug "quay lại".
+
+### Đã sửa
+- `parse_srt_content()` → quét **tuyến tính theo dòng**: chỉ mở cue khi gặp `-->`; dòng trống KHÔNG kết thúc cue; nhìn-trước loại số thứ tự cue khỏi text; chuẩn hóa timestamp `HH:MM:SS,mmm`; bỏ BOM; nhận cả LF/CRLF.
+- `normalize_srt_timestamp()` — hàm helper mới.
+- `src-tauri/src/dubbing/mod.rs` → `srt_segments_to_dubbing()`: **đường riêng cho nguồn SRT**, không dùng `clean_and_merge_raw_segments()` (hàm dành cho output Whisper).
+- `dedupe_rolling_overlap()` — text rolling-caption là **cumulative** (mỗi cue lặp lại câu trước rồi thêm phần mới) → rút gọn phần trùng, **ngưỡng tối thiểu 3 từ** để không cắt nhầm.
+
+## Số liệu (đo trên file thật)
+
+| | Trước | Sau |
+|---|---|---|
+| Cue nhận diện từ `.en.srt` | 49 | **155** |
+| Cue có text thật (bỏ 77 cue marker 10ms / `[ ]`) | 49 | **78** |
+| Cue đầu | — | `Heat. Heat.` (không dính số thứ tự) |
+| Cue thứ 3 sau dedupe | — | `your warriors question your whereabouts.` |
+
+## Nghiệm thu GUI thật (app fork, CDP 9223)
+
+- `78 câu • AUTO ➔ VI`, badge nguồn `📥 YouTube (.en)`
+- **78 khối phụ đề** render trên track `💬 PHỤ ĐỀ (TEXT)`
+- Bước 2 (TTS) sinh **khối audio tím có sóng âm thanh** trên track `🎙️ TIẾNG LỒNG` — panel phải hiện badge `🔊 Xóa tiếng`
+- **Mojibake trên DOM: 0 hit** (quét toàn bộ text node, không tính script/style)
+- Badge version: `V0.11.34` (nay đọc từ `package.json`, không hardcode)
+
+Ảnh: `gui-2026-10-20/`
+
+| File | Nội dung |
+|---|---|
+| `03-fork-78-cues-fixed-parser.png` | 78 khối phụ đề, track TIẾNG LỒNG còn trống (chưa chạy TTS) |
+| `04-fork-voice-track-audio-blocks.png` | Track TIẾNG LỒNG có khối audio tím, tiến độ 17/78 |
+| `06-fork-final-voice-track-audio.png` | Bản cuối: 78 câu + khối audio + tiến độ 14/78 |
+
+## Version drift — 5 lớp, đã đồng bộ + guard 6 mục
+
+| Lớp | Trạng thái trước | Sau |
+|---|---|---|
+| `package.json` | 0.11.33 | 0.11.34 |
+| `src-tauri/Cargo.toml` | 0.11.33 | 0.11.34 |
+| `tauri.conf.json` version | 0.11.33 | 0.11.34 |
+| Tiêu đề cửa sổ main | **v0.11.32** | v0.11.34 |
+| Tiêu đề cửa sổ overlay | **v0.11.32** | v0.11.34 |
+| Badge UI `SublixStudioView.tsx` | **hardcode `v0.11.33`** | đọc `package.json` |
+| Fallback `SettingsView.tsx` | **hardcode `"0.11.29"`** ×3 | đọc runtime/`package.json` |
+
+Guard `scripts/check_version.ps1` (tạo lại — đã mất trong rollback) nay quét **6 mục**:
+4 nguồn manifest + 2 tiêu đề cửa sổ + **hardcode version trong `src/`** → exit 1 khi lệch.
+Negative test đã chạy: hạ 1 nguồn → `[LECH]` + exit 1; hardcode badge → `[LECH] hardcode version trong src/` + exit 1.
+
+## Test
+
+```
+cargo test --lib  → 30 passed; 0 failed
+cargo build       → exit 0
+npx tsc --noEmit  → exit 0
+npm run verify:version → PASS, exit 0
+```
+
+## Còn lại (CHƯA làm, ghi rõ để agent sau biết)
+
+- ⏳ Chưa nghiệm thu **phát lại video** (replace) và **save/reload project** trong fork.
+- ⏳ Chưa kiểm chứng **audio đầu ra cuối** (playback/sync) — mới xác nhận khối audio được tạo trên timeline.
+- ⏳ `CHANGELOG.md` còn thiếu mục cho ~17 bản cũ (chỉ có trong `ChangelogModal.tsx`) — lỗi có sẵn từ trước, ngoài phạm vi.
+- ⏳ Guard có **false negative** nếu một dòng có dấu nháy đơn trước `//` (đã nêu trong ISSUE_LOG).
+- ℹ️ Bản gốc `H:\AI Project\sublix` **không đổi 1 byte** — đã verify bằng SHA-256 của 8 file key.
+

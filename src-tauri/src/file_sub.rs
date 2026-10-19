@@ -114,51 +114,198 @@ pub fn extract_audio_16k_mono(input: &Path, output_wav: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Parse standard SRT format content into structured subtitle segments.
+/// Mot cue SRT dang duoc gom (timestamp da chuan hoa + cac dong text rieng biet).
+struct PendingSrtCue {
+    start_time: String,
+    end_time: String,
+    text_lines: Vec<String>,
+}
+
+/// Chuan hoa mot moc thoi gian SRT ve dinh dang `HH:MM:SS,mmm`.
+///
+/// Chap nhan:
+/// - `HH:MM:SS,mmm`, `H:MM:SS,mmm`, `MM:SS,mmm` (thieu phan gio)
+/// - Dau phan cach mili-giay la `,` hoac `.` (kieu WebVTT)
+/// - Mili-giay thieu chu so 0 (`00:01:02,5` -> `00:01:02,500`)
+///
+/// Tra ve `None` neu khong parse duoc - cue do se bi bo qua (khong panic).
+pub fn normalize_srt_timestamp(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+
+    // tach phan mili-giay: chi hop le khi phan truoc co ':' va phan sau toan chu
+    // so - tranh bien "00:01:02" thanh "00:01" + "02".
+    let (main, frac) = match s.rfind(|c| c == ',' || c == '.') {
+        Some(pos) => {
+            let (head, tail) = s.split_at(pos);
+            let tail = &tail[1..];
+            if head.contains(':') && !tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit()) {
+                (head, tail)
+            } else {
+                (s, "")
+            }
+        }
+        None => (s, ""),
+    };
+
+    let parts: Vec<&str> = main.split(':').map(str::trim).collect();
+    if parts
+        .iter()
+        .any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()))
+    {
+        return None;
+    }
+
+    let (h, m, sec) = match parts.len() {
+        3 => (parts[0], parts[1], parts[2]),
+        2 => ("0", parts[0], parts[1]),
+        1 => ("0", "0", parts[0]),
+        _ => return None,
+    };
+
+    let hours: u64 = h.parse().ok()?;
+    let minutes: u64 = m.parse().ok()?;
+    let seconds: u64 = sec.parse().ok()?;
+    if minutes > 59 || seconds > 59 {
+        return None;
+    }
+
+    // Mili-giay: dem ben phai ("5" -> 500) va cat con dung 3 chu so.
+    let mut ms_digits = frac.to_string();
+    while ms_digits.len() < 3 {
+        ms_digits.push('0');
+    }
+    ms_digits.truncate(3);
+    let ms: u64 = ms_digits.parse().ok()?;
+
+    Some(format!("{:02}:{:02}:{:02},{:03}", hours, minutes, seconds, ms))
+}
+
+/// Parse content SRT thanh danh sach subtitle segment.
+///
+/// BUG FIX (SRT kieu rolling-caption / karaoke cua YouTube): parser cu dung
+/// `split("\n\n")` nen bi tach cue lam doi khi cue co dong trong ngay sau dong
+/// timestamp - chi ~49/155 cue duoc nap, timeline va track long tieng bi trong.
+///
+/// Parser moi quet TUYEN TINH theo dong:
+/// 1. Chap nhan ca LF va CRLF, bo BOM neu co.
+/// 2. Chi mo cue khi gap dong chua `-->`; dong so thu tu cue duoc bo qua.
+/// 3. Dong trong KHONG ket thuc cue (chi dong `-->` ke tiep moi mo cue moi).
+/// 4. Dong chi gom chu so ma dong khong rong ke tiep chua `-->` la so thu tu cua
+///    cue ke tiep -> cham dut text cua cue hien tai (tranh "Heat. Heat. 2").
+/// 5. Timestamp chuan hoa ve `HH:MM:SS,mmm`; cue co timestamp hong bi bo qua.
+/// 6. Text nhieu dong noi bang MOT dau cach, giu nguyen Unicode.
+///
+/// Luu y: cue KHONG co text (cue marker cua rolling-caption) van duoc giu lai vi
+/// no mang moc thoi gian hop le; viec loai marker thuc hien o tang dubbing
+/// (`dubbing::srt_segments_to_dubbing`). File rolling-caption that: 155 cue,
+/// trong do 78 cue co text that va 77 cue la marker.
 pub fn parse_srt_content(content: &str) -> Vec<SubtitleSegment> {
-    let mut segments = Vec::new();
-    let normalized = content.replace("\r\n", "\n");
-    let blocks: Vec<&str> = normalized.split("\n\n").collect();
+    let mut segments: Vec<SubtitleSegment> = Vec::new();
 
-    for block in blocks {
-        let lines: Vec<&str> = block.lines().map(str::trim).filter(|s| !s.is_empty()).collect();
-        if lines.len() < 2 {
+    // (1) Chuan hoa line ending + bo BOM.
+    let normalized = content
+        .trim_start_matches('\u{FEFF}')
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
+    let lines: Vec<&str> = normalized.split('\n').collect();
+
+    let mut current: Option<PendingSrtCue> = None;
+
+    for (idx, raw_line) in lines.iter().enumerate() {
+        let line = raw_line.trim();
+
+        // (2) Dong timestamp -> dong cue truoc va mo cue moi.
+        if line.contains("-->") {
+            if let Some(cue) = current.take() {
+                push_srt_segment(&mut segments, cue);
+            }
+
+            let mut tokens = line.split_whitespace();
+            let start_raw = tokens.next();
+            let arrow = tokens.next();
+            let end_raw = tokens.next();
+            if arrow != Some("-->") {
+                continue; // dong timestamp hong -> bo qua
+            }
+            let (Some(start_raw), Some(end_raw)) = (start_raw, end_raw) else {
+                continue;
+            };
+            let (Some(start_time), Some(end_time)) = (
+                normalize_srt_timestamp(start_raw),
+                normalize_srt_timestamp(end_raw),
+            ) else {
+                continue; // timestamp khong parse duoc -> bo qua cue do
+            };
+
+            current = Some(PendingSrtCue {
+                start_time,
+                end_time,
+                text_lines: Vec::new(),
+            });
             continue;
         }
 
-        // Line 1 may be index, Line 2 timestamp: 00:00:01,000 --> 00:00:04,000
-        let (time_idx, text_start) = if lines[0].contains("-->") {
-            (0, 1)
-        } else if lines.len() >= 2 && lines[1].contains("-->") {
-            (1, 2)
-        } else {
-            continue;
-        };
-
-        let time_line = lines[time_idx];
-        let parts: Vec<&str> = time_line.split("-->").map(str::trim).collect();
-        if parts.len() != 2 {
+        // (3) Dong trong khong ket thuc cue.
+        if line.is_empty() {
             continue;
         }
 
-        let start_time = parts[0].to_string();
-        let end_time = parts[1].to_string();
-        let text = lines[text_start..].join(" ").trim().to_string();
-
-        if text.is_empty() {
+        // (4) Dong chi gom chu so + dong ke tiep chua "-->" -> so thu tu cue
+        //     tiep theo, KHONG phai text.
+        if current.is_some()
+            && is_digits_only(line)
+            && next_non_empty_line_has_arrow(&lines, idx + 1)
+        {
+            if let Some(cue) = current.take() {
+                push_srt_segment(&mut segments, cue);
+            }
             continue;
         }
 
-        segments.push(SubtitleSegment {
-            index: segments.len() + 1,
-            start_time,
-            end_time,
-            original: text,
-            translated: None,
-        });
+        // (6) Gom text cua cue hien tai.
+        if let Some(cue) = current.as_mut() {
+            cue.text_lines.push(line.to_string());
+        }
+    }
+
+    // Dong cue cuoi cung.
+    if let Some(cue) = current.take() {
+        push_srt_segment(&mut segments, cue);
     }
 
     segments
+}
+
+/// Day cue da gom vao danh sach segment (text nhieu dong noi bang 1 dau cach).
+fn push_srt_segment(segments: &mut Vec<SubtitleSegment>, cue: PendingSrtCue) {
+    let text = cue.text_lines.join(" ").trim().to_string();
+    segments.push(SubtitleSegment {
+        index: segments.len() + 1,
+        start_time: cue.start_time,
+        end_time: cue.end_time,
+        original: text,
+        translated: None,
+    });
+}
+
+/// Dong chi gom chu so (dong so thu tu cue trong SRT).
+fn is_digits_only(line: &str) -> bool {
+    !line.is_empty() && line.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Dong khong rong ke tiep (bo qua dong trong) co chua "-->" hay khong.
+fn next_non_empty_line_has_arrow(lines: &[&str], mut idx: usize) -> bool {
+    while idx < lines.len() {
+        let line = lines[idx].trim();
+        if !line.is_empty() {
+            return line.contains("-->");
+        }
+        idx += 1;
+    }
+    false
 }
 
 /// Write segments to an SRT file.
@@ -582,4 +729,172 @@ pub fn launch_in_vlc(video_path: &str, srt_path: &str) -> Result<()> {
 
     cmd.spawn()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// File SRT rolling-caption that (ten chua dau hai cham rong U+FF1A).
+    const REAL_ROLLING_SRT_PATH: &str = "C:\\Users\\TTC\\AppData\\Roaming\\com.sublix.desktop\\downloads\\StarCraft II\u{FF1A} Legacy of the Void - Reclamation [uQnmfEka3vw].en.srt";
+
+    /// Rut gon segment thanh tuple de so sanh (SubtitleSegment chua derive PartialEq).
+    fn digest(segments: &[SubtitleSegment]) -> Vec<(usize, String, String, String)> {
+        segments
+            .iter()
+            .map(|s| (s.index, s.start_time.clone(), s.end_time.clone(), s.original.clone()))
+            .collect()
+    }
+
+    /// Doi "HH:MM:SS,mmm" sang giay.
+    fn srt_time_to_seconds(time: &str) -> f64 {
+        let clean = time.trim().replace(',', ".");
+        let parts: Vec<f64> = clean
+            .split(':')
+            .filter_map(|p| p.parse::<f64>().ok())
+            .collect();
+        match parts.len() {
+            3 => parts[0] * 3600.0 + parts[1] * 60.0 + parts[2],
+            2 => parts[0] * 60.0 + parts[1],
+            1 => parts[0],
+            _ => 0.0,
+        }
+    }
+
+    /// Cue "co text that": khong rong, khong phai marker ([ ]), du thoi luong.
+    fn is_real_text_segment(seg: &SubtitleSegment) -> bool {
+        let text = seg.original.trim();
+        if text.is_empty() {
+            return false;
+        }
+        let stripped: String = text
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != '[' && *c != ']')
+            .collect();
+        if stripped.is_empty() {
+            return false;
+        }
+        let dur = srt_time_to_seconds(&seg.end_time) - srt_time_to_seconds(&seg.start_time);
+        dur >= 0.055
+    }
+
+    /// TEST 1 - fixture that: file rolling-caption 155 cue (78 cue co text that).
+    #[test]
+    fn test_parse_real_rolling_caption_srt() {
+        let path = Path::new(REAL_ROLLING_SRT_PATH);
+        if !path.exists() {
+            // May khac / CI khong co file mau -> SKIP (khong FAIL).
+            eprintln!("SKIP: khong tim thay file SRT mau: {}", path.display());
+            return;
+        }
+
+        let content = fs::read_to_string(path).expect("doc file SRT mau");
+        let segments = parse_srt_content(&content);
+
+        assert_eq!(segments.len(), 155, "phai nhan dien du 155 cue");
+
+        let real_count = segments.iter().filter(|s| is_real_text_segment(s)).count();
+        assert_eq!(real_count, 78, "phai co 78 cue co text that");
+
+        let first = &segments[0];
+        assert_eq!(first.original, "Heat. Heat.");
+        assert_eq!(first.start_time, "00:00:14,440");
+        assert_eq!(first.end_time, "00:00:34,870");
+
+        assert_eq!(segments[2].original, "I wish to be alone. Kaldares,");
+    }
+
+    /// TEST 2 - CRLF cho ket qua giong het LF.
+    #[test]
+    fn test_parse_crlf_same_as_lf() {
+        let lf = "1\n00:00:01,000 --> 00:00:04,000\n\nHello\n\n2\n00:00:04,000 --> 00:00:06,000\n\nWorld there\n";
+        let crlf = lf.replace('\n', "\r\n");
+
+        let lf_segments = parse_srt_content(lf);
+        let crlf_segments = parse_srt_content(&crlf);
+
+        assert_eq!(lf_segments.len(), 2);
+        assert_eq!(digest(&lf_segments), digest(&crlf_segments));
+    }
+
+    /// TEST 3 - BOM cho ket qua giong het khong BOM.
+    #[test]
+    fn test_parse_bom_same_as_no_bom() {
+        let lf = "1\n00:00:01,000 --> 00:00:04,000\n\nHello\n";
+        let with_bom = format!("\u{FEFF}{lf}");
+
+        assert_eq!(
+            digest(&parse_srt_content(lf)),
+            digest(&parse_srt_content(&with_bom))
+        );
+    }
+
+    /// TEST 4 - chuan hoa timestamp.
+    #[test]
+    fn test_normalize_srt_timestamp() {
+        assert_eq!(
+            normalize_srt_timestamp("0:01:02.500").as_deref(),
+            Some("00:01:02,500")
+        );
+        assert_eq!(
+            normalize_srt_timestamp("00:01:02,5").as_deref(),
+            Some("00:01:02,500")
+        );
+        assert_eq!(normalize_srt_timestamp("abc"), None);
+
+        // Cac truong hop bien.
+        assert_eq!(
+            normalize_srt_timestamp("00:00:14,440").as_deref(),
+            Some("00:00:14,440")
+        );
+        assert_eq!(
+            normalize_srt_timestamp("01:02,500").as_deref(),
+            Some("00:01:02,500")
+        );
+        assert_eq!(
+            normalize_srt_timestamp("00:01:02").as_deref(),
+            Some("00:01:02,000")
+        );
+        assert_eq!(
+            normalize_srt_timestamp("00:01:02,1234").as_deref(),
+            Some("00:01:02,123")
+        );
+        assert_eq!(normalize_srt_timestamp(""), None);
+        assert_eq!(normalize_srt_timestamp("00:99:00,000"), None);
+        assert_eq!(normalize_srt_timestamp("00:01:xx,000"), None);
+    }
+
+    /// TEST 5 - dong trong khong ket thuc cue.
+    #[test]
+    fn test_blank_line_does_not_end_cue() {
+        let srt = "1\n00:00:01,000 --> 00:00:04,000\n\nHello world\n\n2\n00:00:04,000 --> 00:00:06,000\n\nSecond cue\n";
+        let segments = parse_srt_content(srt);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].original, "Hello world");
+        assert_eq!(segments[1].original, "Second cue");
+    }
+
+    /// TEST 6 - so thu tu cue khong lam vao text.
+    #[test]
+    fn test_cue_index_not_merged_into_text() {
+        let srt = "1\n00:00:14,440 --> 00:00:34,870\n\nHeat. Heat.\n\n2\n00:00:34,870 --> 00:00:34,880\n\n[ ]\n";
+        let segments = parse_srt_content(srt);
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].original, "Heat. Heat.");
+        assert_eq!(segments[0].start_time, "00:00:14,440");
+        assert_eq!(segments[0].end_time, "00:00:34,870");
+        assert_eq!(segments[1].original, "[ ]");
+    }
+
+    /// TEST 7 - timestamp khong parse duoc -> bo qua cue do (khong panic).
+    #[test]
+    fn test_malformed_timestamp_is_skipped() {
+        let srt = "1\n00:00:01,000 --> 00:00:04,000\n\nGood cue\n\n2\nnot-a-time --> also-bad\n\nBad cue\n";
+        let segments = parse_srt_content(srt);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].original, "Good cue");
+    }
 }

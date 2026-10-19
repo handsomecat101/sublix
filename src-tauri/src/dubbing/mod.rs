@@ -1284,6 +1284,171 @@ pub fn clean_and_merge_raw_segments(
     segments
 }
 
+/// v0.11.34 (BUG SRT rolling-caption): chuyen segment tu file .srt co san sang
+/// cau truc dubbing.
+///
+/// KHAC voi `clean_and_merge_raw_segments` (danh cho output Whisper: loc ao giac
+/// + ghep cau), ham nay GIU NGUYEN moi cue co text that - chi loai cue marker
+/// dac thu cua rolling-caption:
+/// - text rong
+/// - text chi gom ngoac vuong / ngoac tron / khoang trang (vi du "[ ]")
+/// - thoi luong < 55 ms (cue "luong" 10 ms lap lai cue truoc do)
+///
+/// File rolling-caption that: 155 cue -> 78 cue dung de long tieng.
+///
+/// Buoc 2 cat phan trung cua rolling-caption (text cumulative) — chi rut gon
+/// text, SO CUE giu nguyen.
+pub fn srt_segments_to_dubbing(
+    raw_segments: Vec<crate::file_sub::SubtitleSegment>,
+    src_lang: &str,
+    expected_speakers: Option<usize>,
+) -> Vec<DubbingSegment> {
+    let is_cjk = matches!(
+        src_lang.to_lowercase().as_str(),
+        "ja" | "japanese" | "zh" | "chinese"
+    );
+
+    // 1. Loc cue marker, giu nguyen cue co text that.
+    let mut kept: Vec<(f64, f64, String)> = Vec::with_capacity(raw_segments.len());
+    for seg in raw_segments {
+        let start_sec = parse_srt_time_to_seconds(&seg.start_time);
+        let end_sec = parse_srt_time_to_seconds(&seg.end_time);
+        let dur = end_sec - start_sec;
+
+        let text = seg.original.trim();
+        if text.is_empty() || is_srt_marker_text(text, is_cjk) {
+            continue;
+        }
+        // Cue "luong" ~10 ms cua rolling-caption (lap lai cue truoc do).
+        if dur < 0.055 {
+            continue;
+        }
+
+        kept.push((start_sec, end_sec, text.to_string()));
+    }
+
+    if kept.is_empty() {
+        return Vec::new();
+    }
+
+    // 2. Cat phan trung rolling-caption (text cumulative).
+    //    File rolling-caption lap lai toan bo text cue truoc roi them phan moi
+    //    ("... There are few" -> "... There are few of us left."). Giu nguyen se
+    //    khien TTS doc lai moi cau nhieu lan -> audio lap/chong nhau.
+    let mut prev_deduped: Option<String> = None;
+    for entry in kept.iter_mut() {
+        let current = entry.2.clone();
+        if let Some(prev) = prev_deduped.as_deref() {
+            let (_, deduped) = dedupe_rolling_overlap(prev, &current);
+            entry.2 = deduped;
+        }
+        // Text DA dedupe lai la "prev" cho cue ke tiep.
+        prev_deduped = Some(entry.2.clone());
+    }
+
+    // 3. Gan speaker_id: dung cung luat turn-boundary voi nhanh Whisper de hanh vi
+    //    nhat quan (sherpa diarization se ghi de neu co model).
+    let max_spk = expected_speakers.unwrap_or(2).max(1);
+    let mut current_speaker_idx = 0;
+    let mut last_end = 0.0;
+    let mut segments: Vec<DubbingSegment> = Vec::with_capacity(kept.len());
+
+    for (idx, (start_sec, end_sec, text)) in kept.into_iter().enumerate() {
+        let pause = start_sec - last_end;
+        let prev_text = segments
+            .last()
+            .map(|s: &DubbingSegment| s.original_text.as_str())
+            .unwrap_or("");
+        let is_speaker_change = idx > 0 && is_turn_boundary(prev_text, &text, pause);
+
+        if is_speaker_change && max_spk > 1 {
+            current_speaker_idx = (current_speaker_idx + 1) % max_spk;
+        }
+
+        let speaker_id = format!("speaker_{}", current_speaker_idx);
+        last_end = end_sec;
+
+        segments.push(DubbingSegment {
+            id: idx + 1,
+            speaker_id,
+            start_sec,
+            end_sec,
+            original_text: text,
+            // dubbed_text se duoc buoc dich (step 4) gan sau, giong nhanh Whisper.
+            dubbed_text: String::new(),
+            audio_duration_sec: None,
+            status: "ready".to_string(),
+        });
+    }
+
+    segments
+}
+
+/// Cue marker cua rolling-caption: text chi gom ngoac / khoang trang (vi du
+/// "[ ]", "[]") - khong phai loi thoai nen khong long tieng.
+fn is_srt_marker_text(text: &str, is_cjk: bool) -> bool {
+    let stripped: String = text
+        .chars()
+        .filter(|c| {
+            if c.is_whitespace() || *c == '[' || *c == ']' || *c == '(' || *c == ')' {
+                return false;
+            }
+            // Ngoac rong (full-width) chi xuat hien trong phu de CJK.
+            !(is_cjk
+                && (*c == '\u{FF08}'
+                    || *c == '\u{FF09}'
+                    || *c == '\u{FF3B}'
+                    || *c == '\u{FF3D}'
+                    || *c == '\u{300C}'
+                    || *c == '\u{300D}'))
+        })
+        .collect();
+    stripped.is_empty()
+}
+
+/// So khoang trung giua hai cue lien tiep cua rolling-caption.
+///
+/// Tim so tu `k` LON NHAT sao cho `k` tu cuoi cua `prev_words` bang `k` tu dau
+/// cua `cur_words`. Neu `k >= MIN_OVERLAP_WORDS` (3) thi cat `k` tu dau
+/// `cur_words` de bo phan trung. Khi overlap < 3 tu (vi du hai cau ngan trung
+/// nhau) thi GIU NGUYEN de tranh cat nham.
+///
+/// `prev_text` phai la text DA dedupe cua cue truoc do.
+///
+/// Tra ve `(so tu bi cat, text moi)`. Neu cat xong text bi rong thi giu nguyen
+/// text goc (khong tao cue rong).
+fn dedupe_rolling_overlap(prev_text: &str, cur_text: &str) -> (usize, String) {
+    /// Nguong toi thieu de coi la overlap that (tranh cat nham cau ngan).
+    const MIN_OVERLAP_WORDS: usize = 3;
+
+    let prev_words: Vec<&str> = prev_text.split_whitespace().collect();
+    let cur_words: Vec<&str> = cur_text.split_whitespace().collect();
+    if prev_words.is_empty() || cur_words.is_empty() {
+        return (0, cur_text.to_string());
+    }
+
+    let max_k = prev_words.len().min(cur_words.len());
+    let mut best_k = 0usize;
+    for k in (1..=max_k).rev() {
+        if prev_words[prev_words.len() - k..] == cur_words[..k] {
+            best_k = k;
+            break;
+        }
+    }
+
+    if best_k < MIN_OVERLAP_WORDS {
+        return (0, cur_text.to_string());
+    }
+
+    let deduped = cur_words[best_k..].join(" ");
+    if deduped.trim().is_empty() {
+        // Cue hien tai nam trong hoan toan trong cue truoc -> giu nguyen.
+        return (0, cur_text.to_string());
+    }
+
+    (best_k, deduped)
+}
+
 /// Extract clean JSON array from model output, stripping `<think>` tags and markdown code blocks
 pub fn extract_json_array_from_response(raw: &str) -> Option<serde_json::Value> {
     let after_think = if let Some(idx) = raw.find("</think>") {
@@ -2009,9 +2174,31 @@ pub fn analyze_and_create_project_full(
         return Err(anyhow::anyhow!("Không nhận diện được giọng nói trong tệp này."));
     }
 
-    // 3. Clean, filter hallucinations, and merge contiguous dialogue clauses
-    emit("diarizing", 35.0, "Đang lọc ảo giác & ghép nối câu thoại hoàn chỉnh...", 0, raw_segments.len());
-    let mut parsed_segments = clean_and_merge_raw_segments(raw_segments, &src_lang, expected_speakers);
+    // 3. Xu ly segment theo nguon transcript:
+    //    - "srt:*": file phu de co san -> GIU NGUYEN cue co text that, chi loai
+    //      cue marker (rolling-caption). KHONG dung luat loc ao giac cua Whisper
+    //      vi luat do se loai mat cac cue hop le.
+    //    - "whisper": giu nguyen hanh vi cu (loc ao giac + ghep cau).
+    let raw_count = raw_segments.len();
+    let mut parsed_segments = if transcript_source.starts_with("srt:") {
+        emit(
+            "diarizing",
+            35.0,
+            "Đang lọc cue rỗng & chuẩn hóa mốc thời gian phụ đề...",
+            0,
+            raw_count,
+        );
+        srt_segments_to_dubbing(raw_segments, &src_lang, expected_speakers)
+    } else {
+        emit(
+            "diarizing",
+            35.0,
+            "Đang lọc ảo giác & ghép nối câu thoại hoàn chỉnh...",
+            0,
+            raw_count,
+        );
+        clean_and_merge_raw_segments(raw_segments, &src_lang, expected_speakers)
+    };
 
     if parsed_segments.is_empty() {
         let _ = fs::remove_file(&temp_wav);
@@ -2997,6 +3184,120 @@ mod tests {
         let gen2 = start_new_generation();
         assert!(is_generation_cancelled(gen1), "Old generation must stay cancelled!");
         assert!(!is_generation_cancelled(gen2), "New generation must not be cancelled!");
+    }
+
+    /// BUG SRT rolling-caption: cue marker (text rong / "[ ]" / thoi luong
+    /// < 55 ms) phai bi lo, cue co text that phai duoc giu nguyen.
+    #[test]
+    fn test_srt_segments_to_dubbing_drops_markers() {
+        let srt = "1\n00:00:14,440 --> 00:00:34,870\n\nHeat. Heat.\n\n2\n00:00:34,870 --> 00:00:34,880\n\n \n\n3\n00:00:34,880 --> 00:00:37,910\n\nI wish to be alone. Kaldares,\n\n4\n00:00:37,910 --> 00:00:37,920\nI wish to be alone. Kaldares,\n \n";
+        let raw = crate::file_sub::parse_srt_content(srt);
+        assert_eq!(raw.len(), 4, "parser phai nhan dien du 4 cue");
+
+        let segments = srt_segments_to_dubbing(raw, "en", Some(2));
+
+        assert_eq!(
+            segments.len(),
+            2,
+            "chi giu 2 cue co text that (bo cue rong + cue 10 ms)"
+        );
+        assert_eq!(segments[0].original_text, "Heat. Heat.");
+        assert_eq!(segments[1].original_text, "I wish to be alone. Kaldares,");
+
+        assert!((segments[0].start_sec - 14.44).abs() < 0.001);
+        assert!((segments[0].end_sec - 34.87).abs() < 0.001);
+        assert!((segments[1].start_sec - 34.88).abs() < 0.001);
+        assert!((segments[1].end_sec - 37.91).abs() < 0.001);
+
+        assert_eq!(segments[0].id, 1);
+        assert_eq!(segments[1].id, 2);
+        assert!(segments.iter().all(|s| s.speaker_id.starts_with("speaker_")));
+        assert!(segments.iter().all(|s| s.dubbed_text.is_empty()));
+        assert!(segments.iter().all(|s| s.status == "ready"));
+    }
+
+    /// Thuật toán overlap: chuỗi < 3 từ KHÔNG cắt, chuỗi >= 3 từ CÓ cắt.
+    #[test]
+    fn test_dedupe_rolling_overlap_algorithm() {
+        // Overlap 2 từ -> KHÔNG cắt (k < 3).
+        let (k, out) = dedupe_rolling_overlap("Hello there my friend", "my friend again");
+        assert_eq!(k, 0, "overlap 2 từ không được cắt");
+        assert_eq!(out, "my friend again");
+
+        // Overlap 1 từ -> KHÔNG cắt (k < 3).
+        let (k, out) = dedupe_rolling_overlap("Hello there my friend", "friend again now");
+        assert_eq!(k, 0, "overlap 1 từ không được cắt");
+        assert_eq!(out, "friend again now");
+
+        // Overlap đúng 3 từ -> CÓ cắt.
+        let (k, out) = dedupe_rolling_overlap("of us left.", "of us left. And tomorrow I send");
+        assert_eq!(k, 3);
+        assert_eq!(out, "And tomorrow I send");
+
+        // Overlap dài -> cắt đúng phần trùng.
+        let (k, out) = dedupe_rolling_overlap(
+            "I wish to be alone. Kaldares,",
+            "I wish to be alone. Kaldares, your warriors question your whereabouts.",
+        );
+        assert_eq!(k, 6);
+        assert_eq!(out, "your warriors question your whereabouts.");
+
+        // Cue nằm trong hoàn toàn trong cue trước -> giữ nguyên text gốc.
+        let (k, out) = dedupe_rolling_overlap("one two three four", "two three four");
+        assert_eq!(k, 0, "cắt rỗng thì giữ nguyên");
+        assert_eq!(out, "two three four");
+    }
+
+    /// Overlap giữa 2 cue liên tiếp: cue sau so với text ĐÃ dedupe của cue trước.
+    #[test]
+    fn test_srt_segments_to_dubbing_dedupes_overlap() {
+        let srt = "1\n00:00:14,440 --> 00:00:34,870\n\nI wish to be alone. Kaldares,\n\n2\n00:00:34,870 --> 00:00:47,510\n\nI wish to be alone. Kaldares, your warriors question your whereabouts.\n";
+        let raw = crate::file_sub::parse_srt_content(srt);
+        let segments = srt_segments_to_dubbing(raw, "en", Some(2));
+
+        assert_eq!(segments.len(), 2, "số cue không đổi");
+        assert_eq!(segments[0].original_text, "I wish to be alone. Kaldares,");
+        assert_eq!(
+            segments[1].original_text,
+            "your warriors question your whereabouts."
+        );
+    }
+
+    /// TEST file thật: 78 cue (không đổi số cue) và text đã dedupe.
+    #[test]
+    fn test_srt_segments_to_dubbing_dedupes_real_rolling_caption() {
+        /// File SRT rolling-caption thật (tên chứa dấu hai chấm rộng U+FF1A).
+        const REAL_ROLLING_SRT_PATH: &str = "C:\\Users\\TTC\\AppData\\Roaming\\com.sublix.desktop\\downloads\\StarCraft II\u{FF1A} Legacy of the Void - Reclamation [uQnmfEka3vw].en.srt";
+
+        let path = Path::new(REAL_ROLLING_SRT_PATH);
+        if !path.exists() {
+            // Máy khác / CI không có file mẫu -> SKIP (không FAIL).
+            eprintln!("SKIP: không tìm thấy file SRT mẫu: {}", path.display());
+            return;
+        }
+
+        let content = fs::read_to_string(path).expect("đọc file SRT mẫu");
+        let raw = crate::file_sub::parse_srt_content(&content);
+        assert_eq!(raw.len(), 155, "parser phải nhận diện đủ 155 cue");
+
+        let segments = srt_segments_to_dubbing(raw, "en", Some(2));
+        assert_eq!(segments.len(), 78, "số cue không đổi sau khi dedupe");
+
+        let texts: Vec<&str> = segments.iter().map(|s| s.original_text.as_str()).collect();
+
+        // Cue đầu không có overlap -> giữ nguyên.
+        assert_eq!(texts[0], "Heat. Heat.");
+
+        // Ba mẫu bắt buộc.
+        assert!(texts.contains(&"I wish to be alone. Kaldares,"));
+        assert!(texts.contains(&"your warriors question your whereabouts."));
+        assert!(texts.contains(&"of us left."));
+        assert!(texts.contains(&"And tomorrow I send so many to die. If"));
+
+        // Phần trùng đã bị cắt: không còn cue nào mang nguyên văn bản cumulative.
+        assert!(!texts.iter().any(|t| t.contains("Kaldares, your warriors")));
+        assert!(!texts.iter().any(|t| t.contains("few of us left")));
+        assert!(!texts.iter().any(|t| t.contains("of us left. And tomorrow")));
     }
 
     #[test]

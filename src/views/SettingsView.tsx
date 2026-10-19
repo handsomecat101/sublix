@@ -20,6 +20,7 @@ import {
   type DubbingProgress,
   type DownloadProgressPayload,
 } from "../lib/tauri";
+import { version as APP_VERSION_PKG } from "../../package.json";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import SublixStudioView from "./SublixStudioView";
@@ -1198,7 +1199,7 @@ export default function SettingsView() {
                 <IconClapper size={15} />
               </div>
               <span className="studio-brand-title">SUBLIX STUDIO</span>
-              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? "0.11.29"}</span>
+              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? APP_VERSION_PKG}</span>
             </div>
 
             <nav className="studio-nav-tabs">
@@ -2947,7 +2948,7 @@ export default function SettingsView() {
                     onClick={() => setShowChangelog(true)}
                     style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
                   >
-                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? "0.11.29"})
+                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? APP_VERSION_PKG})
                   </button>
                   <button
                     type="button"
@@ -3218,7 +3219,7 @@ export default function SettingsView() {
       <ChangelogModal
         isOpen={showChangelog}
         onClose={() => setShowChangelog(false)}
-        currentVersion={`v${appInfo?.version ?? "0.11.29"}`}
+        currentVersion={`v${appInfo?.version ?? APP_VERSION_PKG}`}
         currentTheme={theme}
         onThemeChange={handleThemeChange}
       />

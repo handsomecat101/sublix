@@ -23,10 +23,27 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
-    version: "v0.11.33",
-    date: "17/10/2026",
-    title: "Khớp Hoàn Toàn Độ Dài Audio Track & Video Xuất (Chống Tràn Đuôi Video & Thu Gọn Khối Lồng Tiếng)",
+    version: "v0.11.34",
+    date: "20/10/2026",
+    title: "Đồng Bộ Version 4 Nguồn + 2 Tiêu Đề Cửa Sổ Native (Thêm Lại Guard `npm run verify:version`)",
     isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi + Bảo Vệ Build",
+        icon: "🔧",
+        items: [
+          "Sửa version drift: field `version` = 0.11.33 nhưng 2 tiêu đề cửa sổ native trong `tauri.conf.json` còn sót `v0.11.32` → cửa sổ hiển thị sai version. Nay đồng bộ cả 4 nguồn (`package.json`, `Cargo.toml`, `tauri.conf.json` version + 2 tiêu đề cửa sổ) ở 0.11.34.",
+          "Thêm lại script guard `scripts/check_version.ps1` (đã mất trong một lần rollback) kèm npm script `npm run verify:version`: quét 4 nguồn + 2 tiêu đề cửa sổ, in bảng trạng thái `[OK  ]` / `[LECH]`, exit code 1 khi lệch, exit code 0 khi khớp.",
+          "Kiểm chứng thật: hạ version 1 nguồn (`package.json` xuống 0.11.33) → guard bắt lỗi, in 4 dòng `[LECH]` và exit code 1; khôi phục lại 0.11.34 → in `PASS`, exit code 0.",
+        ],
+      },
+    ],
+  },
+  {
+    version: "v0.11.33",
+    date: "18/10/2026",
+    title: "Khớp Hoàn Toàn Độ Dài Audio Track & Video Xuất (Chống Tràn Đuôi Video & Thu Gọn Khối Lồng Tiếng)",
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Cốt Lõi",
@@ -380,7 +397,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
     version: "v0.11.3",
     date: "09/10/2026",
     title: "Sublix Studio: Timeline Zoom Đúng Chuẩn Premiere (full video fit + tick tự co giãn)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",
@@ -399,7 +416,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
     version: "v0.11.2",
     date: "09/10/2026",
     title: "Sublix Studio: Timeline Zoom In/Out + Reset",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Tính Năng Mới",
@@ -418,7 +435,7 @@ const CHANGELOG_DATA: VersionEntry[] = [
     version: "v0.11.1",
     date: "09/10/2026",
     title: "Sublix Studio: Thả Video Vào App Phải THẤY HÌNH (ROUND-4 R4-01)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi Quan Trọng",

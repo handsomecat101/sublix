@@ -1,13 +1,14 @@
 {
   "name": "sublix",
   "private": true,
-  "version": "0.11.33",
+  "version": "0.11.34",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "verify:version": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_version.ps1"
   },
   "dependencies": {
     "react": "^19.1.0",

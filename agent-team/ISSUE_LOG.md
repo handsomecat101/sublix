@@ -136,6 +136,11 @@
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-062` | 6 tiến trình ffmpeg treo bám video cache cũ ("Meta's…") chạy ngầm ăn CPU 600–800s mỗi tiến trình, không tự thoát (quan sát khi GUI-test v0.11.32) | `src/views/SublixStudioView.tsx` (preview/transcode/filmstrip khi restore project cache) | Khi restore project từ cache: tác vụ preview/transcode phải có guard hủy theo video-idle/đổi file; không spawn nhiều ffmpeg song song cho cùng file | 🔴 Open (cần soi root cause) |
 
+### 🧾 Lỗi Fix Tại v0.11.34 (Mavis — 2026-10-20):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-073` | Version drift: field `version` = 0.11.33 nhưng 2 tiêu đề cửa sổ native còn sót `v0.11.32`; script guard `check_version.ps1` bị mất trong lúc rollback | `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` | Bump version phải sửa CẢ 4 nguồn + 2 tiêu đề cửa sổ, và chạy `npm run verify:version` trước khi commit | ✅ Fixed |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
@@ -367,6 +372,22 @@
   1. **Tự động mute video gốc khi AI nói:** Trong `syncVoicePlayback`, khi câu thoại AI bắt đầu phát, lưu âm lượng gốc và kích hoạt `v.muted = true`. Khi câu thoại AI kết thúc hoặc người dùng bấm dừng/tua, hàm `stopVoicePlayback` tự động phục hồi `v.muted = false` và âm lượng ban đầu.
   2. **Lắng nghe native event `play`:** Thêm `v.addEventListener("play", onPlay)` để đồng bộ tiếng lồng ngay lập tức khi người dùng bấm phát, tránh phụ thuộc vào interval `timeupdate`.
   3. **Hủy triệt để buffer audio cũ:** Gọi `va.onended = null; va.removeAttribute("src"); va.load();` trước khi gán clip mới để WebView2 giải phóng hoàn toàn bộ giải mã âm thanh.
+
+---
+
+### [BUG-073] Version drift: field `version` = 0.11.33 nhưng 2 tiêu đề cửa sổ native còn sót `v0.11.32` — mất luôn script guard `check_version.ps1`
+- **Ngày:** 2026-10-20 | **Phát hiện bởi:** Anh Tuấn (PO) | **Fix bởi:** Mavis (MiniMax-M3) | **Status:** ✅ Fixed
+- **File:** `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (`version` + `app.windows[].title`), `scripts/check_version.ps1` (tạo lại), `src/views/SublixStudioView.tsx` + `src/views/SettingsView.tsx` (version hardcode trong UI)
+- **Root Cause:**
+  1. *Tiêu đề cửa sổ native ghi sai version:* Log runtime cho thấy `🚀 Sublix v0.11.33 started` nhưng `🎨 Overlay window ready (hidden by default): Sublix v0.11.32 — Overlay`. Trong một lần rollback, field `version` của `tauri.conf.json` đã được bump lên `0.11.33` nhưng 2 trường `title` trong `app.windows` (`main` + `overlay`) bị bỏ sót, vẫn còn `v0.11.32` → cửa sổ native hiển thị sai version cho người dùng.
+  2. *Không có lưới an toàn:* Script `scripts/check_version.ps1` từng tồn tại để so khớp 4 nguồn + 2 tiêu đề cửa sổ, nhưng **bị xoá mất trong lúc rollback** → các lần bump version sau này không có gì để bắt lỗi drift.
+  3. *Lớp drift thứ 5 — version hardcode trong mã nguồn UI:* badge `v0.11.33` bị **hardcode** trong `SublixStudioView.tsx` và 3 fallback `"0.11.29"` trong `SettingsView.tsx` → app hiển thị sai version (đo thật trên app đang chạy: UI hiện `v0.11.33` trong khi native window title đã là `v0.11.34`). Guard lúc đó **chỉ quét manifest + tiêu đề cửa sổ, không quét mã nguồn** → không bắt được lớp drift này.
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Đồng bộ cả 4 nguồn + 2 tiêu đề cửa sổ:** `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (field `version`) và cả `title` của 2 cửa sổ native (`Sublix v0.11.34 — Settings & Studio` + `Sublix v0.11.34 — Overlay`) → tất cả ở `0.11.34`.
+  2. **Tạo lại guard `scripts/check_version.ps1` + npm script `npm run verify:version`:** lấy version chuẩn từ `package.json`, in bảng trạng thái `[OK  ]` / `[LECH]`, **exit code 1** khi bất kỳ dòng nào lệch và **exit code 0** khi tất cả khớp. Script tự dò thư mục gốc theo `$PSScriptRoot` (chạy được từ mọi thư mục) và được viết **ASCII không dấu** để không bị mojibake khi chạy bằng PowerShell 5.1.
+  3. **Bằng chứng (chạy thật):** `npm run verify:version` → `PASS: tat ca nguon version deu = 0.11.34`, **exit 0**. Negative test hạ `package.json` xuống `0.11.33` → guard in **4 dòng `[LECH]`** + tổng kết `FAIL`, **exit 1**; khôi phục lại `0.11.34` → `PASS`, exit 0.
+  4. **Bài học:** Mỗi lần bump version phải sửa **4 nguồn + 2 tiêu đề cửa sổ native** và chạy `npm run verify:version` **trước khi commit** — đừng tin "đã bump version ở 1 chỗ" là đủ.
+  5. **Mở rộng guard cho lớp drift thứ 5:** `check_version.ps1` nay quét thêm `src/**.ts(x)` — **cắt bỏ comment/JSDoc** trước khi kiểm tra và **bỏ qua `ChangelogModal.tsx`** (dữ liệu lịch sử phiên bản) — in `[LECH] <file>:<line>` cho mọi literal version hardcode. Song song, dọn nốt 1 ký tự mojibake U+FFFD còn sót trong `SublixStudioView.tsx` → hiện **0 U+FFFD** trong `src/` + `src-tauri/src/`.
 
 
 

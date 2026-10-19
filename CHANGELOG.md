@@ -1,4 +1,42 @@
 
+## v0.11.34 — 2026-10-20
+### Đồng Bộ Version 4 Nguồn + 2 Tiêu Đề Cửa Sổ Native (Thêm Lại Guard `npm run verify:version`)
+
+**Bối cảnh (Anh Tuấn):** log runtime của app cho thấy version field = `0.11.33` nhưng tiêu đề cửa sổ native vẫn ghi `v0.11.32` → cửa sổ hiển thị sai version. Đây là hệ quả của một lần rollback trong repo: lúc đó `version` đã được bump lên `0.11.33` nhưng 2 trường `title` trong `src-tauri/tauri.conf.json` bị bỏ sót (vẫn `v0.11.32`), đồng thời script guard `scripts/check_version.ps1` cũng bị mất trong lúc rollback.
+
+**Fix v0.11.34:**
+- **Đồng bộ version 4 nguồn:** `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (field `version`) và **2 tiêu đề cửa sổ native** trong `app.windows` (`Sublix v0.11.34 — Settings & Studio` + `Sublix v0.11.34 — Overlay`) — tất cả khớp tuyệt đối ở `0.11.34`.
+- **Thêm lại guard `scripts/check_version.ps1`** (script từng bị mất trong một lần rollback) kèm npm script **`npm run verify:version`**: quét 4 nguồn + 2 tiêu đề cửa sổ, lấy version chuẩn từ `package.json`, in bảng trạng thái `[OK  ]` / `[LECH]`, **exit code 1** nếu bất kỳ dòng nào lệch và **exit code 0** khi tất cả đã khớp.
+- **Bắt lớp drift thứ 5 — version hardcode trong mã nguồn UI:** badge `v0.11.33` cứng trong `SublixStudioView.tsx` và 3 fallback `"0.11.29"` trong `SettingsView.tsx` đã chuyển sang đọc `package.json` (`APP_VERSION_PKG`); guard nay quét thêm `src/**.ts(x)` (bỏ qua comment/JSDoc và `ChangelogModal.tsx` là dữ liệu lịch sử) và in `[LECH] <file>:<line>` khi phát hiện literal version.
+
+**Bằng chứng (chạy thật):**
+- `npm run verify:version` → in `PASS: tat ca nguon version deu = 0.11.34`, **exit 0** — đồng bộ đủ 4 nguồn + 2 tiêu đề cửa sổ.
+- **Negative test (manifest):** hạ `package.json` xuống `0.11.33` (đúng 1 dòng version) → guard in **4 dòng `[LECH]`** + tổng kết `FAIL` và **exit code 1**; khôi phục lại `0.11.34` → in `PASS`, exit 0.
+- **Negative test (mã nguồn):** tạm hardcode badge `>v0.11.99<` trong `SublixStudioView.tsx` → guard in `[LECH] hardcode version trong src/` kèm `file:line` và **exit code 1**; khôi phục `v{APP_VERSION_PKG}` → `PASS`, exit 0.
+- Guard tự dò thư mục gốc theo vị trí file script (chạy được từ mọi thư mục), file ASCII không BOM, ổn định trên PowerShell 5.1; `npx tsc --noEmit` 0 lỗi. Dọn nốt 1 ký tự mojibake U+FFFD còn sót trong `SublixStudioView.tsx` → hiện **0 U+FFFD** trong `src/` + `src-tauri/src/`.
+
+---
+
+## v0.11.33 — 2026-10-18
+### Khớp 100% Thời Lượng Audio Track & Video Xuất + Track Tiếng Lồng Chuẩn Premiere (Toggle Mute & Ducking Chống Nhân Đôi Tiếng)
+
+**Bối cảnh (Anh Tuấn):** bản v0.11.32 xuất ra bị lỗi **audio track dài hơn video gốc** (phần tiếng lồng AI tràn đuôi video), track Tiếng Lồng trên Timeline chập chờn, nút bật/tắt tiếng gốc bị loạn và một số nhãn tiếng Việt trên UI bị mojibake. Mục changelog này từng bị mất trong một lần rollback — v0.11.33 đã chạy thật nhưng lịch sử phiên bản bị đứt đoạn tại đây, nay bổ sung lại.
+
+**Tính năng & sửa lỗi v0.11.33:**
+- **Xuất video khớp 100% thời lượng gốc:** thêm `duration=first` vào filter `amix` và `-shortest` vào bước remux → các câu thoại ở đuôi video bị trim tự động, file xuất ra có thời lượng bằng **đúng** video nguồn (không còn dư 20–30s như trước).
+- **Khối Tiếng Lồng trên Timeline co gọn đúng thời lượng phát âm:** dùng `audioDuration` thật (hoặc ước tính theo từ vựng) thay vì bám theo khung phụ đề SRT → khối không còn bị phình to 20–30s.
+- **Nút bật/tắt track kiểu Premiere:** thêm toggle mute/unmute từng track trên Timeline và sửa lỗi track Tiếng Lồng bị render rỗng.
+- **Ducking âm lượng & tách xoá tiếng lồng khỏi phụ đề:** khôi phục ducking (mute video gốc khi AI đang nói → hết hiện tượng "nhân đôi tiếng"), nút xoá track giờ chỉ xoá **tiếng lồng** (không xoá phụ đề), và sửa phát lại tiếng lồng trên Timeline.
+- **Sửa mojibake tiếng Việt trên UI:** khôi phục hiển thị track Tiếng Lồng và sửa toàn bộ ký tự tiếng Việt bị lỗi encoding trong giao diện.
+
+**Bằng chứng (4 commit trong repo):**
+- `e02d6c3` (17/10) — `src-tauri/src/dubbing/mod.rs` (+142/-15) + `SublixStudioView.tsx` + 2 example test (`test_dubbing_srt.rs`, `test_dubbing_video.rs`): `duration=first` + `-shortest`, khối tiếng lồng theo `audioDuration` thật.
+- `b698295` (17/10) — bump version `0.11.32` → `0.11.33` ở `package.json` / `Cargo.toml` / `tauri.conf.json` + thêm entry changelog trong `ChangelogModal.tsx`.
+- `1edeef4` (17/10) — `SublixStudioView.tsx` (+455/-154) + `SublixStudioView.css` (+74): toggle mute track kiểu Premiere + sửa render track rỗng.
+- `51f73fe` (18/10) — `SublixStudioView.tsx` (+180/-28) + `src/icons.tsx`: khôi phục ducking, tách xoá tiếng lồng khỏi phụ đề, sửa phát lại tiếng lồng trên Timeline.
+
+---
+
 ## v0.11.32 — 2026-10-13
 ### Studio: Tận Dụng Phụ Đề YouTube Đã Tải (Tích Sẵn) + Đánh Dấu "YouTube" Mọi Nơi
 

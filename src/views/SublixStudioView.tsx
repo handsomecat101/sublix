@@ -12,6 +12,7 @@ import {
   type AppConfig,
   type DubbingProgress,
 } from "../lib/tauri";
+import { version as APP_VERSION_PKG } from "../../package.json";
 import {
   IconFilm,
   IconClapper,
@@ -1431,7 +1432,7 @@ export default function SublixStudioView({
   // Xo wrapper cũ để trnh TS6133 unused + trnh ti sử dụng sai trong tương lai.
 
   // R4-05: chỉ save translation undo khi gi trị thay đổi (onFocus + onBlur)
-  // R5-05: push `before` (TRƯỚC khi sửa) ln stack  bấm ↶ = khi phục v� trạng thi trước.
+  // R5-05: push `before` (TRƯỚC khi sửa) lên stack — bấm ↶ = khôi phục về trạng thái trước.
   // Bug củ: gi saveTranslationUndo() (push `after`) → bấm ↶ = no-op.
   const translationPreFocusRef = useRef<{ id: number; translated: string }[] | null>(null);
   const saveTranslationUndoIfChanged = () => {
@@ -4236,7 +4237,7 @@ export default function SublixStudioView({
               <IconClapper size={15} />
             </div>
             <span className="studio-brand-title">SUBLIX STUDIO</span>
-            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v0.11.33</span>
+            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{APP_VERSION_PKG}</span>
           </div>
 
           <nav className="studio-nav-tabs">
