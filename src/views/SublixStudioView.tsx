@@ -1164,6 +1164,8 @@ export default function SublixStudioView({
   const activeVoiceSegRef = useRef<number | null>(null);
   const finishedVoiceSegRef = useRef<number | null>(null);
   const videoVolumeBeforeDuckRef = useRef<number | null>(null);
+  const isFetchingTtsRef = useRef<Set<number>>(new Set());
+  const [currentPlayingVoiceSegId, setCurrentPlayingVoiceSegId] = useState<number | null>(null);
 
   // Premiere Pro-style Track Mute Toggles (Tắt/Bật tiếng riêng biệt cho Tiếng Gốc & Tiếng Lồng)
   const [isOriginalMuted, setIsOriginalMuted] = useState<boolean>(false);
@@ -1203,6 +1205,7 @@ export default function SublixStudioView({
       try {
         va.pause();
         va.onended = null;
+        va.onloadedmetadata = null;
         va.currentTime = 0;
         va.removeAttribute("src");
         va.load();
@@ -1211,6 +1214,7 @@ export default function SublixStudioView({
       }
     }
     activeVoiceSegRef.current = null;
+    setCurrentPlayingVoiceSegId(null);
     const v = videoRef.current;
     if (v) {
       // Khôi phục âm lượng video gốc về mức ban đầu trước khi ducking
@@ -1241,16 +1245,51 @@ export default function SublixStudioView({
       return now >= s.start && now < s.start + vDur;
     });
 
-    if (!seg || !seg.audioUrl) {
+    if (!seg) {
       if (activeVoiceSegRef.current !== null) stopVoicePlayback();
       finishedVoiceSegRef.current = null;
       return;
     }
 
+    // TỰ ĐỘNG TẠO TTS TRÊN NHỊP TIMELINE NẾU CÂU CÓ TIẾNG NHƯNG CHƯA NẠP DỮ LIỆU AUDIO (on-demand streaming)
+    if (!seg.audioUrl) {
+      if (activeVoiceSegRef.current !== null) stopVoicePlayback();
+      finishedVoiceSegRef.current = null;
+      if (!isFetchingTtsRef.current.has(seg.id)) {
+        isFetchingTtsRef.current.add(seg.id);
+        const textToSpeak = (seg.translated || seg.original || "").trim();
+        const spk = speakersRef.current.find((s) => s.id === seg.speakerId);
+        const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
+        if (textToSpeak) {
+          sublix.dubbingPreviewTts(textToSpeak, voice).then((wavData) => {
+            isFetchingTtsRef.current.delete(seg.id);
+            if (wavData) {
+              setSegments((prev) =>
+                prev.map((s) => (s.id === seg.id ? { ...s, audioUrl: wavData } : s))
+              );
+              const curV = videoRef.current;
+              if (curV && !curV.paused) {
+                syncVoicePlayback(curV.currentTime, false);
+              }
+            }
+          }).catch((err) => {
+            console.warn("Auto TTS fetch error:", err);
+            isFetchingTtsRef.current.delete(seg.id);
+          });
+        } else {
+          isFetchingTtsRef.current.delete(seg.id);
+        }
+      }
+      return;
+    }
+
     if (activeVoiceSegRef.current === seg.id) {
-      // Đang phát đúng câu — kiểm tra lệch pha (desync) và đồng bộ lại nếu lệch > 0.35s
+      // Đang phát đúng câu — kiểm tra lệch pha (desync) và tự động resume nếu bị paused
       const va = voicePlayRef.current;
       if (va) {
+        if (va.paused && !paused) {
+          va.play().catch(() => {});
+        }
         const expectedTime = Math.max(0, now - seg.start);
         if (Math.abs(va.currentTime - expectedTime) > 0.35) {
           try {
@@ -1269,11 +1308,24 @@ export default function SublixStudioView({
     const va = voicePlayRef.current ?? new Audio();
     voicePlayRef.current = va;
     activeVoiceSegRef.current = seg.id;
+    setCurrentPlayingVoiceSegId(seg.id);
+
+    const offset = Math.max(0, now - seg.start);
     va.src = seg.audioUrl;
-    try {
-      va.currentTime = Math.max(0, now - seg.start);
-    } catch {
-      /* noop */
+
+    const playVoiceClip = () => {
+      try {
+        if (offset > 0) va.currentTime = offset;
+      } catch {
+        /* noop */
+      }
+      va.play().catch((e) => console.warn("R32: voice play failed:", e));
+    };
+
+    if (va.readyState >= 1) {
+      playVoiceClip();
+    } else {
+      va.onloadedmetadata = () => playVoiceClip();
     }
 
     // AUDIO DUCKING CHUẨN: Giảm nhỏ âm lượng video gốc xuống 20% khi có giọng lồng tiếng, KHÔNG tắt hẳn tiếng nền!
@@ -1288,17 +1340,18 @@ export default function SublixStudioView({
         stopVoicePlayback();
       }
     };
-    va.play().catch((e) => console.warn("R32: voice play failed:", e));
   };
 
   const handleTimeUpdate = () => {
     const v = videoRef.current;
-    if (!v || v.paused) return;
+    if (!v) return;
     const t = v.currentTime;
-    syncVoicePlayback(t, false);
+    if (!v.paused) {
+      syncVoicePlayback(t, false);
+    }
 
     const now = performance.now();
-    if (now - lastNativeTimeUpdateRef.current > 100) {
+    if (now - lastNativeTimeUpdateRef.current > 80) {
       lastNativeTimeUpdateRef.current = now;
       setCurrentTime(t);
     }
@@ -1316,7 +1369,21 @@ export default function SublixStudioView({
     const onSeeked = () => {
       activeVoiceSegRef.current = null;
       finishedVoiceSegRef.current = null;
-      syncVoicePlayback(v.currentTime, v.paused);
+      const curT = v.currentTime;
+      setCurrentTime(curT);
+      const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
+      if (match) {
+        setSelectedSegId(match.id);
+        selectedSegIdRef.current = match.id;
+        setSelectedSegIds([match.id]);
+        selectedSegIdsRef.current = [match.id];
+      } else {
+        setSelectedSegId(0);
+        selectedSegIdRef.current = 0;
+        setSelectedSegIds([]);
+        selectedSegIdsRef.current = [];
+      }
+      syncVoicePlayback(curT, v.paused);
     };
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onStop);
@@ -1329,8 +1396,7 @@ export default function SublixStudioView({
       v.removeEventListener("seeked", onSeeked);
       stopVoicePlayback();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filePath, transcodedPath]);
 
   const isPlayingRef = useRef<boolean>(isPlaying);
   isPlayingRef.current = isPlaying;
@@ -1707,6 +1773,7 @@ export default function SublixStudioView({
     if (isCurrentlyPlaying) {
       setIsPlaying(false);
       isPlayingRef.current = false;
+      stopVoicePlayback();
       if (videoRef.current && !videoRef.current.paused) {
         try { videoRef.current.pause(); } catch (e) { console.warn("Video pause error:", e); }
       }
@@ -1716,8 +1783,13 @@ export default function SublixStudioView({
       }
       setIsPlaying(true);
       isPlayingRef.current = true;
+      activeVoiceSegRef.current = null;
       if (videoRef.current) {
-        videoRef.current.play().catch((err) => {
+        videoRef.current.play().then(() => {
+          if (videoRef.current) {
+            syncVoicePlayback(videoRef.current.currentTime, false);
+          }
+        }).catch((err) => {
           const isAbort = (err as Error)?.name === "AbortError";
           if (!isAbort) {
             console.error("Video element play failed:", err);
@@ -1726,6 +1798,7 @@ export default function SublixStudioView({
           }
           setIsPlaying(false);
           isPlayingRef.current = false;
+          stopVoicePlayback();
         });
       }
     }
@@ -1755,6 +1828,20 @@ export default function SublixStudioView({
       } catch (e) {
         console.warn("Seek error:", e);
       }
+    }
+
+    // Đồng bộ đồng thời selection theo điểm seek để không bao giờ bị sáng lệch khối cũ ở chỗ khác
+    const match = segmentsRef.current.find((s) => s.start <= clamped && clamped <= s.end);
+    if (match) {
+      setSelectedSegId(match.id);
+      selectedSegIdRef.current = match.id;
+      setSelectedSegIds([match.id]);
+      selectedSegIdsRef.current = [match.id];
+    } else {
+      setSelectedSegId(0);
+      selectedSegIdRef.current = 0;
+      setSelectedSegIds([]);
+      selectedSegIdsRef.current = [];
     }
 
     if (isPlayingRef.current) {
@@ -1908,13 +1995,28 @@ export default function SublixStudioView({
 
   // Synchronize active subtitle selection as playhead moves
   useEffect(() => {
-    if (isPlaying) {
-      const match = segments.find((s) => s.start <= currentTime && currentTime <= s.end);
-      if (match && match.id !== selectedSegId) {
+    const match = segments.find((s) => s.start <= currentTime && currentTime <= s.end);
+    if (match) {
+      if (match.id !== selectedSegIdRef.current) {
         setSelectedSegId(match.id);
+        selectedSegIdRef.current = match.id;
+      }
+      // Xóa sạch mọi khối cũ bị chọn thừa/lệch trên timeline, chỉ giữ duy nhất câu đang phát
+      if (selectedSegIdsRef.current.length !== 1 || selectedSegIdsRef.current[0] !== match.id) {
+        setSelectedSegIds([match.id]);
+        selectedSegIdsRef.current = [match.id];
+      }
+    } else if (isPlaying) {
+      if (selectedSegIdRef.current !== 0) {
+        setSelectedSegId(0);
+        selectedSegIdRef.current = 0;
+      }
+      if (selectedSegIdsRef.current.length > 0) {
+        setSelectedSegIds([]);
+        selectedSegIdsRef.current = [];
       }
     }
-  }, [currentTime, isPlaying, segments, selectedSegId]);
+  }, [currentTime, isPlaying, segments]);
 
   // ROUND-10: Timeline Action Handlers & Shortcuts
   const handleSplitSegment = (segIdToSplit?: number) => {
@@ -5774,15 +5876,43 @@ export default function SublixStudioView({
                   onPlay={() => {
                     setIsPlaying(true);
                     isPlayingRef.current = true;
+                    if (videoRef.current) {
+                      activeVoiceSegRef.current = null;
+                      syncVoicePlayback(videoRef.current.currentTime, false);
+                    }
                   }}
                   onPause={() => {
                     setIsPlaying(false);
                     isPlayingRef.current = false;
+                    stopVoicePlayback();
                   }}
                   onEnded={() => {
                     setIsPlaying(false);
                     isPlayingRef.current = false;
+                    stopVoicePlayback();
                     handleSeek(mediaDurationRef.current);
+                  }}
+                  onSeeked={() => {
+                    const v = videoRef.current;
+                    if (v) {
+                      activeVoiceSegRef.current = null;
+                      finishedVoiceSegRef.current = null;
+                      const curT = v.currentTime;
+                      setCurrentTime(curT);
+                      const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
+                      if (match) {
+                        setSelectedSegId(match.id);
+                        selectedSegIdRef.current = match.id;
+                        setSelectedSegIds([match.id]);
+                        selectedSegIdsRef.current = [match.id];
+                      } else {
+                        setSelectedSegId(0);
+                        selectedSegIdRef.current = 0;
+                        setSelectedSegIds([]);
+                        selectedSegIdsRef.current = [];
+                      }
+                      syncVoicePlayback(curT, v.paused);
+                    }
                   }}
                   onError={async () => {
                     if (!transcodedPath && filePath) {
@@ -7184,6 +7314,7 @@ export default function SublixStudioView({
                     const isCompact = width < 30;
                     const isSelected = seg.id === selectedSegId;
                     const isMultiSelected = selectedSegIds.includes(seg.id);
+                    const isSpeaking = currentPlayingVoiceSegId === seg.id;
                     const spkColor = spk?.color || "#38bdf8";
                     const hasAudio = !!seg.hasAudio;
 
@@ -7191,7 +7322,7 @@ export default function SublixStudioView({
                       <div
                         key={seg.id}
                         data-seg-id={seg.id}
-                        className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
+                        className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${isSpeaking ? "is-speaking" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
                         style={{
                           left: `${left}px`,
                           width: `${width}px`,
@@ -7323,13 +7454,14 @@ export default function SublixStudioView({
                         const isCompact = width < 30;
                         const isSelected = seg.id === selectedSegId;
                         const isMultiSelected = selectedSegIds.includes(seg.id);
+                        const isSpeaking = currentPlayingVoiceSegId === seg.id;
                         const hasAudio = !!seg.hasAudio;
 
                         return (
                           <div
                             key={seg.id}
                             data-seg-id={seg.id}
-                            className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
+                            className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${isSpeaking ? "is-speaking" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
                             style={{
                               left: `${left}px`,
                               width: `${width}px`,
