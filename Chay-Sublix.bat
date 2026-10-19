@@ -12,7 +12,7 @@ rem  - Cua so console nay la log cua app; dong no = tat app
 rem  - Muon ban dong goi sieu toc: src-tauri\target\release\sublix.exe
 rem ============================================================
 
-set "PROJECT_DIR=H:\AI Project\sublix"
+set "PROJECT_DIR=H:\AI Project\sub-lix-fork-2026-10-19"
 
 rem 1) Tat Sublix dang chay (neu co) de tranh khoa file
 taskkill /F /IM sublix.exe /T >nul 2>&1
@@ -29,6 +29,10 @@ cd /d "%PROJECT_DIR%"
 rem 3) Dam bao cargo/rustc co trong PATH cua phien nay
 set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
+rem 3b) FORK: build Rust ra thu muc RIENG (khong dung target cua ban goc)
+rem     Target cua ban goc da bi xoa de giai phong dia, nen fork dung thu muc rieng.
+set "CARGO_TARGET_DIR=H:\AI Project\sub-lix-fork-build-2026-10-19"
+
 rem 4) Cai dependencies neu thieu (may moi / node_modules bi xoa)
 if not exist "node_modules" (
   echo [Setup] Chua co node_modules, dang cai dat dependencies...
@@ -43,7 +47,9 @@ echo ============================================================
 echo.
 
 rem 5) Chay che do dev: luon dong bo voi code hien tai trong may
-set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222"
+rem    FORK: port 9223 (KHAC 9222 cua ban goc) + "FORC" trong title de phan biet
+set "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223"
+title SUBLIX FORK - Safe Copy (Dev Mode) - port 9223
 call npm run tauri dev
 
 echo.
