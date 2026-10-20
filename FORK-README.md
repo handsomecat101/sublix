@@ -198,6 +198,73 @@ Xác nhận bằng `npx tauri info` (chính CLI check): **không còn cảnh bá
 
 ## Còn lại (CHƯA làm, ghi rõ để agent sau biết)
 
+---
+
+# VÒNG 2 (20/10) — 4 BUG "TIẾNG THỪA / 2 TRACK LỆCH" + NỀN TẢNG TRUNG QUỐC
+
+## Chẩn đoán từ test A→Z thật (đo bằng DOM + log backend)
+
+| Chỉ số | Lần 1 (trước sửa) | Lần 2 (sau sửa) |
+|---|---|---|
+| Khối phụ đề / lồng tiếng / có audio | 78 / 78 / 78 | xem bảng verify |
+| **Lệch start giữa 2 track** | **0 ms** (dữ liệu đúng) | 0 ms |
+| **Lệch hiển thị lane (offsetLeft)** | **+959px ở cue 78** | **0 px** (đã sửa) |
+| **Cặp audio chồng nhau** | **45 cặp / 30,81s / max 1,92s** | **0** (đã sửa) |
+| **Cue mang `[Dịch lỗi: ...]`** | **78/78** | **0** (đã sửa) |
+
+## 4 bug đã sửa (branch `fix/translate-failure-garbage-tts`, commit `d652002`)
+
+| # | Bug | Root cause | Fix |
+|---|---|---|---|
+| **A** | 2 track lệch hàng | `SublixStudioView.css:3017` `.studio-timeline-voice-block { position: relative }` đặt **sau** `.studio-timeline-block { position: absolute }` → đè mất position → khối voice nằm trong flow → bị đẩy phải cộng dồn | `position: absolute` |
+| **B** | 45 cặp audio chồng (30,81s) | Export chỉ trim theo cuối video, atempo chặn ở 1,45× → audio câu N tràn sang câu N+1 | Rust `export_dubbed_video`: `-t allowed` cắt đuôi dư; FE clamp `voiceDur ≤ nextStart − start` |
+| **C** | A→Z không chạy TTS ở mode "Chỉ làm Phụ đề" | `handleRunCustomWorkflow` bám pill "Chế độ" chỉ-đọc | A→Z luôn chạy trọn pipeline (vẫn tôn trọng switch "Dịch phụ đề") |
+| **1** | `llama-server` chết không tự lên lại → dịch hỏng im lặng | `preload_server` reuse singleton mà **không health-check** | `probe_health()` + `server_is_alive()` + `invalidate_server()` + `with_server_retry()` (retry 1 lần) |
+| **2** | TTS đọc nguyên chuỗi `[Dịch lỗi: ...]` | `dubbed_text` nhận thẳng nhãn lỗi | `dubbed_text` rỗng + `status="translate_failed"` → `select_synth_text()` trả `None` → TTS bỏ qua câu đó |
+
+Đường đi mới: dịch lỗi → `is_translate_error()` → `apply_translation_to_segment()` đặt `status="translate_failed"` + `dubbed_text=String::new()` → `select_synth_text()` trả `None` → vòng TTS `continue` → không tạo audio → UI hiện *"⚠️ Dịch lỗi — chưa tạo lồng tiếng"*.
+
+## Nền tảng video Trung Quốc (branch `feature/chinese-platform-downloaders`, commit `325c36e`)
+
+**Root cause gốc (không ai đoán được, phải đọc source yt-dlp):**
+yt-dlp khớp `--sub-langs` bằng **FULLMATCH regex** (`yt_dlp/utils/_utils.py:5340`) → `"en"` **KHÔNG** khớp track `en-US`, `"zh"` không khớp `zh-CN`/`ai-zh`/`zh_hk`.
+→ Pass phụ đề dùng chung `vi,en,ja,zh` **với nền tảng Trung Quốc KHÔNG tải được track nào**.
+
+**Đã làm:**
+- `get_platform()` **+16 nền tảng**: Bilibili (kèm `b23.tv`), Douyin (`iesdouyin`), Kuaishou, Xiaohongshu (`xhslink`), Xigua, Huya, Douyu, Youku, iQIYI, Weibo, AcFun, CCTV, `v.qq.com`, MangoTV, Migu, Niconico, wppilot — khớp theo **host** (giữ nguyên fix BUG-058).
+- `subtitle_lang_patterns()` — Bilibili/MangoTV mở rộng mã user chọn thành `mã.*` (+`ai.*` riêng cho Bilibili). **YouTube/mặc định giữ nguyên `vi,en,ja,zh`** ⇒ không đổi hành vi cũ.
+- `platform_error_hint()` — dịch lỗi yt-dlp sang tiếng Việt (Bilibili 412/567, cần đăng nhập, Douyin/Xigua cần cookie, nền tảng chưa hỗ trợ).
+- Manifest `sublix_subtitles.json` ghi `"source": <nền tảng>` thay vì hardcode `"youtube"`; `is_youtube_subtitle()` giữ nguyên ⇒ **tương thích ngược**.
+- `find_sibling_srt()` ưu tiên `en-us`/`zh-cn`, `ai-zh`/`ai-en` (AI) thấp hơn bản người dùng đăng.
+- `downloader_fetch_subtitles` nhận thêm `browser_cookies`/`cookies_file` (optional).
+
+**Bằng chứng thật:**
+- Chứng minh bằng chính hàm `orderedSet_from_options` của yt-dlp: pattern cũ `vi,en,ja,zh` vs track Bilibili → **`[]`**; pattern mới → `['en-US','zh-CN','ai-zh']` (không lấy `danmaku`).
+- **Tải thật** `https://w.mgtv.com/b/333652/7329822.html` bằng đúng lệnh app sinh ra: cũ → 3 file; mới → **4 file** `拜托，请你爱我 [7329822].{vi,en,ja,zh_hk}.srt`, SRT parse được (3547 dòng).
+
+**Giới hạn (biết rõ):**
+- **Bilibili chưa test end-to-end từ IP này** (HTTP 412 risk control) — cần IP Việt Nam/VPN.
+- **Kuaishou/Migu không có extractor** trong yt-dlp 2026.08.19.
+- App cố tình **tắt** `--cookies-from-browser` (Chrome/Edge khóa DB cookie) → lỗi "cần cookie" chỉ giải quyết được bằng `cookies.txt`.
+- Youku/iQIYI/Tencent/AcFun/Douyu/Huya/Xiaohongshu **không có sub** → phải qua Whisper.
+
+## Tài liệu
+- Ảnh bằng chứng vòng 1: `gui-2026-10-20/t*.png`
+- Ảnh bằng chứng vòng 2 (verify sau fix): `gui-2026-10-20/v2-*.png`
+- Số liệu 78 cue: `gui-2026-10-20/dump-78-cues.json`
+
+## Dọn dẹp (agent khác để lại, nằm NGOÀI workspace nên launcher xoá không được)
+```powershell
+cmd /c rmdir "D:\sublix-wt-translate-fail\node_modules"   # XOÁ JUNCTION — làm trước!
+cmd /c rmdir /s /q "D:\sublix-wt-cn-downloader"
+cmd /c rmdir /s /q "D:\sublix-wt-translate-fail"
+cmd /c rmdir /s /q "D:\sublix-wt-cn-build"
+cmd /c rmdir /s /q "D:\sublix-wt-tf-build"
+cmd /c rmdir /s /q "H:\sublix-wt-tf-build"
+```
+> ⚠️ `D:\sublix-wt-translate-fail\node_modules` là **JUNCTION** trỏ vào `node_modules` của fork. Xoá nó TRƯỚC, nếu xoá thư mục cha bằng `/s` có thể lấn sang node_modules của fork.
+
+
 
 - ⏳ Chưa nghiệm thu **phát lại video** (replace) và **save/reload project** trong fork.
 - ⏳ Chưa kiểm chứng **audio đầu ra cuối** (playback/sync) — mới xác nhận khối audio được tạo trên timeline.
