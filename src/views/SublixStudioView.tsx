@@ -90,6 +90,8 @@ export interface SubtitleItem {
   speakerId: string;
   original: string;
   translated: string;
+  /** true khi câu này dịch lỗi (nhãn "[Dịch lỗi: ...]" bị loại bỏ, không tạo lồng tiếng). */
+  translateFailed?: boolean;
   hasAudio?: boolean;
   audioUrl?: string; // R32: data URI clip tiếng lồng (data:audio/mp3;base64,...)
   audioDuration?: number; // R32: độ dài thật của clip (giây) — dùng để vẽ khối lồng
@@ -210,7 +212,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
         className="studio-segment-text-translated"
         style={{
           background: "rgba(255,255,255,0.03)",
-          border: "1px solid var(--line-soft)",
+          border: seg.translateFailed ? "1px solid rgba(248,113,113,0.55)" : "1px solid var(--line-soft)",
           borderRadius: 4,
           padding: "4px 8px",
           color: "var(--t1)",
@@ -219,6 +221,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
           width: "100%",
           marginTop: 4,
         }}
+        placeholder={seg.translateFailed ? "⚠️ Dịch lỗi — chưa tạo lồng tiếng" : ""}
         value={seg.translated}
         onFocus={onPreFocus}
         onBlur={onSaveUndoIfChanged}
@@ -626,16 +629,24 @@ export default function SublixStudioView({
   // Khi đã có TTS thật: dùng đúng audioDuration (chặn không vượt quá cuối video).
   // Khi chưa tạo TTS (hoặc mới nạp SRT): ước tính thời lượng phát âm thực tế (~3.5 từ/giây + 0.4s đệm)
   // thay vì lấy nguyên khung SRT seg.end - seg.start (vốn có thể dài 20-30s cho câu 2 từ gây cảm giác track lồng tiếng dài ngoằng).
-  const computeVoiceBlockDur = (seg: SubtitleItem, totalDur: number): number => {
+  const computeVoiceBlockDur = (seg: SubtitleItem, totalDur: number, nextStart?: number): number => {
     const maxAllowed = Math.max(0.3, totalDur - seg.start);
+    let dur: number;
     if (seg.audioDuration && seg.audioDuration > 0) {
-      return Math.min(seg.audioDuration, maxAllowed);
+      dur = Math.min(seg.audioDuration, maxAllowed);
+    } else {
+      const text = (seg.translated || seg.original || "").trim();
+      const wordCount = text.length > 0 ? text.split(/\s+/).length : 0;
+      const slotDur = Math.max(0.3, seg.end - seg.start);
+      const estimatedDur = Math.max(0.8, Math.min(slotDur, wordCount * 0.35 + 0.4));
+      dur = Math.min(estimatedDur, maxAllowed);
     }
-    const text = (seg.translated || seg.original || "").trim();
-    const wordCount = text.length > 0 ? text.split(/\s+/).length : 0;
-    const slotDur = Math.max(0.3, seg.end - seg.start);
-    const estimatedDur = Math.max(0.8, Math.min(slotDur, wordCount * 0.35 + 0.4));
-    return Math.min(estimatedDur, maxAllowed);
+    // Khối lồng tiếng KHÔNG được chồng lên câu kế tiếp (đo được 45/78 cặp chồng,
+    // tổng 30.81s) — chặn theo mốc bắt đầu của câu kế tiếp.
+    if (nextStart !== undefined && nextStart > seg.start) {
+      dur = Math.min(dur, Math.max(0.3, nextStart - seg.start));
+    }
+    return dur;
   };
 
   const [speakers, setSpeakers] = useState<SpeakerItem[]>(() => {
@@ -2780,18 +2791,16 @@ export default function SublixStudioView({
 
     // Trường hợp 2: Chỉ làm Phụ Đề (STT + Dịch nếu bật dịch)
     if (workflowOptStt && !workflowOptVoice) {
-      if (workflowOptTranslate) {
-        showToast("💬 Bắt đầu tạo phụ đề và dịch tự động...");
-        const newSegs = await handleRunSttOnly();
-        if (newSegs && newSegs.length > 0) {
-          setTimeout(() => {
-            void handleRunTranslateOnly(newSegs);
-          }, 350);
-        }
-      } else {
-        showToast("💬 Bắt đầu trích xuất phụ đề gốc (không dịch)...");
-        await handleRunSttOnly();
-      }
+      // BUG: nút "⚡ Chạy Tự Động Toàn Trình (A ➔ Z)" bị bám theo pill "Chế độ"
+      // (chỉ đọc, không có switch) → bấm A→Z ở chế độ "Chỉ làm Phụ đề" thì dừng
+      // sau bước dịch, KHÔNG chạy TTS → user phải bấm tay "🎙️ Bước 2" mới có
+      // tiếng. A→Z là nút "toàn trình" → luôn chạy trọn pipeline
+      // (phụ đề + phân vai + dịch + lồng tiếng). Switch "Dịch phụ đề" vẫn được
+      // tôn trọng (xem handleRunAnalysis).
+      showToast(
+        "⚡ A ➔ Z: chạy toàn trình (phụ đề + phân vai + dịch + lồng tiếng) — không phụ thuộc chế độ chỉ-phụ-đề.",
+      );
+      await handleRunAnalysis(undefined, true);
       return;
     }
 
@@ -3099,7 +3108,13 @@ export default function SublixStudioView({
           prev.map((s) => {
             const chunkIdx = chunk.findIndex((c) => c.id === s.id);
             if (chunkIdx !== -1 && translatedTexts[chunkIdx]) {
-              return { ...s, translated: translatedTexts[chunkIdx] };
+              const value = translatedTexts[chunkIdx];
+              // Nhãn lỗi dịch ("[Dịch lỗi: ...]") KHÔNG được đưa vào ô dịch và
+              // không được đọc ra loa. Hiển thị nhãn tiếng Việt thay thế.
+              if (value.trimStart().startsWith("[Dịch lỗi:")) {
+                return { ...s, translated: "", translateFailed: true };
+              }
+              return { ...s, translated: value, translateFailed: false };
             }
             return s;
           })
@@ -3214,6 +3229,12 @@ export default function SublixStudioView({
 
       for (let i = 0; i < total; i++) {
         const seg = targetSegs[i];
+        // Câu dịch lỗi → KHÔNG tạo lồng tiếng (tránh đọc nhãn lỗi hoặc đọc nhầm
+        // text gốc cho một câu chưa có bản dịch).
+        if (seg.translateFailed) {
+          console.warn(`Bỏ qua TTS cho câu ${seg.id} (dịch lỗi)`);
+          continue;
+        }
         const pct = Math.round(((i + 1) / total) * 95);
         setTimelineProgress(pct);
         setAnalyzeProgress(pct);
@@ -3361,7 +3382,8 @@ export default function SublixStudioView({
       const project: DubbingProject = await sublix.dubbingAnalyze(
         filePath,
         sttLang === "auto" ? undefined : sttLang,
-        targetLang,
+        // Switch "Dịch phụ đề" tắt → không dịch (đồng bộ với pill "Chỉ làm Phụ đề").
+        workflowOptTranslate ? targetLang : undefined,
         durLimit,
         startOffset,
         expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined,
@@ -4050,6 +4072,13 @@ export default function SublixStudioView({
     try {
       const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       if (isTauriEnv) {
+        // Câu dịch lỗi → không có bản dịch để nghe thử (không đọc nhãn lỗi,
+        // cũng không đọc nhầm text gốc).
+        if (seg.translateFailed) {
+          showToast("⚠️ Câu này dịch lỗi nên chưa có bản dịch để nghe thử.");
+          setPreviewingSegId(null);
+          return;
+        }
         stopVoicePlayback();
         if (previewAudioRef.current) {
           try {
@@ -4172,7 +4201,9 @@ export default function SublixStudioView({
           end_sec: seg.end,
           original_text: seg.original,
           dubbed_text: seg.translated,
-          status: "ready",
+          // Câu dịch lỗi → status "translate_failed" để backend BỎ QUA câu này
+          // (không đọc nhãn lỗi, cũng không đọc lại text gốc).
+          status: seg.translateFailed ? "translate_failed" : "ready",
         })),
         bgm_volume: 0.8,
         voice_volume: 1.0,
@@ -7303,13 +7334,14 @@ export default function SublixStudioView({
 
                   const voiceSegments = segments.filter((s) => s.hasAudio || s.id === selectedSegId);
 
-                  return voiceSegments.map((seg) => {
+                  return voiceSegments.map((seg, segIdx) => {
                     const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
                     const spkName = getSpeakerDisplayName(spk);
                     const totalDur = Math.max(1, mediaDuration);
                     const left = (seg.start / totalDur) * timelineWidth;
                     // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
-                    const voiceDur = computeVoiceBlockDur(seg, totalDur);
+                    // + không được chồng lên câu kế tiếp.
+                    const voiceDur = computeVoiceBlockDur(seg, totalDur, voiceSegments[segIdx + 1]?.start);
                     const rawWidth = (voiceDur / totalDur) * timelineWidth;
                     const width = Math.max(3, rawWidth);
                     const isCompact = width < 30;
@@ -7445,11 +7477,12 @@ export default function SublixStudioView({
 
                       const voiceSegments = spkSegments.filter((s) => s.hasAudio || s.id === selectedSegId);
 
-                      return voiceSegments.map((seg) => {
+                      return voiceSegments.map((seg, segIdx) => {
                         const totalDur = Math.max(1, mediaDuration);
                         const left = (seg.start / totalDur) * timelineWidth;
                         // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
-                        const voiceDur = computeVoiceBlockDur(seg, totalDur);
+                        // + không được chồng lên câu kế tiếp của cùng vai.
+                        const voiceDur = computeVoiceBlockDur(seg, totalDur, voiceSegments[segIdx + 1]?.start);
                         const rawWidth = (voiceDur / totalDur) * timelineWidth;
                         const width = Math.max(3, rawWidth);
                         const isCompact = width < 30;

@@ -15,6 +15,21 @@ use crate::stt::EnginePreference;
 const BINARIES_DIR: &str = "binaries";
 const MODELS_DIR: &str = "models";
 
+/// Tiền tố nhãn lỗi dịch. Mọi provider (local llama-server, Ollama, MiniMax,
+/// DeepSeek, OpenRouter) dùng CHUNG đúng tiền tố này để phía UI/TTS nhận biết
+/// một câu đã dịch hỏng — tuyệt đối không được đọc nhãn này ra loa.
+pub const TRANSLATE_ERROR_PREFIX: &str = "[Dịch lỗi:";
+
+/// True nếu `text` là nhãn lỗi dịch (không phải bản dịch thật).
+pub fn is_translate_error(text: &str) -> bool {
+    text.trim_start().starts_with(TRANSLATE_ERROR_PREFIX)
+}
+
+/// Tạo nhãn lỗi dịch chuẩn cho một câu không dịch được.
+pub fn translate_error_marker(original: &str) -> String {
+    format!("{} {}]", TRANSLATE_ERROR_PREFIX, original)
+}
+
 const LLAMA_CPP_ZIP_URL: &str =
     "https://github.com/ggml-org/llama.cpp/releases/download/b10472/llama-b10472-bin-win-cpu-x64.zip";
 
@@ -372,7 +387,7 @@ where
                             break;
                         }
                         warn!("Single translation failed for '{item}': {err:#}");
-                        sub_res.push(format!("[Dịch lỗi: {}]", item));
+                        sub_res.push(translate_error_marker(item));
                     }
                 }
             }
@@ -552,4 +567,25 @@ pub fn current_engine() -> Option<String> {
 /// Get the currently loaded translation model name if running.
 pub fn current_model() -> Option<String> {
     server::current_model().map(|m| m.name().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_translate_error_marker_roundtrip() {
+        let marker = translate_error_marker("Heat. Heat.");
+        assert_eq!(marker, "[Dịch lỗi: Heat. Heat.]");
+        assert!(is_translate_error(&marker));
+    }
+
+    #[test]
+    fn test_is_translate_error_only_matches_marker() {
+        assert!(is_translate_error("[Dịch lỗi: abc]"));
+        assert!(is_translate_error("  [Dịch lỗi: abc]"));
+        assert!(!is_translate_error("Nóng. Nóng."));
+        assert!(!is_translate_error(""));
+        assert!(!is_translate_error("Dịch lỗi: abc"));
+    }
 }

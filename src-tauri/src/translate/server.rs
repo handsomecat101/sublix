@@ -378,8 +378,14 @@ impl TranslationServer {
                 match self.translate(item, source, target) {
                     Ok(single) => final_res.push(single),
                     Err(e) => {
+                        // Lỗi kết nối = llama-server đã chết → trả Err để lớp trên
+                        // invalidate singleton + spawn lại + retry. Nếu nhét nhãn lỗi
+                        // vào kết quả thì TTS sẽ đọc nhãn lỗi thành tiếng.
+                        if is_connection_error(&e) {
+                            return Err(e);
+                        }
                         warn!("Single fallback translate failed for '{item}': {e:#}");
-                        final_res.push(format!("[Dịch lỗi: {}]", item));
+                        final_res.push(super::translate_error_marker(item));
                     }
                 }
             }
@@ -571,6 +577,69 @@ struct ChatMessageOwned {
 
 static TRANSLATION_SERVER: Mutex<Option<TranslationServer>> = Mutex::new(None);
 
+/// Timeout cho health-check llama-server (ngắn để không treo UI).
+const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Kiểm tra 1 endpoint health của llama-server.
+/// Trả `false` nếu server đã chết / không lắng nghe / quá timeout.
+fn probe_health(url: &str, timeout: Duration) -> bool {
+    let client = match Client::builder()
+        .connect_timeout(timeout)
+        .timeout(timeout)
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("⚠️ Không tạo được HTTP client cho health-check: {e:#}");
+            return false;
+        }
+    };
+    match client.get(url).send() {
+        Ok(resp) => resp.status().is_success(),
+        Err(e) => {
+            warn!("⚠️ llama-server không phản hồi health-check ({url}): {e:#}");
+            false
+        }
+    }
+}
+
+/// Health-check llama-server đang chạy ở {SERVER_URL}.
+/// BUG-1: singleton có thể vẫn là `Some(...)` trong khi tiến trình llama-server đã
+/// bị kill / crash / máy ngủ → mọi HTTP call sau đó đều fail âm thầm, khiến toàn
+/// bộ câu dịch hỏng mà không có log rõ ràng. Phải health-check trước khi reuse.
+pub fn server_is_alive() -> bool {
+    probe_health(&format!("{SERVER_URL}/health"), HEALTH_PROBE_TIMEOUT)
+}
+
+/// Có nên reuse singleton server không?
+/// Cần đủ 3 điều kiện: cùng model, cùng engine preference, và server CÒN SỐNG.
+fn reuse_decision(
+    existing_model: Option<TranslationModelVariant>,
+    existing_engine: Option<Engine>,
+    resolved_model: TranslationModelVariant,
+    pref: EnginePreference,
+    alive: bool,
+) -> bool {
+    match (existing_model, existing_engine) {
+        (Some(m), Some(e)) => m == resolved_model && matches_pref(e, pref) && alive,
+        _ => false,
+    }
+}
+
+/// Lỗi mạng (connection refused / reset / closed) → server đã chết, có thể restart.
+fn is_connection_error(err: &anyhow::Error) -> bool {
+    let text = format!("{err:#}").to_lowercase();
+    text.contains("connection refused")
+        || text.contains("connection reset")
+        || text.contains("connection closed")
+        || text.contains("connection aborted")
+        || text.contains("tcp connect error")
+        || text.contains("failed to connect")
+        || text.contains("os error 10061")
+        || text.contains("os error 10054")
+        || text.contains("os error 10060")
+}
+
 fn matches_pref(actual: Engine, pref: EnginePreference) -> bool {
     match pref {
         EnginePreference::Auto => true,
@@ -586,21 +655,102 @@ pub fn preload_server(
     let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
     let mut guard = TRANSLATION_SERVER.lock().map_err(|e| e.to_string())?;
     if let Some(ref existing) = *guard {
-        if existing.model() == resolved_model && matches_pref(existing.engine(), pref) {
+        let same_settings =
+            existing.model() == resolved_model && matches_pref(existing.engine(), pref);
+        // Chỉ health-check khi cấu hình khớp (đổi model thì chắc chắn phải restart).
+        let alive = same_settings && server_is_alive();
+        if reuse_decision(
+            Some(existing.model()),
+            Some(existing.engine()),
+            resolved_model,
+            pref,
+            alive,
+        ) {
             return Ok(existing.engine().as_str().to_string());
         }
-        info!(
-            "🔄 Restarting llama-server for new settings (model={} → {}, pref={})",
-            existing.model().name(),
-            resolved_model.name(),
-            pref.as_str()
-        );
+        if same_settings {
+            warn!(
+                "⚠️ llama-server đã chết (health-check /health thất bại) — khởi động lại (model={})",
+                resolved_model.name()
+            );
+        } else {
+            info!(
+                "🔄 Restarting llama-server for new settings (model={} → {}, pref={})",
+                existing.model().name(),
+                resolved_model.name(),
+                pref.as_str()
+            );
+        }
     }
     *guard = None;
     let server = TranslationServer::start(resolved_model, pref).map_err(|e| format!("{e:#}"))?;
     let eng = server.engine().as_str().to_string();
     *guard = Some(server);
     Ok(eng)
+}
+
+/// Vô hiệu hoá singleton server (server đã chết) → lần gọi sau sẽ spawn lại.
+fn invalidate_server() {
+    if let Ok(mut guard) = TRANSLATION_SERVER.lock() {
+        if guard.is_some() {
+            warn!("🧹 Vô hiệu hoá singleton llama-server đã chết");
+        }
+        // Drop handle → kill child process + dọn llama-server.exe cũ.
+        *guard = None;
+    }
+}
+
+/// Lấy singleton server (spawn nếu chưa có / sai cấu hình) rồi chạy `op`.
+fn run_with_server<R, F>(
+    resolved_model: TranslationModelVariant,
+    pref: EnginePreference,
+    op: F,
+) -> Result<R>
+where
+    F: Fn(&TranslationServer) -> Result<R>,
+{
+    let mut guard = TRANSLATION_SERVER
+        .lock()
+        .map_err(|e| anyhow!("Translation server mutex poisoned: {e}"))?;
+
+    let needs_restart = match *guard {
+        Some(ref s) => s.model() != resolved_model || !matches_pref(s.engine(), pref),
+        None => true,
+    };
+
+    if needs_restart {
+        *guard = None;
+        let server = TranslationServer::start(resolved_model, pref)?;
+        *guard = Some(server);
+    }
+
+    let server = guard.as_ref().expect("translation server just initialized");
+    op(server)
+}
+
+/// Chạy tác vụ với singleton server. Nếu gặp lỗi kết nối (server đã chết) →
+/// vô hiệu hoá singleton, khởi động lại và thử lại ĐÚNG 1 lần (không retry vô hạn).
+fn with_server_retry<R, F>(
+    resolved_model: TranslationModelVariant,
+    pref: EnginePreference,
+    op: F,
+) -> Result<R>
+where
+    F: Fn(&TranslationServer) -> Result<R>,
+{
+    match run_with_server(resolved_model, pref, &op) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            if !is_connection_error(&e) {
+                return Err(e);
+            }
+            warn!(
+                "⚠️ llama-server đã chết / không phản hồi ({e:#}) — khởi động lại và thử lại 1 lần"
+            );
+            invalidate_server();
+            run_with_server(resolved_model, pref, &op)
+        }
+    }
 }
 
 pub fn translate_via_server(
@@ -612,34 +762,21 @@ pub fn translate_via_server(
     glossary: &[String],
 ) -> Result<String> {
     let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
-    let mut guard = TRANSLATION_SERVER
-        .lock()
-        .map_err(|e| anyhow!("Translation server mutex poisoned: {e}"))?;
-
-    let needs_restart = match *guard {
-        Some(ref s) => s.model() != resolved_model || !matches_pref(s.engine(), pref),
-        None => true,
-    };
-
-    if needs_restart {
-        *guard = None;
-        let server = TranslationServer::start(resolved_model, pref)?;
-        *guard = Some(server);
-    }
-
-    let server = guard.as_ref().expect("translation server just initialized");
-    if glossary.is_empty() {
-        server.translate(text, source, target)
-    } else {
-        // Glossary nhúng vào đầu text cho đường local llama-server (system prompt nằm trong TranslationServer).
-        let rules = glossary
-            .iter()
-            .map(|g| format!("- {g}"))
-            .collect::<Vec<_>>()
-            .join("; ");
-        let enriched = format!("[Terminology rules — keep these names/terms exactly: {rules}]\n{text}");
-        server.translate(&enriched, source, target)
-    }
+    with_server_retry(resolved_model, pref, |server| {
+        if glossary.is_empty() {
+            server.translate(text, source, target)
+        } else {
+            // Glossary nhúng vào đầu text cho đường local llama-server (system prompt nằm trong TranslationServer).
+            let rules = glossary
+                .iter()
+                .map(|g| format!("- {g}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            let enriched =
+                format!("[Terminology rules — keep these names/terms exactly: {rules}]\n{text}");
+            server.translate(&enriched, source, target)
+        }
+    })
 }
 
 pub fn translate_batch_via_server(
@@ -651,36 +788,22 @@ pub fn translate_batch_via_server(
     glossary: &[String],
 ) -> Result<Vec<String>> {
     let resolved_model = TranslationModelVariant::resolve_or_best(Some(model.name()));
-    let mut guard = TRANSLATION_SERVER
-        .lock()
-        .map_err(|e| anyhow!("Translation server mutex poisoned: {e}"))?;
-
-    let needs_restart = match *guard {
-        Some(ref s) => s.model() != resolved_model || !matches_pref(s.engine(), pref),
-        None => true,
-    };
-
-    if needs_restart {
-        *guard = None;
-        let server = TranslationServer::start(resolved_model, pref)?;
-        *guard = Some(server);
-    }
-
-    let server = guard.as_ref().expect("translation server just initialized");
-    if glossary.is_empty() {
-        server.translate_batch(items, source, target)
-    } else {
-        let rules = glossary
-            .iter()
-            .map(|g| format!("- {g}"))
-            .collect::<Vec<_>>()
-            .join("; ");
-        let enriched: Vec<String> = items
-            .iter()
-            .map(|s| format!("[Keep these names/terms exactly: {rules}] {s}"))
-            .collect();
-        server.translate_batch(&enriched, source, target)
-    }
+    with_server_retry(resolved_model, pref, |server| {
+        if glossary.is_empty() {
+            server.translate_batch(items, source, target)
+        } else {
+            let rules = glossary
+                .iter()
+                .map(|g| format!("- {g}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            let enriched: Vec<String> = items
+                .iter()
+                .map(|s| format!("[Keep these names/terms exactly: {rules}] {s}"))
+                .collect();
+            server.translate_batch(&enriched, source, target)
+        }
+    })
 }
 
 pub fn current_engine() -> Option<Engine> {
@@ -1163,7 +1286,7 @@ fn translate_batch_via_openai_compatible(
                 Ok(single) => final_res.push(single),
                 Err(e) => {
                     warn!("{label} single fallback failed for '{item}': {e:#}");
-                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                    final_res.push(super::translate_error_marker(item));
                 }
             }
         }
@@ -1357,7 +1480,7 @@ pub fn translate_batch_via_minimax(
                 Ok(single) => final_res.push(single),
                 Err(e) => {
                     warn!("MiniMax single fallback failed for '{item}': {e:#}");
-                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                    final_res.push(super::translate_error_marker(item));
                 }
             }
         }
@@ -1458,12 +1581,101 @@ pub fn translate_batch_via_ollama(
                 Ok(single) => final_res.push(single),
                 Err(e) => {
                     warn!("Ollama single fallback failed for '{item}': {e:#}");
-                    final_res.push(format!("[Dịch lỗi: {}]", item));
+                    final_res.push(super::translate_error_marker(item));
                 }
             }
         }
     }
 
     Ok(final_res)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Port chắc chắn không có llama-server nào lắng nghe.
+    const DEAD_PORT: u16 = 59999;
+
+    #[test]
+    fn test_probe_health_false_when_no_server() {
+        let url = format!("http://127.0.0.1:{DEAD_PORT}/health");
+        assert!(
+            !probe_health(&url, Duration::from_millis(800)),
+            "health-check phải trả false khi không có server lắng nghe"
+        );
+    }
+
+    #[test]
+    fn test_reuse_requires_alive_server() {
+        let model = TranslationModelVariant::Qwen3_4B;
+
+        // BUG-1: server đã chết (bị kill) → KHÔNG reuse singleton.
+        assert!(
+            !reuse_decision(
+                Some(model),
+                Some(Engine::Cuda),
+                model,
+                EnginePreference::Cuda,
+                false
+            ),
+            "server đã chết thì không được reuse singleton"
+        );
+
+        // Server còn sống + đúng cấu hình → reuse.
+        assert!(reuse_decision(
+            Some(model),
+            Some(Engine::Cuda),
+            model,
+            EnginePreference::Cuda,
+            true
+        ));
+
+        // Đổi model → không reuse.
+        assert!(!reuse_decision(
+            Some(model),
+            Some(Engine::Cuda),
+            TranslationModelVariant::Qwen3_8B,
+            EnginePreference::Cuda,
+            true
+        ));
+
+        // Đổi engine preference → không reuse.
+        assert!(!reuse_decision(
+            Some(model),
+            Some(Engine::Cuda),
+            model,
+            EnginePreference::Cpu,
+            true
+        ));
+
+        // Chưa có server → không reuse.
+        assert!(!reuse_decision(
+            None,
+            None,
+            model,
+            EnginePreference::Cuda,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_is_connection_error_detects_refused() {
+        let refused = anyhow!(
+            "HTTP POST to llama-server failed: error sending request for url \
+             (http://127.0.0.1:11435/v1/chat/completions): tcp connect error: \
+             Connection refused (os error 10061)"
+        );
+        assert!(
+            is_connection_error(&refused),
+            "phải nhận ra lỗi connection refused để restart server"
+        );
+
+        let server_error = anyhow!("llama-server returned 500: internal error");
+        assert!(
+            !is_connection_error(&server_error),
+            "lỗi HTTP 500 không phải lỗi kết nối (không được restart vô ích)"
+        );
+    }
 }
 
