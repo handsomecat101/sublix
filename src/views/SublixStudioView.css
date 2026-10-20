@@ -3009,7 +3009,12 @@
   border-width: 1.5px;
   border-radius: 5px !important;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
-  position: relative;
+  /* BUG: rule này đặt SAU .studio-timeline-block { position: absolute } nên đè mất
+     position của khối phụ đề. Với `relative`, khối vẫn nằm trong flow → mỗi khối
+     voice bị đẩy phải bằng TỔNG bề rộng các khối trước → lệch dần (tới ~959px ở
+     cue cuối) so với track phụ đề. Phải là `absolute` để `left` inline của React
+     là vị trí thật trên timeline. */
+  position: absolute;
   overflow: hidden;
 }
 

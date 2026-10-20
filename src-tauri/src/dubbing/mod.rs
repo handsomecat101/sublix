@@ -180,7 +180,47 @@ pub struct DubbingSegment {
     pub original_text: String,
     pub dubbed_text: String,
     pub audio_duration_sec: Option<f64>,
-    pub status: String, // "ready" | "previewed" | "rendered"
+    pub status: String, // "ready" | "previewed" | "rendered" | "translate_failed"
+}
+
+/// Gán kết quả dịch vào 1 segment.
+/// Nếu kết quả là nhãn lỗi dịch (`[Dịch lỗi: ...]`) → đánh dấu `translate_failed` và
+/// để `dubbed_text` RỖNG. Tuyệt đối không gán nhãn lỗi vào `dubbed_text`, vì TTS sẽ
+/// đọc nguyên chuỗi đó thành tiếng ("tiếng thừa dài ngoằng").
+pub fn apply_translation_to_segment(seg: &mut DubbingSegment, trans: String) {
+    if crate::translate::is_translate_error(&trans) {
+        seg.status = "translate_failed".to_string();
+        seg.dubbed_text = String::new();
+    } else {
+        seg.dubbed_text = trans;
+    }
+}
+
+/// Chọn nội dung để TTS đọc cho 1 segment.
+/// - `None` → câu này KHÔNG được phát âm (dịch lỗi, hoặc không có nội dung nào để đọc).
+/// - `Some(text)` → text cần đọc (bản dịch; nếu chưa có bản dịch thì fallback text gốc).
+///
+/// Quy tắc quan trọng: câu dịch lỗi KHÔNG BAO GIỜ được đọc ra loa — không đọc nhãn
+/// lỗi, cũng không đọc lại text gốc.
+pub fn select_synth_text(seg: &DubbingSegment) -> Option<&str> {
+    // 1. Dịch lỗi → bỏ qua câu này hoàn toàn.
+    if seg.status == "translate_failed" {
+        return None;
+    }
+    let dubbed = seg.dubbed_text.trim();
+    if !dubbed.is_empty() {
+        // 2. Phòng thủ: nếu nhãn lỗi lọt vào dubbed_text thì cũng không được đọc.
+        if crate::translate::is_translate_error(dubbed) {
+            return None;
+        }
+        return Some(dubbed);
+    }
+    // 3. Chưa có bản dịch (chế độ chỉ phụ đề / chưa bấm dịch) → đọc text gốc như cũ.
+    let original = seg.original_text.trim();
+    if original.is_empty() {
+        return None;
+    }
+    Some(original)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1101,6 +1141,12 @@ pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_p
 
 /// Synthesize single line and return as base64 data URI
 pub fn preview_single_line(text: &str, voice: &str, rate: Option<&str>, pitch: Option<&str>) -> Result<String> {
+    // Chặn nhãn lỗi dịch: không được đọc "[Dịch lỗi: ...]" thành tiếng.
+    if crate::translate::is_translate_error(text) {
+        return Err(anyhow::anyhow!(
+            "Câu này dịch lỗi nên không có bản dịch để nghe thử. Hãy dịch lại câu này."
+        ));
+    }
     let temp_dir = std::env::temp_dir().join("sublix_dubbing");
     fs::create_dir_all(&temp_dir)?;
     let temp_file = temp_dir.join(format!("preview_{}.mp3", gen_unique_id()));
@@ -1704,7 +1750,8 @@ pub fn diarize_and_script_via_minimax(
         if let Some(seg) = segments.iter_mut().find(|s| s.id == id) {
             seg.speaker_id = spk_slug;
             if !text.is_empty() {
-                seg.dubbed_text = text.to_string();
+                // Dùng chung quy tắc: nhãn lỗi dịch không bao giờ nằm trong dubbed_text.
+                apply_translation_to_segment(seg, text.to_string());
             }
         }
     }
@@ -1866,12 +1913,22 @@ fn find_sibling_srt(video: &Path, src_lang: Option<&str>) -> Option<(PathBuf, St
 /// lọc theo cửa sổ [offset, offset+limit] rồi trừ offset — nhờ đó nhánh dùng
 /// SRT sẵn và nhánh Whisper cho ra cùng một hệ toạ độ (offset được cộng lại
 /// ở bước sau, giống hệt nhau).
+///
+/// BUG-3: file .srt tải về từ YouTube có thể phủ video DÀI HƠN NHIỀU lần video
+/// local (ví dụ video 5:27 nhưng .srt dài 5 tiếng). Vì vậy:
+/// - cue bắt đầu sau `offset + limit` → loại hẳn;
+/// - cue bắt đầu trong cửa sổ nhưng kết thúc vượt `offset + limit` → **cắt
+///   `end` về đúng `limit`** (nếu không, timeline có khối tràn ra ngoài video và
+///   sinh ra "tiếng thừa dài ngoằng");
+/// - `limit` phải là thời lượng VIDEO THẬT (xem `window_limit` trong
+///   `analyze_and_create_project_full`), không phải con số 0/None.
 fn crop_srt_to_window(
     segments: Vec<crate::file_sub::SubtitleSegment>,
     offset: f64,
     limit: Option<f64>,
 ) -> Vec<crate::file_sub::SubtitleSegment> {
-    let end_cap = limit.filter(|l| *l > 0.0).map(|l| offset + l);
+    let limit = limit.filter(|l| *l > 0.0);
+    let end_cap = limit.map(|l| offset + l);
     if offset <= 0.0 && end_cap.is_none() {
         return segments;
     }
@@ -1880,11 +1937,33 @@ fn crop_srt_to_window(
         .filter_map(|mut s| {
             let st = parse_srt_time_to_seconds(&s.start_time);
             let en = parse_srt_time_to_seconds(&s.end_time);
-            if end_cap.map(|cap| st >= cap).unwrap_or(false) || en <= offset {
+            // Cue kết thúc trước cửa sổ phân tích → bỏ.
+            if en <= offset {
+                return None;
+            }
+            // Cue bắt đầu sau cửa sổ (nằm ngoài video) → bỏ.
+            if end_cap.map(|cap| st >= cap).unwrap_or(false) {
                 return None;
             }
             let new_st = (st - offset).max(0.0);
-            let new_en = (en - offset).max(new_st + 0.05);
+            let mut new_en = en - offset;
+            // Cắt đuôi cue về đúng thời lượng video.
+            if let Some(l) = limit {
+                new_en = new_en.min(l);
+            }
+            // Cue cần tối thiểu 50ms để phát âm.
+            new_en = new_en.max(new_st + 0.05);
+            if let Some(l) = limit {
+                // Cue bắt đầu sát đuôi video → không đủ chỗ cho 50ms → loại hẳn.
+                if new_st + 0.05 > l {
+                    return None;
+                }
+                new_en = new_en.min(l);
+            }
+            // Sau khi cắt mà rỗng/rời → loại hẳn cue.
+            if new_en <= new_st {
+                return None;
+            }
             s.start_time = fmt_srt_time(new_st);
             s.end_time = fmt_srt_time(new_en);
             Some(s)
@@ -2001,6 +2080,10 @@ pub fn analyze_and_create_project_full(
         return Err(anyhow::anyhow!("File không tồn tại: {}", input_path));
     }
 
+    // BUG-3: thời lượng media THẬT (đo bằng ffmpeg) — dùng làm `media_duration`
+    // của project (frontend clamp theo thời lượng này).
+    let probed_media_duration = get_audio_duration(input).unwrap_or(0.0);
+
     let emit = |stage: &str, percent: f32, msg: &str, cur: usize, tot: usize| {
         if let Some(a) = app {
             let _ = a.emit(
@@ -2038,6 +2121,7 @@ pub fn analyze_and_create_project_full(
         extract_cmd.arg("-ss").arg(format!("{:.2}", offset));
     }
 
+    // Chỉ giới hạn phần trích xuất khi user chọn range (giữ nguyên hành vi cũ).
     if let Some(limit) = time_limit_sec {
         if limit > 0.0 {
             info!("⏱️ Applying time limit: {:.1}s for dubbing test", limit);
@@ -2166,6 +2250,8 @@ pub fn analyze_and_create_project_full(
     let mut raw_segments = crate::file_sub::parse_srt_content(&raw_srt_content);
     // File .srt ngoài phủ TOÀN BỘ video (mốc tuyệt đối) — cắt theo cửa sổ đang
     // phân tích rồi trừ offset để cùng hệ toạ độ với đầu ra Whisper (đã cắt audio).
+    // BUG-3: cue vượt đuôi cửa sổ được CẮT về đúng `limit` (trước đây end_time
+    // giữ nguyên → khối timeline tràn ra ngoài cửa sổ phân tích).
     if transcript_source.starts_with("srt:") {
         raw_segments = crop_srt_to_window(raw_segments, offset, time_limit_sec);
     }
@@ -2341,10 +2427,7 @@ pub fn analyze_and_create_project_full(
             for (offset, trans) in translated_batch.into_iter().enumerate() {
                 let target_idx = chunk_start + offset;
                 if target_idx < parsed_segments.len() {
-                    if trans.starts_with("[Dịch lỗi:") {
-                        parsed_segments[target_idx].status = "translate_failed".to_string();
-                    }
-                    parsed_segments[target_idx].dubbed_text = trans;
+                    apply_translation_to_segment(&mut parsed_segments[target_idx], trans);
                 }
             }
         }
@@ -2392,7 +2475,8 @@ pub fn analyze_and_create_project_full(
         return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
     }
 
-    let probed_media_duration = get_audio_duration(input).unwrap_or(0.0);
+    // Thời lượng media của project: time_limit_sec (nếu có) kẹp trong thời lượng
+    // video thật; nếu không đo được thì lấy mốc cuối của segment.
     let media_duration = if let Some(limit) = time_limit_sec {
         if limit > 0.0 {
             if probed_media_duration > 0.0 { limit.min(probed_media_duration) } else { limit }
@@ -2594,11 +2678,25 @@ pub fn export_dubbed_video(
             return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
         }
 
+        // Chọn nội dung để đọc. Câu dịch lỗi → bỏ qua (không tạo audio, không đọc
+        // nhãn lỗi, cũng không đọc lại text gốc).
+        let synth_text = match select_synth_text(seg) {
+            Some(t) => t,
+            None => {
+                warn!(
+                    "⏭️ Bỏ qua câu {}: không có bản dịch hợp lệ (dịch lỗi) — không tạo lồng tiếng cho câu này.",
+                    seg.id
+                );
+                skipped_segments.push(seg.id);
+                continue;
+            }
+        };
+
         let percent = 5.0 + (i as f32 / total_segs as f32) * 55.0;
         emit(
             "synthesizing",
             percent,
-            &format!("Phát âm câu {}/{}: {}", i + 1, total_segs, seg.dubbed_text),
+            &format!("Phát âm câu {}/{}: {}", i + 1, total_segs, synth_text),
             i + 1,
             total_segs,
         );
@@ -2612,11 +2710,6 @@ pub fn export_dubbed_video(
         // Kokoro (offline) writes WAV; Edge-TTS writes MP3. FFmpeg reads either.
         let ext = if speaker.voice.starts_with(KOKORO_VOICE_PREFIX) { "wav" } else { "mp3" };
         let seg_audio = temp_dir.join(format!("seg_{}.{}", i, ext));
-        let synth_text = if seg.dubbed_text.trim().is_empty() {
-            "..."
-        } else {
-            &seg.dubbed_text
-        };
 
         // Retry-then-skip: never let an empty/invalid file poison the final mux.
         let mut synth_ok = false;
@@ -2728,6 +2821,72 @@ pub fn export_dubbed_video(
         if final_audio_fitted.exists() {
             speech_inputs.push((final_audio_fitted, seg.start_sec));
         }
+    }
+
+    // BUG: các đoạn audio lồng tiếng có thể CHỒNG lên nhau (đo được 45/78 cặp,
+    // tổng 30.81s chồng, tối đa 1.92s) → khi mix, hai giọng nói cùng lúc, nghe loạn.
+    // Ở đây chặn phần ĐUÔI dư của mỗi câu (thường là khoảng lặng cuối) để audio
+    // của câu N không vượt quá thời điểm bắt đầu của câu kế tiếp (và không vượt
+    // cuối video). Nội dung lời thoại ở đầu câu được giữ nguyên.
+    {
+        let media_end = project.media_duration_sec;
+        // Mốc bắt đầu của các câu có audio, đã sắp xếp (để tìm "câu kế tiếp"
+        // kể cả khi thứ tự segment không tuyến tính).
+        let mut starts: Vec<f64> = speech_inputs.iter().map(|(_, s)| *s).collect();
+        starts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        let mut no_overlap_inputs: Vec<(PathBuf, f64)> = Vec::with_capacity(speech_inputs.len());
+        for (idx, (audio_path, start_sec)) in speech_inputs.iter().enumerate() {
+            let next_start = starts
+                .iter()
+                .copied()
+                .filter(|s| *s > *start_sec + 0.001)
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            let mut allowed = f64::INFINITY;
+            if let Some(ns) = next_start {
+                allowed = allowed.min(ns - start_sec);
+            }
+            if media_end > 0.0 && media_end > *start_sec {
+                allowed = allowed.min(media_end - start_sec);
+            }
+
+            if allowed.is_finite() && allowed > 0.05 {
+                let dur = get_audio_duration(audio_path).unwrap_or(0.0);
+                if dur > allowed + 0.02 {
+                    let trimmed = temp_dir.join(format!("seg_nolap_{}.wav", idx));
+                    let mut trim_cmd = Command::new(&ffmpeg_bin);
+                    trim_cmd
+                        .arg("-y")
+                        .arg("-i")
+                        .arg(audio_path)
+                        .arg("-t")
+                        .arg(format!("{:.3}", allowed))
+                        .arg(&trimmed);
+
+                    #[cfg(windows)]
+                    trim_cmd.creation_flags(CREATE_NO_WINDOW);
+
+                    if run_child_with_cancel(trim_cmd, my_gen)
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                        && trimmed.exists()
+                    {
+                        info!(
+                            "✂️ Cắt đuôi audio câu {} ({}): {:.2}s → {:.2}s (tránh chồng câu kế tiếp)",
+                            idx,
+                            audio_path.file_name().unwrap_or_default().to_string_lossy(),
+                            dur,
+                            allowed
+                        );
+                        no_overlap_inputs.push((trimmed, *start_sec));
+                        continue;
+                    }
+                }
+            }
+            no_overlap_inputs.push((audio_path.clone(), *start_sec));
+        }
+        speech_inputs = no_overlap_inputs;
     }
 
     if is_generation_cancelled(my_gen) {
@@ -2857,8 +3016,13 @@ pub fn export_dubbed_video(
     let mut srt_content = String::new();
     let mut srt_valid_count = 0;
     for seg in &project.segments {
-        let text = if !seg.dubbed_text.trim().is_empty() {
-            seg.dubbed_text.trim()
+        let dubbed = seg.dubbed_text.trim();
+        let text = if !dubbed.is_empty() {
+            // Không bao giờ ghi nhãn lỗi dịch vào file phụ đề.
+            if crate::translate::is_translate_error(dubbed) {
+                continue;
+            }
+            dubbed
         } else if !seg.original_text.trim().is_empty() {
             seg.original_text.trim()
         } else {
@@ -3122,6 +3286,88 @@ pub fn build_hierarchical_amix_filter(num_speech: usize, voice_volume: f32) -> S
 mod tests {
     use super::*;
 
+    /// KHÓA CHỈ DÙNG TRONG TEST: các test dùng chung bộ đếm generation TOÀN CỤC
+    /// (CURRENT_GENERATION / CANCELLED_GENERATION) phải chạy TUẦN TỰ. Nếu chạy
+    /// song song, `start_new_generation()` của test này sẽ hủy generation của
+    /// test kia → test kia fail với "Đã dừng tiến trình theo yêu cầu của bạn".
+    /// Đây là race ĐÃ TỒN TẠI từ trước (không do các thay đổi BUG-1/2/3), chỉ bị
+    /// lộ ra khi số lượng test thay đổi làm thay đổi lịch chạy song song.
+    static GENERATION_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Tạo segment mẫu cho test.
+    fn seg_with(dubbed_text: &str, status: &str) -> DubbingSegment {
+        DubbingSegment {
+            id: 1,
+            speaker_id: "speaker_1".to_string(),
+            start_sec: 0.0,
+            end_sec: 1.0,
+            original_text: "Heat. Heat.".to_string(),
+            dubbed_text: dubbed_text.to_string(),
+            audio_duration_sec: None,
+            status: status.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_translate_error_not_used_as_dubbed_text() {
+        let mut seg = seg_with("", "ready");
+        apply_translation_to_segment(&mut seg, "[Dịch lỗi: Heat. Heat.]".to_string());
+
+        assert!(
+            seg.dubbed_text.is_empty(),
+            "nhãn lỗi dịch KHÔNG BAO GIỜ được gán vào dubbed_text (TTS sẽ đọc thành tiếng)"
+        );
+        assert_eq!(seg.status, "translate_failed");
+        assert!(
+            select_synth_text(&seg).is_none(),
+            "câu dịch lỗi không được phát âm"
+        );
+    }
+
+    #[test]
+    fn test_apply_translation_keeps_valid_translation() {
+        let mut seg = seg_with("", "ready");
+        apply_translation_to_segment(&mut seg, "Nóng. Nóng.".to_string());
+        assert_eq!(seg.dubbed_text, "Nóng. Nóng.");
+        assert_eq!(seg.status, "ready");
+        assert_eq!(select_synth_text(&seg), Some("Nóng. Nóng."));
+    }
+
+    #[test]
+    fn test_select_synth_text_skips_failed_translation() {
+        // dubbed_text rỗng + status = translate_failed → KHÔNG phát âm,
+        // KHÔNG fallback sang original_text.
+        let seg = seg_with("", "translate_failed");
+        assert!(
+            select_synth_text(&seg).is_none(),
+            "câu dịch lỗi không được đọc, kể cả text gốc"
+        );
+    }
+
+    #[test]
+    fn test_select_synth_text_falls_back_to_original_when_not_failed() {
+        // dubbed_text rỗng + status bình thường → vẫn fallback original_text như cũ.
+        let seg = seg_with("", "ready");
+        assert_eq!(select_synth_text(&seg), Some("Heat. Heat."));
+    }
+
+    #[test]
+    fn test_select_synth_text_never_speaks_error_marker() {
+        // Phòng thủ: nhãn lỗi lọt vào dubbed_text (VD từ frontend) → không đọc.
+        let seg = seg_with("[Dịch lỗi: Heat. Heat.]", "ready");
+        assert!(
+            select_synth_text(&seg).is_none(),
+            "nhãn lỗi dịch không được đọc ra loa"
+        );
+    }
+
+    #[test]
+    fn test_select_synth_text_none_when_nothing_to_say() {
+        let mut seg = seg_with("", "ready");
+        seg.original_text = "   ".to_string();
+        assert!(select_synth_text(&seg).is_none());
+    }
+
     #[test]
     fn test_hierarchical_amix_filter_invariant_under_32() {
         for n in [1, 10, 28, 29, 56, 896, 1000, 2500] {
@@ -3174,6 +3420,7 @@ mod tests {
 
     #[test]
     fn test_generation_cancellation() {
+        let _gen_guard = GENERATION_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let gen1 = start_new_generation();
         assert!(!is_generation_cancelled(gen1));
 
@@ -3302,6 +3549,7 @@ mod tests {
 
     #[test]
     fn test_render_combined_speech_track_large_segments() {
+        let _gen_guard = GENERATION_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let temp_dir = std::env::temp_dir().join(format!("sublix_test_large_{}", gen_unique_id()));
         let _ = fs::create_dir_all(&temp_dir);
 
@@ -3372,6 +3620,7 @@ mod tests {
 
     #[test]
     fn test_dubbing_duration_never_exceeds_video() {
+        let _gen_guard = GENERATION_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let test_video = PathBuf::from(r"H:\AI Project\sublix\test_dubbing_input\multi_speaker_scene.mp4");
         if !test_video.exists() {
             println!("Test fixture multi_speaker_scene.mp4 not found, skipping");
@@ -3550,7 +3799,7 @@ mod tests {
         let segs = vec![
             seg("00:00:01,000", "00:00:02,000"), // trước cửa sổ → bỏ
             seg("00:00:10,000", "00:00:12,000"), // trong cửa sổ → 5–7
-            seg("00:00:14,000", "00:00:16,000"), // chạm cận trên → 9–11
+            seg("00:00:14,000", "00:00:16,000"), // chạm cận trên → 9–10 (end CẮT về limit)
             seg("00:00:20,000", "00:00:22,000"), // sau cửa sổ → bỏ
         ];
         let cropped = crop_srt_to_window(segs, 5.0, Some(10.0));
@@ -3558,12 +3807,187 @@ mod tests {
         assert_eq!(cropped[0].start_time, "00:00:05,000");
         assert_eq!(cropped[0].end_time, "00:00:07,000");
         assert_eq!(cropped[1].start_time, "00:00:09,000");
-        assert_eq!(cropped[1].end_time, "00:00:11,000");
+        // BUG-3: cue vượt đuôi cửa sổ (window = [5, 15]) → end bị CẮT về 10s
+        // (trước BUG-3 end giữ nguyên 11s → khối timeline tràn ra ngoài video).
+        assert_eq!(cropped[1].end_time, "00:00:10,000");
 
         // Không cắt gì thì giữ nguyên
         let untouched = crop_srt_to_window(vec![seg("00:00:01,000", "00:00:02,000")], 0.0, None);
         assert_eq!(untouched.len(), 1);
         assert_eq!(untouched[0].start_time, "00:00:01,000");
+    }
+
+    /// BUG-3: cue vượt đuôi video (start < limit < end) phải bị CẮT end về limit.
+    /// Nếu không, timeline có khối tràn ra ngoài video → "tiếng thừa dài ngoằng".
+    #[test]
+    fn test_crop_srt_to_window_clamps_end_to_limit() {
+        let seg = |st: &str, en: &str| crate::file_sub::SubtitleSegment {
+            index: 0,
+            start_time: st.to_string(),
+            end_time: en.to_string(),
+            original: "x".to_string(),
+            translated: None,
+        };
+        let segs = vec![
+            seg("00:00:10,000", "00:00:12,000"), // trọn trong video → giữ nguyên
+            seg("00:05:00,000", "01:00:00,000"), // vượt đuôi → cắt end về 327.24s
+            seg("02:00:00,000", "02:00:02,000"), // ngoài video → bỏ hẳn
+        ];
+        let limit = 327.24_f64;
+        let cropped = crop_srt_to_window(segs, 0.0, Some(limit));
+
+        assert_eq!(cropped.len(), 2, "cue nằm ngoài video phải bị loại");
+
+        // Cue trọn trong video: giữ nguyên.
+        assert_eq!(cropped[0].start_time, "00:00:10,000");
+        assert_eq!(cropped[0].end_time, "00:00:12,000");
+
+        // Cue vượt đuôi: end bị cắt đúng về limit.
+        let st = parse_srt_time_to_seconds(&cropped[1].start_time);
+        let en = parse_srt_time_to_seconds(&cropped[1].end_time);
+        assert_eq!(st, 300.0);
+        assert!(
+            (en - limit).abs() < 0.002,
+            "end phải được cắt về đúng limit ({limit}), thực tế {en}"
+        );
+        assert!(en <= limit + 0.001, "không được có cue nào end > limit");
+    }
+
+    /// BUG-3: cue kết thúc ĐÚNG bằng limit → phải giữ nguyên (không cắt, không bỏ).
+    #[test]
+    fn test_crop_srt_to_window_keeps_cue_ending_exactly_at_limit() {
+        let seg = |st: &str, en: &str| crate::file_sub::SubtitleSegment {
+            index: 0,
+            start_time: st.to_string(),
+            end_time: en.to_string(),
+            original: "x".to_string(),
+            translated: None,
+        };
+        // 00:05:27,240 = 327.24s
+        let segs = vec![seg("00:05:25,000", "00:05:27,240")];
+        let cropped = crop_srt_to_window(segs, 0.0, Some(327.24));
+        assert_eq!(cropped.len(), 1, "cue kết thúc đúng limit phải được giữ");
+        assert_eq!(cropped[0].end_time, "00:05:27,240");
+    }
+
+    /// BUG-3 (mô phỏng file thật): .srt rolling-caption dài 5 tiếng, video local chỉ
+    /// 5:27. Sau khi crop, KHÔNG cue nào được vượt quá thời lượng video.
+    #[test]
+    fn test_crop_srt_to_window_synthetic_5h_rolling_caption() {
+        let mut segs: Vec<crate::file_sub::SubtitleSegment> = Vec::new();
+        let mk = |idx: usize, st: f64, en: f64| crate::file_sub::SubtitleSegment {
+            index: idx,
+            start_time: fmt_srt_time(st),
+            end_time: fmt_srt_time(en),
+            original: "x".to_string(),
+            translated: None,
+        };
+        // 20 cue dày trong 5 phút đầu.
+        for i in 0..20 {
+            let st = 15.0 + i as f64 * 15.5;
+            segs.push(mk(i, st, st + 2.5));
+        }
+        // 1 cue vượt đuôi video (bắt đầu trong video, kết thúc 1 tiếng sau).
+        segs.push(mk(20, 320.0, 3600.0));
+        // 134 cue nằm hoàn toàn ngoài video (3 tiếng → 5 tiếng).
+        for i in 0..134 {
+            let st = 3600.0 + i as f64 * 116.0;
+            segs.push(mk(21 + i, st, st + 2.5));
+        }
+        assert_eq!(segs.len(), 155);
+
+        let limit = 327.24_f64;
+        let cropped = crop_srt_to_window(segs, 0.0, Some(limit));
+
+        assert_eq!(cropped.len(), 21, "chỉ giữ cue trong video + cue vượt đuôi đã cắt");
+        for c in &cropped {
+            let st = parse_srt_time_to_seconds(&c.start_time);
+            let en = parse_srt_time_to_seconds(&c.end_time);
+            assert!(st < limit, "cue bắt đầu ngoài video: {}", c.start_time);
+            assert!(
+                en <= limit + 0.001,
+                "cue vượt đuôi video: {} → {}",
+                c.start_time,
+                c.end_time
+            );
+        }
+    }
+
+    /// BUG-3 (file thật trên máy): nếu tìm thấy file .srt rolling-caption 155 cue
+    /// thì crop với limit = 327.24s phải còn ≤ 78 cue và không cue nào vượt đuôi.
+    /// Không tìm thấy file thật → skip.
+    #[test]
+    fn test_crop_srt_to_window_real_rolling_caption_file() {
+        let Some(path) = find_real_rolling_caption_srt() else {
+            println!("⏭️ Không tìm thấy file .srt thật (155 cue) trên máy → bỏ qua test");
+            return;
+        };
+        let content = std::fs::read_to_string(&path).expect("đọc file .srt thật");
+        let segs = crate::file_sub::parse_srt_content(&content);
+        assert_eq!(segs.len(), 155, "file .srt thật phải có 155 cue");
+
+        let limit = 327.24_f64;
+        let cropped = crop_srt_to_window(segs, 0.0, Some(limit));
+        assert!(
+            cropped.len() <= 78,
+            "sau crop phải còn ≤ 78 cue, thực tế {}",
+            cropped.len()
+        );
+        for c in &cropped {
+            let st = parse_srt_time_to_seconds(&c.start_time);
+            let en = parse_srt_time_to_seconds(&c.end_time);
+            assert!(st < limit, "cue bắt đầu ngoài video: {}", c.start_time);
+            assert!(
+                en <= limit + 0.001,
+                "cue vượt đuôi video: {} → {}",
+                c.start_time,
+                c.end_time
+            );
+        }
+        println!(
+            "✅ File thật {}: 155 cue → {} cue sau crop (limit {limit}s)",
+            path.display(),
+            cropped.len()
+        );
+    }
+
+    /// Tìm file .srt rolling-caption thật (đúng 155 cue) trên máy.
+    /// Ưu tiên biến môi trường SUBLIX_REAL_SRT, sau đó quét vài thư mục đã biết.
+    fn find_real_rolling_caption_srt() -> Option<std::path::PathBuf> {
+        if let Ok(p) = std::env::var("SUBLIX_REAL_SRT") {
+            let p = std::path::PathBuf::from(p);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        let candidates = [
+            r"H:\AI Project\sublix\test_dubbing_input",
+            r"H:\AI Project\sub-lix-fork-2026-10-19",
+            r"C:\Users\TTC\Downloads",
+            r"C:\Users\TTC\Videos",
+        ];
+        for dir in candidates {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if !name.ends_with(".srt") {
+                    continue;
+                }
+                let Ok(content) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                if crate::file_sub::parse_srt_content(&content).len() == 155 {
+                    return Some(path);
+                }
+            }
+        }
+        None
     }
 }
 
