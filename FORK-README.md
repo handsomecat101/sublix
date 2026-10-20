@@ -167,7 +167,37 @@ npx tsc --noEmit  → exit 0
 npm run verify:version → PASS, exit 0
 ```
 
+## Bằng chứng MẠNH NHẤT — log backend của app thật
+
+Không chỉ UI, **backend cũng xác nhận** fix đúng (trích từ log `tauri dev` lúc chạy thật):
+
+```
+INFO 📝 Using existing subtitle file (...StarCraft II： Legacy...en.srt — lang: en)
+INFO 🎬 Parsed & merged into 78 natural dialogue lines          <-- 78 dòng thoại tự nhiên
+SUCCESS: Diarization complete. Found 1 speakers across 67 segments.
+INFO 🎬 Sherpa Diarization returned 67 audio speech turns
+INFO ✅ llama-server ready on http://127.0.0.1:11435 (cuda engine, model=qwen3-4b loaded in 3.9s)
+INFO 🌐 LLM (cuda, qwen3-4b): 0.21s (auto→vi): 'reclaiming our home?' → 'đang thu hồi ngôi nhà của chúng ta?'
+```
+
+Toàn bộ chuỗi chạy được end-to-end: SRT → 78 dòng → sherpa diarization → dịch bằng Qwen3-4B CUDA (tiếng Việt đúng dấu) → TTS sinh file mp3 từng câu.
+
+## Tauri: cảnh báo mismatch package đã sửa (phát hiện thêm 20/10)
+
+Mỗi lần khởi động, Tauri in:
+```
+Error Found version mismatched Tauri packages.
+tauri (v2.12.4) : @tauri-apps/api (v2.11.1)
+tauri-plugin-opener (v2.7.2) : @tauri-apps/plugin-opener (v2.5.4)
+```
+Vì `package.json` dùng range `^2` nên lockfile giữ bản npm cũ hơn crate Rust. Đã **pin exact** cho khớp:
+`@tauri-apps/api` → `2.12.4` · `@tauri-apps/plugin-opener` → `2.7.2` · `@tauri-apps/cli` → `2.12.3`.
+Xác nhận bằng `npx tauri info` (chính CLI check): **không còn cảnh báo**.
+
+> Pin exact thay vì `^` là chủ ý: `^2.12.4` sẽ kéo được 2.13.x vào và lại lệch major.minor.
+
 ## Còn lại (CHƯA làm, ghi rõ để agent sau biết)
+
 
 - ⏳ Chưa nghiệm thu **phát lại video** (replace) và **save/reload project** trong fork.
 - ⏳ Chưa kiểm chứng **audio đầu ra cuối** (playback/sync) — mới xác nhận khối audio được tạo trên timeline.
