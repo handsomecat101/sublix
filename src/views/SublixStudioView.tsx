@@ -12,6 +12,7 @@ import {
   type AppConfig,
   type DubbingProgress,
 } from "../lib/tauri";
+import { subtitleSourceLabel } from "../lib/types";
 import { version as APP_VERSION_PKG } from "../../package.json";
 import {
   IconFilm,
@@ -702,6 +703,15 @@ export default function SublixStudioView({
   // v0.11.32 (PO): nguồn phụ đề đang dùng — có giá trị "srt:<lang>" khi lấy từ
   // file YouTube tải sẵn → hiện badge "📥 YouTube" trên timeline để phân biệt.
   const [transcriptSource, setTranscriptSource] = useState<string | null>(null);
+
+  // Nền tảng của phụ đề đang dùng: "srt:<lang>" → tra `availableSubs` (đọc từ
+  // manifest `sublix_subtitles.json`) để hiện đúng "YouTube" / "Bilibili"…
+  const transcriptSourcePlatform: string = (() => {
+    if (!transcriptSource || !transcriptSource.startsWith("srt:")) return "";
+    const srtLang = transcriptSource.split(":")[1];
+    const src = availableSubs.find((s) => s.lang === srtLang)?.source ?? "youtube";
+    return subtitleSourceLabel(src) || "YouTube";
+  })();
 
   // v0.11.32: khi đổi video → dò phụ đề có sẵn cạnh video để hiển thị lựa chọn.
   useEffect(() => {
@@ -4487,9 +4497,9 @@ export default function SublixStudioView({
                         (transcriptSource.startsWith("srt:") ? (
                           <span
                             className="studio-src-badge src-yt"
-                            title={`Phụ đề gốc đang dùng lấy từ file YouTube (.${transcriptSource.split(":")[1]}.srt đã tải)`}
+                            title={`Phụ đề gốc đang dùng lấy từ file ${transcriptSourcePlatform || "YouTube"} (.${transcriptSource.split(":")[1]}.srt đã tải)`}
                           >
-                            📥 YouTube (.{transcriptSource.split(":")[1]})
+                            📥 {transcriptSourcePlatform || "YouTube"} (.{transcriptSource.split(":")[1]})
                           </span>
                         ) : (
                           <span
@@ -4543,7 +4553,10 @@ export default function SublixStudioView({
                           📥 Tận dụng phụ đề đã tải (nếu có)
                           {availableSubs.length > 0 && (
                             <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 6 }}>
-                              — có sẵn: {availableSubs.map((s) => `${s.lang}${s.source === "youtube" ? " (YouTube)" : ""}`).join(", ")}
+                              — có sẵn: {availableSubs.map((s) => {
+                                const src = subtitleSourceLabel(s.source);
+                                return `${s.lang}${src ? ` (${src})` : ""}`;
+                              }).join(", ")}
                             </span>
                           )}
                         </span>

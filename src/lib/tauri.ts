@@ -509,8 +509,18 @@ export const sublix = {
   },
 
   /** v0.9.11: fetch subtitle (.srt) files for an already-downloaded video. */
-  async downloaderFetchSubtitles(url: string, videoFilename: string): Promise<string[]> {
-    return await invoke<string[]>("downloader_fetch_subtitles", { url, videoFilename });
+  async downloaderFetchSubtitles(
+    url: string,
+    videoFilename: string,
+    browserCookies?: string | null,
+    cookiesFile?: string | null,
+  ): Promise<string[]> {
+    return await invoke<string[]>("downloader_fetch_subtitles", {
+      url,
+      videoFilename,
+      browserCookies: browserCookies ?? null,
+      cookiesFile: cookiesFile ?? null,
+    });
   },
 
   // BUG-051: how many bytes are free on the volume that would hold

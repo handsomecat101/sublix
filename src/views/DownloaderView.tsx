@@ -90,6 +90,21 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   tiktok: { label: "TikTok", icon: "🎵", color: "#00f2fe" },
   douyin: { label: "Douyin (抖音)", icon: "🇨🇳", color: "#fe2c55" },
   bilibili: { label: "Bilibili (B站)", icon: "📺", color: "#00a1d6" },
+  kuaishou: { label: "Kuaishou (快手)", icon: "⚡", color: "#ff6a00" },
+  xiaohongshu: { label: "Xiaohongshu (小红书)", icon: "📕", color: "#ff2442" },
+  ixigua: { label: "Xigua (西瓜视频)", icon: "🍉", color: "#f04142" },
+  huya: { label: "Huya (虎牙)", icon: "🐯", color: "#ff7f00" },
+  douyu: { label: "Douyu (斗鱼)", icon: "🐟", color: "#f20d2e" },
+  youku: { label: "Youku (优酷)", icon: "🎬", color: "#1a63d8" },
+  iqiyi: { label: "iQIYI (爱奇艺)", icon: "🟩", color: "#00be06" },
+  weibo: { label: "Weibo (微博)", icon: "🔴", color: "#e6162d" },
+  acfun: { label: "AcFun", icon: "🅰️", color: "#ff7f24" },
+  cctv: { label: "CCTV (央视)", icon: "📡", color: "#c81623" },
+  vqq: { label: "Tencent Video (腾讯视频)", icon: "🎞️", color: "#ff6022" },
+  mgtv: { label: "MangoTV (芒果TV)", icon: "🥭", color: "#ff9c02" },
+  migu: { label: "Migu (咪咕)", icon: "📱", color: "#0a68d4" },
+  niconico: { label: "Niconico", icon: "🎌", color: "#252525" },
+  wppilot: { label: "WeChat Channels (视频号)", icon: "💚", color: "#07c160" },
   facebook: { label: "Facebook", icon: "🔵", color: "#1877f2" },
   twitter: { label: "X / Twitter", icon: "🐦", color: "#1d9bf0" },
   instagram: { label: "Instagram", icon: "📷", color: "#e1306c" },
@@ -100,19 +115,42 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   generic_video: { label: "Web Video", icon: "🌐", color: "#64748b" },
 };
 
+// So khớp theo HOST (không phải substring) — giống `downloader::get_platform`
+// ở backend. Substring từng khớp nhầm (vd "fox.com" chứa "x.com").
 function detectPlatform(url: string): string {
-  const u = url.trim().toLowerCase();
-  if (u.includes("youtube.com") || u.includes("youtu.be")) return "youtube";
-  if (u.includes("tiktok.com")) return "tiktok";
-  if (u.includes("douyin.com")) return "douyin";
-  if (u.includes("bilibili.com")) return "bilibili";
-  if (u.includes("facebook.com") || u.includes("fb.watch") || u.includes("fb.com")) return "facebook";
-  if (u.includes("twitter.com") || u.includes("x.com")) return "twitter";
-  if (u.includes("instagram.com")) return "instagram";
-  if (u.includes("vimeo.com")) return "vimeo";
-  if (u.includes("soundcloud.com")) return "soundcloud";
-  if (u.includes("reddit.com")) return "reddit";
-  if (u.includes("twitch.tv")) return "twitch";
+  let host = "";
+  try {
+    host = new URL(url.trim()).hostname.toLowerCase();
+  } catch {
+    return "generic_video";
+  }
+  const hostMatches = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+  if (hostMatches("youtube.com") || hostMatches("youtu.be")) return "youtube";
+  if (hostMatches("tiktok.com")) return "tiktok";
+  if (hostMatches("douyin.com") || hostMatches("iesdouyin.com")) return "douyin";
+  if (hostMatches("bilibili.com") || hostMatches("b23.tv")) return "bilibili";
+  if (hostMatches("kuaishou.com") || hostMatches("gifshow.com")) return "kuaishou";
+  if (hostMatches("xiaohongshu.com") || hostMatches("xhslink.com")) return "xiaohongshu";
+  if (hostMatches("ixigua.com")) return "ixigua";
+  if (hostMatches("huya.com")) return "huya";
+  if (hostMatches("douyu.com")) return "douyu";
+  if (hostMatches("youku.com")) return "youku";
+  if (hostMatches("iqiyi.com")) return "iqiyi";
+  if (hostMatches("weibo.com")) return "weibo";
+  if (hostMatches("acfun.cn")) return "acfun";
+  if (hostMatches("cctv.com")) return "cctv";
+  if (hostMatches("v.qq.com")) return "vqq";
+  if (hostMatches("mgtv.com")) return "mgtv";
+  if (hostMatches("migu.cn")) return "migu";
+  if (hostMatches("nicovideo.jp")) return "niconico";
+  if (hostMatches("wppilot.com")) return "wppilot";
+  if (hostMatches("facebook.com") || hostMatches("fb.watch") || hostMatches("fb.com")) return "facebook";
+  if (hostMatches("twitter.com") || hostMatches("x.com")) return "twitter";
+  if (hostMatches("instagram.com")) return "instagram";
+  if (hostMatches("vimeo.com")) return "vimeo";
+  if (hostMatches("soundcloud.com")) return "soundcloud";
+  if (hostMatches("reddit.com")) return "reddit";
+  if (hostMatches("twitch.tv")) return "twitch";
   return "generic_video";
 }
 
@@ -373,18 +411,27 @@ export default function DownloaderView({
     if (subsBusyId) return;
     setSubsBusyId(item.id);
     setSubsNotice(null);
+    const platform = detectPlatform(item.url);
+    const platformLabel = PLATFORM_META[platform]?.label ?? "nền tảng này";
     try {
-      const langs = await sublix.downloaderFetchSubtitles(item.url, item.filename || "");
+      const langs = await sublix.downloaderFetchSubtitles(
+        item.url,
+        item.filename || "",
+        item.browserCookies ?? null,
+        null,
+      );
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, subsLangs: langs } : i))
       );
       if (langs.length > 0) {
         setSubsNotice(
-          `📝 Đã tải phụ đề YouTube: ${langs.join(", ")} (${langs.length} file .srt — nằm cùng thư mục với video, Studio sẽ tự tận dụng).`
+          `📝 Đã tải phụ đề ${platformLabel}: ${langs.join(", ")} (${langs.length} file .srt — nằm cùng thư mục với video, Studio sẽ tự tận dụng).`
         );
       } else {
         setSubsNotice(
-          "⚠️ YouTube không trả về track phụ đề nào cho video này (các track dịch đang bị chặn tạm thời — thử lại sau vài phút)."
+          platform === "youtube"
+            ? "⚠️ YouTube không trả về track phụ đề nào cho video này (các track dịch đang bị chặn tạm thời — thử lại sau vài phút)."
+            : `⚠️ ${platformLabel} không trả về track phụ đề nào cho video này.`
         );
       }
     } catch (err) {
