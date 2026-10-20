@@ -1808,6 +1808,28 @@ pub fn diarize_and_script_via_minimax(
     Ok(speakers)
 }
 
+/// Nền tảng của file phụ đề có sẵn đang dùng — để hiện đúng "từ Bilibili"
+/// thay vì luôn "từ YouTube". Đọc manifest `sublix_subtitles.json`; khi không
+/// có manifest (file tải trước v0.11.32) thì mặc định "YouTube" như cũ.
+fn sibling_srt_source_label(video: &Path, lang: &str) -> String {
+    let fallback = "YouTube".to_string();
+    let Some(dir) = video.parent() else {
+        return fallback;
+    };
+    let Some(stem) = video.file_stem().map(|s| s.to_string_lossy().to_string()) else {
+        return fallback;
+    };
+    let Some(vid) = crate::downloader::extract_bracketed_video_id(&stem) else {
+        return fallback;
+    };
+    let source = crate::downloader::subtitle_source(dir, &vid, lang)
+        .filter(|s| s != "file")
+        .unwrap_or_else(|| "youtube".to_string());
+    crate::downloader::platform_source_label(&source)
+        .unwrap_or("YouTube")
+        .to_string()
+}
+
 /// v0.11.32 (PO — "sub YouTube chính xác hơn STT của mình"): tìm file phụ đề
 /// `.srt` có sẵn NGAY CẠNH video (dạng `<tên video>.<lang>.srt` do nút
 /// "📝 Tải phụ đề" sinh ra). Ưu tiên: đúng ngôn ngữ nguồn → bản gốc en → vi
@@ -1850,11 +1872,14 @@ fn find_sibling_srt(video: &Path, src_lang: Option<&str>) -> Option<(PathBuf, St
         }
         match l.as_str() {
             "en-orig" => 2,
-            "en" => 3,
+            "en" | "en-us" => 3,
             "vi" => 4,
             "ja" => 5,
-            "zh" | "zh-hans" | "zh-hant" => 6,
-            _ => 7,
+            "zh" | "zh-hans" | "zh-hant" | "zh-cn" => 6,
+            // Phụ đề AI tự sinh của Bilibili (`ai-zh`, `ai-en`) — thấp hơn bản
+            // do người dùng đăng, nhưng vẫn hơn "không rõ nguồn".
+            "ai-en" | "ai-zh" => 7,
+            _ => 8,
         }
     };
     candidates.sort_by(|a, b| (priority(&a.0), a.0.clone()).cmp(&(priority(&b.0), b.0.clone())));
@@ -1897,7 +1922,9 @@ fn crop_srt_to_window(
 #[derive(Debug, Clone, Serialize)]
 pub struct AvailableSubtitle {
     pub lang: String,
-    pub source: String, // "youtube" | "file"
+    /// Nguồn của phụ đề: "youtube" | "bilibili" | "douyin" | … | "file"
+    /// (id nền tảng ghi trong manifest `sublix_subtitles.json`).
+    pub source: String,
 }
 
 /// v0.11.32: liệt kê phụ đề có sẵn cạnh video + đánh dấu file nào là phụ đề YouTube.
@@ -1928,19 +1955,23 @@ pub fn available_subtitles(file_path: &str) -> Vec<AvailableSubtitle> {
             // Đánh dấu YouTube: tên có cùng tag [video_id] với video (quy cách tải
             // của app — backfill cả file tải TRƯỚC v0.11.32) HOẶC manifest xác nhận.
             let name_tag = crate::downloader::extract_bracketed_video_id(&name);
-            let is_youtube = match (video_id.as_deref(), name_tag.as_deref()) {
-                (Some(vid), Some(tag)) if vid == tag => true,
-                (Some(vid), _) => crate::downloader::is_youtube_subtitle(dir, vid, &lang),
-                _ => false,
+            // Manifest là nguồn sự thật (ghi đúng nền tảng đã tải: youtube,
+            // bilibili, douyin…). Nếu không có manifest (file tải trước v0.11.32)
+            // thì dùng heuristic cũ: file có cùng tag [video_id] → coi như
+            // phụ đề YouTube.
+            let source = match video_id.as_deref() {
+                Some(vid) => crate::downloader::subtitle_source(dir, vid, &lang)
+                    .or_else(|| {
+                        if name_tag.as_deref() == Some(vid) {
+                            Some("youtube".to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| "file".to_string()),
+                None => "file".to_string(),
             };
-            out.push(AvailableSubtitle {
-                lang,
-                source: if is_youtube {
-                    "youtube".to_string()
-                } else {
-                    "file".to_string()
-                },
-            });
+            out.push(AvailableSubtitle { lang, source });
         }
     }
     out.sort_by(|a, b| a.lang.cmp(&b.lang));
@@ -2098,7 +2129,10 @@ pub fn analyze_and_create_project_full(
             emit(
                 "transcribing",
                 15.0,
-                &format!("📝 Dùng phụ đề có sẵn (.{srt_lang}.srt từ YouTube) — chuẩn hơn nhận dạng giọng nói..."),
+                &format!(
+                    "📝 Dùng phụ đề có sẵn (.{srt_lang}.srt từ {}) — chuẩn hơn nhận dạng giọng nói...",
+                    sibling_srt_source_label(input, &srt_lang)
+                ),
                 0,
                 100,
             );

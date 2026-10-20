@@ -458,11 +458,58 @@ pub fn get_platform(url: &str) -> &'static str {
     if host_matches("tiktok.com") {
         return "tiktok";
     }
-    if host_matches("douyin.com") {
+    if host_matches("douyin.com") || host_matches("iesdouyin.com") {
         return "douyin";
     }
-    if host_matches("bilibili.com") {
+    if host_matches("bilibili.com") || host_matches("b23.tv") {
         return "bilibili";
+    }
+    // --- Nền tảng Trung Quốc (yt-dlp 2026.08.19) ---
+    // Mỗi nền tảng dùng bộ mã phụ đề riêng — xem `subtitle_lang_patterns`.
+    if host_matches("kuaishou.com") || host_matches("gifshow.com") {
+        return "kuaishou";
+    }
+    if host_matches("xiaohongshu.com") || host_matches("xhslink.com") {
+        return "xiaohongshu";
+    }
+    if host_matches("ixigua.com") {
+        return "ixigua";
+    }
+    if host_matches("huya.com") {
+        return "huya";
+    }
+    if host_matches("douyu.com") {
+        return "douyu";
+    }
+    if host_matches("youku.com") {
+        return "youku";
+    }
+    if host_matches("iqiyi.com") {
+        return "iqiyi";
+    }
+    if host_matches("weibo.com") {
+        return "weibo";
+    }
+    if host_matches("acfun.cn") {
+        return "acfun";
+    }
+    if host_matches("cctv.com") {
+        return "cctv";
+    }
+    if host_matches("v.qq.com") {
+        return "vqq";
+    }
+    if host_matches("mgtv.com") {
+        return "mgtv";
+    }
+    if host_matches("migu.cn") {
+        return "migu";
+    }
+    if host_matches("nicovideo.jp") {
+        return "niconico";
+    }
+    if host_matches("wppilot.com") {
+        return "wppilot";
     }
     if host_matches("facebook.com") || host_matches("fb.watch") || host_matches("fb.com") {
         return "facebook";
@@ -486,6 +533,156 @@ pub fn get_platform(url: &str) -> &'static str {
         return "twitch";
     }
     "generic_video"
+}
+
+/// Ngôn ngữ phụ đề mặc định — GIỮ NGUYÊN để không đổi hành vi luồng YouTube.
+pub const DEFAULT_SUBTITLE_LANGS: [&str; 4] = ["vi", "en", "ja", "zh"];
+
+/// yt-dlp so khớp `--sub-langs` bằng regex **FULLMATCH** + không phân biệt hoa
+/// thường (`yt_dlp/utils/_utils.py:5340` → `re.compile(val, re.I).fullmatch`).
+/// Nên mã "en" KHÔNG khớp track "en-US" của Bilibili, mã "zh" cũng không khớp
+/// "zh-CN" / "zh-Hans" / "ai-zh" — nếu dùng chung `vi,en,ja,zh` thì yt-dlp báo
+/// "There are no subtitles for the requested languages" và KHÔNG tải được gì.
+///
+/// Vì vậy mỗi nền tảng cần bộ pattern riêng:
+/// - Nền tảng dùng mã có hậu tố vùng (Bilibili: `zh-CN`, `en-US`, `en-orig`,
+///   `ai-zh`…) → mỗi mã người dùng chọn được mở rộng thêm `mã.*` (giữ luôn
+///   mã gốc) + các pattern riêng của nền tảng.
+/// - YouTube và mặc định → GIỮ NGUYÊN `vi,en,ja,zh` (không đổi hành vi cũ).
+///
+/// `requested` = danh sách mã user chọn (rỗng → dùng mặc định).
+pub fn subtitle_lang_patterns(platform: &str, requested: &[String]) -> Vec<String> {
+    let base: Vec<String> = if requested.is_empty() {
+        DEFAULT_SUBTITLE_LANGS.iter().map(|s| s.to_string()).collect()
+    } else {
+        requested.to_vec()
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |p: String| {
+        if !out.contains(&p) {
+            out.push(p);
+        }
+    };
+    match platform {
+        // Bilibili: API trả mã `zh-CN`, `zh-Hans`, `zh-Hant`, `en-US`, `en-orig`
+        // và phụ đề AI tự sinh `ai-zh` / `ai-en` (mã "ai-*" KHÔNG bắt đầu bằng
+        // "zh"/"en" nên cần pattern riêng). Nguồn: yt-dlp extractor
+        // bilibili.py:255 `_get_subtitles` + issue yt-dlp/yt-dlp#10526.
+        //
+        // MangoTV (芒果TV): mã `vi`, `en`, `ja`… nhưng Trung Quốc là `zh_hk`
+        // (gạch dưới) → cần `zh.*` mới khớp. Nguồn: yt-dlp --list-subs thật
+        // cho https://w.mgtv.com/b/333652/7329822.html (lang: vi/en/ja/zh_hk).
+        "bilibili" | "mgtv" => {
+            for l in &base {
+                push(l.clone());
+                push(format!("{l}.*"));
+            }
+            if platform == "bilibili" {
+                push("ai.*".to_string());
+            }
+        }
+        // Douyin: mã do API Douyin trả về (`eng-us`, `chi_sim`…) — mở rộng rộng.
+        "douyin" => {
+            for l in &base {
+                push(l.clone());
+                push(format!("{l}.*"));
+            }
+            push("chi.*".to_string());
+            push("zho.*".to_string());
+            push("eng.*".to_string());
+        }
+        // Các nền tảng khác: giữ mã người dùng chọn, không mở rộng (chưa có
+        // bằng chứng mã nền tảng dùng hậu tố vùng).
+        _ => {
+            for l in &base {
+                push(l.clone());
+            }
+        }
+    }
+    out
+}
+
+/// Tên nền tảng hiển thị cho manifest phụ đề (dùng làm `source`).
+/// Trả về `None` cho nền tảng không xác định.
+pub fn platform_source_label(platform: &str) -> Option<&'static str> {
+    match platform {
+        "youtube" => Some("YouTube"),
+        "tiktok" => Some("TikTok"),
+        "douyin" => Some("Douyin"),
+        "bilibili" => Some("Bilibili"),
+        "kuaishou" => Some("Kuaishou"),
+        "xiaohongshu" => Some("Xiaohongshu"),
+        "ixigua" => Some("Xigua"),
+        "huya" => Some("Huya"),
+        "douyu" => Some("Douyu"),
+        "youku" => Some("Youku"),
+        "iqiyi" => Some("iQIYI"),
+        "weibo" => Some("Weibo"),
+        "acfun" => Some("AcFun"),
+        "cctv" => Some("CCTV"),
+        "vqq" => Some("Tencent Video"),
+        "mgtv" => Some("MangoTV"),
+        "migu" => Some("Migu"),
+        "niconico" => Some("Niconico"),
+        "wppilot" => Some("WeChat Channels"),
+        _ => None,
+    }
+}
+
+/// Dịch lỗi yt-dlp đặc thù từng nền tảng sang tiếng Việt để user biết chính
+/// xác phải làm gì (bật cookie, đổi mạng, cập nhật yt-dlp…).
+/// Trả về `None` nếu không khớp lỗi nào đã biết.
+pub fn platform_error_hint(platform: &str, stderr: &str) -> Option<String> {
+    let s = stderr.to_lowercase();
+    // Bilibili: "Subtitles are only available when logged in."
+    if s.contains("only available when logged in") {
+        return Some(
+            "Phụ đề Bilibili chỉ tải được khi ĐĂNG NHẬP (cookie SESSDATA). Hãy bật \
+             \"cookie trình duyệt\" (Edge/Chrome/Firefox) trong phần cài đặt rồi thử lại."
+                .to_string(),
+        );
+    }
+    // Douyin: "Fresh cookies (not necessarily logged in) are needed"
+    if s.contains("fresh cookies") {
+        return Some(
+            "Douyin cần cookie MỚI (đã đăng nhập) cho cả video lẫn phụ đề. Hãy bật \
+             \"cookie trình duyệt\" (Edge/Chrome/Firefox) trong phần cài đặt rồi thử lại."
+                .to_string(),
+        );
+    }
+    // Xigua (西瓜视频) & một số nền tảng khác:
+    // "Cookies (not necessarily logged in) are needed"
+    if s.contains("cookies") && s.contains("are needed") {
+        let name = platform_source_label(platform).unwrap_or("Nền tảng này");
+        return Some(format!(
+            "{name} cần cookie (không nhất thiết phải đăng nhập) để tải video/phụ đề. \
+             Hãy bật \"cookie trình duyệt\" trong phần cài đặt rồi thử lại."
+        ));
+    }
+    // Bilibili risk control: HTTP 412 (Precondition Failed) / 567 (Restricted Access)
+    if s.contains("http error 412") || s.contains("http error 567") {
+        return Some(
+            "Bilibili chặn truy cập từ IP này (HTTP 412/567 — kiểm soát rủi ro). \
+             Thử đổi mạng/VPN, hoặc bật cookie đăng nhập Bilibili rồi tải lại."
+                .to_string(),
+        );
+    }
+    // yt-dlp chưa biết nền tảng này (ví dụ Kuaishou, Migu — yt-dlp chưa hỗ trợ)
+    if s.contains("unsupported url") {
+        let name = platform_source_label(platform).unwrap_or("nền tảng này");
+        return Some(format!(
+            "yt-dlp hiện chưa hỗ trợ {name}. Hãy cập nhật yt-dlp \
+             (pip install -U yt-dlp) rồi thử lại."
+        ));
+    }
+    if s.contains("sign in to confirm you're not a bot") || s.contains("http error 403") {
+        return Some(
+            "Nền tảng yêu cầu xác minh người dùng (HTTP 403). Hãy bật \
+             \"cookie trình duyệt\" (đã đăng nhập) trong phần cài đặt rồi thử lại."
+                .to_string(),
+        );
+    }
+    None
 }
 
 /// Build format selector arguments based on hermes-downloader
@@ -894,16 +1091,38 @@ fn read_subtitle_manifest(save_dir: &Path) -> Vec<serde_json::Value> {
 
 /// Kiểm tra cặp (video_id, lang) có được ĐÁNH DẤU là phụ đề tải từ YouTube không.
 pub fn is_youtube_subtitle(save_dir: &Path, video_id: &str, lang: &str) -> bool {
-    read_subtitle_manifest(save_dir).iter().any(|entry| {
-        entry.get("video_id").and_then(|v| v.as_str()) == Some(video_id)
-            && entry.get("lang").and_then(|v| v.as_str()) == Some(lang)
-            && entry.get("source").and_then(|v| v.as_str()) == Some("youtube")
-    })
+    subtitle_source(save_dir, video_id, lang).as_deref() == Some("youtube")
+}
+
+/// Nguồn đã ghi nhận của phụ đề (video_id, lang) trong manifest.
+///
+/// Trả về `Some("youtube")` cho manifest cũ, `Some("bilibili")` / `Some("douyin")`
+/// … cho manifest mới, `None` khi không có trong manifest.
+pub fn subtitle_source(save_dir: &Path, video_id: &str, lang: &str) -> Option<String> {
+    read_subtitle_manifest(save_dir)
+        .iter()
+        .find(|entry| {
+            entry.get("video_id").and_then(|v| v.as_str()) == Some(video_id)
+                && entry.get("lang").and_then(|v| v.as_str()) == Some(lang)
+        })
+        .and_then(|entry| entry.get("source").and_then(|v| v.as_str()))
+        .map(|s| s.to_string())
 }
 
 /// Ghi/refresh manifest đánh dấu các file `.srt` vừa tải từ YouTube
 /// (video nào, ngôn ngữ nào, link gốc, tải lúc nào) để lần sau dễ quản lý.
-fn mark_youtube_subtitles(save_dir: &Path, video_filename: &str, url: &str, langs: &[String]) {
+/// Ghi/refresh manifest đánh dấu các file `.srt` vừa tải từ một nền tảng
+/// (video nào, ngôn ngữ nào, nguồn nào, link gốc, tải lúc nào).
+///
+/// `platform` = id nền tảng ("youtube", "bilibili", "douyin"…). Manifest cũ
+/// ghi `"source": "youtube"` nên vẫn đọc được bình thường (tương thích ngược).
+fn mark_downloaded_subtitles(
+    save_dir: &Path,
+    video_filename: &str,
+    url: &str,
+    langs: &[String],
+    platform: &str,
+) {
     if langs.is_empty() {
         return;
     }
@@ -924,7 +1143,7 @@ fn mark_youtube_subtitles(save_dir: &Path, video_filename: &str, url: &str, lang
         entries.push(serde_json::json!({
             "video_id": video_id,
             "lang": lang,
-            "source": "youtube",
+            "source": platform,
             "url": url,
             "file": format!("{stem}.{lang}.srt"),
             "downloaded_at": downloaded_at,
@@ -941,6 +1160,19 @@ fn mark_youtube_subtitles(save_dir: &Path, video_filename: &str, url: &str, lang
 /// `--ignore-errors` lets the good tracks land even when some are blocked.
 /// Returns the langs found on disk (empty vec = ran fine, nothing available),
 /// None when yt-dlp itself could not be executed.
+/// Cookie dùng cho pass phụ đề — theo ĐÚNG quy tắc của `start_download`:
+/// chỉ dùng `cookies.txt` (Chrome/Edge chặn đọc cookie — yt-dlp#7271/#10927)
+/// và chỉ khi file thực sự tồn tại.
+fn resolve_cookie_args(req: &DownloadRequest) -> (Option<String>, Option<String>) {
+    let file = req
+        .cookies_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|cf| !cf.is_empty() && Path::new(cf).exists())
+        .map(|cf| cf.to_string());
+    (None, file)
+}
+
 fn fetch_subtitles_pass(
     ytdlp_bin: &Path,
     save_dir: &Path,
@@ -948,14 +1180,25 @@ fn fetch_subtitles_pass(
     video_filename: &str,
     js_runtime: Option<&str>,
     langs: &[String],
-) -> Option<Vec<String>> {
+    use_browser_cookie: Option<&str>,
+    use_cookies_file: Option<&str>,
+) -> Result<Vec<String>> {
+    let platform = get_platform(url);
     let out_template = save_dir.join("%(title)s [%(id)s].%(ext)s");
     let mut cmd = Command::new(ytdlp_bin);
     if let Some(token) = js_runtime {
         cmd.arg("--js-runtimes").arg(token);
     }
-    if get_platform(url) == "youtube" {
+    if platform == "youtube" {
         cmd.arg("--remote-components").arg("ejs:github");
+    }
+    // Douyin/Bilibili can require a logged-in session for both the video and
+    // its subtitles — reuse the cookie mechanism the download command already
+    // uses so the subtitle pass behaves like the download itself.
+    if let Some(b) = use_browser_cookie {
+        cmd.arg("--cookies-from-browser").arg(b);
+    } else if let Some(cf) = use_cookies_file {
+        cmd.arg("--cookies").arg(cf);
     }
     let ffmpeg_bin = crate::dubbing::find_ffmpeg();
     if ffmpeg_bin.exists() {
@@ -963,6 +1206,9 @@ fn fetch_subtitles_pass(
             cmd.arg("--ffmpeg-location").arg(ffmpeg_dir);
         }
     }
+    // yt-dlp matches `--sub-langs` with a FULLMATCH regex, so a bare "en"
+    // never matches Bilibili's "en-US" / "zh-CN" / "ai-zh" tracks.
+    let patterns = subtitle_lang_patterns(platform, langs);
     cmd.arg("-o")
         .arg(&out_template)
         .arg("--skip-download")
@@ -975,7 +1221,7 @@ fn fetch_subtitles_pass(
         .arg("--sleep-subtitles")
         .arg("2")
         .arg("--sub-langs")
-        .arg(langs.join(","))
+        .arg(patterns.join(","))
         .arg("--no-colors")
         .arg("--no-warnings")
         .arg("--no-playlist")
@@ -992,7 +1238,9 @@ fn fetch_subtitles_pass(
         Ok(o) => o,
         Err(e) => {
             warn!("⚠️ subtitle pass could not run for {}: {}", url, e);
-            return None;
+            return Err(anyhow::anyhow!(
+                "Không chạy được yt-dlp để tải phụ đề (kiểm tra Python/yt-dlp): {e}"
+            ));
         }
     };
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1000,14 +1248,27 @@ fn fetch_subtitles_pass(
         info!("📝 subtitle pass stderr for {}: {}", url, stderr.trim());
     }
     let langs_found = scan_subtitle_langs(save_dir, video_filename);
-    mark_youtube_subtitles(save_dir, video_filename, url, &langs_found);
-    Some(langs_found)
+    mark_downloaded_subtitles(save_dir, video_filename, url, &langs_found, platform);
+    if langs_found.is_empty() {
+        // Không có phụ đề nào về — nếu stderr có lỗi đặc thù nền tảng thì báo
+        // cho user biết cần làm gì (cookie đăng nhập, đổi IP, cập nhật yt-dlp).
+        if let Some(hint) = platform_error_hint(platform, &stderr) {
+            return Err(anyhow::anyhow!("{hint}"));
+        }
+    }
+    Ok(langs_found)
 }
 
 /// v0.9.11: on-demand subtitle fetch for an already-downloaded video
 /// (the "📝 Tải phụ đề" button + CLI path). Runs the same separate pass the
 /// download flow uses; never touches the video file.
-pub fn fetch_subtitles_now(app: &AppHandle, url: &str, video_filename: &str) -> Result<Vec<String>> {
+pub fn fetch_subtitles_now(
+    app: &AppHandle,
+    url: &str,
+    video_filename: &str,
+    browser_cookies: Option<&str>,
+    cookies_file: Option<&str>,
+) -> Result<Vec<String>> {
     if !is_valid_http_url(url) {
         anyhow::bail!("Link không hợp lệ: chỉ chấp nhận URL http(s)://");
     }
@@ -1019,12 +1280,7 @@ pub fn fetch_subtitles_now(app: &AppHandle, url: &str, video_filename: &str) -> 
     };
     let save_dir = get_downloads_dir(app);
     fs::create_dir_all(&save_dir)?;
-    let langs = vec![
-        "vi".to_string(),
-        "en".to_string(),
-        "ja".to_string(),
-        "zh".to_string(),
-    ];
+    let langs = DEFAULT_SUBTITLE_LANGS.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     fetch_subtitles_pass(
         &ytdlp_bin,
         &save_dir,
@@ -1032,8 +1288,9 @@ pub fn fetch_subtitles_now(app: &AppHandle, url: &str, video_filename: &str) -> 
         video_filename,
         js_runtime_token.as_deref(),
         &langs,
+        browser_cookies,
+        cookies_file,
     )
-    .ok_or_else(|| anyhow::anyhow!("Không chạy được yt-dlp để tải phụ đề (kiểm tra Python/yt-dlp)"))
 }
 
 struct DrainResult {
@@ -1575,17 +1832,13 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 .clone()
                 .filter(|l| !l.is_empty())
                 .unwrap_or_else(|| {
-                    vec![
-                        "vi".to_string(),
-                        "en".to_string(),
-                        "ja".to_string(),
-                        "zh".to_string(),
-                    ]
+                    DEFAULT_SUBTITLE_LANGS.iter().map(|s| s.to_string()).collect()
                 });
             info!(
                 "🎬 job {}: fetching subtitle tracks (separate pass) for {}",
                 job_id, video_fname
             );
+            let (sub_browser, sub_file) = resolve_cookie_args(&req_clone);
             match fetch_subtitles_pass(
                 &ytdlp_bin_clone,
                 &save_dir_clone,
@@ -1593,12 +1846,18 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
                 &video_fname,
                 js_runtime_token.as_deref(),
                 &langs,
+                sub_browser.as_deref(),
+                sub_file.as_deref(),
             ) {
-                Some(found) => {
+                Ok(found) => {
                     info!("📝 job {}: subtitle langs on disk: {:?}", job_id, found);
                     Some(found)
                 }
-                None => None,
+                Err(e) => {
+                    // Phụ đề hỏng KHÔNG được làm hỏng kết quả tải video.
+                    warn!("⚠️ job {}: subtitle pass failed: {}", job_id, e);
+                    None
+                }
             }
         } else {
             None
@@ -2203,6 +2462,177 @@ mod tests {
         assert_eq!(get_platform("https://www.fox.com/news"), "generic_video");
         assert_eq!(get_platform("https://evil-facebook.com.scam.io/clip"), "generic_video");
         assert_eq!(get_platform("https://myyoutube.org.attacker.com/v"), "generic_video");
+    }
+
+    #[test]
+    fn test_chinese_platform_detection() {
+        // Nền tảng Trung Quốc — yt-dlp 2026.08.19 có extractor cho hầu hết.
+        assert_eq!(get_platform("https://www.bilibili.com/video/BV1xx411c7mD"), "bilibili");
+        assert_eq!(get_platform("https://b23.tv/abcdef"), "bilibili");
+        assert_eq!(get_platform("https://www.douyin.com/video/123"), "douyin");
+        assert_eq!(get_platform("https://v.douyin.com/abc123/"), "douyin");
+        assert_eq!(get_platform("https://www.kuaishou.com/short-video/3xabcdef"), "kuaishou");
+        assert_eq!(get_platform("https://www.xiaohongshu.com/explore/123"), "xiaohongshu");
+        assert_eq!(get_platform("https://xhslink.com/a/abcdef"), "xiaohongshu");
+        assert_eq!(get_platform("https://www.ixigua.com/123456"), "ixigua");
+        assert_eq!(get_platform("https://www.huya.com/12345"), "huya");
+        assert_eq!(get_platform("https://www.douyu.com/12345"), "douyu");
+        assert_eq!(get_platform("https://v.youku.com/v_show/id_xNTg1.html"), "youku");
+        assert_eq!(get_platform("https://www.iqiyi.com/v_19rr7depxo.html"), "iqiyi");
+        assert_eq!(get_platform("https://weibo.com/tv/show/1234567890"), "weibo");
+        assert_eq!(get_platform("https://www.acfun.cn/v/ac12345"), "acfun");
+        assert_eq!(get_platform("https://tv.cctv.com/2020/01/01/VIDE.shtml"), "cctv");
+        assert_eq!(get_platform("https://v.qq.com/x/cover/abc123.html"), "vqq");
+        assert_eq!(get_platform("https://www.mgtv.com/b/334442/1234567.html"), "mgtv");
+        assert_eq!(get_platform("https://www.migu.cn/video/12345678"), "migu");
+        assert_eq!(get_platform("https://www.nicovideo.jp/watch/sm9"), "niconico");
+        assert_eq!(get_platform("https://wppilot.com/channels/abc"), "wppilot");
+
+        // Không được khớp nhầm do hậu tố tên miền.
+        assert_eq!(get_platform("https://www.notbilibili.com.evil.io/v/1"), "generic_video");
+        assert_eq!(get_platform("https://fake-huya.example.com/1"), "generic_video");
+    }
+
+    #[test]
+    fn test_subtitle_lang_patterns_youtube_unchanged() {
+        // YouTube / mặc định: GIỮ NGUYÊN hành vi cũ (vi,en,ja,zh).
+        let p = subtitle_lang_patterns("youtube", &[]);
+        assert_eq!(p, vec!["vi", "en", "ja", "zh"]);
+        let p2 = subtitle_lang_patterns("generic_video", &[]);
+        assert_eq!(p2, vec!["vi", "en", "ja", "zh"]);
+        // Danh sách rỗng → dùng mặc định.
+        assert_eq!(
+            subtitle_lang_patterns("bilibili", &[]),
+            vec![
+                "vi", "vi.*", "en", "en.*", "ja", "ja.*", "zh", "zh.*", "ai.*"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_subtitle_lang_patterns_bilibili_region_codes() {
+        // yt-dlp so khớp --sub-langs bằng regex FULLMATCH → "en" KHÔNG khớp
+        // "en-US" của Bilibili, nên phải có "en.*" và "zh.*" (và "ai.*" cho
+        // phụ đề AI tự sinh có mã "ai-zh"/"ai-en").
+        let p = subtitle_lang_patterns("bilibili", &["en".to_string(), "zh".to_string()]);
+        assert!(p.contains(&"en".to_string()));
+        assert!(p.contains(&"en.*".to_string()));
+        assert!(p.contains(&"zh".to_string()));
+        assert!(p.contains(&"zh.*".to_string()));
+        assert!(p.contains(&"ai.*".to_string()));
+        // Không được lấy track "danmaku" (XML bình luận, không phải phụ đề).
+        assert!(!p.iter().any(|x| x.contains("danmaku")));
+        assert!(!p.iter().any(|x| x == "*" || x == ".*"));
+    }
+
+    #[test]
+    fn test_platform_error_hint_vietnamese() {
+        // Các chuỗi lỗi dưới đây là output THẬT của yt-dlp 2026.08.19 chạy
+        // thật trên máy (xem báo cáo) — không phải ví dụ bịa.
+        let h = platform_error_hint(
+            "bilibili",
+            "ERROR: [BiliBili] 1bE421w78J: Unable to download webpage: HTTP Error 412: \
+             Precondition Failed (caused by <HTTPError 412: Precondition Failed>)",
+        )
+        .expect("hint for bilibili 412");
+        assert!(h.contains("412"));
+
+        let h2 = platform_error_hint(
+            "douyin",
+            "ERROR: [Douyin] 6961737553342991651: Fresh cookies (not necessarily logged in) are needed",
+        )
+        .expect("hint for douyin cookies");
+        assert!(h2.contains("cookie"));
+        assert!(h2.contains("Douyin"));
+
+        let h3 = platform_error_hint(
+            "ixigua",
+            "ERROR: [Ixigua] 735829305529146885: Cookies (not necessarily logged in) are needed",
+        )
+        .expect("hint for ixigua cookies");
+        assert!(h3.contains("cookie"));
+        assert!(h3.contains("Xigua"));
+
+        let h4 = platform_error_hint(
+            "bilibili",
+            "ERROR: [BiliBili] BV1bE421w78J: Subtitles are only available when logged in.",
+        )
+        .expect("hint for bilibili login");
+        assert!(h4.contains("cookie"));
+
+        // Nền tảng chưa được yt-dlp hỗ trợ.
+        let h5 = platform_error_hint("kuaishou", "ERROR: Unsupported URL: https://www.kuaishou.com/x")
+            .expect("hint unsupported");
+        assert!(h5.contains("yt-dlp"));
+        // Lỗi lạ → không đoán bừa.
+        assert!(platform_error_hint("youtube", "ERROR: something else entirely").is_none());
+    }
+
+    #[test]
+    fn test_subtitle_lang_patterns_mgtv_underscore_codes() {
+        // MangoTV dùng mã `zh_hk` (gạch dưới) → `zh.*` phải khớp.
+        let p = subtitle_lang_patterns("mgtv", &[]);
+        assert!(p.contains(&"zh".to_string()));
+        assert!(p.contains(&"zh.*".to_string()));
+        // Không có mã "ai-*" trên MangoTV.
+        assert!(!p.contains(&"ai.*".to_string()));
+    }
+
+    #[test]
+    fn test_subtitle_manifest_records_platform_source() {
+        let dir = std::env::temp_dir().join(format!("sublix_manifest_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&dir);
+        let fname = "Video [BV1bE421w78J].mp4";
+        fs::write(dir.join("Video [BV1bE421w78J].zh-CN.srt"), b"x").expect("write srt");
+
+        // Manifest ghi đúng nền tảng.
+        mark_downloaded_subtitles(
+            &dir,
+            fname,
+            "https://www.bilibili.com/video/BV1bE421w78J",
+            &["zh-CN".to_string()],
+            "bilibili",
+        );
+        assert_eq!(
+            subtitle_source(&dir, "BV1bE421w78J", "zh-CN").as_deref(),
+            Some("bilibili")
+        );
+        // Không phải phụ đề YouTube nữa.
+        assert!(!is_youtube_subtitle(&dir, "BV1bE421w78J", "zh-CN"));
+        // Ngôn ngữ chưa ghi → None.
+        assert_eq!(subtitle_source(&dir, "BV1bE421w78J", "en"), None);
+
+        // Manifest cũ (source="youtube") vẫn đọc được → tương thích ngược.
+        let entries = read_subtitle_manifest(&dir);
+        let mut legacy = entries;
+        legacy.push(serde_json::json!({
+            "video_id": "uQnmfEka3vw",
+            "lang": "en",
+            "source": "youtube",
+            "url": "https://www.youtube.com/watch?v=uQnmfEka3vw",
+            "file": "V [uQnmfEka3vw].en.srt",
+            "downloaded_at": 0,
+        }));
+        fs::write(
+            dir.join(SUBTITLE_MANIFEST_FILENAME),
+            serde_json::to_string_pretty(&legacy).expect("json"),
+        )
+        .expect("write manifest");
+        assert!(is_youtube_subtitle(&dir, "uQnmfEka3vw", "en"));
+        assert_eq!(
+            subtitle_source(&dir, "uQnmfEka3vw", "en").as_deref(),
+            Some("youtube")
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_platform_source_label() {
+        assert_eq!(platform_source_label("youtube"), Some("YouTube"));
+        assert_eq!(platform_source_label("bilibili"), Some("Bilibili"));
+        assert_eq!(platform_source_label("douyin"), Some("Douyin"));
+        assert_eq!(platform_source_label("nope"), None);
     }
 
     #[test]

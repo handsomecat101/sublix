@@ -1249,11 +1249,21 @@ async fn downloader_fetch_subtitles(
     app: tauri::AppHandle,
     url: String,
     video_filename: String,
+    browser_cookies: Option<String>,
+    cookies_file: Option<String>,
 ) -> Result<Vec<String>, String> {
-    tokio::task::spawn_blocking(move || downloader::fetch_subtitles_now(&app, &url, &video_filename))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| format!("{e:#}"))
+    tokio::task::spawn_blocking(move || {
+        downloader::fetch_subtitles_now(
+            &app,
+            &url,
+            &video_filename,
+            browser_cookies.as_deref(),
+            cookies_file.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
 }
 
 /// v0.9.10 (PO): open the ONE folder that holds both downloaded videos and
