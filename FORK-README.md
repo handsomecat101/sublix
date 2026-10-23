@@ -272,3 +272,71 @@ cmd /c rmdir /s /q "H:\sublix-wt-tf-build"
 - ⏳ Guard có **false negative** nếu một dòng có dấu nháy đơn trước `//` (đã nêu trong ISSUE_LOG).
 - ℹ️ Bản gốc `H:\AI Project\sublix` **không đổi 1 byte** — đã verify bằng SHA-256 của 8 file key.
 
+---
+
+# 🚚 CHUYỂN SANG MÁY KHÁC — LÀM THEO THỨ TỰ NÀY
+
+## 1. Clone đúng nhánh (chứa toàn bộ fix)
+
+```bash
+git clone https://github.com/handsomecat101/sublix.git
+cd sublix
+git checkout fix/voice-timeline-mojibake
+```
+
+> ⚠️ **Phải checkout nhánh `fix/voice-timeline-mojibake`** — chính tả, đừng gõ thêm chữ `e` ở cuối (`...mojibabe` là sai, nhánh đó không tồn tại trên remote).
+> Nhánh `master` trên remote vẫn ở `51f73fe` (chưa có 4 fix vòng 2). Nhánh fork mới là bản đầy đủ.
+>
+> Nếu muốn đưa fix lên `master` thì merge nhánh fork vào master (fast-forward, không viết lại history).
+
+## 2. Cài deps
+
+```bash
+npm install
+cd src-tauri && cargo build && cd ..
+```
+> `cargo` cần có trong PATH: `%USERPROFILE%\.cargo\bin`.
+
+## 3. THỨ KHÔNG CÓ TRONG GIT (phải tải lại — ~12 GB)
+
+| Thứ | Kích thước | Cách lấy |
+|---|---|---|
+| `src-tauri/models/` (Qwen3-4B, whisper, kokoro-vi) | **6.9 GB** | Trong app: tab **Cài đặt → Mô hình** hoặc `src-tauri/models/README.md` |
+| `src-tauri/binaries/` (llama-server CUDA, whisper) | **5.3 GB** | `src-tauri/binaries/README.md` |
+| `node_modules/` | 78 MB | `npm install` |
+| `src-tauri/target/` | build cache | `cargo build` |
+
+> Trên máy cũ, 3 thứ đầu là **JUNCTION** trỏ về bản gốc → máy mới phải tải thật.
+
+## 4. Chạy
+
+```bash
+cd sublix
+Chay-Sublix.bat
+```
+- Launcher của FORK đã sửa: trỏ đúng thư mục fork + **CDP port 9223** (khác 9222 của bản gốc) + `CARGO_TARGET_DIR` riêng.
+- Nếu chạy bản gốc cùng lúc → **xung đột port 1420** (vite). Chỉ chạy 1 app tại 1 thời điểm.
+
+## 5. Test lại 4 bug đã sửa (đọc mục "VÒNG 2" ở trên)
+
+Tool test đã được commit kèm:
+```
+test_dubbing_input/ab2.ps1              ← helper CDP (kết nối, eval, screenshot)
+test_dubbing_input/measure-tracks.js    ← đo 2 track + phát hiện tiếng thừa
+test_dubbing_input/fork-gui-test.js     ← load video, đọc trạng thái timeline
+test_dubbing_input/fork-gui-analyze.js
+gui-2026-10-20/                          ← 27 ảnh bằng chứng (v1 = trước fix, v2 = sau fix)
+gui-2026-10-20/dump-78-cues.json        ← số liệu 78 cue
+```
+
+> **Chọn đúng tab CDP:** có 2 tab (main `http://localhost:1420/` và overlay `?window=overlay`).
+> Thứ tự `t1`/`t2` **đổi không cố định** → luôn kiểm `location.href` sau khi `tab t1`.
+
+## 6. Bản sao offline (không cần mạng)
+
+```bash
+git clone D:\sublix-history-2026-10-19.bundle sublix
+```
+> Bundle chứa **toàn bộ lịch sử + mọi nhánh** (đã cập nhật 23/10).
+
+
