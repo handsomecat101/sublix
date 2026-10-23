@@ -12,6 +12,7 @@
 use anyhow::{Context, Result};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -334,6 +335,41 @@ const KOKORO_TTS_SCRIPT: &str = include_str!("../../scripts/kokoro_vi_tts.py");
 
 /// Prefix used in voice ids / speaker.voice to select the local Kokoro engine.
 pub const KOKORO_VOICE_PREFIX: &str = "kokoro:";
+
+/// Prefix used by the VietNeu TTS engine voice ids (frontend model `vietneu`).
+pub const VIETNEU_VOICE_PREFIX: &str = "vietneu:";
+
+/// Normalize a voice id coming from the frontend into an id the backend can
+/// actually route to a TTS engine.
+///
+/// The frontend stores VietNeu ids (`vietneu:vi_bac_nam`) in `speaker.voice`.
+/// The backend knows nothing about that prefix, so the id used to reach
+/// Edge-TTS, which rejects it: every segment failed and the exported MP4 came
+/// out with no dubbed voice at all. This mirrors the frontend helper
+/// `mapVoiceForEngine` (src/views/SublixStudioView.tsx): VietNeu ids are
+/// mapped onto the local Kokoro voices, while `kokoro:` ids and Edge-TTS ids
+/// (`vi-VN-HoaiMyNeural`) pass through unchanged.
+pub fn normalize_voice_id(voice: &str) -> String {
+    let id = voice.trim();
+    if !id.starts_with(VIETNEU_VOICE_PREFIX) {
+        return id.to_string();
+    }
+    // Same order as the frontend helper so both sides agree on the mapping.
+    let kokoro_id = if id.contains("bac_nu") {
+        "mai_linh"
+    } else if id.contains("nam_nu") || id.contains("hue_nu") {
+        "ngoc_huyen"
+    } else if id.contains("bac_nam") {
+        "tuan_ngoc"
+    } else if id.contains("nam_nam") {
+        "manh_dung"
+    } else if id.contains("thoisu") {
+        "hung_thinh"
+    } else {
+        "tuan_ngoc"
+    };
+    format!("{}{}", KOKORO_VOICE_PREFIX, kokoro_id)
+}
 
 /// Helper to find a usable python interpreter for the Kokoro sidecar.
 pub fn find_python() -> PathBuf {
@@ -877,6 +913,161 @@ pub fn synthesize_kokoro(text: &str, voice_id: &str, out_path: &Path) -> Result<
     Ok(())
 }
 
+/// Per-item outcome of a Kokoro batch synthesis.
+#[derive(Debug, Clone)]
+pub struct KokoroBatchItemResult {
+    /// True when the item was synthesized and written to disk.
+    pub ok: bool,
+    /// Number of audio samples written (0 when the item failed).
+    pub samples: u64,
+    /// Error message when the item failed (None on success).
+    pub error: Option<String>,
+}
+
+/// Parse one machine-readable line emitted by the Kokoro batch sidecar.
+///
+/// `OK <index> <out_path> <num_samples>` or `ERR <index> <single_line_error>`.
+/// The output path may contain spaces, so it is parsed from the right.
+fn parse_kokoro_batch_line(line: &str) -> Option<(usize, bool, u64, String)> {
+    let line = line.trim();
+    if let Some(rest) = line.strip_prefix("OK ") {
+        let mut tail = rest.rsplitn(2, ' ');
+        let samples = tail.next()?.trim().parse::<u64>().ok()?;
+        let head = tail.next()?;
+        let mut head_parts = head.splitn(2, ' ');
+        let index = head_parts.next()?.trim().parse::<usize>().ok()?;
+        let path = head_parts.next().unwrap_or("").trim().to_string();
+        Some((index, true, samples, path))
+    } else if let Some(rest) = line.strip_prefix("ERR ") {
+        let mut parts = rest.splitn(2, ' ');
+        let index = parts.next()?.trim().parse::<usize>().ok()?;
+        let message = parts.next().unwrap_or("").trim().to_string();
+        Some((index, false, 0, message))
+    } else {
+        None
+    }
+}
+
+/// Synthesize many lines with a SINGLE Kokoro process.
+///
+/// The Kokoro ONNX model weighs ~325 MB and needs seconds to load, so the old
+/// one-process-per-line path cost ~12 s per sentence (a 323-line export took
+/// over an hour). Batch mode loads the model once per voice and writes every
+/// item in one pass.
+///
+/// Items are `(text, voice id, output path)`; the returned vector carries one
+/// outcome per item. A single failing item never aborts the whole batch.
+pub fn synthesize_kokoro_batch(
+    items: &[(String, String, PathBuf)],
+) -> Result<Vec<KokoroBatchItemResult>> {
+    if items.is_empty() {
+        return Ok(Vec::new());
+    }
+    let model_dir = kokoro_model_dir();
+    if !model_dir.join("kokoro_vi.onnx").exists() {
+        anyhow::bail!(
+            "Chưa tải model Kokoro-Vietnamese (thiếu {}). Vào tab Studio Lồng Tiếng để tải.",
+            model_dir.join("kokoro_vi.onnx").display()
+        );
+    }
+    let script = ensure_kokoro_script()?;
+    let python = find_python();
+
+    // Manifest: [{"text": ..., "voice": ..., "out": ...}, ...] — json.load() by the sidecar.
+    let manifest_path =
+        std::env::temp_dir().join(format!("sublix_kokoro_batch_{}.json", gen_unique_id()));
+    let manifest: Vec<serde_json::Value> = items
+        .iter()
+        .map(|(text, voice, out)| {
+            let voice_id = voice.trim();
+            let voice_id = voice_id
+                .strip_prefix(KOKORO_VOICE_PREFIX)
+                .unwrap_or(voice_id)
+                .trim();
+            serde_json::json!({
+                "text": text,
+                "voice": voice_id,
+                "out": out.to_string_lossy(),
+            })
+        })
+        .collect();
+    let manifest_json = serde_json::to_string(&manifest).context("Serialize manifest Kokoro")?;
+    fs::write(&manifest_path, manifest_json)
+        .with_context(|| format!("Ghi manifest Kokoro vào {}", manifest_path.display()))?;
+
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script)
+        .arg("--batch")
+        .arg(&manifest_path)
+        .arg("--model-dir")
+        .arg(&model_dir)
+        .arg("--device")
+        .arg("cpu")
+        .arg("--speed")
+        .arg("1.0")
+        .arg("--crossfade-ms")
+        .arg("50")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let child = cmd
+        .spawn()
+        .with_context(|| "Không chạy được sidecar Kokoro (thiếu python?)")?;
+    // Register the PID so the user can still cancel a long batch.
+    ACTIVE_CHILD_PID.store(child.id(), Ordering::SeqCst);
+    let output = child
+        .wait_with_output()
+        .context("Chờ sidecar Kokoro batch")?;
+    ACTIVE_CHILD_PID.store(0, Ordering::SeqCst);
+    let _ = fs::remove_file(&manifest_path);
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "Kokoro batch TTS thất bại (exit code: {:?}): {}",
+            output.status.code(),
+            stderr.trim()
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut results: Vec<KokoroBatchItemResult> = items
+        .iter()
+        .map(|_| KokoroBatchItemResult {
+            ok: false,
+            samples: 0,
+            error: Some("Kokoro chưa trả kết quả cho câu này.".to_string()),
+        })
+        .collect();
+
+    for line in stdout.lines() {
+        let Some((index, ok, samples, detail)) = parse_kokoro_batch_line(line) else {
+            continue;
+        };
+        if index >= results.len() {
+            continue;
+        }
+        results[index] = if ok {
+            KokoroBatchItemResult {
+                ok: true,
+                samples,
+                error: None,
+            }
+        } else {
+            KokoroBatchItemResult {
+                ok: false,
+                samples: 0,
+                error: Some(detail),
+            }
+        };
+    }
+
+    Ok(results)
+}
+
 // ===========================================================================
 // v0.9.9 — Voice catalog & pre-generated audition samples.
 // Cho phép chọn model → xem danh sách giọng Nam/Nữ TRƯỚC khi đọc thật:
@@ -1078,6 +1269,10 @@ pub fn get_preset_voices() -> Vec<VoicePreset> {
 
 /// Synthesize a speech file via edge-tts with python -m fallback
 pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_path: &Path) -> Result<()> {
+    // Chuẩn hóa voice id trước (VD `vietneu:vi_bac_nam` -> `kokoro:tuan_ngoc`).
+    // Đây là điểm nghẽn duy nhất nên cả preview lẫn export đều đi đúng engine.
+    let normalized = normalize_voice_id(voice);
+    let voice = normalized.as_str();
     // Local, offline engine first. Anything not prefixed with `kokoro:` uses the
     // (optional, network) Edge-TTS fallback below.
     if let Some(kokoro_id) = voice.strip_prefix(KOKORO_VOICE_PREFIX) {
@@ -2705,6 +2900,86 @@ pub fn export_dubbed_video(
     let mut speech_inputs = Vec::new();
     let mut skipped_segments: Vec<usize> = Vec::new();
 
+    if is_generation_cancelled(my_gen) {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err(anyhow::anyhow!("Đã dừng xuất video theo yêu cầu của bạn."));
+    }
+
+    // 1a. Pre-pass (chỉ giọng Kokoro): tổng hợp TẤT CẢ câu trong MỘT tiến trình
+    //     Python cho mỗi giọng, để model ONNX 325 MB chỉ nạp 1 lần thay vì 1
+    //     lần/câu. Câu mà batch không tạo được sẽ rơi xuống đường dẫn cũ
+    //     (tổng hợp từng câu → retry → bỏ qua) bên dưới.
+    let mut batched_audio: HashMap<usize, PathBuf> = HashMap::new();
+    {
+        let mut groups: BTreeMap<String, Vec<(usize, String, PathBuf)>> = BTreeMap::new();
+        for (i, seg) in project.segments.iter().enumerate() {
+            let Some(synth_text) = select_synth_text(seg) else {
+                continue;
+            };
+            let speaker_voice = match project.speakers.iter().find(|s| s.id == seg.speaker_id) {
+                Some(s) => s.voice.clone(),
+                None => project
+                    .speakers
+                    .first()
+                    .map(|s| s.voice.clone())
+                    .unwrap_or_default(),
+            };
+            let voice = normalize_voice_id(&speaker_voice);
+            if !voice.starts_with(KOKORO_VOICE_PREFIX) {
+                continue; // Giọng Edge-TTS giữ nguyên đường dẫn từng câu.
+            }
+            let seg_audio = temp_dir.join(format!("seg_{}.wav", i));
+            groups
+                .entry(voice)
+                .or_default()
+                .push((i, synth_text.to_string(), seg_audio));
+        }
+
+        if !groups.is_empty() {
+            let batched_count: usize = groups.values().map(|g| g.len()).sum();
+            emit(
+                "synthesizing",
+                5.0,
+                &format!(
+                    "Tổng hợp giọng lồng tiếng hàng loạt ({} câu, Kokoro offline)...",
+                    batched_count
+                ),
+                0,
+                total_segs,
+            );
+            for (voice, group) in groups {
+                let batch_items: Vec<(String, String, PathBuf)> = group
+                    .iter()
+                    .map(|(_, text, out)| (text.clone(), voice.clone(), out.clone()))
+                    .collect();
+                match synthesize_kokoro_batch(&batch_items) {
+                    Ok(results) => {
+                        for (item, res) in group.iter().zip(results.iter()) {
+                            let (idx, _, out) = item;
+                            if res.ok && out.exists() {
+                                batched_audio.insert(*idx, out.clone());
+                            } else {
+                                warn!(
+                                    "TTS batch câu {} thất bại: {}",
+                                    idx,
+                                    res.error
+                                        .as_deref()
+                                        .unwrap_or("file audio rỗng/không hợp lệ")
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "TTS batch Kokoro thất bại ({} câu) — chuyển sang tổng hợp từng câu: {e:#}",
+                            group.len()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // 1. Synthesize each segment and check duration
     for (i, seg) in project.segments.iter().enumerate() {
         if is_generation_cancelled(my_gen) {
@@ -2742,13 +3017,31 @@ pub fn export_dubbed_video(
             .unwrap_or(&project.speakers[0]);
 
         // Kokoro (offline) writes WAV; Edge-TTS writes MP3. FFmpeg reads either.
-        let ext = if speaker.voice.starts_with(KOKORO_VOICE_PREFIX) { "wav" } else { "mp3" };
+        // Dùng voice ĐÃ chuẩn hóa: `vietneu:*` map sang Kokoro nên phải xuất .wav
+        // (nếu không Kokoro sẽ ghi file WAV ra tên .mp3).
+        let voice = normalize_voice_id(&speaker.voice);
+        let ext = if voice.starts_with(KOKORO_VOICE_PREFIX) {
+            "wav"
+        } else {
+            "mp3"
+        };
         let seg_audio = temp_dir.join(format!("seg_{}.{}", i, ext));
 
         // Retry-then-skip: never let an empty/invalid file poison the final mux.
         let mut synth_ok = false;
         let mut last_err = String::new();
+
+        // Tái sử dụng file do batch pre-pass tạo ra (không spawn Python mới).
+        if let Some(pre) = batched_audio.get(&i) {
+            if pre == &seg_audio && is_valid_audio(pre) {
+                synth_ok = true;
+            }
+        }
+
         for attempt in 0..2 {
+            if synth_ok {
+                break;
+            }
             let _ = fs::remove_file(&seg_audio);
             match synthesize_speech(
                 synth_text,
@@ -4022,6 +4315,149 @@ mod tests {
             }
         }
         None
+    }
+
+    // =======================================================================
+    // DEFECT-1: voice id `vietneu:*` phải được map sang giọng Kokoro cục bộ.
+    // Nếu không, id này bị đưa thẳng cho Edge-TTS (bị từ chối) → mọi câu đều
+    // fail → file MP4 xuất ra KHÔNG có lồng tiếng.
+    // =======================================================================
+
+    #[test]
+    fn test_normalize_voice_id_maps_all_vietneu_voices() {
+        let cases = [
+            ("vietneu:vi_bac_nam", "kokoro:tuan_ngoc"),
+            ("vietneu:vi_bac_nu", "kokoro:mai_linh"),
+            ("vietneu:vi_nam_nam", "kokoro:manh_dung"),
+            ("vietneu:vi_nam_nu", "kokoro:ngoc_huyen"),
+            ("vietneu:vi_hue_nu", "kokoro:ngoc_huyen"),
+            ("vietneu:vi_bac_thoisu", "kokoro:hung_thinh"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                normalize_voice_id(input),
+                expected,
+                "voice '{}' phải map sang '{}'",
+                input,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalize_voice_id_passes_through_kokoro_ids() {
+        assert_eq!(normalize_voice_id("kokoro:tuan_ngoc"), "kokoro:tuan_ngoc");
+        assert_eq!(normalize_voice_id("kokoro:mai_linh"), "kokoro:mai_linh");
+    }
+
+    #[test]
+    fn test_normalize_voice_id_passes_through_edge_tts_ids() {
+        assert_eq!(
+            normalize_voice_id("vi-VN-HoaiMyNeural"),
+            "vi-VN-HoaiMyNeural"
+        );
+        assert_eq!(
+            normalize_voice_id("en-US-AndrewNeural"),
+            "en-US-AndrewNeural"
+        );
+    }
+
+    #[test]
+    fn test_normalize_voice_id_unknown_vietneu_falls_back_to_tuan_ngoc() {
+        assert_eq!(normalize_voice_id("vietneu:xyz"), "kokoro:tuan_ngoc");
+        assert_eq!(normalize_voice_id("vietneu:"), "kokoro:tuan_ngoc");
+    }
+
+    // =======================================================================
+    // DEFECT-2: parser dòng kết quả của sidecar Kokoro batch.
+    // =======================================================================
+
+    #[test]
+    fn test_parse_kokoro_batch_line_ok() {
+        let (index, ok, samples, path) =
+            parse_kokoro_batch_line("OK 3 C:\\tmp\\seg_3.wav 48000").expect("parse OK line");
+        assert_eq!(index, 3);
+        assert!(ok);
+        assert_eq!(samples, 48000);
+        assert_eq!(path, "C:\\tmp\\seg_3.wav");
+    }
+
+    #[test]
+    fn test_parse_kokoro_batch_line_ok_with_spaces_in_path() {
+        let (index, ok, samples, path) =
+            parse_kokoro_batch_line("OK 0 C:\\Users\\A B\\seg_0.wav 12000").expect("parse OK line");
+        assert_eq!(index, 0);
+        assert!(ok);
+        assert_eq!(samples, 12000);
+        assert_eq!(path, "C:\\Users\\A B\\seg_0.wav");
+    }
+
+    #[test]
+    fn test_parse_kokoro_batch_line_err() {
+        let (index, ok, samples, message) =
+            parse_kokoro_batch_line("ERR 7 Kokoro khong tao duoc audio").expect("parse ERR line");
+        assert_eq!(index, 7);
+        assert!(!ok);
+        assert_eq!(samples, 0);
+        assert_eq!(message, "Kokoro khong tao duoc audio");
+    }
+
+    #[test]
+    fn test_parse_kokoro_batch_line_ignores_other_output() {
+        assert!(parse_kokoro_batch_line("some legacy stdout line").is_none());
+        assert!(parse_kokoro_batch_line("").is_none());
+    }
+
+    /// END-TO-END: Rust -> sidecar Kokoro batch -> parse kết quả stdout.
+    /// Cần model Kokoro-Vietnamese + python; chạy tường minh:
+    ///   cargo test --lib test_kokoro_batch_end_to_end -- --ignored --nocapture
+    #[test]
+    #[ignore = "cần model Kokoro-Vietnamese + python (chạy tường minh)"]
+    fn test_kokoro_batch_end_to_end() {
+        if !kokoro_available() {
+            eprintln!("SKIP: chưa có model Kokoro-Vietnamese trên máy này.");
+            return;
+        }
+        let temp_dir =
+            std::env::temp_dir().join(format!("sublix_test_kokoro_batch_{}", gen_unique_id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let items: Vec<(String, String, PathBuf)> = vec![
+            (
+                "Xin chao Viet Nam.".to_string(),
+                "kokoro:tuan_ngoc".to_string(),
+                temp_dir.join("seg_0.wav"),
+            ),
+            // Câu rỗng -> lỗi riêng, KHÔNG được làm hỏng cả batch.
+            (
+                "".to_string(),
+                "kokoro:tuan_ngoc".to_string(),
+                temp_dir.join("seg_1.wav"),
+            ),
+            (
+                "Cam on ban da xem video nay.".to_string(),
+                "kokoro:tuan_ngoc".to_string(),
+                temp_dir.join("seg_2.wav"),
+            ),
+        ];
+
+        let results = synthesize_kokoro_batch(&items).expect("batch phải chạy được");
+        assert_eq!(results.len(), 3, "mỗi item phải có đúng 1 kết quả");
+
+        assert!(results[0].ok, "câu 0 phải tổng hợp thành công");
+        assert!(results[0].samples > 0, "câu 0 phải có số mẫu audio > 0");
+        assert!(items[0].2.exists(), "file WAV của câu 0 phải tồn tại");
+
+        assert!(!results[1].ok, "câu rỗng phải báo lỗi");
+        assert!(results[1].error.is_some(), "câu rỗng phải có thông báo lỗi");
+
+        assert!(
+            results[2].ok,
+            "một câu lỗi KHÔNG được làm hỏng các câu còn lại của batch"
+        );
+        assert!(items[2].2.exists(), "file WAV của câu 2 phải tồn tại");
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
 

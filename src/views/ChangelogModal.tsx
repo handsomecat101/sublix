@@ -23,10 +23,40 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.35",
+    date: "23/10/2026",
+    title: "Sửa Lỗi Xuất Video Không Có Tiếng Việt + TTS Batch Nhanh Gấp 10 Lần",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Sửa Lỗi Nghiêm Trọng — Xuất Video Mất Tiếng Lồng",
+        icon: "🔧",
+        items: [
+          "Backend không hiểu prefix `vietneu:` trong `speaker.voice` (grep `vietneu` trong `src-tauri/src` = 0 kết quả).",
+          "Hậu quả: `export_dubbed_video` đưa `vietneu:vi_bac_nam` xuống Edge-TTS, Edge-TTS từ chối → MỌI câu bị skip → file MP4 xuất ra KHÔNG có tiếng Việt nào.",
+          "Thêm `normalize_voice_id()` trong `dubbing/mod.rs` map 6 giọng VietNeu → giọng Kokoro tương ứng (tuan_ngoc / mai_linh / manh_dung / ngoc_huyen / hung_thinh).",
+          "Áp dụng trong `synthesize_speech` (điểm chặn duy nhất) + chọn đuôi file `.wav`/`.mp3` theo voice đã normalize.",
+          "Giọng `kokoro:` và Edge-TTS (`vi-VN-HoaiMyNeural`) đi qua không đổi."
+        ]
+      },
+      {
+        category: "Tối Ưu Hiệu Năng — Kokoro Batch Mode",
+        icon: "⚡",
+        items: [
+          "Kokoro nạp lại model ONNX 325 MB mỗi câu → đo được 12,4 giây/câu (một video 323 câu = 67 phút).",
+          "`kokoro_vi_tts.py` thêm chế độ `--batch <manifest.json>`: nạp model MỘT LẦN cho cả lô, cache theo từng giọng.",
+          "Rust thêm `synthesize_kokoro_batch()` — một tiến trình Python cho cả lô, parse dòng `OK/ERR` từng câu.",
+          "`export_dubbed_video` gom câu theo giọng rồi gọi batch 1 lần, vẫn giữ fallback từng câu và cơ chế retry-then-skip cũ.",
+          "Đo thực tế: 5 câu 16,1s (legacy 62s); xuất video 78 câu mất ~2 phút thay vì ~16 phút."
+        ]
+      }
+    ]
+  },
+  {
     version: "v0.11.34",
     date: "20/10/2026",
     title: "Đồng Bộ Version 4 Nguồn + 2 Tiêu Đề Cửa Sổ Native (Thêm Lại Guard `npm run verify:version`)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Sửa Lỗi + Bảo Vệ Build",

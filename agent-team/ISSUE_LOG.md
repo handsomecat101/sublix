@@ -391,3 +391,39 @@
 
 
 
+
+---
+
+### [BUG-074] Xuất video KHÔNG có tiếng Việt — backend không hiểu prefix `vietneu:`, mọi câu bị skip
+- **Ngày:** 2026-10-23 | **Phát hiện bởi:** Mavis (MiniMax-M3) khi đọc code trước khi chạy A→Z | **Fix bởi:** Worker agent (Mavis điều phối) | **Status:** ✅ Fixed (verify thật bằng ffprobe + đối chiếu giọng)
+- **File:** `src-tauri/src/dubbing/mod.rs` (`export_dubbed_video`, `synthesize_speech`), `src/views/SublixStudioView.tsx` (`mapVoiceForEngine` — chỉ dùng cho preview)
+- **Triệu chứng:** bấm "Xuất video" → file MP4 ra **không có tiếng lồng tiếng Việt nào** (chỉ còn audio gốc + phụ đề). Không có báo lỗi rõ ràng cho người dùng.
+- **Root Cause:**
+  1. *Frontend lưu voice theo model VietNeu:* `TTS_ENGINE_MODELS.vietneu.defaultMaleVoice` = `vietneu:vi_bac_nam`; khi xuất, payload gửi nguyên vẹn `voice: s.voice` (không map).
+  2. *Backend không biết prefix `vietneu:`:* `grep -i vietneu src-tauri/src` → **0 kết quả**. `synthesize_speech` chỉ route id bắt đầu bằng `kokoro:` sang engine Kokoro cục bộ, **mọi id còn lại** đưa xuống Edge-TTS với tên voice đó.
+  3. *Edge-TTS từ chối voice id không hợp lệ:* mỗi câu fail → retry 1 lần → **skip** qua `skipped_segments` → **323/323 câu bị bỏ qua**, file xuất không có tiếng AI.
+  4. *Helper map có sẵn nhưng không dùng đúng chỗ:* `mapVoiceForEngine` ở frontend chỉ được gọi trong `handleRunVoiceOnly` / `handlePreviewSpeakerVoice` (đường preview), **không** được gọi trong `handleExportDubbing` (đường xuất).
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Thêm `normalize_voice_id()` ở backend** (`src-tauri/src/dubbing/mod.rs`): map 6 giọng VietNeu → giọng Kokoro tương ứng (`vi_bac_nam`→`tuan_ngoc`, `vi_bac_nu`→`mai_linh`, `vi_nam_nam`→`manh_dung`, `vi_nam_nu`/`vi_hue_nu`→`ngoc_huyen`, `vi_bac_thoisu`→`hung_thinh`, lạ→`tuan_ngoc`); `kokoro:` và Edge-TTS đi qua không đổi.
+  2. **Áp dụng ở điểm chặn duy nhất `synthesize_speech`** → cả preview lẫn export đều đúng; đồng thời dùng voice đã normalize khi chọn đuôi file `.wav`/`.mp3` trong `export_dubbed_video`.
+  3. **Bài học:** khi frontend có "tầng dịch id" riêng, **backend cũng phải có tầng dịch id** — không được tin là mọi đường gọi đều đi qua frontend đó. Đặc biệt đường **export** thường là đường hay bị sót vì nó gọi thẳng xuống backend.
+  4. **Bài học (phát hiện sớm):** luôn **đọc code đường export trước khi bấm nút** — 1 lần đọc 5 phút tiết kiệm hàng giờ chờ và tránh ra file không dùng được.
+
+---
+
+### [BUG-075] Kokoro nạp lại model ONNX 325 MB cho MỌI câu — 12,4s/câu, xuất video 323 câu mất 67 phút
+- **Ngày:** 2026-10-23 | **Phát hiện bởi:** Mavis (MiniMax-M3) khi đo trực tiếp | **Fix bởi:** Worker agent (Mavis điều phối) | **Status:** ✅ Fixed (đo thật: 12,4s/câu → ~1,2s/câu)
+- **File:** `src-tauri/src/dubbing/mod.rs` (`synthesize_kokoro`, `export_dubbed_video`), `src-tauri/scripts/kokoro_vi_tts.py`
+- **Triệu chứng:** xuất video rất chậm, có vẻ treo; ước lượng >2 giờ cho video 323 câu.
+- **Root Cause:**
+  1. *Spawn process cho từng câu:* `synthesize_kokoro` chạy `Command::new(python)` **một lần cho mỗi câu**.
+  2. *Model nặng nạp lại mỗi lần:* `KokoroVietnameseONNX.__init__` nạp `kokoro_vi.onnx` (~325 MB) + `torch.load` voicepack mỗi tiến trình → phần lớn 12,4s là **thời gian nạp model**, không phải thời gian tổng hợp.
+  3. *Đường export lặp lại công việc:* `export_dubbed_video` tự tổng hợp lại toàn bộ TTS (không dùng lại audio đã tạo trong UI) → tốn thêm một lần nữa.
+- **Cách fix & Bài học cho Dev sau:**
+  1. **Thêm chế độ `--batch <manifest.json>` cho sidecar Python:** nạp model **một lần**, cache instance theo từng giọng, in từng dòng `OK <i> <path> <samples>` / `ERR <i> <msg>` để Rust parse được.
+  2. **Rust `synthesize_kokoro_batch()`:** ghi manifest JSON → spawn sidecar **một lần** → parse kết quả từng câu; một câu lỗi **không** làm hỏng cả lô.
+  3. **`export_dubbed_video` gom câu theo giọng → gọi batch 1 lần/giọng**, tái dùng file đã tổng hợp; giữ nguyên fallback từng câu, retry-then-skip, sự kiện tiến trình, atempo stretch, amix, mux.
+  4. **Bài học:** khi một sidecar nạp model nặng, **luôn thiết kế đường batch** — đừng gọi 1 tiến trình cho mỗi item. Đo `tổng thời gian / số item` trước khi lên kế hoạch cho video dài.
+  5. **Bài học:** đường export **tự tổng hợp lại TTS** ⇒ chạy bước "TTS trong UI" trước là tốn công vô nghĩa với mục tiêu tạo file. Với mục tiêu "có file xuất", bỏ qua bước preview TTS.
+
+---

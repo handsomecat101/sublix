@@ -12,9 +12,22 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.34` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | on `master` (`https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Sẵn sàng làm việc (version đồng bộ `0.11.34` ở 4 nguồn + 2 tiêu đề cửa sổ native; guard `npm run verify:version` PASS exit 0; `npx tsc --noEmit` 0 lỗi) |
+| **Bản Build Hiện Tại** | `v0.11.35` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Git Commit** | trên nhánh `fix/voice-timeline-mojibache` (`origin` = `https://github.com/handsomecat101/sublix.git`) |
+| **Trạng Thái** | 🟢 Sẵn sàng làm việc (version đồng bộ `0.11.35` ở 4 nguồn + 2 tiêu đề cửa sổ native; guard `npm run verify:version` PASS exit 0; `npx tsc --noEmit` 0 lỗi) |
+
+---
+
+## 2. ✅ ĐÃ ĐẠT / ❌ CHƯA ĐẠT (Phiên 2026-10-23)
+
+| Hạng mục | Trạng thái | Bằng chứng | Ai xác nhận |
+|----------|-----------|-----------|------------|
+| BUG-074 — Xuất video có tiếng Việt (map `vietneu:` → `kokoro:` ở backend) | ✅ ĐẠT | File `StarCraft…_dubbed.mp4` có track `aac` thứ 2; đối chiếu giọng: correlation với giọng Kokoro = **0,6921** (track AI) vs **0,0346** (track gốc) | Mavis (đo bằng ffprobe + script tương quan) |
+| BUG-075 — TTS batch mode (nạp model 1 lần) | ✅ ĐẠT | Batch 5 câu **16,1s** (legacy 62s); xuất 78 câu ~**2 phút**; per-line 12,4s → ~1,2s | Mavis (đo trực tiếp trên app live) |
+| Guard version `npm run verify:version` | ✅ ĐẠT | PASS exit 0, 6/6 nguồn = `0.11.35` | Mavis |
+| TypeScript `npx tsc --noEmit` | ✅ ĐẠT | exit 0, 0 lỗi | Mavis |
+| Video Trung Quốc 26 phút (323 câu) trong app | ❌ CHƯA ĐẠT | Project bị thay thế trong app lúc anh tự chạy A→Z trên StarCraft; cần nạp lại video + chạy lại STT/dịch | Chờ anh Tuấn quyết định có chạy lại không |
+| `cargo test --lib` cho bản vá mới | ⚠️ CHƯA CHẠY | Anh yêu cầu dừng test; bằng chứng thay thế = export thật + ffprobe + đối chiếu giọng | Mavis (đã ghi vào AGENT_CHAT) |
 
 ---
 
@@ -54,6 +67,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FIX-KOKORO-EXPORT-074-075` | Sửa "Xuất video mất tiếng Việt" (`vietneu:` → `kokoro:` ở backend) + Kokoro batch mode (12,4s/câu → ~1,2s/câu) | **Mavis (MiniMax-M3)** + Worker agent | 2026-10-23 | ✅ Export thật 78 câu ~2 phút, file có track AI; đối chiếu giọng corr 0,69 vs 0,03; `BUG-074`, `BUG-075`; v0.11.35 |
 | `TSK-FIX-VERSION-DRIFT-073` | Đồng bộ version 4 nguồn + 2 tiêu đề cửa sổ native (drift `v0.11.32` còn sót trong `tauri.conf.json`) & tạo lại guard `scripts/check_version.ps1` + npm `verify:version` | **Mavis (MiniMax-M3)** | 2026-10-20 | ✅ 4 nguồn = `0.11.34`; guard PASS exit 0 / negative test `[LECH]` exit 1; `tsc` 0 lỗi; `BUG-073` |
 | `TSK-FIX-STUDIO-REPLACE-EXPORT-VLC` | Sửa lỗi không đổi được video trong Studio (dội ngược file cũ) & Xuất Softsub / Multi-track Audio chuẩn VLC | **Antigravity** | 2026-10-13 | ✅ Bỏ deps filePath, tập trung handleLoadNewVideoFile + onClearPendingFile; FFmpeg Softsub & Multi-track VLC; Modal UI cấu hình xuất; v0.11.33 |
 | `TSK-SUBS-YOUTUBE-REUSE-2026-10-13` | Studio tận dụng phụ đề YouTube đã tải (checkbox TÍCH SẴN) + marking "YouTube" (badge timeline + chip Downloader + manifest quản lý) | **CommandCode** | 2026-10-13 | ✅ E2E StarCraft: whisper=0 process, 49 câu từ .srt, badge "📥 YouTube (.en)", manifest 2 entry; v0.11.32 |

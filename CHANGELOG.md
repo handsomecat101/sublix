@@ -1,4 +1,34 @@
 
+## v0.11.35 — 2026-10-23
+### Sửa Lỗi Xuất Video Không Có Tiếng Việt + TTS Batch Nhanh Gấp 10 Lần
+
+**Bối cảnh (Anh Tuấn):** anh bảo "Chạy A→Z: dịch + TTS lồng tiếng + xuất video". Trước khi bấm, Mavis kiểm tra code và phát hiện **2 lỗi chí mạng** sẽ làm thất bại hoặc làm chậm vô lý:
+
+**Lỗi 1 — Xuất video KHÔNG có tiếng Việt (sai chức năng):**
+- Frontend lưu giọng theo model VietNeu (`vietneu:vi_bac_nam`) và gửi nguyên vẹn lên backend khi xuất (`SublixStudioView.tsx`, `voice: s.voice`).
+- Backend **không hề biết** prefix `vietneu:` — `grep -i vietneu src-tauri/src` = **0 kết quả**.
+- `export_dubbed_video` đưa voice id đó xuống Edge-TTS; Edge-TTS từ chối → **mọi câu bị retry rồi skip** → file MP4 xuất ra **không có tiếng Việt nào** (chỉ còn audio gốc).
+- Frontend có sẵn helper `mapVoiceForEngine` nhưng **chỉ dùng cho preview, không dùng cho đường xuất**.
+
+**Lỗi 2 — Mỗi câu nạp lại model ONNX 325 MB (chậm vô lý):**
+- `synthesize_kokoro` spawn **một tiến trình Python cho mỗi câu**, mỗi tiến trình nạp lại model Kokoro 325 MB.
+- Đo thật trên máy này: **12,4 giây/câu** → video 323 câu = **67 phút**, cộng thêm bước xuất lặp lại lần nữa → >2 giờ.
+
+**Fix v0.11.35:**
+- **Thêm `normalize_voice_id()`** trong `src-tauri/src/dubbing/mod.rs`: map 6 giọng VietNeu → giọng Kokoro tương ứng (`vi_bac_nam`→`tuan_ngoc`, `vi_bac_nu`→`mai_linh`, `vi_nam_nam`→`manh_dung`, `vi_nam_nu`/`vi_hue_nu`→`ngoc_huyen`, `vi_bac_thoisu`→`hung_thinh`, lạ→`tuan_ngoc`). Giọng `kokoro:` và Edge-TTS đi qua không đổi.
+- Áp dụng normalize trong `synthesize_speech` (điểm chặn duy nhất → cả preview lẫn export đều đúng) và khi chọn đuôi file `.wav`/`.mp3` trong `export_dubbed_video`.
+- **Kokoro batch mode:** `src-tauri/scripts/kokoro_vi_tts.py` thêm `--batch <manifest.json>` — nạp model **một lần** cho cả lô, cache theo từng giọng, in từng dòng `OK <i> <path> <samples>` / `ERR <i> <msg>`.
+- **Rust `synthesize_kokoro_batch()`:** ghi manifest, spawn sidecar **một lần**, parse kết quả từng câu; một câu lỗi **không** làm hỏng cả lô.
+- **`export_dubbed_video`** gom câu theo giọng → gọi batch 1 lần/giọng, tái dùng file đã tổng hợp; giữ nguyên fallback từng câu, cơ chế retry-then-skip, sự kiện tiến trình, atempo stretch, amix và mux.
+
+**Bằng chứng (chạy thật trên app live, video StarCraft 78 câu):**
+- **Batch 5 câu: 16,1s** (legacy cùng 5 câu: 62s) → per-line **12,4s → ~1,2s**.
+- Xuất video xong trong **~2 phút** (78 câu): file `StarCraft II…_dubbed.mp4` — 71,6 MB, 4 stream: `vp9` video + **2 track `aac`** (gốc + tiếng AI) + `mov_text` subtitle, cùng file `.vi.srt` phụ.
+- **Đối chiếu giọng bằng tương quan tín hiệu:** tổng hợp lại đúng câu "Nhiệt độ. Nhiệt độ." bằng giọng Kokoro `tuan_ngoc` → correlation với **track AI = 0,6921**, với **track gốc = 0,0346** (mức nhiễu) → **giọng AI tiếng Việt thật sự nằm trong track 2** của file xuất.
+- `npm run verify:version` PASS (6/6 nguồn khớp `0.11.35`), `npx tsc --noEmit` 0 lỗi.
+
+---
+
 ## v0.11.34 — 2026-10-20
 ### Đồng Bộ Version 4 Nguồn + 2 Tiêu Đề Cửa Sổ Native (Thêm Lại Guard `npm run verify:version`)
 

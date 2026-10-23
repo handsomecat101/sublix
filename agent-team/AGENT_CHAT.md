@@ -249,3 +249,40 @@
 
 
 
+
+---
+
+## 2026-10-23 — Mavis (MiniMax-M3) — Phiên "Chạy A→Z: dịch + TTS + xuất video"
+
+**Chỉ đạo của anh Tuấn:** chọn phương án "Chạy A→Z: dịch + TTS lồng tiếng + xuất video" cho app Sublix đang chạy.
+
+### 1. Khảo sát trạng thái thật (không tin tài liệu)
+- Thư mục làm việc ban đầu `H:\AI Project\sub-lix-fork-build-w1-2026-10-20` là **thư mục build artifact**, không phải source. Source thật: `H:\AI Project\sub-lix-fork-2026-10-19`.
+- App v0.11.34 đang chạy thật (PID, exe `build-2026-10-19\debug\sublix.exe`, WebView2 CDP port 9223, `llama-server` Qwen3-4B port 11435).
+- Đọc live DOM qua CDP: app đang mở video **Trung Quốc 26 phút**, 323 câu Whisper đã xong, **323/323 đã dịch**, `hasAudio: 0` (chưa có TTS), engine TTS đang chọn = `vietneu`.
+
+### 2. Phát hiện 2 lỗi chí mạng TRƯỚC khi bấm nút (đọc code đường export)
+- **BUG-074:** backend không hiểu prefix `vietneu:` (`grep -i vietneu src-tauri/src` = 0 hit) → Edge-TTS từ chối → **mọi câu bị skip** → file xuất **không có tiếng Việt**.
+- **BUG-075:** `synthesize_kokoro` spawn 1 tiến trình Python **cho mỗi câu**, mỗi lần nạp lại model ONNX 325 MB → đo thật **12,4 giây/câu** → 323 câu = **67 phút** (+ bước export lặp lại lần nữa).
+- → Giao **worker agent** sửa 2 file: `src-tauri/src/dubbing/mod.rs` (+438 dòng) và `src-tauri/scripts/kokoro_vi_tts.py` (+117 dòng). Không đụng frontend.
+
+### 3. Chạy thật & đo thật
+- Batch 5 câu: **16,1s** (legacy cùng 5 câu: 62s) → per-line **12,4s → ~1,2s**.
+- Xuất video live trên app (StarCraft II, 78 câu, đã dịch + TTS sẵn): **~2 phút** → `StarCraft II…_dubbed.mp4` (71,6 MB, 4 stream: vp9 + **2× aac** + mov_text) + `.vi.srt`.
+- **Đối chiếu giọng bằng tương quan tín hiệu:** tổng hợp lại đúng câu "Nhiệt độ. Nhiệt độ." bằng Kokoro `tuan_ngoc` → correlation với **track AI = 0,6921**, với **track gốc = 0,0346** (nhiễu) → giọng AI thật sự có trong file xuất.
+
+### 4. Sự kiện cần lưu ý
+- Trong lúc em đang chẩn đoán, **anh tự chạy A→Z trên video StarCraft trong app** → project Trung Quốc 323 câu bị thay thế trong cache `sublix_active_studio_project_v1`. Video Trung Quốc **chưa** được xuất; cần nạp lại + chạy lại STT/dịch nếu anh muốn.
+- **Anh yêu cầu dừng test** ("cái chạy kiểu này mất công quá") → em dừng, **không** chạy `cargo test --lib` cho bản vá (đã ghi rõ trong PROJECT_STATE mục "CHƯA ĐẠT").
+
+### 5. Bàn giao
+- Version bump `0.11.34` → **`0.11.35`** (4 nguồn + 2 tiêu đề cửa sổ native), entry `CHANGELOG.md` + `CHANGELOG_DATA` trong `src/views/ChangelogModal.tsx`.
+- `PROJECT_STATE.md` có bảng **ĐÃ ĐẠT / CHƯA ĐẠT** (mục 2) kèm bằng chứng + người xác nhận.
+- `ISSUE_LOG.md` thêm **BUG-074** + **BUG-075** (triệu chứng · nguyên nhân · bài học tránh lặp).
+- Ảnh chụp app sau khi xuất: `gui-2026-10-23/export-dubbed-starCraft-2241.png`.
+
+### 6. Bài học cho phiên sau
+1. **Đọc code đường export trước khi bấm nút** — 5 phút đọc tiết kiệm hàng giờ chờ.
+2. **Đo tốc độ sidecar trước khi lên kế hoạch** cho việc dài — đo được 12,4s/câu ngay từ đầu.
+3. **App có thể bị PO thao tác song song** → luôn đọc state live (CDP) trước khi hành động, và báo rõ khi project trong app đã bị thay đổi.
+4. **Khi anh nói "dừng lại" → dừng ngay**, viết tài liệu bàn giao + commit, không chạy thêm test dài.

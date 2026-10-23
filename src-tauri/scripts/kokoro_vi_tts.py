@@ -11,6 +11,17 @@ Usage:
         --model-dir "H:/AI Project/sublix/src-tauri/models/voice/kokoro-vi" \
         --device cpu --speed 1.0
 
+Batch mode (loads the 325 MB ONNX model ONCE for the whole batch):
+    python kokoro_vi_tts.py --batch manifest.json --model-dir <dir> --device cpu
+
+    manifest.json = [{"text": "...", "voice": "tuan_ngoc", "out": "C:/tmp/seg_0.wav"}, ...]
+
+    One machine-readable line is printed per manifest item:
+        OK <index> <out_path> <num_samples>
+        ERR <index> <single_line_error_message>
+    Exit code is 0 whenever the batch ran (per-item failures are reported per
+    line); a non-zero exit means the model itself could not be loaded.
+
 Model files expected inside --model-dir (default: ../models/voice/kokoro-vi
 relative to this script):
     kokoro_vi.onnx             (~326 MB acoustic + vocoder model)
@@ -223,11 +234,98 @@ class KokoroVietnameseONNX:
         return merge_audio_chunks(audio_chunks, crossfade_samples)
 
 
+class KokoroEngineCache:
+    """Cache one Kokoro engine (ONNX session) per voice.
+
+    The Kokoro ONNX session weighs ~325 MB and takes seconds to load, so the
+    whole point of batch mode is to load it once and reuse it for every item
+    that shares the same voice (a single voice is the common case).
+    """
+
+    def __init__(self, model_dir: Path, device: str = "cpu") -> None:
+        self.model_dir = model_dir
+        self.device = device
+        self._engines: dict[str, KokoroVietnameseONNX] = {}
+
+    def get(self, voice: str) -> KokoroVietnameseONNX:
+        key = (voice or "").strip() or DEFAULT_VOICE
+        engine = self._engines.get(key)
+        if engine is None:
+            engine = KokoroVietnameseONNX(self.model_dir, key, device=self.device)
+            self._engines[key] = engine
+        return engine
+
+
+def sanitize_error(message: str) -> str:
+    """Collapse a multi-line error message into a single machine-readable line."""
+    return " ".join(message.split())
+
+
+def run_batch(
+    manifest_path: str,
+    *,
+    model_dir: Path,
+    device: str = "cpu",
+    speed: float = 1.0,
+    crossfade_ms: int = DEFAULT_CROSSFADE_MS,
+) -> int:
+    """Synthesize every item of a JSON manifest, reusing one engine per voice.
+
+    Returns 0 when the batch ran (individual item failures are reported per
+    line as `ERR <index> <message>`). Raises when the model itself cannot be
+    loaded, which the caller turns into a non-zero exit code.
+    """
+    # utf-8-sig transparently accepts a UTF-8 BOM (some writers add one).
+    with open(manifest_path, "r", encoding="utf-8-sig") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, list):
+        raise ValueError("Batch manifest must be a JSON array of {text, voice, out} objects.")
+
+    cache = KokoroEngineCache(model_dir, device=device)
+
+    # Load the first voice up-front: when the ONNX model itself cannot be
+    # loaded the whole batch is impossible, so we fail fast with a non-zero
+    # exit instead of printing one `ERR` line per item.
+    first_voice: str | None = None
+    for item in manifest:
+        if isinstance(item, dict):
+            first_voice = str(item.get("voice") or DEFAULT_VOICE)
+            break
+    if first_voice is None:
+        return 0
+    cache.get(first_voice)
+
+    for index, item in enumerate(manifest):
+        try:
+            if not isinstance(item, dict):
+                raise ValueError("Batch item must be a JSON object.")
+            text = str(item.get("text") or "")
+            voice = str(item.get("voice") or DEFAULT_VOICE)
+            out_raw = str(item.get("out") or "")
+            if not out_raw:
+                raise ValueError("Batch item is missing the 'out' path.")
+            engine = cache.get(voice)
+            audio = engine.synthesize(text, speed=speed, crossfade_ms=crossfade_ms)
+            if audio.size == 0:
+                raise RuntimeError("Kokoro produced no audio (empty or invalid text).")
+            out_path = Path(out_raw)
+            write_wav(out_path, audio, SAMPLE_RATE)
+            print(f"OK {index} {out_path} {audio.size}", flush=True)
+        except Exception as exc:  # noqa: BLE001 - one bad line must not kill the batch
+            print(f"ERR {index} {sanitize_error(str(exc))}", flush=True)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Sublix Kokoro-Vietnamese offline TTS (ONNX)")
-    parser.add_argument("--text", required=True, help="Vietnamese text to synthesize")
+    parser.add_argument("--text", default=None, help="Vietnamese text to synthesize")
     parser.add_argument("--voice", default=DEFAULT_VOICE, help="Voice id from voices.json")
-    parser.add_argument("--out", required=True, help="Output audio path (.wav)")
+    parser.add_argument("--out", default=None, help="Output audio path (.wav)")
+    parser.add_argument(
+        "--batch",
+        default=None,
+        help="Batch manifest JSON: [{text, voice, out}, ...] (loads the model once)",
+    )
     parser.add_argument("--model-dir", default=None, help="Folder with kokoro_vi.onnx + config.json + voicepacks")
     parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="ONNX Runtime device")
     parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
@@ -236,8 +334,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     model_dir = resolve_model_dir(args.model_dir)
+
+    if args.batch:
+        return run_batch(
+            args.batch,
+            model_dir=model_dir,
+            device=args.device,
+            speed=args.speed,
+            crossfade_ms=args.crossfade_ms,
+        )
+
+    if not args.text or not args.out:
+        parser.error("missing --text/--out (use --batch <manifest.json> for batch mode)")
     tts = KokoroVietnameseONNX(model_dir, args.voice, device=args.device)
     audio = tts.synthesize(args.text, speed=args.speed, crossfade_ms=args.crossfade_ms)
     if audio.size == 0:
