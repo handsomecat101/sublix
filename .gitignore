@@ -107,3 +107,7 @@ test-output-*/
 .commandcode/
 
 .tmp-encoding-fix/
+
+# Python sidecar cache (Kokoro TTS script)
+__pycache__/
+*.pyc

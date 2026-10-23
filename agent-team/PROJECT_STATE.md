@@ -13,7 +13,7 @@
 |-------|-------|
 | **Project Name** | **Sublix** |
 | **Bản Build Hiện Tại** | `v0.11.35` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | trên nhánh `fix/voice-timeline-mojibache` (`origin` = `https://github.com/handsomecat101/sublix.git`) |
+| **Git Commit** | trên nhánh `fix/voice-timeline-mojibake` (`origin` = `https://github.com/handsomecat101/sublix.git`) |
 | **Trạng Thái** | 🟢 Sẵn sàng làm việc (version đồng bộ `0.11.35` ở 4 nguồn + 2 tiêu đề cửa sổ native; guard `npm run verify:version` PASS exit 0; `npx tsc --noEmit` 0 lỗi) |
 
 ---
