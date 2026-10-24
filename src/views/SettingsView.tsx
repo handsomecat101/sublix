@@ -37,6 +37,7 @@ import {
 } from "../icons";
 import spotHistoryUrl from "../assets/spot-history.jpg";
 import spotModelsUrl from "../assets/spot-models.jpg";
+import MasterTopbar from "./MasterTopbar";
 import "./SettingsView.css";
 
 type Status =
@@ -1278,152 +1279,83 @@ export default function SettingsView() {
             {/* RIGHT MAIN WORKSPACE */}
       <main className="app-main" style={{ display: activeTab === "studio" ? "none" : "flex" }}>
         {/* MASTER STUDIO TOPBAR */}
-        <header className="studio-topbar">
-          <div className="studio-topbar-left">
-            <div className="studio-brand" onClick={() => setActiveTab("studio")}>
-              <div className="studio-brand-logo">
-                <IconClapper size={15} />
-              </div>
-              <span className="studio-brand-title">SUBLIX STUDIO</span>
-              <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{appInfo?.version ?? APP_VERSION_PKG}</span>
-            </div>
-
-            <nav className="studio-nav-tabs">
+        {/* R2-2: thanh trên DÙNG CHUNG (MasterTopbar) — giống hệt Studio, badge hiện ở MỌI tab. */}
+        <MasterTopbar
+          version={appInfo?.version ?? APP_VERSION_PKG}
+          activeTab={activeTab}
+          onNavigateTab={(tabId) => setActiveTab(tabId as typeof activeTab)}
+          tabs={[
+            { id: "studio", label: "Studio", icon: <IconClapper size={13} /> },
+            {
+              id: "downloader",
+              label: "Tải video",
+              icon: <IconGlobe size={13} />,
+              badge: runningDownloads.length > 0 ? `⬇ ${runningDownloads.length}` : null,
+            },
+            {
+              id: "live",
+              label: "Live",
+              icon: <IconMic size={13} />,
+              badge: isLive ? "LIVE" : null,
+            },
+            { id: "history", label: "Lịch sử", icon: <IconClock size={13} /> },
+            {
+              id: "process",
+              label: "Tiến trình",
+              icon: <IconClock size={13} />,
+              badge: totalActiveTasksCount > 0 ? `⚡ ${totalActiveTasksCount}` : null,
+            },
+            {
+              id: "models",
+              label: "Cài đặt",
+              icon: <IconSettings size={13} />,
+              badge: runningModels.length > 0 ? `📥 ${runningModels.length}` : null,
+            },
+          ]}
+          statusLabel={
+            status.kind === "idle"
+              ? isLive
+                ? "🔴 Đang bắt âm thanh & dịch live..."
+                : "✓ Sẵn sàng"
+              : status.kind === "working"
+              ? `⏳ ${status.message}`
+              : status.kind === "error"
+              ? `⚠ ${status.message}`
+              : `✓ ${status.message}`
+          }
+          onStatusClick={() => setActiveTab("process")}
+          overlay={{
+            onClick: async () => {
+              if (overlayVisible) {
+                await sublix.hideOverlay();
+                setOverlayVisible(false);
+              } else {
+                await sublix.showOverlay();
+                setOverlayVisible(true);
+              }
+            },
+            title: "Bật/tắt Overlay (Ctrl+Shift+O)",
+          }}
+        >
+          {/* 4 chấm đổi theme: tạm giữ ở vùng ngữ cảnh cho tới khi R2-5 thêm mục
+              "Chủ đề" vào Cài đặt (theo plan §4.2 là chuyển hẳn sang Cài đặt). */}
+          <div className="studio-theme-dots" title="Đổi theme giao diện">
+            {[
+              { id: "cinema", bg: "#e8a33d" },
+              { id: "studio", bg: "#2dd4bf" },
+              { id: "light", bg: "#b45309" },
+              { id: "vibrant", bg: "#e11d48" },
+            ].map((t) => (
               <button
+                key={t.id}
                 type="button"
-                className={`studio-nav-tab ${activeTab === "studio" ? "active" : ""}`}
-                onClick={() => setActiveTab("studio")}
-              >
-                <IconClapper size={13} />
-                <span>Studio</span>
-              </button>
-              <button
-                type="button"
-                className={`studio-nav-tab ${activeTab === "downloader" ? "active" : ""}`}
-                onClick={() => setActiveTab("downloader")}
-              >
-                <IconGlobe size={13} />
-                <span>Tải video</span>
-                {runningDownloads.length > 0 && (
-                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
-                    ⬇ {runningDownloads.length}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`studio-nav-tab ${activeTab === "live" ? "active" : ""}`}
-                onClick={() => setActiveTab("live")}
-              >
-                <IconMic size={13} />
-                <span>Live</span>
-                {isLive && (
-                  <span style={{ fontSize: 9, background: "#ef4444", color: "#fff", padding: "1px 5px", borderRadius: 3, fontWeight: 700, marginLeft: 4 }}>
-                    LIVE
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`studio-nav-tab ${activeTab === "history" ? "active" : ""}`}
-                onClick={() => setActiveTab("history")}
-              >
-                <IconClock size={13} />
-                <span>Lịch sử</span>
-              </button>
-              <button
-                type="button"
-                className={`studio-nav-tab ${activeTab === "process" ? "active" : ""}`}
-                onClick={() => setActiveTab("process")}
-              >
-                <IconClock size={13} />
-                <span>Tiến trình</span>
-                {totalActiveTasksCount > 0 ? (
-                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
-                    ⚡ {totalActiveTasksCount}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>
-                    ({processHistory.length})
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`studio-nav-tab ${activeTab === "models" || activeTab === "overlay" ? "active" : ""}`}
-                onClick={() => setActiveTab("models")}
-              >
-                <IconSettings size={13} />
-                <span>Cài đặt</span>
-                {runningModels.length > 0 && (
-                  <span className="sidebar-process-badge pulse-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>
-                    📥 {runningModels.length}
-                  </span>
-                )}
-              </button>
-            </nav>
+                className={`studio-theme-dot ${theme === t.id ? "active" : ""}`}
+                style={{ background: t.bg }}
+                onClick={() => handleThemeChange(t.id)}
+              />
+            ))}
           </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div className={`main-topbar-status status-${status.kind}`} style={{ fontSize: 11.5 }}>
-              {status.kind === "idle" && (isLive ? "🔴 Đang bắt âm thanh & dịch live..." : "✓ Sẵn sàng")}
-              {status.kind === "working" && `⏳ ${status.message}`}
-              {status.kind === "error" && `⚠ ${status.message}`}
-              {status.kind === "success" && `✓ ${status.message}`}
-            </div>
-          </div>
-
-          <div className="studio-topbar-right">
-            <button
-              type="button"
-              className={`topbar-process-btn ${totalActiveTasksCount > 0 ? "has-active" : ""}`}
-              onClick={() => setShowProcessCenter(true)}
-              title="Xem trung tâm toàn bộ tiến trình ứng dụng (Background Jobs)"
-              style={{ padding: "4px 10px", fontSize: 11.5 }}
-            >
-              <span className={totalActiveTasksCount > 0 ? "process-icon-spin" : ""}>
-                {totalActiveTasksCount > 0 ? "⚡" : "📊"}
-              </span>
-              <span>Tiến Trình ({totalActiveTasksCount})</span>
-            </button>
-
-            <div className="studio-theme-dots" title="Đổi theme giao diện">
-              {[
-                { id: "cinema", bg: "#e8a33d" },
-                { id: "studio", bg: "#2dd4bf" },
-                { id: "light", bg: "#b45309" },
-                { id: "vibrant", bg: "#e11d48" },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`studio-theme-dot ${theme === t.id ? "active" : ""}`}
-                  style={{ background: t.bg }}
-                  onClick={() => handleThemeChange(t.id)}
-                />
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className="sidebar-quick-btn"
-              style={{ margin: 0, padding: "4px 10px", fontSize: 11.5 }}
-              onClick={async () => {
-                if (overlayVisible) {
-                  await sublix.hideOverlay();
-                  setOverlayVisible(false);
-                } else {
-                  await sublix.showOverlay();
-                  setOverlayVisible(true);
-                }
-              }}
-              title="Phím tắt: Ctrl+Shift+O"
-            >
-              {overlayVisible ? <IconEyeOff size={13} /> : <IconEye size={13} />}
-              <span>{overlayVisible ? "Ẩn Overlay" : "Hiện Overlay"}</span>
-            </button>
-          </div>
-        </header>
+        </MasterTopbar>
 
         {/* Scrollable Body */}
         <div className="main-body">

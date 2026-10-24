@@ -1,0 +1,445 @@
+/* Studio — panel quy trình 5 bước (R2-3).
+   Bám mockup docs/ui-mockups/studio.html: Cinema Dark, dùng token của App.css. */
+
+.spp-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-side);
+  border-right: 1px solid var(--line);
+}
+
+/* ---------- Rail 5 bước ---------- */
+.spp-rail {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.spp-rail-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 52px;
+}
+.spp-rail-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 700;
+  border: 1.5px solid var(--line);
+  color: var(--t4);
+  background: var(--bg);
+  cursor: pointer;
+}
+.spp-rail-dot.done {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #0e1a10;
+}
+.spp-rail-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--t4);
+  white-space: nowrap;
+}
+.spp-rail-label.cur {
+  color: var(--ac-txt);
+}
+.spp-rail-line {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 32px;
+  height: 1.5px;
+  background: var(--line);
+  transform: translateX(16px);
+}
+.spp-rail-line.done {
+  background: var(--ok);
+}
+
+/* ---------- Danh sách bước ---------- */
+.spp-steps {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.spp-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.spp-card.open {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.035);
+}
+.spp-card.adv {
+  border-style: dashed;
+  background: transparent;
+}
+.spp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.spp-card-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #111;
+  flex: none;
+}
+.spp-card-num.adv-num {
+  width: 18px;
+  color: var(--t3);
+  font-size: 12px;
+}
+.spp-card-titles {
+  flex: 1;
+  min-width: 0;
+}
+.spp-card-title {
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--t1);
+}
+.spp-card-sub {
+  font-size: 11px;
+  color: var(--t3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spp-pill {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--t3);
+  white-space: nowrap;
+}
+.spp-pill.ok {
+  color: var(--ok-txt);
+  border-color: var(--ok-br);
+  background: var(--ok-soft);
+}
+.spp-toggle {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.spp-switch {
+  display: inline-block;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.12);
+  position: relative;
+  flex: none;
+  transition: background 0.15s ease;
+}
+.spp-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--t3);
+  transition: left 0.15s ease, background 0.15s ease;
+}
+.spp-switch.on {
+  background: var(--ac);
+}
+.spp-switch.on::after {
+  left: 15px;
+  background: #1a1209;
+}
+.spp-run-mini {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--t3);
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+.spp-run-mini:hover {
+  color: var(--ac-txt);
+  border-color: var(--ac-br);
+}
+.spp-caret {
+  color: var(--t4);
+  font-size: 12px;
+  width: 10px;
+  text-align: center;
+}
+.spp-card-body {
+  padding: 2px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* ---------- Field ---------- */
+.spp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.spp-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.spp-label {
+  font-size: 11px;
+  color: var(--t3);
+  font-weight: 600;
+}
+.spp-hint {
+  font-size: 10.5px;
+  color: var(--t4);
+}
+.spp-note {
+  font-size: 11px;
+  color: var(--t4);
+}
+.spp-select,
+.spp-input {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  font-size: 12px;
+  width: 100%;
+}
+.spp-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+  color: var(--t2);
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.spp-provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+}
+.spp-provider-text {
+  font-size: 11.5px;
+  color: var(--t2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spp-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--ac-txt);
+  font-weight: 700;
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+.spp-mini-btn {
+  border: 1px solid var(--ac-br);
+  background: var(--ac-soft);
+  color: var(--ac-txt);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+  flex: none;
+}
+.spp-engine-warn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-br);
+}
+.spp-engine-warn-text {
+  font-size: 10.5px;
+  color: var(--warn-txt);
+}
+
+/* ---------- Vai diễn ---------- */
+.spp-voice-body {
+  padding: 2px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.spp-role {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  gap: 5px 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line-soft);
+}
+.spp-role-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.spp-role-name {
+  background: transparent;
+  border: none;
+  color: var(--t1);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+  padding: 0;
+}
+.spp-role-name:focus {
+  outline: 1px solid var(--ac-br);
+  border-radius: 3px;
+}
+.spp-gender-btn {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.spp-role-count {
+  font-size: 10.5px;
+  color: var(--t4);
+  white-space: nowrap;
+}
+.spp-role-voice {
+  grid-column: 2 / 5;
+  height: 27px;
+  font-size: 11.5px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  width: 100%;
+}
+.spp-play-btn {
+  grid-column: 5;
+  grid-row: 2;
+  width: 27px;
+  height: 27px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  color: var(--t2);
+  font-size: 11px;
+  cursor: pointer;
+  align-self: center;
+}
+.spp-add-role {
+  margin-top: 2px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--t3);
+  padding: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.spp-add-role:hover {
+  color: var(--t1);
+  border-color: var(--ac-br);
+}
+
+/* ---------- Hồ sơ phim ---------- */
+.spp-glossary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.spp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--t2);
+}
+.spp-chip-x {
+  border: none;
+  background: transparent;
+  color: var(--t4);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0;
+}
+.spp-chip-x:hover {
+  color: var(--dang-txt);
+}
+
+/* ---------- Chân panel: nút chạy ---------- */
+.spp-foot {
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.spp-hint-center {
+  font-size: 10px;
+  color: var(--t4);
+  text-align: center;
+  white-space: nowrap;
+}

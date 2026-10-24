@@ -1,0 +1,161 @@
+/* MasterTopbar — thanh trên dùng chung cho 6 tab (R2-2).
+   Bám mockup docs/ui-mockups/studio.html (token Cinema Dark của src/App.css). */
+
+.master-topbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--bg-top);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.master-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-size: 13px;
+  flex: none;
+}
+.master-brand-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--grad-ac);
+  display: grid;
+  place-items: center;
+  color: #1a1209;
+  font-size: 14px;
+}
+.master-brand-title {
+  white-space: nowrap;
+}
+.master-brand-ver {
+  background: var(--ac);
+  color: #000;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 800;
+}
+
+.master-topbar-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+  flex: none;
+}
+.master-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t3);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.master-tab:hover {
+  color: var(--t2);
+  background: var(--hover);
+}
+.master-tab.on {
+  color: var(--ac-txt);
+  background: var(--ac-soft);
+  border-color: var(--ac-br);
+}
+.master-tab-badge {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--ac);
+  color: #000;
+  font-weight: 800;
+}
+
+.master-topbar-context {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.master-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.master-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--t2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.master-status-pill:hover {
+  background: var(--hover);
+}
+.master-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  display: inline-block;
+}
+.master-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  color: var(--t2);
+  font-size: 14px;
+  cursor: pointer;
+}
+.master-icon-btn:hover {
+  background: var(--hover);
+  color: var(--t1);
+}
+.master-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  color: var(--t1);
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.master-btn:hover {
+  background: var(--hover);
+}
+.master-btn.primary {
+  background: var(--grad-ac);
+  border-color: transparent;
+  color: #1a1209;
+  font-weight: 800;
+  box-shadow: var(--shadow-btn);
+}

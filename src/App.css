@@ -45,6 +45,12 @@
   --dang-txt: #f2a99f;
   --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
   --shadow-btn: 0 2px 8px rgba(180, 86, 31, 0.35);
+
+  /* Màu 3 bước quy trình (Nguồn & Phụ đề / Dịch / Lồng tiếng) — dùng chung
+     cho rail 5 bước + panel trái Studio (thiết kế vòng 2, R2-1). */
+  --step-sub: #38bdf8;
+  --step-tr: #a78bfa;
+  --step-dub: #f59e0b;
 }
 
 [data-theme="studio"] {

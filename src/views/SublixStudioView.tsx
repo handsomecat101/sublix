@@ -2,18 +2,31 @@
 //! Reverse-Engineered from EZMAXSUB (ezmaxsoft.com) benchmark.
 //! Specification: agent-team/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
 
-import { useState, useEffect, useLayoutEffect, useRef, memo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, memo, useCallback } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   sublix,
+  type DubbingProgress,
   type DubbingProject,
   type AppConfig,
-  type DubbingProgress,
+  type TtsEngineInfo,
+  type VoicePreset,
 } from "../lib/tauri";
 import { subtitleSourceLabel } from "../lib/types";
 import { version as APP_VERSION_PKG } from "../../package.json";
+// R2-3: panel quy trình 5 bước (tách riêng để file này không phình thêm).
+import StudioPipelinePanel from "./studio/StudioPipelinePanel";
+import MasterTopbar from "./MasterTopbar";
+import type {
+  PanelEngine,
+  PanelRole,
+  PanelVoiceOption,
+  PipelineOpenStep,
+  StudioPipelineApi,
+  StudioPipelineState,
+} from "./studio/studioPipelineTypes";
 import {
   IconFilm,
   IconClapper,
@@ -23,10 +36,6 @@ import {
   IconVolumeX,
   IconSearch,
   IconPlus,
-  IconChevronDown,
-  IconChevronRight,
-  IconUser,
-  IconUndo,
   IconSettings,
   IconGlobe,
   IconMic,
@@ -616,104 +625,16 @@ const StudioTimelineMarkerLines = memo(function StudioTimelineMarkerLines({
   );
 });
 
-export type TtsEngineKey = "vietneu" | "kokoro" | "edge";
-export interface VoiceOption {
-  id: string;
-  label: string;
-  gender: "male" | "female";
-  accent: string;
-  tag: string;
-  description: string;
-}
+/**
+ * Id engine TTS — KHỚP backend (`tts_engines_status`).
+ *
+ * R2-3 (UI redesign vòng 2): frontend KHÔNG hard-code danh sách engine/giọng nữa;
+ * engine + giọng đọc đến từ backend (`tts_engines_status` + `dubbing_get_voices`).
+ * Backend tự fallback (VieNeu chưa tải model -> Kokoro, xem `tts_vieneu::route_voice`),
+ * nên frontend KHÔNG map `vietneu:` -> `kokoro:` nữa.
+ */
+export type TtsEngineKey = "kokoro" | "vieneu" | "zerotts" | "gcloud" | "fptai";
 
-export interface TtsEngineModel {
-  id: TtsEngineKey;
-  name: string;
-  shortName: string;
-  badge: string;
-  badgeType: "offline" | "cloud" | "neural";
-  speed: string;
-  sizeMb: number;
-  description: string;
-  samplePhrase: string;
-  defaultMaleVoice: string;
-  defaultFemaleVoice: string;
-  voices: VoiceOption[];
-}
-
-export const TTS_ENGINE_MODELS: Record<TtsEngineKey, TtsEngineModel> = {
-  vietneu: {
-    id: "vietneu",
-    name: "VietNeu TTS AI",
-    shortName: "VietNeu AI",
-    badge: "🌟 Neural v2",
-    badgeType: "neural",
-    speed: "Rất nhanh (~0.3s)",
-    sizeMb: 120,
-    description: "Mô hình Neural tối ưu ngữ điệu tiếng Việt tự nhiên, truyền cảm, ngắt nghỉ theo ngữ cảnh câu thoại, rất mượt mà cho phim & truyện.",
-    samplePhrase: "Xin chào! Đây là bản nghe thử giọng đọc biểu cảm cao từ mô hình VietNeu TTS AI.",
-    defaultMaleVoice: "vietneu:vi_bac_nam",
-    defaultFemaleVoice: "vietneu:vi_bac_nu",
-    voices: [
-      { id: "vietneu:vi_bac_nam", label: "🌟 VietNeu Nam ♂ (Bắc - Truyền cảm, Review Phim)", gender: "male", accent: "Miền Bắc", tag: "Review Phim", description: "Giọng nam trầm ấm, truyền cảm, thích hợp phim tài liệu & review" },
-      { id: "vietneu:vi_bac_nu", label: "🌟 VietNeu Nữ ♀ (Bắc - Dịu dàng, Sách nói)", gender: "female", accent: "Miền Bắc", tag: "Sách nói", description: "Giọng nữ trong trẻo, dịu dàng, thích hợp thuyết minh & sách nói" },
-      { id: "vietneu:vi_nam_nam", label: "🌟 VietNeu Nam ♂ (Nam - Ấm áp, Podcast)", gender: "male", accent: "Miền Nam", tag: "Podcast", description: "Giọng nam miền Nam gần gũi, ấm áp, thích hợp podcast" },
-      { id: "vietneu:vi_nam_nu", label: "🌟 VietNeu Nữ ♀ (Nam - Tự nhiên, Vlog)", gender: "female", accent: "Miền Nam", tag: "Vlog", description: "Giọng nữ miền Nam trẻ trung, tự nhiên cho vlog đời sống" },
-      { id: "vietneu:vi_hue_nu", label: "🌟 VietNeu Nữ ♀ (Huế - Ngọt ngào, Trữ tình)", gender: "female", accent: "Miền Trung", tag: "Trữ tình", description: "Giọng nữ Huế ngọt ngào, sâu lắng, đậm chất thơ" },
-      { id: "vietneu:vi_bac_thoisu", label: "🌟 VietNeu Nam ♂ (Bắc - Thời sự, Tin tức)", gender: "male", accent: "Miền Bắc", tag: "Thời sự", description: "Giọng nam đĩnh đạc, dứt khoát, chuẩn bản tin thời sự" },
-    ],
-  },
-  kokoro: {
-    id: "kokoro",
-    name: "Kokoro-Vietnamese",
-    shortName: "Kokoro Local",
-    badge: "📦 Offline 100%",
-    badgeType: "offline",
-    speed: "Realtime x5 (ONNX)",
-    sizeMb: 82,
-    description: "Mô hình ONNX siêu nhẹ chạy hoàn toàn trên máy tính, không cần internet, bảo mật tuyệt đối, độ trễ cực thấp.",
-    samplePhrase: "Xin chào! Đây là giọng đọc mẫu từ mô hình Kokoro tiếng Việt chạy hoàn toàn offline trên máy tính.",
-    defaultMaleVoice: "kokoro:tuan_ngoc",
-    defaultFemaleVoice: "kokoro:mai_linh",
-    voices: [
-      { id: "kokoro:tuan_ngoc", label: "🎙️ Tuấn Ngọc ♂ (Bắc - Trầm ấm, Thuyết minh)", gender: "male", accent: "Miền Bắc", tag: "Thuyết minh", description: "Giọng nam Bắc trầm ấm, điềm đạm, độ vang tốt" },
-      { id: "kokoro:manh_dung", label: "🎙️ Mạnh Dũng ♂ (Nam - Tự nhiên, Mạnh mẽ)", gender: "male", accent: "Miền Nam", tag: "Mạnh mẽ", description: "Giọng nam Nam mạnh mẽ, dứt khoát" },
-      { id: "kokoro:hung_thinh", label: "🎙️ Hưng Thịnh ♂ (Bắc - Phóng sự, Thời sự)", gender: "male", accent: "Miền Bắc", tag: "Thời sự", description: "Giọng nam Bắc trang trọng, rõ ràng" },
-      { id: "kokoro:phat_tai", label: "🎙️ Phát Tài ♂ (Nam - Hào sảng, Thể thao)", gender: "male", accent: "Miền Nam", tag: "Hào sảng", description: "Giọng nam Nam nhiệt huyết, sôi nổi" },
-      { id: "kokoro:thanh_dat", label: "🎙️ Thành Đạt ♂ (Bắc - Tự tin, Trẻ trung)", gender: "male", accent: "Miền Bắc", tag: "Trẻ trung", description: "Giọng nam Bắc trẻ trung, năng động" },
-      { id: "kokoro:duc_an", label: "🎙️ Đức An ♂ (Bắc - Điềm đạm, Trầm tĩnh)", gender: "male", accent: "Miền Bắc", tag: "Điềm đạm", description: "Giọng nam Bắc từ tốn, tri thức" },
-      { id: "kokoro:duc_duy", label: "🎙️ Đức Duy ♂ (Nam - Năng động, Hoạt náo)", gender: "male", accent: "Miền Nam", tag: "Hoạt náo", description: "Giọng nam Nam vui vẻ, hoạt bát" },
-      { id: "kokoro:mai_linh", label: "🎙️ Mai Linh ♀ (Bắc - Nhẹ nhàng, Trong trẻo)", gender: "female", accent: "Miền Bắc", tag: "Trong trẻo", description: "Giọng nữ Bắc thanh thoát, dễ nghe" },
-      { id: "kokoro:ngoc_huyen", label: "🎙️ Ngọc Huyền ♀ (Nam - Truyền cảm, Tâm sự)", gender: "female", accent: "Miền Nam", tag: "Tâm sự", description: "Giọng nữ Nam ấm áp, nhẹ nhàng" },
-      { id: "kokoro:diem_trinh", label: "🎙️ Diễm Trinh ♀ (Bắc - Điện ảnh, Sang trọng)", gender: "female", accent: "Miền Bắc", tag: "Điện ảnh", description: "Giọng nữ Bắc kiêu kỳ, chuẩn điện ảnh" },
-      { id: "kokoro:mai_loan", label: "🎙️ Mai Loan ♀ (Bắc - Ấm áp, Trưởng thành)", gender: "female", accent: "Miền Bắc", tag: "Trưởng thành", description: "Giọng nữ Bắc từng trải, sâu lắng" },
-      { id: "kokoro:my_yen", label: "🎙️ Mỹ Yến ♀ (Nam - Ngọt ngào, Tươi tắn)", gender: "female", accent: "Miền Nam", tag: "Tươi tắn", description: "Giọng nữ Nam dễ thương, tươi vui" },
-      { id: "kokoro:thuc_trinh", label: "🎙️ Thục Trinh ♀ (Bắc - Trang nhã, Lịch thiệp)", gender: "female", accent: "Miền Bắc", tag: "Lịch thiệp", description: "Giọng nữ Bắc chuẩn mực, nhã nhặn" },
-      { id: "kokoro:storyvert", label: "🎙️ Storyvert ♀ (Bắc - Kể chuyện cổ tích, Sách nói)", gender: "female", accent: "Miền Bắc", tag: "Kể chuyện", description: "Giọng nữ Bắc biến hóa, truyền cảm kể chuyện" },
-    ],
-  },
-  edge: {
-    id: "edge",
-    name: "Edge-TTS Cloud",
-    shortName: "Edge Cloud",
-    badge: "☁️ Microsoft Azure",
-    badgeType: "cloud",
-    speed: "Ổn định (Cloud)",
-    sizeMb: 0,
-    description: "Giọng đọc chuẩn phát thanh viên Microsoft Azure đám mây, độ rõ âm cực cao, miễn phí 24/7.",
-    samplePhrase: "Xin chào! Đây là giọng đọc thử nghiệm chất lượng cao từ dịch vụ Microsoft Edge TTS đám mây.",
-    defaultMaleVoice: "vi-VN-NamMinhNeural",
-    defaultFemaleVoice: "vi-VN-HoaiMyNeural",
-    voices: [
-      { id: "vi-VN-NamMinhNeural", label: "🌐 Nam Minh ♂ (Bắc - Chuẩn phát thanh viên)", gender: "male", accent: "Miền Bắc", tag: "Phát thanh", description: "Giọng nam Bắc chuẩn truyền hình, rõ chữ" },
-      { id: "vi-VN-HoaiMyNeural", label: "🌐 Hoài My ♀ (Bắc - Dịu êm, Sâu lắng)", gender: "female", accent: "Miền Bắc", tag: "Dịu êm", description: "Giọng nữ Bắc êm dịu, chuẩn mực" },
-      { id: "en-US-AndrewNeural", label: "🌐 Andrew ♂ (Mỹ - Tiếng Anh Đa sắc thái)", gender: "male", accent: "Tiếng Anh Mỹ", tag: "English Male", description: "Giọng nam tiếng Anh tự nhiên, đa sắc thái" },
-      { id: "en-US-AvaNeural", label: "🌐 Ava ♀ (Mỹ - Tiếng Anh Biểu cảm)", gender: "female", accent: "Tiếng Anh Mỹ", tag: "English Female", description: "Giọng nữ tiếng Anh biểu cảm, trong trẻo" },
-      { id: "zh-CN-YunxiNeural", label: "🌐 Vân Hy ♂ (Trung - Trầm ấm, Kể chuyện)", gender: "male", accent: "Tiếng Trung", tag: "Chinese Male", description: "Giọng nam tiếng Trung chuẩn phổ thông" },
-      { id: "ja-JP-KeitaNeural", label: "🌐 Keita ♂ (Nhật - Tự nhiên, Đàm thoại)", gender: "male", accent: "Tiếng Nhật", tag: "Japanese Male", description: "Giọng nam tiếng Nhật tự nhiên, hiện đại" },
-    ],
-  },
-};
 
 const STUDIO_PROJECT_CACHE_KEY = "sublix_active_studio_project_v1";
 
@@ -754,7 +675,6 @@ export default function SublixStudioView({
   });
 
   // Navigation & Project Meta
-  const [activeTab, setActiveTab] = useState<string>("studio");
   const [filePath, setFilePath] = useState<string>(
     initialFilePath || cachedProject?.filePath || ""
   );
@@ -786,10 +706,7 @@ export default function SublixStudioView({
   const [undoTranslationStack, setUndoTranslationStack] = useState<Array<{ id: number; translated: string }[]>>([]);
   const [undoAudioStack, setUndoAudioStack] = useState<SpeakerItem[][]>([]);
 
-  // Step Accordion Toggles (P2) - Khối Phụ đề & Khối Lồng tiếng
-  const [openSubCard, setOpenSubCard] = useState<boolean>(true);
-  const [openDubCard, setOpenDubCard] = useState<boolean>(true);
-  const [leftTab, setLeftTab] = useState<"pipeline" | "review">("pipeline");
+  // R2-3: accordion 1-bước-mở nằm trong `pipelineOpenStep` (panel mới).
 
   // Kích thước có thể thay đổi của Panel Trái & Panel Phải (Resizable Sidebars)
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
@@ -818,34 +735,61 @@ export default function SublixStudioView({
   const [isDraggingRight, setIsDraggingRight] = useState<boolean>(false);
 
   // Bộ chọn TTS Engine / Model AI (chỉ chọn 1 trong 3 mô hình, không còn 'all')
+  // R2-3: engine + giọng đọc lấy TỪ BACKEND (`tts_engines_status` + `dubbing_get_voices`).
   const [selectedTtsEngine, setSelectedTtsEngine] = useState<TtsEngineKey>(() => {
     try {
       const saved = localStorage.getItem("sublix_selected_tts_engine");
-      if (saved && (saved === "vietneu" || saved === "kokoro" || saved === "edge")) {
+      // Migrate id cũ của frontend (vietneu/edge) sang id backend (vieneu/…).
+      if (saved === "vietneu") return "vieneu";
+      if (
+        saved === "kokoro" ||
+        saved === "vieneu" ||
+        saved === "zerotts" ||
+        saved === "gcloud" ||
+        saved === "fptai"
+      ) {
         return saved as TtsEngineKey;
       }
     } catch {}
-    return "vietneu";
+    return "vieneu";
   });
+
+  // Trạng thái engine TTS + danh mục giọng đọc (nguồn sự thật: backend).
+  const [ttsEngines, setTtsEngines] = useState<TtsEngineInfo[]>([]);
+  const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
+  const [ttsEngineDownloading, setTtsEngineDownloading] = useState<string | null>(null);
+  const [ttsEngineDownloadPct, setTtsEngineDownloadPct] = useState<number | null>(null);
+
+  /** Danh sách giọng của 1 engine (lọc theo prefix do backend khai báo). */
+  const voicesForEngine = useCallback(
+    (engine: TtsEngineKey | string): VoicePreset[] => {
+      const info = ttsEngines.find((e) => e.id === engine);
+      const prefix = info?.prefix;
+      if (!prefix) return voicePresets.filter((v) => !v.id.includes(":"));
+      return voicePresets.filter((v) => v.id.startsWith(prefix));
+    },
+    [ttsEngines, voicePresets],
+  );
+
+  /** Giọng mặc định (nam/nữ) của engine — lấy từ danh mục backend. */
+  const defaultVoiceForEngine = useCallback(
+    (engine: TtsEngineKey | string, gender: "male" | "female"): string => {
+      const list = voicesForEngine(engine);
+      const found = list.find((v) => v.gender === gender) ?? list[0];
+      return found?.id ?? "";
+    },
+    [voicesForEngine],
+  );
 
   // State & Ref nghe thử âm thanh mẫu của Model và Speaker (quản lý dừng/phát mượt mà, không đè)
   const currentAudioPreviewRef = useRef<HTMLAudioElement | null>(null);
   const [playingEngineSample, setPlayingEngineSample] = useState<TtsEngineKey | null>(null);
-  const [loadingEngineSample, setLoadingEngineSample] = useState<TtsEngineKey | null>(null);
   const engineSampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Ánh xạ giọng đọc cho TTS engine (Hỗ trợ VietNeu TTS, Kokoro Local và Edge TTS)
-  const mapVoiceForEngine = (voice: string): string => {
-    if (voice.startsWith("vietneu:")) {
-      if (voice.includes("bac_nu")) return "kokoro:mai_linh";
-      if (voice.includes("nam_nu") || voice.includes("hue_nu")) return "kokoro:ngoc_huyen";
-      if (voice.includes("bac_nam")) return "kokoro:tuan_ngoc";
-      if (voice.includes("nam_nam")) return "kokoro:manh_dung";
-      if (voice.includes("thoisu")) return "kokoro:hung_thinh";
-      return "kokoro:tuan_ngoc";
-    }
-    return voice;
-  };
+  // R2-3: KHÔNG map `vietneu:` → `kokoro:` ở frontend nữa.
+  // Backend tự route/fallback (`tts_vieneu::route_voice` trong synthesize_speech):
+  // VieNeu chưa tải model → fallback Kokoro, nên không mất tiếng project cũ.
+  // Frontend chỉ gửi nguyên id giọng của vai xuống backend.
 
   // Step 1: STT Settings
   const [sttLang, setSttLang] = useState<string>("auto");
@@ -860,10 +804,11 @@ export default function SublixStudioView({
   const [openrouterModel, setOpenrouterModel] = useState<string>("deepseek/deepseek-chat");
   const [minimaxKey, setMinimaxKey] = useState<string>("");
   const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-M3");
+  // R2-4: model Ollama chỉ dùng để hiện dòng "nhà cung cấp" (chỉ đọc) ở panel.
+  const [ollamaModel, setOllamaModel] = useState<string>("");
   const [transStyle, setTransStyle] = useState<string>("theatrical");
   // R2-04.3: Glossary starts empty, loaded from AppConfig
   const [glossary, setGlossary] = useState<string[]>([]);
-  const [newGlossaryTerm, setNewGlossaryTerm] = useState<string>("");
   const [reviewScore, setReviewScore] = useState<number | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
 
@@ -1193,6 +1138,7 @@ export default function SublixStudioView({
       if (cfg.openrouter_model) setOpenrouterModel(cfg.openrouter_model);
       if (cfg.minimax_api_key) setMinimaxKey(cfg.minimax_api_key);
       if (cfg.minimax_model) setMinimaxModel(cfg.minimax_model);
+      if (cfg.ollama_model) setOllamaModel(cfg.ollama_model);
       if (cfg.target_lang) setTargetLang(cfg.target_lang);
       if (cfg.glossary && Array.isArray(cfg.glossary)) {
         setGlossary(cfg.glossary);
@@ -1596,7 +1542,7 @@ export default function SublixStudioView({
         isFetchingTtsRef.current.add(seg.id);
         const textToSpeak = (seg.translated || seg.original || "").trim();
         const spk = speakersRef.current.find((s) => s.id === seg.speakerId);
-        const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
+        const voice = spk?.voice || defaultVoiceForEngine(selectedTtsEngine, "male");
         if (textToSpeak) {
           sublix.dubbingPreviewTts(textToSpeak, voice).then((wavData) => {
             isFetchingTtsRef.current.delete(seg.id);
@@ -1815,20 +1761,6 @@ export default function SublixStudioView({
 
   // R4-05: chỉ save undo khi nội dung THẬT SỰ thay đổi.
   // Lưu snapshot trước khi user focus vo input; nếu blur với cng gi trị → b qua.
-  // R5-05: push `before` (TRƯỚC khi sửa) ln stack. Bug củ: gi saveAudioUndo() (push `after`) → no-op.
-  const audioPreFocusRef = useRef<SpeakerItem[] | null>(null);
-  const saveAudioUndoIfChanged = () => {
-    const before = audioPreFocusRef.current;
-    audioPreFocusRef.current = null;
-    if (!before) return;
-    const after = speakersRef.current;
-    const changed = JSON.stringify(before) !== JSON.stringify(after);
-    if (changed) {
-      // Push `before` (snapshot TRƯỚC khi user sửa) thay v `after` → bấm ↶ khi phục đng.
-      setUndoAudioStack((prev) => [...prev.slice(-19), before]);
-    }
-  };
-
   const saveUndoHistory = () => {
     saveSubtitleUndo();
   };
@@ -1958,13 +1890,13 @@ export default function SublixStudioView({
     setTwoSpeakerGenderPreset(preset);
     saveAudioUndo();
 
-    const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
-    const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
-    const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+    const currentEngine = voicesForEngine(selectedTtsEngine);
+    const maleVoices = currentEngine.filter((v) => v.gender === "male");
+    const femaleVoices = currentEngine.filter((v) => v.gender === "female");
 
-    const maleV1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+    const maleV1 = maleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "male");
     const maleV2 = maleVoices[1]?.id || maleV1;
-    const femaleV1 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+    const femaleV1 = femaleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "female");
     const femaleV2 = femaleVoices[1]?.id || femaleV1;
 
     setSpeakers((prev) => {
@@ -2021,18 +1953,18 @@ export default function SublixStudioView({
       mm: "👨‍🦱👨‍🦱 2 Nam (Nam & Nam)",
       ff: "👩👩 2 Nữ (Nữ & Nữ)",
     };
-    showToast(`🎭 Đã áp dụng phân vai: ${labelMap[preset]} (${currentEngine.name})`);
+    showToast(`🎭 Đã áp dụng phân vai: ${labelMap[preset]} (${selectedTtsEngine})`);
   };
 
   // Toggle giới tính riêng của từng vai diễn: Nam ⇄ Nữ
   const handleToggleSpeakerGender = (idx: number) => {
     saveAudioUndo();
-    const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
-    const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
-    const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+    const currentEngine = voicesForEngine(selectedTtsEngine);
+    const maleVoices = currentEngine.filter((v) => v.gender === "male");
+    const femaleVoices = currentEngine.filter((v) => v.gender === "female");
 
-    const maleVoice = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
-    const femaleVoice = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+    const maleVoice = maleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "male");
+    const femaleVoice = femaleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "female");
 
     setSpeakers((prev) =>
       prev.map((s, i) => {
@@ -4099,7 +4031,7 @@ export default function SublixStudioView({
           name: "Thuyết minh AI",
           gender: "male",
           color: "#38bdf8",
-          voice: TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam",
+          voice: defaultVoiceForEngine(selectedTtsEngine, "male") || "kokoro:tuan_ngoc",
           count: project.segments.length,
           sampleAudio: null,
         };
@@ -4434,7 +4366,7 @@ export default function SublixStudioView({
 
         // speakersRef (không phải `speakers`): khi chạy nối tiếp sau bóc tách, closure cũ còn giữ roster TRƯỚC khi phân vai
         const spk = speakersRef.current.find((s) => s.id === seg.speakerId);
-        const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
+        const voice = spk?.voice || defaultVoiceForEngine(selectedTtsEngine, "male");
         // R32: LƯU clip tiếng lồng thật + đo độ dài thật (trước đây vứt kết quả, chỉ giơ cờ hasAudio)
         let clipDataUri: string | undefined;
         try {
@@ -4624,8 +4556,7 @@ export default function SublixStudioView({
         }
 
         let mappedSpeakers: SpeakerItem[] = [];
-        const currentEngine = TTS_ENGINE_MODELS[selectedTtsEngine];
-        const defaultVoice = currentEngine?.defaultMaleVoice || "vietneu:vi_bac_nam";
+        const defaultVoice = defaultVoiceForEngine(selectedTtsEngine, "male") || "kokoro:tuan_ngoc";
 
         if (expectedSpeakerCount === 1) {
           const singleSpk: SpeakerItem = {
@@ -4641,23 +4572,25 @@ export default function SublixStudioView({
           setSpeakers(mappedSpeakers);
         } else if (expectedSpeakerCount === 2) {
           // Xử lý chuẩn xác cho 2 người nói theo preset Nam/Nữ người dùng chọn
-          const maleVoices = currentEngine.voices.filter((v) => v.gender === "male");
-          const femaleVoices = currentEngine.voices.filter((v) => v.gender === "female");
+          // Giọng lấy từ danh mục BACKEND của engine đang chọn.
+          const engineVoices = voicesForEngine(selectedTtsEngine);
+          const maleVoices = engineVoices.filter((v) => v.gender === "male");
+          const femaleVoices = engineVoices.filter((v) => v.gender === "female");
 
           let g1: "male" | "female" = "male";
           let g2: "male" | "female" = "female";
-          let v1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
-          let v2 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+          let v1 = maleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "male");
+          let v2 = femaleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "female");
 
           if (twoSpeakerGenderPreset === "mm") {
             g1 = "male";
             g2 = "male";
-            v1 = maleVoices[0]?.id || currentEngine.defaultMaleVoice;
+            v1 = maleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "male");
             v2 = maleVoices[1]?.id || v1;
           } else if (twoSpeakerGenderPreset === "ff") {
             g1 = "female";
             g2 = "female";
-            v1 = femaleVoices[0]?.id || currentEngine.defaultFemaleVoice;
+            v1 = femaleVoices[0]?.id || defaultVoiceForEngine(selectedTtsEngine, "female");
             v2 = femaleVoices[1]?.id || v1;
           }
 
@@ -4906,9 +4839,9 @@ export default function SublixStudioView({
     try {
       const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
       let dataUri: string | null = null;
-      const spkVoice = spk.voice || "vietneu:vi_bac_nam";
-      const mappedVoice = mapVoiceForEngine(spkVoice);
-      const cleanVoice = mappedVoice.replace(/^kokoro:/, "");
+      const spkVoice = spk.voice || defaultVoiceForEngine(selectedTtsEngine, "male");
+      // R2-3: không map vietneu→kokoro ở frontend; backend tự route/fallback.
+      const cleanVoice = spkVoice.replace(/^kokoro:/, "");
 
       if (isTauriEnv) {
         // Nếu là Kokoro: Đọc trực tiếp từ 14 file mẫu .wav có sẵn trong repo
@@ -4924,7 +4857,7 @@ export default function SublixStudioView({
         if (!dataUri) {
           try {
             const samplePhrase = `Xin chào, tôi là ${spk.name}, đây là mẫu giọng đọc được gán cho nhân vật của tôi.`;
-            dataUri = await sublix.dubbingPreviewTts(samplePhrase, mappedVoice);
+            dataUri = await sublix.dubbingPreviewTts(samplePhrase, spkVoice);
           } catch (e) {
             console.warn("Preview TTS invoke failed:", e);
           }
@@ -4934,7 +4867,7 @@ export default function SublixStudioView({
       if (dataUri) {
         handlePlayAudio(dataUri, spk.id);
         const voiceLabel = spkVoice.startsWith("vietneu:")
-          ? `VietNeu AI (${spkVoice.replace("vietneu:", "")})`
+          ? `VieNeu (${spkVoice.replace("vietneu:", "")})`
           : spkVoice.startsWith("kokoro:")
           ? `Kokoro (${cleanVoice})`
           : spkVoice;
@@ -5036,17 +4969,19 @@ export default function SublixStudioView({
       localStorage.setItem("sublix_selected_tts_engine", engine);
     } catch {}
 
-    const model = TTS_ENGINE_MODELS[engine];
-    const validVoiceIds = new Set(model.voices.map((v) => v.id));
+    const model = voicesForEngine(engine);
+    const validVoiceIds = new Set(model.map((v) => v.id));
 
-    // Tự động kiểm tra và re-map giọng của các vai nếu giọng hiện tại không thuộc model vừa chọn
+    // Tự động kiểm tra và re-map giọng của các vai nếu giọng hiện tại không thuộc engine vừa chọn
     setSpeakers((prev) => {
       let changed = false;
       const updated = prev.map((s, idx) => {
         if (!validVoiceIds.has(s.voice)) {
           changed = true;
           const isFemale = s.name.toLowerCase().includes("nữ") || s.name.toLowerCase().includes("female") || idx % 2 === 1;
-          const newVoice = isFemale ? model.defaultFemaleVoice : model.defaultMaleVoice;
+          const newVoice = isFemale
+            ? defaultVoiceForEngine(engine, "female")
+            : defaultVoiceForEngine(engine, "male");
           return { ...s, voice: newVoice };
         }
         return s;
@@ -5057,21 +4992,22 @@ export default function SublixStudioView({
       return updated;
     });
 
-    showToast(`✅ Đã kích hoạt mô hình ${model.name}. Danh sách giọng các vai đã được cập nhật tương ứng!`);
+    showToast(`✅ Đã kích hoạt engine ${engine}. Danh sách giọng các vai đã được cập nhật tương ứng!`);
   };
 
   // Áp dụng nhanh giọng mặc định của Model cho tất cả các vai
   const handleApplyEngineToAllSpeakers = (engine: TtsEngineKey) => {
     saveAudioUndo();
-    const model = TTS_ENGINE_MODELS[engine];
     setSpeakers((prev) =>
       prev.map((s, idx) => {
         const isFemale = s.name.toLowerCase().includes("nữ") || s.name.toLowerCase().includes("female") || idx % 2 === 1;
-        const newVoice = isFemale ? model.defaultFemaleVoice : model.defaultMaleVoice;
+        const newVoice = isFemale
+          ? defaultVoiceForEngine(engine, "female")
+          : defaultVoiceForEngine(engine, "male");
         return { ...s, voice: newVoice };
       })
     );
-    showToast(`✅ Đã đồng bộ giọng đọc (${model.shortName}) cho tất cả các vai diễn`);
+    showToast(`✅ Đã đồng bộ giọng đọc (${engine}) cho tất cả các vai diễn`);
   };
 
   // Nghe thử âm thanh mẫu đại diện của từng Mô hình TTS (VietNeu / Kokoro / Edge)
@@ -5100,8 +5036,10 @@ export default function SublixStudioView({
       engineSampleAudioRef.current = null;
     }
 
-    const model = TTS_ENGINE_MODELS[engineKey];
-    setLoadingEngineSample(engineKey);
+    // R2-3: giọng mẫu lấy từ danh mục BACKEND, không hard-code theo engine.
+    const engineVoices = voicesForEngine(engineKey);
+    const sampleVoice = engineVoices[0]?.id ?? "";
+    const samplePhrase = "Xin chào! Đây là bản nghe thử giọng đọc của Sublix Studio.";
 
     try {
       const isTauriEnv = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
@@ -5115,16 +5053,12 @@ export default function SublixStudioView({
           }
         }
         if (!dataUri && isTauriEnv) {
-          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "kokoro:tuan_ngoc").catch(() => null);
+          dataUri = await sublix
+            .dubbingPreviewTts(samplePhrase, sampleVoice || "kokoro:tuan_ngoc")
+            .catch(() => null);
         }
-      } else if (engineKey === "vietneu") {
-        if (isTauriEnv) {
-          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "vi-VN-NamMinhNeural").catch(() => null);
-        }
-      } else if (engineKey === "edge") {
-        if (isTauriEnv) {
-          dataUri = await sublix.dubbingPreviewTts(model.samplePhrase, "vi-VN-NamMinhNeural").catch(() => null);
-        }
+      } else if (sampleVoice && isTauriEnv) {
+        dataUri = await sublix.dubbingPreviewTts(samplePhrase, sampleVoice).catch(() => null);
       }
 
       if (dataUri) {
@@ -5143,15 +5077,14 @@ export default function SublixStudioView({
           setPlayingEngineSample((curr) => (curr === engineKey ? null : curr));
         };
         await audio.play();
-        showToast(`🎧 Đang phát mẫu giọng đại diện của ${model.name}`);
+        showToast(`🎧 Đang phát mẫu giọng đại diện của ${engineKey}`);
       } else {
-        showToast(`⚠️ Không thể tải mẫu âm thanh cho mô hình ${model.name}.`);
+        showToast(`⚠️ Không thể tải mẫu âm thanh cho engine ${engineKey}.`);
       }
     } catch (err) {
       console.warn("Lỗi phát mẫu giọng engine:", err);
       showToast(`⚠️ Lỗi phát mẫu giọng: ${String(err)}`);
     } finally {
-      setLoadingEngineSample(null);
     }
   };
 
@@ -5564,175 +5497,480 @@ export default function SublixStudioView({
   const calculatedWpm = totalSpeechSeconds > 0 ? Math.round(totalWords / (totalSpeechSeconds / 60)) : 0;
 
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // R2-3 — Panel quy trình 5 bước (src/views/studio/StudioPipelinePanel.tsx)
+  //
+  // - `pipelineState`: useMemo theo đúng field → identity đổi khi state đổi
+  //   (timeline phát ở 60fps KHÔNG làm panel re-render).
+  // - `pipelineApi`: object có identity ỔN ĐỊNH (ref + Object.assign) → memo
+  //   của panel không bị phá vỡ, không truyền `currentTime` vào panel.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** Bước đang mở trong accordion của panel (chỉ 1 bước mở tại 1 thời điểm). */
+  const [pipelineOpenStep, setPipelineOpenStep] = useState<PipelineOpenStep>("voice");
+
+  /** Nạp trạng thái engine TTS + danh mục giọng đọc TỪ BACKEND. */
+  useEffect(() => {
+    if (!isActive) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const status = await sublix.ttsEnginesStatus();
+        if (alive && status?.engines) setTtsEngines(status.engines);
+      } catch (err) {
+        console.warn("Không lấy được trạng thái engine TTS:", err);
+      }
+      try {
+        const voices = await sublix.dubbingGetVoices();
+        if (alive && Array.isArray(voices)) setVoicePresets(voices);
+      } catch (err) {
+        console.warn("Không lấy được danh mục giọng TTS:", err);
+      }
+    };
+    void load();
+    return () => {
+      alive = false;
+    };
+  }, [isActive]);
+
+  /** Danh sách engine dạng panel (nguồn: backend). */
+  const panelEngines = useMemo<PanelEngine[]>(
+    () =>
+      ttsEngines.map((e) => ({
+        id: e.id,
+        prefix: e.prefix,
+        kind: e.kind,
+        modelId: e.model_id,
+        installed: e.installed,
+        deps: e.deps,
+        needsKey: e.needs_key,
+        hasKey: e.has_key,
+        ready: e.ready,
+        hint: e.hint,
+      })),
+    [ttsEngines],
+  );
+
+  /** Giọng đọc của engine đang chọn (nguồn: backend). */
+  const panelVoiceOptions = useMemo<PanelVoiceOption[]>(
+    () =>
+      voicesForEngine(selectedTtsEngine).map((v) => ({
+        id: v.id,
+        label: v.name,
+        gender: v.gender,
+      })),
+    [voicesForEngine, selectedTtsEngine],
+  );
+
+  /** Vai diễn dạng panel. */
+  const panelRoles = useMemo<PanelRole[]>(
+    () =>
+      speakers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        gender: s.gender,
+        color: s.color,
+        voice: s.voice,
+        count: s.count,
+      })),
+    [speakers],
+  );
+
+  /** Nhãn nhà cung cấp dịch — CHỈ ĐỌC (R2-4: cấu hình ở Cài đặt). */
+  const providerLabel = useMemo(() => {
+    const names: Record<string, string> = {
+      ollama: "Ollama",
+      deepseek: "DeepSeek",
+      openrouter: "OpenRouter",
+      minimax: "minimax",
+      local: "Dịch cục bộ",
+    };
+    const name = names[transProvider] ?? transProvider;
+    const model =
+      transProvider === "deepseek"
+        ? deepseekModel
+        : transProvider === "openrouter"
+        ? openrouterModel
+        : transProvider === "minimax"
+        ? minimaxModel
+        : transProvider === "ollama"
+        ? ollamaModel
+        : "";
+    return model ? `${name} · ${model}` : name;
+  }, [transProvider, deepseekModel, openrouterModel, minimaxModel, ollamaModel]);
+
+  /** Gộp vai A vào vai B (thay cho modal "Gộp vai..." cũ). */
+  const handleMergeRoleInto = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const from = speakers.find((s) => s.id === fromId);
+    const to = speakers.find((s) => s.id === toId);
+    if (!from || !to) return;
+    saveSubtitleUndo();
+    saveAudioUndo();
+    setSegments((prev) =>
+      prev.map((seg) => (seg.speakerId === fromId ? { ...seg, speakerId: toId } : seg)),
+    );
+    setSpeakers((prev) => prev.filter((s) => s.id !== fromId));
+    showToast(`⇢ Đã gộp vai "${from.name}" vào "${to.name}".`);
+  };
+
+  /** Thêm 1 vai diễn mới. */
+  const handleAddRole = () => {
+    saveAudioUndo();
+    setSpeakers((prev) => [
+      ...prev,
+      {
+        id: `speaker_${prev.length}`,
+        name: `Nhân vật ${prev.length + 1}`,
+        gender: "male" as const,
+        color: SPEAKER_COLORS[prev.length % SPEAKER_COLORS.length],
+        voice: defaultVoiceForEngine(selectedTtsEngine, "male"),
+        count: 0,
+      },
+    ]);
+    showToast("➕ Đã thêm vai diễn mới");
+  };
+
+  /** Đổi tên vai. */
+  const handleRenameRole = (roleId: string, name: string) => {
+    setSpeakers((prev) => prev.map((s) => (s.id === roleId ? { ...s, name } : s)));
+  };
+
+  /** Gán giọng cho vai. */
+  const handleSetRoleVoice = (roleId: string, voice: string) => {
+    saveAudioUndo();
+    setSpeakers((prev) => prev.map((s) => (s.id === roleId ? { ...s, voice } : s)));
+  };
+
+  /** Bật/tắt giới tính của 1 vai (đổi kèm giọng theo giới tính). */
+  const handleToggleRoleGender = (roleId: string) => {
+    const idx = speakers.findIndex((s) => s.id === roleId);
+    if (idx >= 0) handleToggleSpeakerGender(idx);
+  };
+
+  /** Tải model của engine TTS (offline). */
+  const handleDownloadEngineModel = async (engineId: string) => {
+    const info = ttsEngines.find((e) => e.id === engineId);
+    if (!info?.model_id) {
+      showToast("⚠️ Engine này không có model để tải.");
+      return;
+    }
+    setTtsEngineDownloading(engineId);
+    setTtsEngineDownloadPct(0);
+    try {
+      await sublix.voiceModelDownload(info.model_id);
+      showToast(`✅ Đã tải model ${info.model_id}.`);
+      const status = await sublix.ttsEnginesStatus();
+      if (status?.engines) setTtsEngines(status.engines);
+    } catch (err) {
+      showToast(`⚠️ Không tải được model: ${String(err)}`);
+    } finally {
+      setTtsEngineDownloading(null);
+      setTtsEngineDownloadPct(null);
+    }
+  };
+
+  /** Nhãn nguồn phụ đề (dòng 1 dòng của bước Phụ đề). */
+  const transcriptSourceLabel = useMemo(() => {
+    if (!transcriptSource) return null;
+    if (transcriptSource.startsWith("srt:")) {
+      const lang = transcriptSource.split(":")[1];
+      const plat = transcriptSourcePlatform || "YouTube";
+      return `Phụ đề có sẵn: ${lang} (${plat})`;
+    }
+    return "AI tự nhận dạng (Whisper)";
+  }, [transcriptSource, transcriptSourcePlatform]);
+
+  /** State của panel (memo — identity chỉ đổi khi field đổi). */
+  const pipelineState = useMemo<StudioPipelineState>(
+    () => ({
+      segmentCount: segments.length,
+      sttLang,
+      sttModel,
+      targetLang,
+      transStyle,
+      providerLabel,
+      workflowStt: workflowOptStt,
+      workflowTranslate: workflowOptTranslate,
+      workflowVoice: workflowOptVoice,
+      preferExistingSrt,
+      sourceLabel: transcriptSourceLabel,
+      expectedSpeakerCount,
+      engines: panelEngines,
+      selectedEngineId: selectedTtsEngine,
+      voiceOptions: panelVoiceOptions,
+      roles: panelRoles,
+      glossary,
+      running: isAnalyzing,
+      runningLabel: analyzeMessage,
+      openStep: pipelineOpenStep,
+      hasRange: inPoint !== null && outPoint !== null,
+      rangeLabel:
+        inPoint !== null && outPoint !== null
+          ? `${formatTimecode(inPoint)} → ${formatTimecode(outPoint)}`
+          : "",
+      downloadingEngineId: ttsEngineDownloading,
+      downloadProgress: ttsEngineDownloadPct,
+      auditioningRoleId: auditioningSpkId,
+      auditioningEngineId: playingEngineSample,
+    }),
+    [
+      segments.length,
+      sttLang,
+      sttModel,
+      targetLang,
+      transStyle,
+      providerLabel,
+      workflowOptStt,
+      workflowOptTranslate,
+      workflowOptVoice,
+      preferExistingSrt,
+      transcriptSourceLabel,
+      expectedSpeakerCount,
+      panelEngines,
+      selectedTtsEngine,
+      panelVoiceOptions,
+      panelRoles,
+      glossary,
+      isAnalyzing,
+      analyzeMessage,
+      pipelineOpenStep,
+      inPoint,
+      outPoint,
+      ttsEngineDownloading,
+      ttsEngineDownloadPct,
+      auditioningSpkId,
+      playingEngineSample,
+    ],
+  );
+
+  /** Bước đang "đứng" trên rail 5 bước. */
+  const pipelineActiveStep = useMemo<"source" | "sub" | "translate" | "voice" | "export">(() => {
+    if (pipelineOpenStep === "sub") return "sub";
+    if (pipelineOpenStep === "translate") return "translate";
+    if (pipelineOpenStep === "voice") return "voice";
+    if (segments.length === 0) return "source";
+    return "translate";
+  }, [pipelineOpenStep, segments.length]);
+
+  /** API của panel — identity ỔN ĐỊNH (đóng gói trong ref). */
+  const pipelineApiRef = useRef<StudioPipelineApi | null>(null);
+  if (!pipelineApiRef.current) {
+    pipelineApiRef.current = {
+      setOpenStep: () => {},
+      setWorkflowStt: () => {},
+      setWorkflowTranslate: () => {},
+      setWorkflowVoice: () => {},
+      setSttLang: () => {},
+      setSttModel: () => {},
+      setTargetLang: () => {},
+      setTransStyle: () => {},
+      setPreferExistingSrt: () => {},
+      setExpectedSpeakerCount: () => {},
+      setRoleVoice: () => {},
+      setRoleName: () => {},
+      toggleRoleGender: () => {},
+      addRole: () => {},
+      removeRole: () => {},
+      mergeRoleInto: () => {},
+      mergeAllInto: () => {},
+      mergeToTwo: () => {},
+      mergeToOne: () => {},
+      applyEngineToAll: () => {},
+      selectEngine: () => {},
+      previewEngine: () => {},
+      downloadEngineModel: () => {},
+      auditionRole: () => {},
+      playOriginalClip: () => {},
+      runStepSub: () => {},
+      runStepTranslate: () => {},
+      runStepVoice: () => {},
+      runAll: () => {},
+      cancel: () => {},
+      runRangeOnly: () => {},
+      addGlossary: () => {},
+      removeGlossary: () => {},
+      openExport: () => {},
+      openSettings: () => {},
+    };
+  }
+  Object.assign(pipelineApiRef.current, {
+    setOpenStep: (step: PipelineOpenStep) => setPipelineOpenStep(step),
+    setWorkflowStt: (value: boolean) => setWorkflowOptStt(value),
+    setWorkflowTranslate: (value: boolean) => setWorkflowOptTranslate(value),
+    setWorkflowVoice: (value: boolean) => setWorkflowOptVoice(value),
+    setSttLang: (value: string) => setSttLang(value),
+    setSttModel: (value: string) => setSttModel(value),
+    setTargetLang: (value: string) => setTargetLang(value),
+    setTransStyle: (value: string) => setTransStyle(value),
+    setPreferExistingSrt: (value: boolean) => setPreferExistingSrt(value),
+    setExpectedSpeakerCount: (value: number) => setExpectedSpeakerCount(value),
+    setRoleVoice: (roleId: string, voice: string) => handleSetRoleVoice(roleId, voice),
+    setRoleName: (roleId: string, name: string) => handleRenameRole(roleId, name),
+    toggleRoleGender: (roleId: string) => handleToggleRoleGender(roleId),
+    addRole: () => handleAddRole(),
+    removeRole: (roleId: string) => handleDeleteSpeaker(roleId),
+    mergeRoleInto: (fromId: string, toId: string) => handleMergeRoleInto(fromId, toId),
+    mergeAllInto: (roleId: string) => {
+      const target = speakers.find((s) => s.id === roleId);
+      if (!target) return;
+      const others = speakers.filter((s) => s.id !== roleId);
+      for (const other of others) handleMergeRoleInto(other.id, roleId);
+    },
+    mergeToTwo: () => {
+      handleQuickMergeToTwoRoles();
+      handleApplyTwoSpeakerPreset("mf");
+    },
+    mergeToOne: () => handleQuickMergeToOneRole(),
+    applyEngineToAll: () => handleApplyEngineToAllSpeakers(selectedTtsEngine),
+    selectEngine: (engineId: string) => handleSelectTtsEngine(engineId as TtsEngineKey),
+    previewEngine: (engineId: string) => {
+      void handlePreviewEngineSample(engineId as TtsEngineKey);
+    },
+    downloadEngineModel: (engineId: string) => {
+      void handleDownloadEngineModel(engineId);
+    },
+    auditionRole: (roleId: string) => {
+      const spk = speakers.find((s) => s.id === roleId);
+      if (spk) void handlePreviewSpeakerVoice(spk);
+    },
+    playOriginalClip: (roleId: string) => {
+      const spk = speakers.find((s) => s.id === roleId);
+      if (spk?.sampleAudio) handlePlayAudio(spk.sampleAudio, spk.id);
+      else showToast("⚠️ Vai này chưa có clip giọng gốc.");
+    },
+    runStepSub: () => {
+      void handleRunAnalysis(false, false);
+    },
+    runStepTranslate: () => {
+      void handleRunTranslateOnly();
+    },
+    runStepVoice: () => {
+      void handleRunVoiceOnly();
+    },
+    runAll: () => {
+      void handleRunCustomWorkflow();
+    },
+    cancel: () => {
+      void handleCancelAnalysis();
+    },
+    runRangeOnly: () => {
+      setUseRangeOnly(true);
+      void handleRunCustomWorkflow();
+    },
+    addGlossary: (term: string) => {
+      setGlossary((prev) => (prev.includes(term) ? prev : [...prev, term]));
+      void handleSaveProviderConfig();
+    },
+    removeGlossary: (term: string) => {
+      setGlossary((prev) => prev.filter((t) => t !== term));
+      void handleSaveProviderConfig();
+    },
+    openExport: () => handleOpenExportModal(),
+    openSettings: () => onNavigateTab?.("models"),
+  });
+  const pipelineApi = pipelineApiRef.current;
+
   return (
     <div className="sublix-studio-container" data-theme={currentTheme}>
       {/* ====================================================================
           P1 — TOPBAR
           ==================================================================== */}
-      <header className="studio-topbar">
-        <div className="studio-topbar-left">
-          <div className="studio-brand">
-            <div className="studio-brand-logo">
-              <IconClapper size={15} />
-            </div>
-            <span className="studio-brand-title">SUBLIX STUDIO</span>
-            <span className="studio-brand-badge" style={{ background: "var(--ac)", color: "#000", fontWeight: 800 }}>v{APP_VERSION_PKG}</span>
-          </div>
+      {/* R2-2: thanh trên DÙNG CHUNG (MasterTopbar) — thay bản copy riêng của Studio. */}
+      <MasterTopbar
+        version={APP_VERSION_PKG}
+        activeTab="studio"
+        onNavigateTab={(tabId) => {
+          if (tabId === "studio") return;
+          onNavigateTab?.(
+            tabId as "downloader" | "live" | "history" | "models" | "overlay" | "process",
+          );
+        }}
+        tabs={[
+          { id: "studio", label: "Studio", icon: <IconClapper size={13} /> },
+          { id: "downloader", label: "Tải video", icon: <IconGlobe size={13} /> },
+          { id: "live", label: "Live", icon: <IconMic size={13} /> },
+          { id: "history", label: "Lịch sử", icon: <IconClock size={13} /> },
+          { id: "process", label: "Tiến trình", icon: <IconClock size={13} /> },
+          { id: "models", label: "Cài đặt", icon: <IconSettings size={13} /> },
+        ]}
+        statusLabel={isAnalyzing ? analyzeMessage || "Đang xử lý…" : "Sẵn sàng"}
+        onStatusClick={() => onNavigateTab?.("process")}
+        undo={{
+          onUndo: handleUndo,
+          layers: [
+            { id: "audio", label: "Audio", onUndo: handleUndoAudio },
+            { id: "translation", label: "Bản dịch", onUndo: handleUndoTranslation },
+            { id: "subtitles", label: "Phụ đề", onUndo: handleUndoSubtitles },
+          ],
+        }}
+        primary={{
+          label: "Xuất video",
+          icon: <IconClapper size={13} />,
+          onClick: handleOpenExportModal,
+          title: "Cấu hình và xuất video hoàn chỉnh",
+        }}
+      >
+        {/* Vùng ngữ cảnh: input file ẩn + chip file + nút Mở video.
+            Nút "📥 Nhập video" cũ bị bỏ (trùng "Mở video" — TL-09). */}
+        <input
+          id="studio-hidden-file-input"
+          type="file"
+          accept="video/*,audio/*,.mp4,.mkv,.mov,.m4a,.avi,.mp3"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const p = (file as any).path || file.name;
+              lastLoadedInitialPathRef.current = p;
+              onClearPendingFile?.();
+              handleLoadNewVideoFile(p);
+              showToast(`Đã mở video: ${file.name}`);
+            }
+          }}
+        />
 
-          <nav className="studio-nav-tabs">
-            <button
-              type="button"
-              className={`studio-nav-tab ${activeTab === "studio" ? "active" : ""}`}
-              onClick={() => setActiveTab("studio")}
-            >
-              <IconClapper size={13} />
-              <span>Studio</span>
-            </button>
-            <button
-              type="button"
-              className="studio-nav-tab"
-              onClick={() => onNavigateTab?.("downloader")}
-            >
-              <IconGlobe size={13} />
-              <span>Tải video</span>
-            </button>
-            <button
-              type="button"
-              className="studio-nav-tab"
-              onClick={() => onNavigateTab?.("live")}
-            >
-              <IconMic size={13} />
-              <span>Live</span>
-            </button>
-            <button
-              type="button"
-              className="studio-nav-tab"
-              onClick={() => onNavigateTab?.("history")}
-            >
-              <IconClock size={13} />
-              <span>Lịch sử</span>
-            </button>
-            <button
-              type="button"
-              className="studio-nav-tab"
-              onClick={() => onNavigateTab?.("process")}
-            >
-              <IconClock size={13} />
-              <span>Tiến trình</span>
-            </button>
-            <button
-              type="button"
-              className="studio-nav-tab"
-              onClick={() => onNavigateTab?.("models")}
-            >
-              <IconSettings size={13} />
-              <span>Cài đặt</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Center: Import button & File meta chip */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            id="studio-hidden-file-input"
-            type="file"
-            accept="video/*,audio/*,.mp4,.mkv,.mov,.m4a,.avi,.mp3"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const p = (file as any).path || file.name;
-                lastLoadedInitialPathRef.current = p;
-                onClearPendingFile?.();
-                handleLoadNewVideoFile(p);
-                showToast(`Đã mở video: ${file.name}`);
-              }
-            }}
-          />
+        <div className="studio-file-chip" title={filePath}>
+          <IconFilm size={13} />
+          <span>{fileName}</span>
           <button
             type="button"
-            className="studio-btn-import-pill"
-            onClick={handlePickMediaFile}
-            title="Nhập video từ máy tính (Phím tắt: Ctrl + I)"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 12px",
-              borderRadius: 20,
-              background: "rgba(232, 163, 61, 0.15)",
-              border: "1px solid var(--ac)",
-              color: "var(--ac)",
-              fontSize: 11.5,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className="studio-file-chip-close"
+            onClick={handleCloseCurrentVideo}
+            title="Đóng video hiện tại"
           >
-            <span>📥 Nhập video</span>
-            <span style={{ fontSize: 9.5, opacity: 0.75, background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: 4 }}>Ctrl+I</span>
-          </button>
-
-          <div className="studio-file-chip" title={filePath}>
-            <IconFilm size={13} />
-            <span>{fileName}</span>
-            <button
-              type="button"
-              className="studio-file-chip-close"
-              onClick={handleCloseCurrentVideo}
-              title="Đóng video hiện tại"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Right: Actions */}
-        <div className="studio-topbar-right">
-          <button
-            type="button"
-            className="studio-btn-subtle"
-            title="Hoàn tác"
-            onClick={handleUndo}
-          >
-            <IconUndo size={14} />
-          </button>
-
-          <div className="studio-theme-dots" title="Đổi theme giao diện">
-            {[
-              { id: "cinema", bg: "#e8a33d" },
-              { id: "studio", bg: "#2dd4bf" },
-              { id: "light", bg: "#b45309" },
-              { id: "vibrant", bg: "#e11d48" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`studio-theme-dot ${currentTheme === t.id ? "active" : ""}`}
-                style={{ background: t.bg }}
-                onClick={() => onThemeChange?.(t.id)}
-              />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="studio-btn-open-video"
-            onClick={handlePickMediaFile}
-            title="Mở file video từ máy tính"
-          >
-            <IconPlus size={13} /> Mở video
-          </button>
-
-          <button
-            type="button"
-            className="studio-btn-export-video"
-            onClick={handleOpenExportModal}
-            title="Cấu hình và xuất video hoàn chỉnh"
-          >
-            <IconClapper size={13} /> Xuất video
+            ✕
           </button>
         </div>
-      </header>
+
+        <button
+          type="button"
+          className="studio-btn-open-video"
+          onClick={handlePickMediaFile}
+          title="Mở file video từ máy tính (Phím tắt: Ctrl + I)"
+        >
+          <IconPlus size={13} /> Mở video
+        </button>
+
+        {/* 4 chấm đổi theme: tạm giữ ở vùng ngữ cảnh cho tới khi R2-5 thêm mục
+            "Chủ đề" vào Cài đặt (theo plan §4.2 là chuyển hẳn sang Cài đặt). */}
+        <div className="studio-theme-dots" title="Đổi theme giao diện">
+          {[
+            { id: "cinema", bg: "#e8a33d" },
+            { id: "studio", bg: "#2dd4bf" },
+            { id: "light", bg: "#b45309" },
+            { id: "vibrant", bg: "#e11d48" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`studio-theme-dot ${currentTheme === t.id ? "active" : ""}`}
+              style={{ background: t.bg }}
+              onClick={() => onThemeChange?.(t.id)}
+            />
+          ))}
+        </div>
+      </MasterTopbar>
 
       {/* ====================================================================
           WORKSPACE — 3 COLUMNS (P2, P3, P4)
@@ -5740,929 +5978,12 @@ export default function SublixStudioView({
       <div className={`studio-workspace ${isDraggingLeft || isDraggingRight ? "is-resizing" : ""}`}>
         {/* P2: CỘT BƯỚC BÊN TRÁI (RESIZABLE) */}
         <aside className="studio-col-steps" style={{ width: `${leftPanelWidth}px` }}>
-          <div className="studio-steps-header">
-            <button
-              type="button"
-              className={`studio-steps-tab-btn ${leftTab === "pipeline" ? "active" : ""}`}
-              onClick={() => setLeftTab("pipeline")}
-            >
-              ⚡ Thuyết Minh & Lồng Tiếng
-            </button>
-            <button
-              type="button"
-              className={`studio-steps-tab-btn ${leftTab === "review" ? "active" : ""}`}
-              onClick={() => setLeftTab("review")}
-            >
-              📑 Tóm Tắt & Review
-            </button>
-          </div>
-
-          <div className="studio-steps-body">
-            {leftTab === "pipeline" ? (
-              <>
-                {/* =========================================================================
-                    KHỐI 1: 💬 CẤU HÌNH PHỤ ĐỀ & DỊCH THUẬT (SUBTITLES & TRANSLATION)
-                    ========================================================================= */}
-                <div className={`studio-step-card ${workflowOptStt ? "active-feature" : ""}`}>
-                  <div
-                    className="studio-step-card-header"
-                    onClick={() => setOpenSubCard(!openSubCard)}
-                  >
-                    <div className="studio-step-card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={workflowOptStt}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          setWorkflowOptStt(e.target.checked);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        title="Bật/Tắt tính năng tạo Phụ đề"
-                        style={{ cursor: "pointer", width: 15, height: 15, accentColor: "#38bdf8" }}
-                      />
-                      <span style={{ color: workflowOptStt ? "#38bdf8" : "var(--t3)", display: "inline-flex" }}>
-                        <IconMic size={14} />
-                      </span>
-                      <span style={{ fontWeight: 700, color: workflowOptStt ? "var(--t1)" : "var(--t3)" }}>
-                        💬 Phụ Đề & Dịch Thuật
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span className="studio-step-card-status">
-                        {segments.length} câu • {sttLang.toUpperCase()}{workflowOptTranslate ? ` ➔ ${targetLang.toUpperCase()}` : " (Gốc)"}
-                      </span>
-                      {transcriptSource &&
-                        (transcriptSource.startsWith("srt:") ? (
-                          <span
-                            className="studio-src-badge src-yt"
-                            title={`Phụ đề gốc đang dùng lấy từ file ${transcriptSourcePlatform || "YouTube"} (.${transcriptSource.split(":")[1]}.srt đã tải)`}
-                          >
-                            📥 {transcriptSourcePlatform || "YouTube"} (.{transcriptSource.split(":")[1]})
-                          </span>
-                        ) : (
-                          <span
-                            className="studio-src-badge src-ai"
-                            title="Phụ đề gốc đang dùng do phần mềm tự nhận dạng (Whisper STT)"
-                          >
-                            🎙 AI tự tạo
-                          </span>
-                        ))}
-                      {openSubCard ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-                    </div>
-                  </div>
-
-                  {openSubCard && (
-                    <div className="studio-step-card-content">
-                      {/* Section 1.1: Nhận diện giọng gốc Whisper */}
-                      <div className="studio-sub-section-title">
-                        <span>🎙️ 1. Nhận diện giọng gốc (Whisper STT)</span>
-                      </div>
-
-                      <div className="studio-form-row">
-                        <label className="studio-form-label">Ngôn ngữ gốc của video:</label>
-                        <select
-                          className="studio-form-select"
-                          value={sttLang}
-                          onChange={(e) => setSttLang(e.target.value)}
-                        >
-                          <option value="auto">Tự động phát hiện (Auto Detect)</option>
-                          <option value="ja">Tiếng Nhật (Japanese)</option>
-                          <option value="en">Tiếng Anh (English)</option>
-                          <option value="zh">Tiếng Trung (Chinese)</option>
-                          <option value="vi">Tiếng Việt (Vietnamese)</option>
-                        </select>
-                      </div>
-
-                      <div className="studio-form-row">
-                        <label className="studio-form-label">Mô hình nhận dạng:</label>
-                        <select
-                          className="studio-form-select"
-                          value={sttModel}
-                          onChange={(e) => setSttModel(e.target.value)}
-                        >
-                          <option value="large-v3-turbo">Whisper Large-v3-Turbo (GPU Siêu Nhanh)</option>
-                          <option value="base">Whisper Base (Nhẹ & Nhanh)</option>
-                        </select>
-                      </div>
-
-                      {/* v0.11.32 (PO): tận dụng phụ đề đã tải — TÍCH SẴN mặc định */}
-                      <div className="studio-toggle-row" style={{ padding: "6px 8px", background: "rgba(56, 189, 248, 0.06)", borderRadius: 6 }}>
-                        <span className="studio-toggle-label" style={{ fontWeight: 600 }}>
-                          📥 Tận dụng phụ đề đã tải (nếu có)
-                          {availableSubs.length > 0 && (
-                            <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 6 }}>
-                              — có sẵn: {availableSubs.map((s) => {
-                                const src = subtitleSourceLabel(s.source);
-                                return `${s.lang}${src ? ` (${src})` : ""}`;
-                              }).join(", ")}
-                            </span>
-                          )}
-                        </span>
-                        <label className="studio-switch" title="Khi bật: nếu video có file .srt tải sẵn (YouTube), Studio dùng luôn làm phụ đề gốc — chính xác hơn và nhanh hơn chạy Whisper">
-                          <input
-                            type="checkbox"
-                            checked={preferExistingSrt}
-                            onChange={(e) => setPreferExistingSrt(e.target.checked)}
-                          />
-                          <span className="studio-slider" />
-                        </label>
-                      </div>
-
-                      {/* Section 1.2: Tùy chọn dịch thuật phụ đề */}
-                      <div className="studio-sub-section-title" style={{ marginTop: 8 }}>
-                        <span>🌐 2. Tùy chọn Dịch thuật Phụ đề</span>
-                      </div>
-
-                      <div className="studio-toggle-row" style={{ padding: "6px 8px", background: "rgba(255, 255, 255, 0.03)", borderRadius: 6 }}>
-                        <span className="studio-toggle-label" style={{ fontWeight: 600 }}>
-                          Dịch phụ đề sang ngôn ngữ khác
-                        </span>
-                        <label className="studio-switch">
-                          <input
-                            type="checkbox"
-                            checked={workflowOptTranslate}
-                            onChange={(e) => setWorkflowOptTranslate(e.target.checked)}
-                          />
-                          <span className="studio-slider" />
-                        </label>
-                      </div>
-
-                      {workflowOptTranslate ? (
-                        <>
-                          <div className="studio-form-row">
-                            <label className="studio-form-label">Ngôn ngữ đích:</label>
-                            <select
-                              className="studio-form-select"
-                              value={targetLang}
-                              onChange={(e) => {
-                                const newLang = e.target.value;
-                                setTargetLang(newLang);
-                                void sublix
-                                  .getConfig()
-                                  .then((cfg) => {
-                                    cfg.target_lang = newLang;
-                                    return sublix.saveConfig(cfg);
-                                  })
-                                  .then(() => {
-                                    showToast(`✅ Đã lưu ngôn ngữ đích: ${newLang}`);
-                                  })
-                                  .catch((err) => {
-                                    console.warn("R6-08: failed to save target_lang:", err);
-                                  });
-                              }}
-                            >
-                              <option value="vi">Tiếng Việt (vi)</option>
-                              <option value="en">English (en)</option>
-                              <option value="ja">Tiếng Nhật (ja)</option>
-                            </select>
-                          </div>
-
-                          <div className="studio-form-row">
-                            <label className="studio-form-label">Nhà cung cấp AI dịch:</label>
-                            <select
-                              className="studio-form-select"
-                              value={transProvider}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setTransProvider(val);
-                                handleSaveProviderConfig(val);
-                              }}
-                            >
-                              <option value="deepseek">★ DeepSeek Chính Hãng (Khuyên Dùng - Siêu Nhanh)</option>
-                              <option value="openrouter">OpenRouter API (Top Models Toàn Cầu)</option>
-                              <option value="minimax">MiniMax Cloud API</option>
-                              <option value="local">Local Qwen3-4B (GPU Offline)</option>
-                              <option value="ollama">Ollama Local</option>
-                            </select>
-                          </div>
-
-                          {/* DeepSeek Provider Fields */}
-                          {transProvider === "deepseek" && (
-                            <>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">Model DeepSeek:</label>
-                                <select
-                                  className="studio-form-select"
-                                  value={deepseekModel}
-                                  onChange={(e) => setDeepseekModel(e.target.value)}
-                                >
-                                  <option value="deepseek-chat">deepseek-chat (V3 - Khuyên Dùng)</option>
-                                  <option value="deepseek-reasoner">deepseek-reasoner (R1 Suy Luận)</option>
-                                </select>
-                              </div>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">DeepSeek API Key:</label>
-                                <input
-                                  type="password"
-                                  className="studio-form-input"
-                                  placeholder="sk-..."
-                                  value={deepseekKey}
-                                  onChange={(e) => setDeepseekKey(e.target.value)}
-                                  onBlur={() => handleSaveProviderConfig()}
-                                />
-                              </div>
-                            </>
-                          )}
-
-                          {/* OpenRouter Provider Fields */}
-                          {transProvider === "openrouter" && (
-                            <>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">Model OpenRouter:</label>
-                                <select
-                                  className="studio-form-select"
-                                  value={openrouterModel}
-                                  onChange={(e) => setOpenrouterModel(e.target.value)}
-                                >
-                                  <option value="deepseek/deepseek-chat">deepseek/deepseek-chat (DeepSeek-V3 Official Port)</option>
-                                  <option value="deepseek/deepseek-r1">deepseek/deepseek-r1 (DeepSeek-R1 Reasoner)</option>
-                                  <option value="google/gemini-2.0-flash-001">google/gemini-2.0-flash-001 (Siêu Nhanh & Rẻ)</option>
-                                  <option value="google/gemini-2.5-pro">google/gemini-2.5-pro (Gemini Pro Cao Cấp)</option>
-                                  <option value="meta-llama/llama-3.3-70b-instruct">meta-llama/llama-3.3-70b-instruct (Hội Thoại Tự Nhiên)</option>
-                                  <option value="qwen/qwen-2.5-72b-instruct">qwen/qwen-2.5-72b-instruct (Đa Ngôn Ngữ SOTA)</option>
-                                  <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
-                                </select>
-                              </div>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">OpenRouter API Key:</label>
-                                <input
-                                  type="password"
-                                  className="studio-form-input"
-                                  placeholder="sk-or-..."
-                                  value={openrouterKey}
-                                  onChange={(e) => setOpenrouterKey(e.target.value)}
-                                  onBlur={() => handleSaveProviderConfig()}
-                                />
-                              </div>
-                            </>
-                          )}
-
-                          {/* MiniMax Provider Fields */}
-                          {transProvider === "minimax" && (
-                            <>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">Model MiniMax:</label>
-                                <select
-                                  className="studio-form-select"
-                                  value={minimaxModel}
-                                  onChange={(e) => setMinimaxModel(e.target.value)}
-                                >
-                                  <option value="MiniMax-M3">MiniMax-M3</option>
-                                  <option value="MiniMax-Text-01">MiniMax-Text-01</option>
-                                </select>
-                              </div>
-                              <div className="studio-form-row">
-                                <label className="studio-form-label">MiniMax API Key:</label>
-                                <input
-                                  type="password"
-                                  className="studio-form-input"
-                                  placeholder="sk-cp-..."
-                                  value={minimaxKey}
-                                  onChange={(e) => setMinimaxKey(e.target.value)}
-                                  onBlur={() => handleSaveProviderConfig()}
-                                />
-                              </div>
-                            </>
-                          )}
-
-                          <div className="studio-form-row">
-                            <label className="studio-form-label">Phong cách dịch:</label>
-                            <select
-                              className="studio-form-select"
-                              value={transStyle}
-                              onChange={(e) => setTransStyle(e.target.value)}
-                            >
-                              <option value="theatrical">Review phim & Truyền cảm</option>
-                              <option value="literal">Dịch sát nghĩa (Học thuật)</option>
-                              <option value="casual">Thân mật & Trẻ trung</option>
-                            </select>
-                          </div>
-
-                          {/* Hồ sơ phim (AI Học) — Khóa xưng hô */}
-                          <div className="studio-glossary-box">
-                            <div className="studio-glossary-header">
-                              <span>📚 Hồ sơ phim (AI học)</span>
-                              <button
-                                type="button"
-                                className="studio-btn-subtle-sm"
-                                onClick={async () => {
-                                  try {
-                                    const cfg = await sublix.getConfig();
-                                    cfg.glossary = glossary;
-                                    await sublix.saveConfig(cfg);
-                                    showToast(`✅ Đã lưu ${glossary.length} quy tắc vào hồ sơ phim`);
-                                  } catch (err) {
-                                    console.warn("Failed to save glossary:", err);
-                                    showToast("❌ Không thể lưu hồ sơ phim");
-                                  }
-                                }}
-                                title="Ghi nhận quy tắc xưng hô để áp dụng vào GLOSSARY prompt khi dịch"
-                              >
-                                Lưu hồ sơ
-                              </button>
-                            </div>
-                            <span className="studio-glossary-desc">
-                              Quy tắc xưng hô nhất quán giữa các tập phim.
-                            </span>
-                            <div className="studio-glossary-chips">
-                              {glossary.map((item, idx) => (
-                                <span key={idx} className="studio-glossary-tag">
-                                  <span>{item}</span>
-                                  <button
-                                    type="button"
-                                    style={{
-                                      background: "transparent",
-                                      border: "none",
-                                      color: "inherit",
-                                      cursor: "pointer",
-                                      padding: "0 2px",
-                                      fontSize: 10,
-                                      marginLeft: 4,
-                                    }}
-                                    onClick={() => setGlossary((prev) => prev.filter((_, i) => i !== idx))}
-                                    title="Xoá quy tắc này"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                              <input
-                                type="text"
-                                className="studio-form-input"
-                                placeholder="Cặp tên / xưng hô (vd: Kenji ➔ Huỳnh)..."
-                                value={newGlossaryTerm}
-                                onChange={(e) => setNewGlossaryTerm(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && newGlossaryTerm.trim()) {
-                                    e.preventDefault();
-                                    setGlossary((prev) => [...prev, newGlossaryTerm.trim()]);
-                                    setNewGlossaryTerm("");
-                                  }
-                                }}
-                                style={{ fontSize: 11, padding: "3px 8px" }}
-                              />
-                              <button
-                                type="button"
-                                className="studio-btn-subtle-sm"
-                                onClick={() => {
-                                  if (newGlossaryTerm.trim()) {
-                                    setGlossary((prev) => [...prev, newGlossaryTerm.trim()]);
-                                    setNewGlossaryTerm("");
-                                  }
-                                }}
-                              >
-                                + Thêm
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div style={{ fontSize: 11, color: "var(--t3)", padding: "4px 8px", background: "rgba(255, 255, 255, 0.02)", borderRadius: 6 }}>
-                          ℹ️ Sẽ chỉ trích xuất phụ đề gốc từ Whisper, giữ nguyên ngôn ngữ gốc của video.
-                        </div>
-                      )}
-
-                      {/* Nút hành động cục bộ: Chỉ tạo phụ đề */}
-                      <button
-                        type="button"
-                        className="studio-btn-subtle"
-                        style={{
-                          width: "100%",
-                          justifyContent: "center",
-                          marginTop: 6,
-                          background: "rgba(56, 189, 248, 0.08)",
-                          borderColor: "rgba(56, 189, 248, 0.25)",
-                          color: "#38bdf8",
-                          fontWeight: 600,
-                        }}
-                        disabled={isAnalyzing || !workflowOptStt}
-                        onClick={async () => {
-                          if (workflowOptTranslate) {
-                            showToast("💬 Bắt đầu tạo phụ đề và dịch...");
-                            const newSegs = await handleRunSttOnly();
-                            if (newSegs && newSegs.length > 0) {
-                              setTimeout(() => { void handleRunTranslateOnly(newSegs); }, 350);
-                            }
-                          } else {
-                            showToast("💬 Bắt đầu trích xuất phụ đề gốc...");
-                            await handleRunSttOnly();
-                          }
-                        }}
-                        title="Chỉ tạo phụ đề cho video (không phân vai hay tạo giọng đọc)"
-                      >
-                        <IconMic size={13} /> 💬 Chỉ Tạo Phụ Đề {workflowOptTranslate ? "+ Dịch" : "Gốc"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* =========================================================================
-                    KHỐI 2: 🎙️ CẤU HÌNH LỒNG TIẾNG & PHÂN VAI (DUBBING & VOICES)
-                    ========================================================================= */}
-                <div className={`studio-step-card ${workflowOptVoice ? "active-feature" : ""}`}>
-                  <div
-                    className="studio-step-card-header"
-                    onClick={() => setOpenDubCard(!openDubCard)}
-                  >
-                    <div className="studio-step-card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={workflowOptVoice}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          setWorkflowOptVoice(e.target.checked);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        title="Bật/Tắt tính năng Lồng tiếng & Phân vai"
-                        style={{ cursor: "pointer", width: 15, height: 15, accentColor: "#f59e0b" }}
-                      />
-                      <span style={{ color: workflowOptVoice ? "#f59e0b" : "var(--t3)", display: "inline-flex" }}>
-                        <IconClapper size={14} />
-                      </span>
-                      <span style={{ fontWeight: 700, color: workflowOptVoice ? "var(--t1)" : "var(--t3)" }}>
-                        🎙️ Lồng Tiếng & Phân Vai
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span className="studio-step-card-status">{speakers.length} vai diễn</span>
-                      {openDubCard ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-                    </div>
-                  </div>
-
-                  {openDubCard && (
-                    <div className="studio-step-card-content">
-                      {/* Section 2.1: Cấu hình phân vai */}
-                      <div className="studio-sub-section-title">
-                        <span>👥 1. Phân vai & Người nói</span>
-                      </div>
-
-                      <div className="studio-speaker-count-selector">
-                        <div className="studio-speaker-count-header">
-                          <span className="studio-speaker-count-title">Số người nói trong video:</span>
-                          <span className="studio-speaker-count-hint">Định hướng AI phân vai</span>
-                        </div>
-                        <div className="studio-speaker-count-chips">
-                          <button
-                            type="button"
-                            className={`studio-speaker-count-chip ${expectedSpeakerCount === 1 ? "active" : ""}`}
-                            onClick={() => {
-                              setExpectedSpeakerCount(1);
-                              if (speakers.length > 1) {
-                                handleQuickMergeToOneRole();
-                              }
-                            }}
-                            title="1 người độc thoại / thuyết minh (Khóa chính xác 1 vai duy nhất, dọn sạch timeline)"
-                          >
-                            👤 1 Người ⭐
-                          </button>
-                          <button
-                            type="button"
-                            className={`studio-speaker-count-chip ${expectedSpeakerCount === 2 ? "active" : ""}`}
-                            onClick={() => {
-                              setExpectedSpeakerCount(2);
-                              setCollapseSpeakerTracks(false);
-                            }}
-                            title="2 người đối thoại / podcast / phỏng vấn (Phân đúng 2 vai)"
-                          >
-                            👥 2 Người
-                          </button>
-                          <button
-                            type="button"
-                            className={`studio-speaker-count-chip ${expectedSpeakerCount === 0 ? "active" : ""}`}
-                            onClick={() => setExpectedSpeakerCount(0)}
-                            title="Để Sherpa AI tự động dò tìm số lượng người nói theo âm học"
-                          >
-                            🤖 Tự động
-                          </button>
-                        </div>
-
-                        {/* Presets tổ hợp 2 vai (Nam & Nữ / 2 Nam / 2 Nữ) */}
-                        {expectedSpeakerCount === 2 && (
-                          <div className="studio-two-speaker-preset-box">
-                            <span className="studio-two-speaker-preset-title">🎭 Chọn tổ hợp giới tính 2 vai:</span>
-                            <div className="studio-two-speaker-preset-chips">
-                              <button
-                                type="button"
-                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "mf" ? "active" : ""}`}
-                                onClick={() => handleApplyTwoSpeakerPreset("mf")}
-                                title="Vai 1 là Nam, Vai 2 là Nữ (Tổ hợp đối thoại chuẩn)"
-                              >
-                                👨‍🦱👩 1 Nam & 1 Nữ ⭐
-                              </button>
-                              <button
-                                type="button"
-                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "mm" ? "active" : ""}`}
-                                onClick={() => handleApplyTwoSpeakerPreset("mm")}
-                                title="Cả 2 vai đều là Nam (Giọng Nam 1 & Nam 2 riêng biệt)"
-                              >
-                                👨‍🦱👨‍🦱 2 Nam
-                              </button>
-                              <button
-                                type="button"
-                                className={`studio-speaker-preset-chip ${twoSpeakerGenderPreset === "ff" ? "active" : ""}`}
-                                onClick={() => handleApplyTwoSpeakerPreset("ff")}
-                                title="Cả 2 vai đều là Nữ (Giọng Nữ 1 & Nữ 2 riêng biệt)"
-                              >
-                                👩👩 2 Nữ
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Bước 1: Nút Quét Phân Tích & Phân Vai Trước (Chưa Lồng Tiếng) */}
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          type="button"
-                          className="studio-btn-subtle"
-                          style={{
-                            flex: 1,
-                            justifyContent: "center",
-                            background: "rgba(168, 85, 247, 0.12)",
-                            borderColor: "rgba(168, 85, 247, 0.35)",
-                            color: "#c084fc",
-                            fontWeight: 700,
-                            padding: "8px 12px",
-                          }}
-                          onClick={() => void handleRunAnalysis(false, false)}
-                          disabled={isAnalyzing}
-                          title="Bước 1: Quét nhận diện kịch bản và phân tích âm sắc phân vai trước để bạn xem lại và chọn giọng"
-                        >
-                          <IconUser size={13} />
-                          {isAnalyzing ? "⏳ Đang Phân Tích..." : "🔍 Bước 1: Quét & Phân Vai Trước (Chưa Lồng Tiếng)"}
-                        </button>
-                        {isAnalyzing && (
-                          <button
-                            type="button"
-                            className="studio-btn-action-danger"
-                            onClick={handleCancelAnalysis}
-                            style={{
-                              background: "rgba(239, 68, 68, 0.15)",
-                              border: "1px solid rgba(239, 68, 68, 0.4)",
-                              color: "#f87171",
-                              borderRadius: 6,
-                              padding: "6px 12px",
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              fontSize: 12,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                            }}
-                            title="Dừng tiến trình phân tích"
-                          >
-                            🛑 Dừng
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Thanh công cụ quản lý vai diễn (Thêm / Gộp / Về 2 vai) */}
-                      <div className="studio-speaker-tools-bar" style={{ marginTop: 4 }}>
-                        <button
-                          type="button"
-                          className="studio-btn-tool-chip"
-                          onClick={() => {
-                            saveAudioUndo();
-                            const newId = `speaker_${speakers.length}`;
-                            setSpeakers([
-                              ...speakers,
-                              {
-                                id: newId,
-                                name: `Nhân vật ${speakers.length + 1}`,
-                                gender: "male",
-                                color: SPEAKER_COLORS[speakers.length % SPEAKER_COLORS.length],
-                                voice: TTS_ENGINE_MODELS[selectedTtsEngine]?.defaultMaleVoice || "vietneu:vi_bac_nam",
-                                count: 0,
-                              },
-                            ]);
-                            showToast("➕ Đã thêm vai diễn mới");
-                          }}
-                          title="Thêm một vai diễn mới vào dự án"
-                        >
-                          <IconPlus size={12} /> Thêm vai
-                        </button>
-
-                        <button
-                          type="button"
-                          className="studio-btn-tool-chip"
-                          onClick={() => {
-                            if (speakers.length < 2) {
-                              showToast("⚠️ Cần ít nhất 2 vai diễn để thực hiện gộp.");
-                              return;
-                            }
-                            setMergeFromSpkId(speakers[speakers.length - 1]?.id || "");
-                            setMergeToSpkId(speakers[0]?.id || "");
-                            setShowMergeModal(true);
-                          }}
-                          title="Gộp các câu thoại từ vai này sang vai khác"
-                        >
-                          <IconLink size={12} /> Gộp vai...
-                        </button>
-
-                        {speakers.length > 1 && (
-                          <button
-                            type="button"
-                            className="studio-btn-tool-chip highlight-solo"
-                            onClick={handleQuickMergeToOneRole}
-                            title="👤 Tự động gộp toàn bộ câu thoại về 1 vai duy nhất (Thuyết minh độc thoại), dọn sạch timeline ngay lập tức"
-                          >
-                            👤 Về 1 vai
-                          </button>
-                        )}
-
-                        {speakers.length > 2 && (
-                          <button
-                            type="button"
-                            className="studio-btn-tool-chip highlight"
-                            onClick={handleQuickMergeToTwoRoles}
-                            title="⚡ Tự động gộp tất cả các vai phụ (vai 3, 4, 5...) về 2 vai chính (Vai 1 & 2), dọn sạch timeline ngay lập tức"
-                          >
-                            ⚡ Về 2 vai
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Section 2.2: Danh sách Nhân vật & Chọn Giọng Đọc (TTS) */}
-                      <div className="studio-sub-section-title" style={{ marginTop: 6 }}>
-                        <span>🎙️ 2. Giọng Đọc Nhân Vật (TTS)</span>
-                      </div>
-
-                      {/* CARD: BỘ CHỌN MÔ HÌNH & ĐỘNG CƠ GIỌNG ĐỌC AI (TTS ENGINE / MODEL) */}
-                      <div className="studio-tts-engine-card">
-                        <div className="studio-tts-engine-card-header">
-                          <span className="studio-tts-engine-card-title">
-                            🤖 Mô Hình Động Cơ TTS:
-                          </span>
-                          <span style={{ fontSize: 10, color: "var(--t3)" }}>
-                            {TTS_ENGINE_MODELS[selectedTtsEngine].name} ({TTS_ENGINE_MODELS[selectedTtsEngine].voices.length} giọng)
-                          </span>
-                        </div>
-
-                        {/* Selector Pills: 3 Models riêng biệt với nút nghe thử mẫu độc lập */}
-                        <div className="studio-tts-engine-pills">
-                          {(["vietneu", "kokoro", "edge"] as TtsEngineKey[]).map((engKey) => {
-                            const model = TTS_ENGINE_MODELS[engKey];
-                            const isSelected = selectedTtsEngine === engKey;
-                            const isPlayingThis = playingEngineSample === engKey;
-                            const isLoadingThis = loadingEngineSample === engKey;
-
-                            return (
-                              <div
-                                key={engKey}
-                                className={`studio-tts-pill-btn ${isSelected ? "active" : ""}`}
-                                onClick={() => handleSelectTtsEngine(engKey)}
-                                title={model.description}
-                              >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                                  <div style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
-                                    <span className="studio-tts-pill-title">{model.name}</span>
-                                    <span className="studio-tts-pill-sub">
-                                      {model.badge} • {model.voices.length} giọng
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className={`studio-tts-pill-sample-btn ${isPlayingThis ? "is-playing" : ""}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void handlePreviewEngineSample(engKey);
-                                    }}
-                                    disabled={isLoadingThis}
-                                    title={`Nghe thử mẫu giọng tiêu biểu của mô hình ${model.name} trước khi chọn`}
-                                  >
-                                    {isLoadingThis ? (
-                                      "⏳"
-                                    ) : isPlayingThis ? (
-                                      "⏹ Dừng"
-                                    ) : (
-                                      "▶️ Mẫu"
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Engine Spec & Quick Apply */}
-                        {(() => {
-                          const currentModel = TTS_ENGINE_MODELS[selectedTtsEngine];
-                          const isPlayingCurrent = playingEngineSample === selectedTtsEngine;
-                          const isLoadingCurrent = loadingEngineSample === selectedTtsEngine;
-
-                          return (
-                            <div className="studio-tts-engine-spec">
-                              <div className="studio-tts-badge-row">
-                                <span className={`studio-tts-badge ${currentModel.badgeType === "offline" ? "badge-offline" : currentModel.badgeType === "cloud" ? "badge-cloud" : ""}`}>
-                                  {currentModel.badge}
-                                </span>
-                                <span className="studio-tts-badge">⚡ {currentModel.speed}</span>
-                                <span className="studio-tts-badge">
-                                  {currentModel.sizeMb > 0 ? `📦 ~${currentModel.sizeMb}MB` : "☁️ API Cloud"}
-                                </span>
-                                <span className="studio-tts-badge" style={{ color: "#38bdf8", borderColor: "rgba(56,189,248,0.4)" }}>
-                                  {currentModel.voices.length} giọng độc quyền
-                                </span>
-                              </div>
-                              <div style={{ fontSize: 10.5, lineHeight: 1.4, color: "var(--t2)", marginTop: 4 }}>
-                                {currentModel.description}
-                              </div>
-                              <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-                                <button
-                                  type="button"
-                                  className={`studio-tts-sample-preview-btn ${isPlayingCurrent ? "is-playing" : ""}`}
-                                  onClick={() => void handlePreviewEngineSample(selectedTtsEngine)}
-                                  disabled={isLoadingCurrent}
-                                  title={`Nghe câu đọc mẫu đầy đủ của mô hình ${currentModel.name}`}
-                                >
-                                  {isLoadingCurrent ? (
-                                    <>⏳ Đang tải âm thanh mẫu...</>
-                                  ) : isPlayingCurrent ? (
-                                    <>⏹ Dừng nghe mẫu ({currentModel.shortName})</>
-                                  ) : (
-                                    <>▶️ Nghe Thử Mẫu Tiêu Biểu ({currentModel.shortName})</>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="studio-filter-chip"
-                                  onClick={() => handleApplyEngineToAllSpeakers(selectedTtsEngine)}
-                                  style={{ cursor: "pointer", fontSize: 10, padding: "3px 8px" }}
-                                  title={`Gán giọng mặc định của ${currentModel.name} cho tất cả các vai`}
-                                >
-                                  ✨ Áp dụng {currentModel.shortName} cho tất cả vai
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* BẢNG CHỈ BÁO TRỰC QUAN: MÔ HÌNH TTS ĐANG DÙNG & TỔNG QUAN PHÂN VAI */}
-                      <div className="studio-active-tts-hud">
-                        <div className="studio-active-tts-hud-header">
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span className="studio-active-tts-hud-title">🤖 Model TTS Đang Dùng:</span>
-                            <span className="studio-active-tts-hud-engine">
-                              {TTS_ENGINE_MODELS[selectedTtsEngine].name}
-                            </span>
-                          </div>
-                          <span className="studio-active-tts-hud-badge">
-                            {TTS_ENGINE_MODELS[selectedTtsEngine].badge}
-                          </span>
-                        </div>
-                        {speakers.length > 0 && (
-                          <div className="studio-active-tts-hud-chips">
-                            {speakers.map((spk) => {
-                              const vObj = TTS_ENGINE_MODELS[selectedTtsEngine].voices.find((v) => v.id === spk.voice);
-                              return (
-                                <div key={spk.id} className="studio-active-tts-role-tag" style={{ borderLeftColor: spk.color }}>
-                                  <span className="tag-gender">{spk.gender === "male" ? "👨" : "👩"}</span>
-                                  <span className="tag-name">{spk.name}:</span>
-                                  <span className="tag-voice">{vObj?.label || spk.voice}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="studio-speakers-list">
-                        {speakers.map((spk, idx) => (
-                          <div key={spk.id} className="studio-speaker-item">
-                            <div className="studio-speaker-item-top">
-                              <span
-                                className="studio-speaker-dot"
-                                style={{ background: spk.color }}
-                              />
-                              <input
-                                type="text"
-                                className="studio-speaker-name-input"
-                                value={getSpeakerDisplayName(spk)}
-                                onFocus={() => { audioPreFocusRef.current = speakersRef.current; }}
-                                onBlur={() => saveAudioUndoIfChanged()}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setSpeakers((prev) =>
-                                    prev.map((s, i) => (i === idx ? { ...s, name: val } : s))
-                                  );
-                                }}
-                                placeholder="Tên vai diễn / người nói"
-                                title="Tên vai diễn / người lồng tiếng"
-                              />
-                              <button
-                                type="button"
-                                className={`studio-speaker-gender-toggle ${spk.gender}`}
-                                onClick={() => handleToggleSpeakerGender(idx)}
-                                title={`Giới tính hiện tại: ${spk.gender === "male" ? "Nam" : "Nữ"}. Nhấp để đổi sang ${spk.gender === "male" ? "Nữ" : "Nam"} (tự động đổi giọng đọc tương ứng)`}
-                              >
-                                {spk.gender === "male" ? "👨 Nam" : "👩 Nữ"}
-                              </button>
-                              <span className="studio-speaker-chip-count">
-                                {segments.filter((s) => s.speakerId === spk.id).length} câu
-                              </span>
-                            </div>
-
-                            <select
-                              className="studio-form-select"
-                              value={
-                                TTS_ENGINE_MODELS[selectedTtsEngine].voices.some((v) => v.id === spk.voice)
-                                  ? spk.voice
-                                  : TTS_ENGINE_MODELS[selectedTtsEngine].defaultMaleVoice
-                              }
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                saveAudioUndo();
-                                setSpeakers((prev) =>
-                                  prev.map((s, i) => (i === idx ? { ...s, voice: val } : s))
-                                );
-                              }}
-                              title={`Chọn giọng đọc từ mô hình ${TTS_ENGINE_MODELS[selectedTtsEngine].name}`}
-                            >
-                              {TTS_ENGINE_MODELS[selectedTtsEngine].voices.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                  {v.label}
-                                </option>
-                              ))}
-                            </select>
-
-                            <div className="studio-speaker-actions">
-                              <button
-                                type="button"
-                                className="studio-btn-voice-preview"
-                                onClick={() => handlePlayAudio(spk.sampleAudio, spk.id)}
-                                title="Nghe clip âm thanh gốc của nhân vật này trong video"
-                              >
-                                <IconVolume2 size={12} /> Giọng gốc
-                              </button>
-                              <button
-                                type="button"
-                                className={`studio-btn-voice-preview ${playingAudioSpkId === spk.id ? "is-playing" : ""}`}
-                                onClick={() => handlePreviewSpeakerVoice(spk)}
-                                disabled={auditioningSpkId === spk.id}
-                                title="Nghe thử mẫu giọng đọc được gán"
-                              >
-                                {playingAudioSpkId === spk.id ? (
-                                  <>
-                                    <span style={{ color: "#38bdf8", display: "inline-flex" }}>
-                                      <IconVolume2 size={12} />
-                                    </span>{" "}
-                                    Đang phát...
-                                  </>
-                                ) : auditioningSpkId === spk.id ? (
-                                  <>
-                                    <IconPlay size={12} /> Đang tải...
-                                  </>
-                                ) : (
-                                  <>
-                                    <IconPlay size={12} /> Nghe thử
-                                  </>
-                                )}
-                              </button>
-                              {speakers.length > 1 && (
-                                <button
-                                  type="button"
-                                  className="studio-btn-voice-preview studio-speaker-remove-btn"
-                                  style={{ marginLeft: "auto" }}
-                                  onClick={() => handleDeleteSpeaker(spk.id)}
-                                  title={`Xoá vai ${spk.name} và chuyển các câu thoại sang vai khác`}
-                                >
-                                  <IconTrash size={12} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Nút hành động cục bộ: Bước 2 - Bắt đầu lồng tiếng */}
-                      <button
-                        type="button"
-                        className="studio-btn-subtle"
-                        style={{
-                          width: "100%",
-                          justifyContent: "center",
-                          marginTop: 10,
-                          background: "rgba(245, 158, 11, 0.15)",
-                          borderColor: "rgba(245, 158, 11, 0.45)",
-                          color: "#f59e0b",
-                          fontWeight: 700,
-                          padding: "10px 14px",
-                          fontSize: 13,
-                        }}
-                        disabled={isAnalyzing || segments.length === 0}
-                        onClick={() => void handleRunVoiceOnly()}
-                        title="Tạo giọng đọc TTS cho các câu thoại theo đúng các vai và giọng đã chọn ở trên"
-                      >
-                        <IconPlay size={14} /> 🎙️ Bước 2: Bắt Đầu Lồng Tiếng TTS ({speakers.length} vai)
-                      </button>
-                    </div>
-                  )}
-                </div>
-          </>
-        ) : (
+          {/* R2-3: panel quy trình 5 bước — tách sang src/views/studio/StudioPipelinePanel.tsx */}
+          <StudioPipelinePanel
+            state={pipelineState}
+            api={pipelineApi}
+            activeStep={pipelineActiveStep}
+            advancedExtra={
           <div className="studio-review-panel">
             <div className="studio-review-card">
               <div className="studio-review-title">
@@ -6778,142 +6099,8 @@ export default function SublixStudioView({
               </button>
             </div>
           </div>
-        )}
-
-            {/* ROUND-8: Modular Step-by-Step Action Hub & Pipeline CTA */}
-            <div className="studio-pipeline-action-hub">
-              {/* Range Scope Indicator Bar (if In/Out markers exist) */}
-              {inPoint !== null && outPoint !== null && (
-                <div className={`studio-range-scope-bar ${useRangeOnly ? "active" : ""}`}>
-                  <div className="studio-range-scope-label">
-                    <span>🎯 Vùng chọn:</span>
-                    <span className="studio-range-scope-time">
-                      {formatTimecode(Math.min(inPoint, outPoint))} ➔ {formatTimecode(Math.max(inPoint, outPoint))}
-                    </span>
-                    <span style={{ fontSize: 9.5, opacity: 0.75 }}>
-                      ({Math.abs(outPoint - inPoint).toFixed(1)}s)
-                    </span>
-                  </div>
-                  <label className="studio-range-scope-toggle">
-                    <input
-                      type="checkbox"
-                      checked={useRangeOnly}
-                      onChange={(e) => setUseRangeOnly(e.target.checked)}
-                    />
-                    <span>Chỉ vùng này</span>
-                  </label>
-                </div>
-              )}
-
-              {/* ROUND-13: ACTION HUB GỌN GÀNG — TỰ ĐỘNG CHẠY THEO 2 KHỐI TRÊN */}
-              <div className="studio-action-hub-compact">
-                {/* 1-Line Mode Summary Pill */}
-                <div className={`studio-mode-summary-pill ${workflowOptStt && workflowOptVoice ? "full" : workflowOptStt ? "sub" : workflowOptVoice ? "dub" : "none"}`}>
-                  {workflowOptStt && workflowOptVoice ? (
-                    <span>⚡ Chế độ: <b>Toàn trình</b> (💬 Phụ đề + 🎙️ Lồng tiếng)</span>
-                  ) : workflowOptStt ? (
-                    <span>💬 Chế độ: <b>Chỉ làm Phụ đề</b> ({workflowOptTranslate ? "STT + Dịch thuật" : "STT nguyên bản"})</span>
-                  ) : workflowOptVoice ? (
-                    <span>🎙️ Chế độ: <b>Chỉ Lồng tiếng</b> ({speakers.length} vai TTS)</span>
-                  ) : (
-                    <span>⚠️ Vui lòng bật ít nhất 1 tính năng để xử lý</span>
-                  )}
-                </div>
-
-                {/* Stepped Action Hub Buttons */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                  {/* Hàng 2 bước tách rời */}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      type="button"
-                      className="studio-btn-subtle"
-                      style={{
-                        flex: 1,
-                        justifyContent: "center",
-                        background: "rgba(168, 85, 247, 0.12)",
-                        borderColor: "rgba(168, 85, 247, 0.35)",
-                        color: "#c084fc",
-                        fontWeight: 700,
-                        padding: "8px 10px",
-                        fontSize: 12,
-                      }}
-                      onClick={() => void handleRunAnalysis(false, false)}
-                      disabled={isAnalyzing}
-                      title="Bước 1: Quét nhận diện phụ đề và phân vai trước để bạn review và chọn giọng"
-                    >
-                      <IconUser size={13} /> 🔍 1. Quét & Phân Vai
-                    </button>
-                    <button
-                      type="button"
-                      className="studio-btn-subtle"
-                      style={{
-                        flex: 1,
-                        justifyContent: "center",
-                        background: segments.length > 0 ? "rgba(245, 158, 11, 0.15)" : "rgba(255, 255, 255, 0.03)",
-                        borderColor: segments.length > 0 ? "rgba(245, 158, 11, 0.45)" : "rgba(255, 255, 255, 0.1)",
-                        color: segments.length > 0 ? "#f59e0b" : "var(--t3)",
-                        fontWeight: 700,
-                        padding: "8px 10px",
-                        fontSize: 12,
-                      }}
-                      onClick={() => void handleRunVoiceOnly()}
-                      disabled={isAnalyzing || segments.length === 0}
-                      title="Bước 2: Tổng hợp giọng lồng tiếng cho các vai đã chọn"
-                    >
-                      <IconPlay size={13} /> 🎙️ 2. Lồng Tiếng TTS
-                    </button>
-                  </div>
-
-                  {/* Nút Chạy Toàn Trình Tự Động A -> Z */}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      type="button"
-                      className="studio-workflow-run-btn"
-                      style={{ flex: 1 }}
-                      onClick={handleRunCustomWorkflow}
-                      disabled={isAnalyzing || (!workflowOptStt && !workflowOptVoice)}
-                      title="Tự động chạy toàn trình từ đầu đến cuối không cần can thiệp"
-                    >
-                      {isAnalyzing ? (
-                        <>⚡ {timelineProcessMessage || "Đang xử lý..."}</>
-                      ) : (
-                        <>⚡ Chạy Tự Động Toàn Trình (A ➔ Z)</>
-                      )}
-                    </button>
-                    {isAnalyzing && (
-                      <button
-                        type="button"
-                        className="studio-btn-action-danger"
-                        onClick={handleCancelAnalysis}
-                        style={{
-                          background: "rgba(239, 68, 68, 0.15)",
-                          border: "1px solid rgba(239, 68, 68, 0.4)",
-                          color: "#f87171",
-                          borderRadius: 8,
-                          padding: "8px 14px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                          fontSize: 12,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                        title="Dừng tiến trình đang chạy"
-                      >
-                        🛑 Dừng
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                <span style={{ fontSize: 10, color: "var(--t3)" }}>Hoàn tác:</span>
-                <span className="studio-filter-chip" onClick={handleUndoAudio} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Audio</span>
-                <span className="studio-filter-chip" onClick={handleUndoTranslation} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Bản dịch</span>
-                <span className="studio-filter-chip" onClick={handleUndoSubtitles} style={{ cursor: "pointer" }} title="Hoàn tác">↶ Phụ đề</span>
-              </div>
-            </div>
-          </div>
+            }
+          />
         </aside>
 
         {/* RESIZER CỘT TRÁI (LEFT PANEL RESIZER) */}

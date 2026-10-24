@@ -380,3 +380,45 @@ Tổng dung lượng thư mục `shots/` ≈ 3 MB (< 15 MB). Mockup là HTML tĩ
 - Timeline giữ nguyên 100 % ở vòng 2.
 
 Không có quyết định nào không thể đảo ngược ở vòng 1 (chỉ tài liệu + mockup).
+---
+
+## 7. TIẾN ĐỘ CODE VÒNG 2 (cập nhật 2026-10-24 · worker `Mavis/mcode`)
+
+| Bước | Trạng thái | Ghi chú |
+|---|---|---|
+| **R2-1** Token + component dùng chung | ✅ Xong | `src/App.css` (+`--step-sub/--step-tr/--step-dub`); `src/components/ui/{Segmented,SplitButton,ContextMenu}.tsx` + `ui.css` (mỗi file TSX < 120 dòng) |
+| **R2-2** `MasterTopbar` dùng chung | ✅ Xong | `src/views/MasterTopbar.tsx/.css`; thay cả 2 bản copy (Studio + `SettingsView.tsx`). Chuột phải nút ↶ → menu 3 lớp hoàn tác (Audio / Bản dịch / Phụ đề) — thay 3 chip cũ. Bỏ nút "Tiến Trình" dạng modal + nút "Nhập video" trùng; overlay còn 1 biểu tượng 👁 |
+| **R2-3** Panel trái Studio 5 bước | ✅ Xong | `src/views/studio/{StudioPipelinePanel,StudioVoiceStep,studioPipelineTypes}.tsx/.ts` + `.css`. Rail 5 bước · accordion 1-mở · 1 nút chạy split (`▶ Chạy N bước đã bật \| ▾`) · chuột phải vai (giọng gốc · gộp · về 1/2 vai · xoá) · engine + giọng **đọc từ backend** (`tts_engines_status` + `dubbing_get_voices`) — đã **gỡ `TTS_ENGINE_MODELS` hard-code** và **gỡ map `vietneu:`→`kokoro:`** (backend tự fallback ở `tts_vieneu::route_voice`) |
+| **R2-4** Provider dịch chỉ đọc | ✅ Xong | Dòng "Ollama · qwen2.5:3b — **Đổi**" (mở Cài đặt); **xoá hẳn** 3 select model + 3 ô API key khỏi Studio |
+| R2-5 Cài đặt › Dịch thuật | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
+| R2-6 Tải video | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
+| R2-7 Live / Lịch sử / Tiến trình | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
+
+### 7.1. Bảng "không mất chức năng" (checklist §2)
+
+Mỗi control bị bỏ/chuyển đều còn **đường vào** mới:
+
+| Control cũ | Đường vào mới |
+|---|---|
+| 2 tab "Thuyết Minh & Lồng Tiếng" / "Tóm Tắt & Review" | 1 panel; thống kê + đánh giá kịch bản chuyển vào **"⚙ Nâng cao"** (giữ nguyên nội dung cũ) |
+| Select "Mô hình nhận dạng" | "⚙ Nâng cao" |
+| 3 select provider + 3 ô API key + 3 select model | Dòng **chỉ đọc** "Nhà cung cấp: … — **Đổi**" → mở Cài đặt |
+| "Nút Lưu hồ sơ" | Tự lưu khi thêm/xoá cặp xưng hô |
+| Nút "+ Thêm" (hồ sơ) | Enter trong ô nhập |
+| Chip "1 Người ⭐" (gộp ngầm) | Segmented "Tự động · 1 người · 2 người" — **không gộp ngầm**; gộp nằm ở chuột phải vai (có Hoàn tác) |
+| Chip tổ hợp giới tính (1N1N / 2N / 2Nữ) | Bỏ (mỗi hàng vai có nút giới tính) + "Về 2 vai" trong menu vai |
+| "Gộp vai…" modal | Chuột phải vai: "⇢ Gộp vào…", "⇢ Gộp tất cả về vai này", "👥 Về 2 vai", "👤 Về 1 vai" |
+| 3 thẻ engine + 3 nút "▶ Mẫu" + badge spec + HUD "Model TTS đang dùng" | 1 segmented engine (trạng thái backend) + 1 ▶ mẫu + select giọng mỗi vai |
+| "✨ Áp dụng VietNeu cho tất cả vai" | Chuột phải vai: "🎯 Giọng mặc định engine cho mọi vai" |
+| "🔊 Giọng gốc" mỗi vai | Chuột phải vai: "🔊 Nghe giọng gốc" |
+| "🗑 Xoá vai" | Chuột phải vai: "🗑 Xoá vai" |
+| 6 nút chạy + 2 nút Dừng + thanh "vùng chọn" + pill "chế độ" | 1 nút split `▶ Chạy N bước đã bật \| ▾` (menu: chỉ phụ đề / chỉ dịch / chỉ lồng tiếng / chỉ vùng In–Out); ▶ nhỏ trên mỗi tiêu đề bước = chạy riêng bước đó |
+| 3 chip hoàn tác (Audio / Bản dịch / Phụ đề) | Chuột phải nút ↶ trên topbar |
+| "📥 Nhập video" (trùng "Mở video") | Bỏ (giữ nút "＋ Mở video") |
+| 4 chấm đổi theme | **Tạm giữ** trong vùng ngữ cảnh của topbar cho tới khi R2-5 thêm mục "Chủ đề" vào Cài đặt (theo §4.2 là chuyển hẳn sang Cài đặt) |
+
+### 7.2. Kiểm chứng
+
+- `npx tsc --noEmit` → **0 lỗi** · `npm run build` → **OK** · `node --test scripts/timeline-tests/` → **79/79 PASS**
+- GUI trên instance riêng (CDP 9225, Vite 1423, exe copy trỏ 1423): **8/9 PASS** — panel 5 bước render, MasterTopbar 6 tab, 25 control (mục tiêu ~20), provider chỉ đọc có nút "Đổi" và **0 ô API key**, chuột phải vai ra 7 mục menu, nút split + menu 4 mục, **hồi quy kéo khối + kéo handle In/Out vẫn chạy**.
+- ⚠️ Check "engine hiện 4 trạng thái" **không chạy được**: `src-tauri/target/debug/sublix.exe` (bản app PO đang dùng) **chưa có** lệnh `tts_engines_status` (lệnh đã có trong source `src-tauri/src/lib.rs:772`, build mới có, nhưng **Windows Application Control chặn chạy file exe vừa build**). UI xử lý graceful: hiện "Đang tải trạng thái engine TTS…" thay vì vỡ. Cần app build lại từ source hiện tại để thấy trạng thái thật.
