@@ -4,6 +4,7 @@ import { Segmented } from "../../components/ui/Segmented";
 import { SplitButton } from "../../components/ui/SplitButton";
 import StudioVoiceStep from "./StudioVoiceStep";
 import StudioTranslateOptions from "./StudioTranslateOptions";
+import StudioSttEnginePicker from "./StudioSttEnginePicker";
 import { formatDuration } from "../../lib/timeline/estimate";
 import {
   PIPELINE_STEPS,
@@ -159,6 +160,17 @@ function StudioPipelinePanelInner({
           {stepHint("stt")}
           {state.openStep === "sub" ? (
             <div className="spp-card-body">
+              {/* [TSK-STUDIO-WIRE-CTX-STT] Chọn engine nhận dạng (Whisper / SenseVoice / Paraformer…),
+                  danh sách lấy từ backend `stt_engines_status` — không hard-code. */}
+              <StudioSttEnginePicker
+                engines={state.sttEngines}
+                selectedId={state.sttSelectedEngineId}
+                sourceLang={state.sttLang}
+                progress={state.sttDownloadProgress}
+                onSelect={api.selectSttEngine}
+                onDownload={api.downloadSttModel}
+                onCancel={api.cancelSttModelDownload}
+              />
               <div className="spp-field">
                 <span className="spp-label">Ngôn ngữ gốc</span>
                 <select
@@ -264,7 +276,13 @@ function StudioPipelinePanelInner({
                 onSelectModel={api.selectTranslateModel}
                 onSelectEffort={api.selectReasoningEffort}
                 onOpenSettings={api.openSettings}
+                contextual={state.contextualTranslate}
+                onContextualChange={api.setContextualTranslate}
+                provider={state.translateProvider}
               />
+              {state.translatePhase ? (
+                <div className="spp-estimate live">{state.translatePhase}</div>
+              ) : null}
               {state.providerLabel ? (
                 <div className="spp-provider-row">
                   <span className="spp-provider-text">

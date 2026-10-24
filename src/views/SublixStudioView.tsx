@@ -11,9 +11,11 @@ import {
   type DubbingProgress,
   type DubbingProject,
   type AppConfig,
+  type ModelDownloadProgressState,
   type TtsEngineInfo,
   type VoicePreset,
 } from "../lib/tauri";
+import type { ScriptLine, TranslateProgress } from "../lib/types";
 import { subtitleSourceLabel } from "../lib/types";
 import { version as APP_VERSION_PKG } from "../../package.json";
 // R2-3: panel quy trình 5 bước (tách riêng để file này không phình thêm).
@@ -32,6 +34,7 @@ import {
 import {
   buildEstimates,
   computeLiveProgress,
+  contextualDefaultOn,
   formatLiveProgress,
   loadRateOverrides,
   rateKey,
@@ -40,6 +43,7 @@ import {
 import type {
   PanelEngine,
   PanelRole,
+  PanelSttEngine,
   PanelVoiceOption,
   PipelineOpenStep,
   StudioPipelineApi,
@@ -4011,15 +4015,63 @@ export default function SublixStudioView({
         });
       });
 
-      const project: DubbingProject = await sublix.dubbingAnalyze(
-        filePath,
-        sttLang === "auto" ? undefined : sttLang,
-        undefined, // Chỉ bóc tách sub gốc, không dịch
-        durLimit,
-        startOffset,
-        1, // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
-        preferExistingSrt
-      );
+      // ── [TSK-STUDIO-WIRE-CTX-STT] Engine STT khác Whisper ────────────────────
+      // Nếu người dùng chọn SenseVoice/Paraformer/Parakeet (đã tải model) thì chạy
+      // engine đó qua `stt_transcribe` (sidecar tự trích audio 16 kHz mono bằng ffmpeg),
+      // thay vì đường Whisper mặc định của `dubbing_analyze`.
+      const customStt = sttEngines.find((engine) => engine.id === sttSelectedEngineId);
+      const useCustomStt =
+        !!customStt && !customStt.id.startsWith("whisper") && customStt.downloaded;
+
+      let project: DubbingProject;
+      if (useCustomStt && customStt) {
+        const sttMsg = `Đang nhận dạng bằng ${customStt.label}...`;
+        setTimelineProcessMessage(sttMsg);
+        setAnalyzeMessage(sttMsg);
+        const sttResult = await sublix.sttTranscribe(
+          filePath,
+          sttLang === "auto" ? undefined : sttLang,
+          customStt.id,
+        );
+        let peaks: number[] = [];
+        let thumbs: Array<{ time_sec: number; data_uri: string }> = [];
+        try {
+          const preview = await sublix.extractMediaPreview(filePath, sttResult.audio_duration_secs);
+          peaks = preview?.peaks ?? [];
+          thumbs = preview?.filmstrip_thumbs ?? [];
+        } catch {
+          /* không có preview thì bỏ trống waveform — không chặn luồng */
+        }
+        project = {
+          input_path: filePath,
+          media_duration_sec: sttResult.audio_duration_secs,
+          speakers: [],
+          segments: sttResult.segments.map((seg, index) => ({
+            id: index + 1,
+            speaker_id: "speaker_0",
+            start_sec: seg.start,
+            end_sec: seg.end,
+            original_text: seg.text,
+            dubbed_text: "",
+            status: "pending",
+          })),
+          bgm_volume: 0.8,
+          voice_volume: 1.0,
+          transcript_source: `stt:${customStt.id}`,
+          peaks,
+          filmstrip_thumbs: thumbs,
+        };
+      } else {
+        project = await sublix.dubbingAnalyze(
+          filePath,
+          sttLang === "auto" ? undefined : sttLang,
+          undefined, // Chỉ bóc tách sub gốc, không dịch
+          durLimit,
+          startOffset,
+          1, // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
+          preferExistingSrt
+        );
+      }
 
       if (project) {
         const vidDur = videoRef.current?.duration;
@@ -4184,6 +4236,73 @@ export default function SublixStudioView({
     try {
       await handleSaveProviderConfig();
       saveTranslationUndo();
+
+      // ── [TSK-STUDIO-WIRE-CTX-STT] Đường dịch THEO NGỮ CẢNH ────────────────
+      // 2 lượt: (1) đọc hiểu cả kịch bản, (2) dịch theo lô có ngữ cảnh trượt.
+      // Chỉ chạy khi người dùng BẬT công tắc; lỗi → tự rơi về dịch theo lô (không crash).
+      if (contextualTranslate && targetSegs.length > 0) {
+        const speakerNames = new Map(speakersRef.current.map((spk) => [spk.id, spk.name]));
+        const ctxLines: ScriptLine[] = targetSegs.map((seg) => ({
+          id: String(seg.id),
+          speakerId: seg.speakerId,
+          speakerName: speakerNames.get(seg.speakerId),
+          text: seg.original,
+          start: seg.start,
+          end: seg.end,
+        }));
+        try {
+          const ctxMsg = "Đang dịch theo ngữ cảnh (đọc hiểu kịch bản trước)...";
+          setTranslatePhase("🧠 Đọc hiểu kịch bản trước khi dịch…");
+          setTimelineProcessMessage(ctxMsg);
+          setAnalyzeMessage(ctxMsg);
+          const ctxResults = await sublix.translateScriptContextual(
+            ctxLines,
+            sttLang === "auto" ? "auto" : sttLang,
+            targetLang,
+          );
+          const ctxFailed = ctxResults.filter((r) => r.failed || !r.translated).length;
+          const ctxById = new Map(ctxResults.map((r) => [r.id, r]));
+          setSegments((prev) =>
+            prev.map((seg) => {
+              const hit = ctxById.get(String(seg.id));
+              if (!hit) return seg;
+              if (hit.failed || !hit.translated) return { ...seg, translateFailed: true };
+              return { ...seg, translated: hit.translated, translateFailed: false };
+            }),
+          );
+          setTranslatePhase(null);
+          setTimelineProgress(100);
+          setAnalyzeProgress(100);
+          setTimelineProcessMessage("Dịch theo ngữ cảnh hoàn tất!");
+          setAnalyzeMessage("Dịch theo ngữ cảnh phụ đề hoàn tất!");
+          showToast(
+            ctxFailed > 0
+              ? `🧠 Đã dịch theo ngữ cảnh ${ctxResults.length - ctxFailed}/${ctxResults.length} câu — ${ctxFailed} câu lỗi`
+              : `🧠 Đã dịch theo ngữ cảnh xong ${ctxResults.length} câu!`,
+          );
+          notifyTaskUpdate({
+            status: "completed",
+            type: "file_sub",
+            workflowType: "subtitle_translate",
+            workflowLabel: "Phụ Đề & Dịch Thuật AI",
+            title: `Phụ Đề & Dịch Thuật · ${fileName || "Video"}`,
+            stage: "Hoàn tất dịch theo ngữ cảnh",
+            detail: `Đã dịch ${ctxResults.length} câu (có ngữ cảnh)`,
+            percent: 100,
+            outputPath: filePath,
+            steps: [
+              { id: "stt", label: "Whisper STT", status: "done" },
+              { id: "trans", label: "Dịch theo ngữ cảnh", status: "done" },
+              { id: "done", label: "Xuất Phụ Đề", status: "done" },
+            ],
+          });
+          return;
+        } catch (ctxErr) {
+          console.warn("Dịch theo ngữ cảnh thất bại — rơi về dịch theo lô:", ctxErr);
+          setTranslatePhase(null);
+          showToast("⚠️ Dịch theo ngữ cảnh lỗi — chuyển sang dịch theo lô.");
+        }
+      }
 
       const BATCH_SIZE = 8;
       const total = targetSegs.length;
@@ -5640,7 +5759,190 @@ export default function SublixStudioView({
     }
   }, []);
 
-  /** Ước tính thời gian từng bước (chỉ tính bước đang BẬT). */
+  // ── [TSK-STUDIO-WIRE-CTX-STT] Engine STT + dịch theo ngữ cảnh ──────────────
+  /** Catalog engine nhận dạng (nguồn: backend `stt_engines_status`). */
+  const [sttEngines, setSttEngines] = useState<PanelSttEngine[]>([]);
+  /** Engine STT đang chọn (backend lưu trong config). */
+  const [sttSelectedEngineId, setSttSelectedEngineId] = useState<string>("");
+  /** Tiến trình tải model STT (sự kiện `model:download-progress`). */
+  const [sttDownloadProgress, setSttDownloadProgress] =
+    useState<ModelDownloadProgressState | null>(null);
+  /** Phase dịch theo ngữ cảnh (sự kiện `translate:progress`). */
+  const [translatePhase, setTranslatePhase] = useState<string | null>(null);
+  /** Bật/tắt dịch theo ngữ cảnh — lưu THEO PROVIDER trong localStorage. */
+  const [contextualFlags, setContextualFlags] = useState<Record<string, boolean>>({});
+
+  /** Tiền tố key lưu cờ dịch theo ngữ cảnh (mỗi provider một cờ). */
+  const CONTEXTUAL_FLAG_PREFIX = "sublix_contextual_translate_";
+
+  /** Provider dịch đang dùng (ưu tiên giá trị backend trả về). */
+  const translateProvider = translateOptions?.provider || transProvider;
+
+  /** Đọc cờ dịch theo ngữ cảnh đã lưu (mỗi provider một cờ). */
+  useEffect(() => {
+    try {
+      const flags: Record<string, boolean> = {};
+      for (const provider of ["openrouter", "deepseek", "ollama", "gguf", "minimax", "local"]) {
+        const raw = localStorage.getItem(`${CONTEXTUAL_FLAG_PREFIX}${provider}`);
+        if (raw === "1") flags[provider] = true;
+        else if (raw === "0") flags[provider] = false;
+      }
+      setContextualFlags(flags);
+    } catch {
+      /* localStorage bị chặn → dùng mặc định theo provider */
+    }
+  }, []);
+
+  /** Cờ "dịch theo ngữ cảnh" của provider hiện tại (mặc định theo provider). */
+  const contextualTranslate = useMemo(() => {
+    const saved = contextualFlags[translateProvider];
+    if (saved !== undefined) return saved;
+    return contextualDefaultOn(translateProvider);
+  }, [contextualFlags, translateProvider]);
+
+  /** Nạp catalog engine STT từ backend. */
+  const loadSttEngines = useCallback(async () => {
+    try {
+      const list = await sublix.sttEnginesStatus();
+      const mapped: PanelSttEngine[] = list.map((engine) => ({
+        id: engine.id,
+        name: engine.name,
+        label: engine.label,
+        family: engine.family,
+        languages: engine.languages ?? [],
+        langLabel: engine.lang_label,
+        desc: engine.desc,
+        sizeNote: engine.size_note,
+        license: engine.license,
+        rtfNote: engine.rtf_note,
+        downloaded: engine.downloaded,
+        progressPct: engine.progress_pct,
+        error: engine.error,
+        selected: engine.selected,
+      }));
+      setSttEngines(mapped);
+      const selected = mapped.find((engine) => engine.selected);
+      setSttSelectedEngineId(selected ? selected.id : (mapped[0]?.id ?? ""));
+    } catch (err) {
+      console.warn("Không lấy được catalog engine STT:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    void loadSttEngines();
+  }, [isActive, loadSttEngines]);
+
+  // Tiến trình tải model (STT) + phase dịch theo ngữ cảnh.
+  useEffect(() => {
+    if (!isActive) return;
+    let alive = true;
+    let unlistenProgress: (() => void) | null = null;
+    let unlistenTranslate: (() => void) | null = null;
+
+    void listen<ModelDownloadProgressState>("model:download-progress", (event) => {
+      if (!alive) return;
+      const payload = event.payload;
+      if (payload.kind !== "stt") return;
+      setSttDownloadProgress(payload);
+      if (payload.phase === "done" || payload.phase === "error") {
+        setSttDownloadProgress(null);
+        void loadSttEngines();
+      }
+    })
+      .then((fn) => {
+        if (alive) unlistenProgress = fn;
+        else fn();
+      })
+      .catch((err) => console.warn("Nghe model:download-progress thất bại:", err));
+
+    void listen<TranslateProgress>("translate:progress", (event) => {
+      if (!alive) return;
+      const payload = event.payload;
+      if (payload.phase === "reading") {
+        setTranslatePhase("🧠 Đọc hiểu kịch bản trước khi dịch…");
+      } else if (payload.phase === "translating") {
+        setTranslatePhase(`🌐 Đang dịch theo ngữ cảnh ${payload.done}/${payload.total} câu`);
+      } else {
+        setTranslatePhase(null);
+      }
+    })
+      .then((fn) => {
+        if (alive) unlistenTranslate = fn;
+        else fn();
+      })
+      .catch((err) => console.warn("Nghe translate:progress thất bại:", err));
+
+    return () => {
+      alive = false;
+      if (unlistenProgress) unlistenProgress();
+      if (unlistenTranslate) unlistenTranslate();
+    };
+  }, [isActive, loadSttEngines]);
+
+  /** Chọn engine STT → lưu config ngay (không có nút Lưu). */
+  const handleSelectSttEngine = useCallback(async (engineId: string) => {
+    try {
+      await sublix.sttSetEngine(engineId);
+      setSttSelectedEngineId(engineId);
+      showToast(`🎙️ Đã chọn engine nhận dạng: ${engineId}`);
+      void loadSttEngines();
+    } catch (err) {
+      showToast(`⚠️ Không đổi được engine nhận dạng: ${String(err)}`);
+    }
+  }, [loadSttEngines]);
+
+  /** Tải model của engine STT. */
+  const handleDownloadSttModel = useCallback(async (engineId: string) => {
+    try {
+      setSttDownloadProgress({
+        model_id: engineId,
+        kind: "stt",
+        phase: "downloading",
+        bytes_done: 0,
+        bytes_total: 0,
+        speed_bps: 0,
+        eta_s: null,
+        file: null,
+        message: "Đang tải model…",
+      });
+      await sublix.sttModelDownload(engineId);
+    } catch (err) {
+      setSttDownloadProgress(null);
+      showToast(`⚠️ Không tải được model: ${String(err)}`);
+    }
+  }, []);
+
+  /** Hủy tải model STT. */
+  const handleCancelSttModelDownload = useCallback(async (engineId: string) => {
+    try {
+      await sublix.sttModelCancel(engineId);
+    } catch (err) {
+      console.warn("Hủy tải model STT thất bại:", err);
+    }
+    setSttDownloadProgress(null);
+  }, []);
+
+  /** Bật/tắt dịch theo ngữ cảnh — lưu theo provider trong localStorage. */
+  const handleSetContextualTranslate = useCallback(
+    (value: boolean) => {
+      const provider = translateProvider;
+      setContextualFlags((prev) => ({ ...prev, [provider]: value }));
+      try {
+        localStorage.setItem(`${CONTEXTUAL_FLAG_PREFIX}${provider}`, value ? "1" : "0");
+      } catch {
+        /* localStorage bị chặn → chỉ giữ trong phiên */
+      }
+      showToast(
+        value
+          ? "🧠 Bật dịch theo ngữ cảnh (đọc hiểu kịch bản trước khi dịch)"
+          : "🌐 Tắt dịch theo ngữ cảnh — dịch theo lô, nhanh hơn",
+      );
+    },
+    [translateProvider],
+  );
+
+  /** Ước tính thời gian từng bước (có tính engine STT + chế độ ngữ cảnh). */
   const pipelineEstimates = useMemo(() => {
     const audioDurationSec = segments.reduce((sum, seg) => sum + Math.max(0, seg.end - seg.start), 0);
     const { steps } = buildEstimates({
@@ -5648,8 +5950,12 @@ export default function SublixStudioView({
       audioDurationSec,
       segmentCount: segments.length,
       sttModel: sttModel === "base" ? "Whisper base" : "Whisper Large-v3-Turbo",
+      sttEngineId: sttSelectedEngineId || "whisper",
+      sttRtfNote: sttEngines.find((engine) => engine.id === sttSelectedEngineId)?.rtfNote,
+      sourceLang: sttLang,
       translateModel: translateOptions?.model || "Ollama qwen2.5:3b",
       reasoningEffort: translateOptions?.reasoning_effort || "auto",
+      contextualTranslate,
       ttsEngine: selectedTtsEngine,
       overrides: rateOverrides,
     });
@@ -5662,7 +5968,11 @@ export default function SublixStudioView({
     segments,
     mediaDuration,
     sttModel,
+    sttLang,
+    sttEngines,
+    sttSelectedEngineId,
     translateOptions,
+    contextualTranslate,
     selectedTtsEngine,
     rateOverrides,
     workflowOptStt,
@@ -5928,6 +6238,12 @@ export default function SublixStudioView({
       translateOptionsUnavailable,
       stepEstimates: pipelineEstimates,
       liveProgress: pipelineLiveProgress,
+      sttEngines,
+      sttSelectedEngineId,
+      contextualTranslate,
+      translateProvider,
+      translatePhase,
+      sttDownloadProgress: sttDownloadProgress ?? undefined,
     }),
     [
       segments.length,
@@ -5961,6 +6277,12 @@ export default function SublixStudioView({
       translateOptionsUnavailable,
       pipelineEstimates,
       pipelineLiveProgress,
+      sttEngines,
+      sttSelectedEngineId,
+      contextualTranslate,
+      translateProvider,
+      translatePhase,
+      sttDownloadProgress,
     ],
   );
 
@@ -6015,6 +6337,10 @@ export default function SublixStudioView({
       selectTranslateModel: () => {},
       selectReasoningEffort: () => {},
       hasProviderKey: () => true,
+      selectSttEngine: () => {},
+      downloadSttModel: () => {},
+      cancelSttModelDownload: () => {},
+      setContextualTranslate: () => {},
     };
   }
   Object.assign(pipelineApiRef.current, {
@@ -6098,6 +6424,16 @@ export default function SublixStudioView({
       void handleSelectReasoningEffort(effort);
     },
     hasProviderKey: handleHasProviderKey,
+    selectSttEngine: (engineId: string) => {
+      void handleSelectSttEngine(engineId);
+    },
+    downloadSttModel: (engineId: string) => {
+      void handleDownloadSttModel(engineId);
+    },
+    cancelSttModelDownload: (engineId: string) => {
+      void handleCancelSttModelDownload(engineId);
+    },
+    setContextualTranslate: (value: boolean) => handleSetContextualTranslate(value),
   });
   const pipelineApi = pipelineApiRef.current;
 

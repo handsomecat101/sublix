@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   buildEstimates,
   computeLiveProgress,
+  contextualDefaultOn,
   DEFAULT_TRANSLATE_RATES,
   estimateSttSeconds,
   estimateTranslateSeconds,
@@ -15,6 +16,7 @@ import {
   formatDuration,
   formatLiveProgress,
   loadRateOverrides,
+  parseRtfFromNote,
   rateKey,
   resolveTranslateRate,
   resolveTtsRtf,
@@ -82,9 +84,46 @@ test("estimate: storage hỏng / rỗng → không crash", () => {
   assert.equal(saveRateOverride(fakeStorage(), "k", 0), false);
 });
 
-test("estimate: ước tính STT theo RTF", () => {
-  assert.equal(estimateSttSeconds(40, {}), 80);
-  assert.equal(estimateSttSeconds(0, {}), 0);
+test("estimate: ước tính STT theo RTF (phân biệt theo engine)", () => {
+  // Whisper base: RTF 0,16 (EN) · 0,14 (ZH) — CPU 4 luồng
+  const near = (actual: number, expected: number) =>
+    assert.ok(Math.abs(actual - expected) < 0.001, `${actual} != ${expected}`);
+  near(estimateSttSeconds(100, "whisper-base", {}, "RTF 0,16 (EN) · 0,14 (ZH) — CPU 4 luồng"), 16);
+  near(estimateSttSeconds(100, "whisper-base", {}, "RTF 0,16 (EN) · 0,14 (ZH)", "zh"), 14);
+  near(estimateSttSeconds(100, "whisper-x", {}, ""), 122);
+  near(estimateSttSeconds(100, "whisper-base", { [rateKey("stt", "whisper-base")]: 0.5 }), 50);
+  assert.equal(estimateSttSeconds(0, "whisper-base", {}, ""), 0);
+});
+
+test("estimate: parseRtfFromNote đọc được số RTF của catalog", () => {
+  const note = "RTF 1,22 (EN) · 1,62 (ZH) — CPU 4 luồng · 0,02 trên RTX 3090 CUDA";
+  assert.equal(parseRtfFromNote(note), 1.22);
+  assert.equal(parseRtfFromNote(note, "en"), 1.22);
+  assert.equal(parseRtfFromNote(note, "zh"), 1.62);
+  assert.equal(parseRtfFromNote("không có RTF"), null);
+  assert.equal(parseRtfFromNote(""), null);
+});
+
+test("estimate: bật dịch theo ngữ cảnh → chậm hơn (hệ số)", () => {
+  const base = resolveTranslateRate("MiniMax-M3", "low", {});
+  const ctx = resolveTranslateRate("MiniMax-M3", "low", {}, true);
+  assert.ok(ctx > base);
+  assert.equal(Math.round((ctx / base) * 100) / 100, 1.6);
+  assert.equal(contextualDefaultOn("openrouter"), true);
+  assert.equal(contextualDefaultOn("deepseek"), true);
+  assert.equal(contextualDefaultOn("ollama"), false);
+  assert.equal(contextualDefaultOn("minimax"), false);
+});
+
+test("estimate: số đo của chế độ ngữ cảnh dùng key riêng (:ctx)", () => {
+  const overrides = { [rateKey("translate", "MiniMax-M3:low:ctx")]: 0.8 };
+  assert.equal(resolveTranslateRate("MiniMax-M3", "low", overrides, true), 0.8);
+  assert.ok(resolveTranslateRate("MiniMax-M3", "low", {}, true) > 0);
+});
+
+test("estimate: ước tính dịch có tính chế độ ngữ cảnh", () => {
+  assert.equal(estimateTranslateSeconds(100, "MiniMax-M3.1-Flash", "low", {}), 44);
+  assert.ok(estimateTranslateSeconds(100, "MiniMax-M3.1-Flash", "low", {}, true) > 44);
 });
 
 test("estimate: ước tính dịch theo số câu", () => {
@@ -105,8 +144,12 @@ test("estimate: buildEstimates trả 3 bước + tổng", () => {
     audioDurationSec: 80,
     segmentCount: 50,
     sttModel: "base",
+    sttEngineId: "whisper-base",
+    sttRtfNote: "RTF 0,16 (EN) · 0,14 (ZH)",
+    sourceLang: "en",
     translateModel: "MiniMax-M3.1-Flash",
     reasoningEffort: "low",
+    contextualTranslate: false,
     ttsEngine: "vieneu",
     overrides: {},
   });
@@ -117,6 +160,8 @@ test("estimate: buildEstimates trả 3 bước + tổng", () => {
   );
   assert.ok(totalSeconds > 0);
   assert.ok(Math.abs(steps[1].seconds - 22) < 0.001);
+  // STT dùng RTF đúng engine (0,16 × 100s = 16s)
+  assert.ok(Math.abs(steps[0].seconds - 16) < 0.001);
 });
 
 test("estimate: tiến độ thật khi đang chạy", () => {

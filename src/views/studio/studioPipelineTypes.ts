@@ -5,6 +5,7 @@
  * không phải import chéo (tránh vòng phụ thuộc component).
  */
 import type { ReasoningEffort, TranslateOptions } from "./translateOptions";
+import type { ModelDownloadProgressState } from "../../lib/tauri";
 
 /** 5 bước của quy trình (theo thứ tự người dùng làm). */
 export type PipelineStepId = "source" | "sub" | "translate" | "voice" | "export";
@@ -76,6 +77,38 @@ export interface PanelLiveProgress {
   text: string;
 }
 
+/** Engine nhận dạng giọng nói (từ backend `stt_engines_status`). */
+export interface PanelSttEngine {
+  /** Id engine (vd "whisper-base", "sensevoice-zh-en"). */
+  id: string;
+  /** Tên đầy đủ. */
+  name: string;
+  /** Nhãn ngắn. */
+  label: string;
+  /** Nhóm engine (whisper / sensevoice / paraformer / parakeet / canary). */
+  family: string;
+  /** Mã ngôn ngữ engine hỗ trợ. */
+  languages: string[];
+  /** Mô tả ngôn ngữ (từ catalog). */
+  langLabel: string;
+  /** Mô tả engine (từ catalog). */
+  desc: string;
+  /** Dung lượng (từ catalog). */
+  sizeNote: string;
+  /** Giấy phép (từ catalog). */
+  license: string;
+  /** Chuỗi RTF (từ catalog) — nguồn sự thật cho ước tính thời gian. */
+  rtfNote: string;
+  /** Đã tải model chưa. */
+  downloaded: boolean;
+  /** % tải (0-100). */
+  progressPct: number;
+  /** Lỗi tải (null = không lỗi). */
+  error: string | null;
+  /** Đang được chọn. */
+  selected: boolean;
+}
+
 /** Trạng thái hiển thị của panel (chỉ đọc — panel KHÔNG tự giữ state nghiệp vụ). */
 export interface StudioPipelineState {
   /** Số câu phụ đề hiện có. */
@@ -140,6 +173,18 @@ export interface StudioPipelineState {
   stepEstimates: PanelEstimate[];
   /** Tiến độ thật của bước đang chạy (null = không chạy). */
   liveProgress: PanelLiveProgress | null;
+  /** Engine nhận dạng giọng nói (từ backend). */
+  sttEngines: PanelSttEngine[];
+  /** Id engine nhận dạng đang chọn. */
+  sttSelectedEngineId: string;
+  /** Đang bật "Dịch theo ngữ cảnh". */
+  contextualTranslate: boolean;
+  /** Provider dịch hiện tại (để gợi ý model local hay cloud). */
+  translateProvider: string;
+  /** Phase dịch theo ngữ cảnh ("Đọc hiểu kịch bản…" / "Đang dịch 120/480 câu"). */
+  translatePhase: string | null;
+  /** Tiến trình tải model STT (null = không tải). */
+  sttDownloadProgress?: ModelDownloadProgressState;
 }
 
 /** Các hành động của panel — truyền từ file cha (state KHÔNG chuyển sang con). */
@@ -185,6 +230,14 @@ export interface StudioPipelineApi {
   selectReasoningEffort: (effort: ReasoningEffort) => void;
   /** Provider này đã có API key chưa (chỉ trả true/false, không trả key). */
   hasProviderKey: (provider: string) => boolean;
+  /** Chọn engine nhận dạng (lưu config ngay, không nút Lưu). */
+  selectSttEngine: (engineId: string) => void;
+  /** Tải model của engine STT. */
+  downloadSttModel: (engineId: string) => void;
+  /** Hủy tải model STT. */
+  cancelSttModelDownload: (engineId: string) => void;
+  /** Bật/tắt "Dịch theo ngữ cảnh" (lưu theo provider). */
+  setContextualTranslate: (value: boolean) => void;
 }
 
 /** Nhãn hiển thị của 5 bước trên rail. */

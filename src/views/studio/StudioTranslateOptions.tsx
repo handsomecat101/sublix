@@ -7,16 +7,18 @@ import {
 } from "./translateOptions";
 
 /**
- * StudioTranslateOptions — chọn **model dịch** + **mức suy luận** ngay trong
- * bước "Dịch" của panel Studio (PO: không đẩy người dùng sang tab Cài đặt).
+ * StudioTranslateOptions — chọn **model dịch** + **mức suy luận** + **chế độ dịch
+ * theo ngữ cảnh** ngay trong bước "Dịch" của panel Studio.
  *
  * - Dropdown "Model dịch" chia 2 nhóm: **Local** (Ollama/GGUF) và **Cloud**
  *   (minimax M3, M3.1 Flash, DeepSeek qua OpenRouter…).
  * - Model cloud **chưa có API key** → mục bị làm xám + dòng nhắc "Cần API key —
  *   Cài đặt" (link mở Cài đặt). Không bao giờ in key ra UI.
- * - Segmented "Suy luận" chỉ hiện khi model hiện tại `supports_reasoning`.
- * - Đổi lựa chọn → ghi NGAY (không có nút "Lưu").
- * - Khi backend chưa có lệnh → hiện trạng thái dự phòng (chỉ đọc), không crash.
+ * - Segmented "Suy luận" (Tự động/Thấp/Vừa/Cao/Tối đa) chỉ hiện khi
+ *   `supports_reasoning`.
+ * - Công tắc "Dịch theo ngữ cảnh": đo thật (mcode #2, §4.4) cho thấy model local
+ *   nhỏ dịch KÉM hơn ở chế độ này → mặc định TẮT với ollama/gguf/minimax, BẬT với
+ *   openrouter/deepseek. Cờ lưu THEO PROVIDER (file cha lo phần lưu).
  */
 export interface StudioTranslateOptionsProps {
   /** Tuỳ chọn từ backend (null = chưa tải xong). */
@@ -33,7 +35,16 @@ export interface StudioTranslateOptionsProps {
   onSelectEffort: (effort: ReasoningEffort) => void;
   /** Mở Cài đặt (để nhập API key / tham số khác). */
   onOpenSettings: () => void;
+  /** Đang bật "Dịch theo ngữ cảnh". */
+  contextual: boolean;
+  /** Bật/tắt "Dịch theo ngữ cảnh". */
+  onContextualChange: (value: boolean) => void;
+  /** Provider hiện tại (để biết model local hay cloud). */
+  provider: string;
 }
+
+/** Provider chạy model trên máy → dịch theo ngữ cảnh thường KÉM hơn (đo thật). */
+const LOCAL_PROVIDERS = ["ollama", "gguf", "local", "minimax"];
 
 function StudioTranslateOptionsInner({
   options,
@@ -43,7 +54,36 @@ function StudioTranslateOptionsInner({
   onSelectModel,
   onSelectEffort,
   onOpenSettings,
+  contextual,
+  onContextualChange,
+  provider,
 }: StudioTranslateOptionsProps) {
+  // Công tắc ngữ cảnh — hiện ở MỌI nhánh (kể cả khi backend chưa có lệnh).
+  const contextualBlock = (
+    <div className="spp-field">
+      <span className="spp-label">Dịch theo ngữ cảnh</span>
+      <Segmented
+        options={[
+          { value: "off", label: "Tắt" },
+          { value: "on", label: "Bật" },
+        ]}
+        value={contextual ? "on" : "off"}
+        onChange={(value) => onContextualChange(value === "on")}
+        ariaLabel="Dịch theo ngữ cảnh"
+      />
+      <span className="spp-hint">
+        Đọc hiểu cả kịch bản trước khi dịch → dịch đúng tông giọng, mạch cảnh.
+      </span>
+      {contextual && LOCAL_PROVIDERS.includes(provider.trim().toLowerCase()) ? (
+        <div className="spp-engine-warn">
+          <span className="spp-engine-warn-text">
+            Model nhỏ trên máy dịch kém hơn ở chế độ này.
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+
   // ── Trạng thái dự phòng: backend chưa có lệnh ──────────────────────────
   if (unavailable) {
     return (
@@ -57,6 +97,7 @@ function StudioTranslateOptionsInner({
             Đổi
           </button>
         </div>
+        {contextualBlock}
       </div>
     );
   }
@@ -66,6 +107,7 @@ function StudioTranslateOptionsInner({
       <div className="spp-field">
         <span className="spp-label">Model dịch</span>
         <div className="spp-note">Đang tải danh sách model dịch…</div>
+        {contextualBlock}
       </div>
     );
   }
@@ -73,8 +115,7 @@ function StudioTranslateOptionsInner({
   const localModels = options.models.filter((m) => m.local);
   const cloudModels = options.models.filter((m) => !m.local);
   const current = options.models.find((m) => m.id === options.model);
-  const currentNeedsKey =
-    current !== undefined && !current.local && !hasProviderKey(current.provider);
+  const currentNeedsKey = current !== undefined && !current.local && !hasProviderKey(current.provider);
 
   const renderOption = (model: { id: string; provider: string; label: string; local: boolean }) => {
     const missingKey = !model.local && !hasProviderKey(model.provider);
@@ -139,6 +180,8 @@ function StudioTranslateOptionsInner({
       <button type="button" className="spp-link-btn" onClick={onOpenSettings}>
         Cài đặt nâng cao (API key, tham số khác)
       </button>
+
+      {contextualBlock}
     </div>
   );
 }

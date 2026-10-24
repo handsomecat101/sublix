@@ -49,6 +49,50 @@ export const DEFAULT_TRANSLATE_RATES: Record<string, number> = {
 };
 
 /**
+ * Hệ số CHẬM khi bật "Dịch theo ngữ cảnh" (đo thật của mcode #2 —
+ * `docs/BENCH_TRANSLATE_2026-10.md` §4.4):
+ * - Ollama 3B: điểm 4,19 → 2,69 (kém hơn)
+ * - MiniMax: 4,79 → 4,34 và **chậm 1,6 lần**
+ * - OpenRouter: 4,82 → 4,78 (gần như ngang, nhẹ hơn)
+ *
+ * Vì vậy chế độ ngữ cảnh MẶC ĐỊNH TẮT với model local nhỏ (ollama/gguf/minimax)
+ * và BẬT với model cloud mạnh (openrouter/deepseek).
+ */
+export const CONTEXTUAL_SLOWDOWN: Record<string, number> = {
+  "minimax-m3": 1.6,
+  "minimax-m3.1-flash": 1.6,
+  "qwen2.5:3b": 1.55,
+};
+
+/** Hệ số chậm mặc định khi bật ngữ cảnh (model chưa biết). */
+export const CONTEXTUAL_SLOWDOWN_DEFAULT = 1.2;
+
+/**
+ * Provider nào BẬT "Dịch theo ngữ cảnh" mặc định.
+ * (Đo thật: model local nhỏ dịch kém hơn ở chế độ này.)
+ */
+export const CONTEXTUAL_DEFAULT_ON_PROVIDERS: readonly string[] = ["openrouter", "deepseek"];
+
+/**
+ * Hệ số chậm theo model khi bật dịch theo ngữ cảnh.
+ *
+ * @param model Id model dịch (vd "MiniMax-M3", "qwen2.5:3b").
+ */
+export function contextualSlowdown(model: string): number {
+  const key = model.trim().toLowerCase();
+  return CONTEXTUAL_SLOWDOWN[key] ?? CONTEXTUAL_SLOWDOWN_DEFAULT;
+}
+
+/**
+ * Provider có bật dịch theo ngữ cảnh mặc định không.
+ *
+ * @param provider Id provider (vd "openrouter", "ollama").
+ */
+export function contextualDefaultOn(provider: string): boolean {
+  return CONTEXTUAL_DEFAULT_ON_PROVIDERS.includes(provider.trim().toLowerCase());
+}
+
+/**
  * Hệ số nhân theo mức suy luận (số bench 0,44 s/câu đo ở mức `low`).
  */
 export const REASONING_EFFORT_FACTOR: Record<string, number> = {
@@ -132,9 +176,12 @@ export function resolveTranslateRate(
   model: string,
   effort: string,
   overrides: Record<string, number>,
+  contextual: boolean = false,
 ): number {
+  const ctxSuffix = contextual ? ":ctx" : "";
   const measured =
-    overrides[rateKey("translate", `${model}:${effort}`)] ?? overrides[rateKey("translate", model)];
+    overrides[rateKey("translate", `${model}:${effort}${ctxSuffix}`)] ??
+    overrides[rateKey("translate", `${model}:${effort}`)];
   if (measured !== undefined) return measured;
 
   const key = model.trim().toLowerCase();
@@ -144,7 +191,8 @@ export function resolveTranslateRate(
   const base =
     DEFAULT_TRANSLATE_RATES[key] ?? DEFAULT_TRANSLATE_RATES[bare] ?? DEFAULT_RATES.translateSecPerSegment;
   const factor = REASONING_EFFORT_FACTOR[effort.trim().toLowerCase()] ?? 1;
-  return base * factor;
+  const slow = contextual ? contextualSlowdown(model) : 1;
+  return base * factor * slow;
 }
 
 /**
@@ -162,19 +210,6 @@ export function resolveTtsRtf(
   return DEFAULT_TTS_RTF[engine.toLowerCase()] ?? DEFAULT_RATES.ttsRtf;
 }
 
-/**
- * Ước tính giây cho bước Nhận dạng (STT).
- *
- * @param mediaDurationSec Độ dài media (giây).
- * @param overrides        Số đo được.
- */
-export function estimateSttSeconds(
-  mediaDurationSec: number,
-  overrides: Record<string, number>,
-): number {
-  const rtf = overrides[rateKey("stt", "base")] ?? DEFAULT_RATES.sttRtf;
-  return Math.max(0, mediaDurationSec) * rtf;
-}
 
 /**
  * Ước tính giây cho bước Dịch.
@@ -183,15 +218,77 @@ export function estimateSttSeconds(
  * @param model        Model dịch.
  * @param effort       Mức suy luận.
  * @param overrides    Số đo được.
+ * @param contextual   Đang bật "Dịch theo ngữ cảnh" (chậm hơn → nhân hệ số).
  */
 export function estimateTranslateSeconds(
   segmentCount: number,
   model: string,
   effort: string,
   overrides: Record<string, number>,
+  contextual: boolean = false,
 ): number {
-  const rate = resolveTranslateRate(model, effort, overrides);
+  const rate = resolveTranslateRate(model, effort, overrides, contextual);
   return Math.max(0, segmentCount) * rate;
+}
+
+/** RTF mặc định khi không đọc được từ catalog (Whisper large-v3-turbo, EN). */
+export const DEFAULT_STT_RTF = 1.22;
+
+/**
+ * Đọc RTF từ chuỗi `rtf_note` của catalog (vd
+ * "RTF 1,22 (EN) · 1,62 (ZH) — CPU 4 luồng · 0,02 trên RTX 3090 CUDA").
+ *
+ * Nhờ vậy ước tính theo DỮ LIỆU CATALOG, không hard-code thứ hạng.
+ *
+ * @param note Chuỗi rtf_note.
+ * @param lang Mã ngôn ngữ nguồn (vd "en", "zh") — ưu tiên số đo theo ngôn ngữ.
+ * @returns RTF (giây máy / giây audio) hoặc null nếu không đọc được.
+ */
+export function parseRtfFromNote(note: string, lang?: string): number | null {
+  if (!note) return null;
+  const idx = note.search(/RTF/i);
+  if (idx < 0) return null;
+  // Chỉ lấy phần sau "RTF" và dừng ở dấu gạch dài để khỏi nuốt số khác
+  // (vd "— CPU 4 luồng · 0,02 trên RTX 3090 CUDA").
+  const tail = note.slice(idx + 3).split("—")[0];
+  const re = /(\d+(?:[.,]\d+)?)\s*(?:\(([A-Za-z]{2,3})\))?/g;
+  const entries: Array<{ rtf: number; lang: string | null }> = [];
+  let match = re.exec(tail);
+  while (match !== null) {
+    const rtf = Number(match[1].replace(",", "."));
+    if (Number.isFinite(rtf) && rtf > 0) {
+      entries.push({ rtf, lang: match[2] ? match[2].toLowerCase() : null });
+    }
+    match = re.exec(tail);
+  }
+  if (entries.length === 0) return null;
+  if (lang) {
+    const wanted = lang.trim().toLowerCase();
+    const hit = entries.find((entry) => entry.lang === wanted);
+    if (hit) return hit.rtf;
+  }
+  return entries[0].rtf;
+}
+
+/**
+ * Ước tính giây cho bước Nhận dạng giọng nói, PHÂN BIỆT THEO ENGINE.
+ *
+ * @param mediaDurationSec Độ dài media (giây).
+ * @param engineId         Id engine (vd "whisper-base", "sensevoice-zh-en").
+ * @param overrides        Số đo được của máy người dùng.
+ * @param rtfNote          Chuỗi rtf_note từ catalog (nguồn sự thật cho RTF).
+ * @param lang             Ngôn ngữ nguồn để chọn đúng số RTF theo ngôn ngữ.
+ */
+export function estimateSttSeconds(
+  mediaDurationSec: number,
+  engineId: string,
+  overrides: Record<string, number>,
+  rtfNote?: string,
+  lang?: string,
+): number {
+  const measured = overrides[rateKey("stt", engineId)];
+  const rtf = measured ?? parseRtfFromNote(rtfNote ?? "", lang) ?? DEFAULT_STT_RTF;
+  return Math.max(0, mediaDurationSec) * rtf;
 }
 
 /**
@@ -258,10 +355,18 @@ export interface EstimateInput {
   segmentCount: number;
   /** Model STT (hiển thị trong nhãn). */
   sttModel: string;
+  /** Id engine STT đang chọn (để tính RTF đúng engine). */
+  sttEngineId: string;
+  /** `rtf_note` của engine từ catalog (nguồn sự thật cho RTF). */
+  sttRtfNote?: string;
+  /** Ngôn ngữ nguồn (để chọn RTF theo ngôn ngữ trong catalog). */
+  sourceLang?: string;
   /** Model dịch. */
   translateModel: string;
   /** Mức suy luận. */
   reasoningEffort: string;
+  /** Đang bật "Dịch theo ngữ cảnh" (chậm hơn → nhân hệ số). */
+  contextualTranslate: boolean;
   /** Engine TTS. */
   ttsEngine: string;
   /** Số đo được của máy người dùng. */
@@ -283,18 +388,27 @@ export function buildEstimates(input: EstimateInput): {
     id: "stt",
     label: "Nhận dạng",
     detail: `${input.sttModel} · CPU`,
-    seconds: estimateSttSeconds(input.mediaDurationSec, input.overrides),
+    seconds: estimateSttSeconds(
+      input.mediaDurationSec,
+      input.sttEngineId,
+      input.overrides,
+      input.sttRtfNote,
+      input.sourceLang,
+    ),
   });
 
   steps.push({
     id: "translate",
     label: "Dịch",
-    detail: `${input.translateModel} · suy luận ${input.reasoningEffort}`,
+    detail: `${input.translateModel} · suy luận ${input.reasoningEffort}${
+      input.contextualTranslate ? " · ngữ cảnh" : ""
+    }`,
     seconds: estimateTranslateSeconds(
       input.segmentCount,
       input.translateModel,
       input.reasoningEffort,
       input.overrides,
+      input.contextualTranslate,
     ),
     segmentCount: input.segmentCount,
   });
