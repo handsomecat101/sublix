@@ -824,6 +824,54 @@ pub fn probe_engine() -> Option<Engine> {
     current_engine()
 }
 
+/// Profile request MiniMax theo từng model.
+///
+/// Nguồn: docs chính thức MiniMax, đọc ngày 2026-10-24 —
+/// https://platform.minimax.io/docs/api-reference/text-openai-api
+///
+/// - `MiniMax-M3.1-Flash`: **không tắt được thinking**
+///   (`thinking.type="disabled"` → HTTP 400 code 2013 "requires adaptive thinking").
+///   `reasoning_effort` nhận low..max, **mặc định = "max"** (suy luận sâu → latency cao).
+///   → dùng `low` để giữ reasoning tối thiểu, đủ cho dịch thoại nhưng nhanh hơn nhiều.
+///   `service_tier`/`temperature`/`top_p` bị model này bỏ qua (temperature luôn = 1, top_p = 0.95).
+/// - `MiniMax-M3`: giữ thinking bật; timeout nới lên 180s (lô) / 60s (câu) vì 60s cũ
+///   làm lô 15 câu timeout rồi rơi xuống dịch từng câu.
+#[derive(Debug, Clone, Copy)]
+struct MinimaxProfile {
+    /// `reasoning_effort` (chỉ M3.1-Flash hỗ trợ).
+    reasoning_effort: Option<&'static str>,
+    /// Timeout 1 request batch (giây).
+    batch_timeout_secs: u64,
+    /// Timeout 1 request đơn câu (giây).
+    single_timeout_secs: u64,
+}
+
+fn minimax_profile(model: &str) -> MinimaxProfile {
+    let m = model.trim();
+    if m.contains("M3.1-Flash") {
+        MinimaxProfile {
+            reasoning_effort: Some("low"),
+            batch_timeout_secs: 120,
+            single_timeout_secs: 60,
+        }
+    } else {
+        // M3 suy luận dài: lô 15 câu hay vượt 60s rồi rơi xuống dịch từng câu (mất ngữ cảnh)
+        // — đo ở docs/BENCH_TRANSLATE_2026-10.md. Nới timeout để lô dịch xong trọn.
+        MinimaxProfile {
+            reasoning_effort: None,
+            batch_timeout_secs: 180,
+            single_timeout_secs: 60,
+        }
+    }
+}
+
+/// Thêm các trường request phụ thuộc model vào body MiniMax.
+fn apply_minimax_profile(body: &mut serde_json::Value, profile: &MinimaxProfile) {
+    if let Some(effort) = profile.reasoning_effort {
+        body["reasoning_effort"] = serde_json::json!(effort);
+    }
+}
+
 /// Translate text via MiniMax Cloud API (OpenAI-compatible)
 pub fn translate_via_minimax(
     text: &str,
@@ -874,7 +922,7 @@ pub fn translate_via_minimax(
         model.trim()
     };
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model_name,
         "messages": [
             { "role": "system", "content": system_prompt },
@@ -883,8 +931,12 @@ pub fn translate_via_minimax(
         "temperature": 0.2,
         "reasoning_split": true
     });
+    let profile = minimax_profile(model_name);
+    apply_minimax_profile(&mut body, &profile);
 
-    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(profile.single_timeout_secs))
+        .build()?;
     let t0 = Instant::now();
     let endpoint = "https://api.minimax.io/v1/chat/completions";
     let resp = client
@@ -1515,7 +1567,7 @@ pub fn translate_batch_via_minimax(
 
     let model_name = if model.trim().is_empty() { "MiniMax-M3" } else { model.trim() };
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model_name,
         "messages": [
             { "role": "system", "content": system_prompt },
@@ -1524,8 +1576,12 @@ pub fn translate_batch_via_minimax(
         "temperature": 0.2,
         "reasoning_split": true
     });
+    let profile = minimax_profile(model_name);
+    apply_minimax_profile(&mut body, &profile);
 
-    let client = Client::builder().timeout(Duration::from_secs(60)).build()?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(profile.batch_timeout_secs))
+        .build()?;
     let t0 = Instant::now();
     let resp = client
         .post("https://api.minimax.io/v1/chat/completions")

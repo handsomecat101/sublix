@@ -2196,6 +2196,23 @@ export default function SettingsView() {
                             </button>
                             <button
                               type="button"
+                              onClick={() => setMinimaxModel("MiniMax-M3.1-Flash")}
+                              className="settings-btn-secondary"
+                              style={{
+                                fontSize: 11,
+                                padding: "2px 8px",
+                                background:
+                                  minimaxModel === "MiniMax-M3.1-Flash"
+                                    ? "rgba(59, 130, 246, 0.3)"
+                                    : undefined,
+                                borderColor:
+                                  minimaxModel === "MiniMax-M3.1-Flash" ? "#3b82f6" : undefined,
+                              }}
+                            >
+                              ⚡ MiniMax M3.1 Flash
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setMinimaxModel("MiniMax-M2.7-highspeed")}
                               className="settings-btn-secondary"
                               style={{
