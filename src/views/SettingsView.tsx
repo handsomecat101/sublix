@@ -33,7 +33,9 @@ import HistoryView from "./history/HistoryView";
 import type { LiveSubPreview } from "./live/liveTypes";
 import { fromDisplayValue } from "./live/liveLogic";
 import { ChangelogModal } from "./ChangelogModal";
-import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
+// TSK-UI-REDESIGN-R2-7C: modal ProcessCenter đã bỏ (TL-14 — chỉ còn 1 giao diện
+// "Tiến trình" là tab). Kiểu dữ liệu tác vụ nằm ở `processTypes.ts`.
+import type { AppTaskItem } from "./processTypes";
 import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconClapper, IconMic, IconClock,
@@ -245,7 +247,6 @@ export default function SettingsView() {
   const reasoningSupported = supportsReasoning(transProvider, effectiveTranslationModel, apiSupportsReasoning);
 
   // Global Process & Activity Tracker (tracks background GPU/AI jobs)
-  const [showProcessCenter, setShowProcessCenter] = useState<boolean>(false);
   const [globalTasks, setGlobalTasks] = useState<Record<string, AppTaskItem>>({});
   const [processHistory, setProcessHistory] = useState<AppTaskItem[]>(() => {
     try {
@@ -2348,7 +2349,9 @@ export default function SettingsView() {
               className="floating-task-toast-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowProcessCenter(true);
+                // TSK-UI-REDESIGN-R2-7C (TL-14): đi thẳng sang tab "Tiến trình"
+                // thay vì mở modal (đã bỏ — chỉ còn 1 giao diện).
+                setActiveTab("process");
               }}
             >
               Mở Tiến Trình
@@ -2356,19 +2359,6 @@ export default function SettingsView() {
           </div>
         );
       })()}
-
-      {/* Central Process & Activity Monitor Modal */}
-      <ProcessCenterModal
-        isOpen={showProcessCenter}
-        onClose={() => setShowProcessCenter(false)}
-        activeTasks={Object.values(globalTasks)}
-        historyTasks={processHistory}
-        onNavigateToTab={(tab) => {
-          setActiveTab((tab === "file_sub" || tab === "dubbing") ? "studio" : tab);
-          setShowProcessCenter(false);
-        }}
-        onClearHistory={handleClearProcessHistory}
-      />
 
       <ChangelogModal
         isOpen={showChangelog}

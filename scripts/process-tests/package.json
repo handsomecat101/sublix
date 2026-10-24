@@ -1,0 +1,6 @@
+{
+  "name": "sublix-process-tests",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts"
+}

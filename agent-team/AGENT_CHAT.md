@@ -9,6 +9,18 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
+- **Mới:** `src/views/processLogic.ts` + `processTypes.ts` (mới) + `ProcessCenterView.tsx` viết lại + `ProcessCenterView.css` (mới) — **xoá** `ProcessCenterModal.tsx/.css` (TL-14: chỉ còn 1 giao diện; nút "Mở Tiến Trình" của toast nền nay sang thẳng tab).
+- **UI:** 6 **chip lọc ngang** (`Segmented`) kèm số đếm thay 6 nút dọc ở cột trái (nhãn lấy từ hằng số → **hết ký tự lạ** "Tải videoo"/"Đang xử lýo"); **menu `⋯`** đầu danh sách gom "Mở Thư Mục Thành Phẩm" · "Mở Thư Mục Tải Về" · "Xoá Lịch Sử Tiến Trình" (nguy hiểm + **hộp xác nhận**); trạng thái rỗng có **câu hướng dẫn riêng** cho từng nhóm lọc (thay thẻ "Hướng Dẫn & Lưu Ý").
+- **Logic thuần:** `processLogic.ts` (lọc/đếm/nhóm tác vụ/làm sạch nhãn) + `scripts/process-tests/` → **23/23 PASS**.
+- **Verify:** trên **bản sao HEAD + file của tôi** → `tsc` **0 lỗi** · `npm run build` OK (103 module) · `process-tests` 23/23 + `live-history-tests` 40/40 + `settings-tests` 21/21 + `timeline-tests` 95/95; ảnh Edge headless 1920×1080 (demo dữ liệu giả + **app thật** với tab "Tiến trình" active) render đúng. CSS cũ **803 → 751 dòng** sau khi cắt 63 rule chết.
+- **Cảnh báo:** ghi `BUG-H20` — **PowerShell 5.1 làm hỏng file UTF-8** (`Get-Content -Raw` + `Set-Content -Encoding UTF8` ⇒ mojibake toàn file). Agent nào sửa file nguồn bằng PS thì phải kiểm tra `git diff` (toàn bộ file đổi = dấu hiệu). Chi tiết: `ISSUE_LOG.md`.
+
+---
+
+---
+
 ### 2026-10-25 07:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
 - **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
@@ -16,6 +28,8 @@
 - **Mục 2 (engine STT):** `src/views/studio/StudioSttEnginePicker.tsx` (mới) — dropdown lấy từ `stt_engines_status`, **gợi ý theo ngôn ngữ nguồn theo `languages` của catalog**, engine chưa tải → `ModelDownloadRow` (tiến trình `model:download-progress`, nút Hủy = `stt_model_cancel`), chọn → `stt_set_engine` (không nút Lưu). Khi engine ≠ Whisper, luồng "chỉ làm phụ đề" dùng `stt_transcribe` (sidecar tự trích 16 kHz mono bằng ffmpeg) thay cho `dubbing_analyze`.
 - **Verify:** `node --test scripts/timeline-tests/` **95/95 PASS** (12 case mới) · `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (repo chính hiện lỗi `ProcessCenterView.tsx` — file của worker khác) · GUI **6/6 PASS** trên instance riêng (release build, CDP 9226, **APPDATA riêng** để không đụng config của PO): dropdown 7 engine + "chưa tải", dòng RTF từ catalog, đổi engine gọi `stt_set_engine`, công tắc ngữ cảnh + gợi ý model local, cờ lưu theo provider.
 - **⚠️ Cần biết:** app của PO đang chạy bình thường; instance verify đã tắt, worktree tạm đã xoá. Đường `stt_transcribe` chỉ dùng cho luồng "chỉ làm phụ đề"; pipeline đầy đủ (phân vai + dịch) vẫn đi qua `dubbing_analyze` (Whisper) — cần mcode #3 thêm engine id vào `dubbing_analyze` để áp dụng rộng.
+
+---
 
 ---
 
@@ -28,13 +42,17 @@
 
 ---
 
-### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+---
+
+### 2026-10-25 06:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7B` — R2-7B: UI tab **Live** + **Lịch sử**, **chưa commit**).
 - **Mới:** `src/views/live/{LiveView.tsx/.css, liveLogic.ts, liveTypes.ts}` + `src/views/history/{HistoryView.tsx/.css, historyLogic.ts}` — `SettingsView.tsx` **2823 → 2244 dòng** (−579). Logic thuần tách riêng (map select gộp, lọc lịch sử, định dạng SRT/TXT) → test `node --test scripts/live-history-tests/` **40/40 PASS**.
 - **Live:** 1 select "Phụ đề hiển thị" (gộp chế độ xuất + ngôn ngữ đích; chọn "Gốc" **giữ** ngôn ngữ đích đã chọn) · ↻ quét âm thanh cạnh select thiết bị · "⚙ Nâng cao" gấp (chunk + Smart VAD) · **1 nút chính** Bắt đầu/Dừng Live (bỏ nút Mở Overlay — dùng 👁 topbar) · cột phải "Luồng thoại" giữ nguyên.
 - **Lịch sử:** 2 cột (bỏ cột trái 300px) · ô tìm + `Sao chép tất cả` + split `Xuất .SRT▾` (menu SRT/TXT) + menu `⋯`→"Xoá toàn bộ lịch sử" **có hộp xác nhận** (nút nguy hiểm hết nổi bật nhất màn hình).
 - **Bonus — fix `BUG-033`** (đang 🔴 Open): hotkey `Ctrl+Shift+L` đọc closure cũ → nay handler trong keydown đi qua `latestRef` (đổi model/ngôn ngữ rồi bấm tắt sẽ ăn đúng). Chi tiết: `ISSUE_LOG.md`.
 - **Verify:** `tsc` 0 lỗi (repo, trước khi worker glossary tạo file mới) · `npm run build` OK · `live-history-tests` 40/40 + `settings-tests` 21/21 · ảnh thật Edge headless 1920×1080 (app chạy thật + backend giả) tab Live + Lịch sử render đúng. **Cảnh báo:** `timeline-tests` 89/91 — 2 fail do `src/lib/timeline/estimate.ts` đang sửa dở của worker khác (tại HEAD: 91/91 PASS), không liên quan task này.
+
+---
 
 ---
 
@@ -47,6 +65,8 @@
 
 ---
 
+---
+
 ### 2026-10-25 03:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-SETTINGS-MODELS` — **chỉ FRONTEND**, chưa commit).
 - **Mới:** `src/views/settings/SttSection.tsx` — danh sách engine từ `stt_engines_status` (catalog thật, **0 hard-code**), mỗi engine 1 `ModelDownloadRow` (Tải/Huỷ/Xoá + %/MB/s/ETA qua `model:download-progress`), Segmented **Engine mặc định** (chỉ engine đã tải → `stt_set_engine`), giữ **Tăng tốc Whisper (AUTO/CPU/CUDA)** + **Kiểm thử nhanh** cũ; bỏ danh sách Whisper trùng (catalog đã có whisper-base/turbo).
@@ -54,6 +74,8 @@
 - **Logic thuần:** `modelUtils.ts` (`formatBytesVi`/`formatSpeedVi`/`formatEtaVi`/`progressPct`/`sortSttEngines`/`engineSummary`/`recommendSttEngine`) + `scripts/settings-tests/modelUtils.test.ts` (9 case) + `package.json`/`index.ts` để `node --test scripts/settings-tests/` chạy được (Node 24 không quét dir — cùng mẹo `timeline-tests`).
 - **Verify:** `node --test scripts/settings-tests/` **21/21 PASS** (12 cũ + 9 mới), `tsc` 0 lỗi, `npm run build` OK trên **bản sao HEAD + file của tôi**; ảnh frontend-only (Edge headless + stub Tauri, 4 engine gồm 1 đang tải/2 đã tải): `%TEMP%\sublix-verify-settings\settings-stt.jpg` · `settings-stt-tools.jpg` · `settings-tts2.jpg`.
 - **Cần biết:** `ModelDownloadRow` lấy % từ **event** nên ảnh tĩnh chỉ hiện trạng thái (Chưa tải/Xong) — muốn thấy thanh tiến trình phải chạy app thật (để R2-8).
+
+---
 
 ---
 
@@ -68,6 +90,8 @@
 
 ---
 
+---
+
 ### 2026-10-25 00:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-FEAT-STT-ENGINES` — engine STT chính xác hơn Whisper cho **EN + ZH**; **chưa commit, không push**).
 - **Báo cáo:** `docs/STT_MODELS_2026.md` (bảng 11 ứng viên + 2 bảng đo thật + khuyến nghị + 5 lỗi kỹ thuật) · code mới `src-tauri/src/model_download.rs` + `src-tauri/src/stt/{stt_catalog,sherpa_asr,stt_integration_tests}.rs` + `src-tauri/scripts/sherpa_asr.py` · `src-tauri/src/config.rs` (+`stt_asr_engine`) · `src-tauri/src/lib.rs` (+7 command) · `src/lib/tauri.ts` (+wrapper) · `src/components/ui/ModelDownloadRow.tsx/.css` (**mới, CHƯA gắn vào Studio/Cài đặt — chờ coordinator giao gắn**).
@@ -76,16 +100,5 @@
 - **Lỗi phát hiện:** `BUG-H14` SenseVoice int8 **2025-09-09 rớt chữ** (WER 40 %) — dùng bản **2024-07-17**; `BUG-H15` mirror HF Parakeet sai layout tensor + thiếu metadata `vocab_size`; `BUG-H16` event tải báo speed 0 ở event đầu (đã fix); `BUG-H17` GitHub release nghẽn 0 byte ⇒ đã thêm **URL dự phòng HF + resume Range**; `BUG-H18` 2 lượt tải song song ghi chung `.part` ⇒ file hỏng (đúng size, sai SHA) → đã thêm **khoá in-process theo `model_id`**.
 - **Verify:** `cargo test --lib` **171 pass / 0 fail** (15 test `#[ignore]` = integration thật) · **integration thật 3/3 PASS** (tải model có `%`/tốc độ/ETA + verify SHA-256 → nhận dạng clip ZH → **SRT UTF-8 đúng chuẩn, 31 cue**) · `npx tsc --noEmit` **0 lỗi** · `npm run build` OK · ảnh component 6 trạng thái: `%TEMP%\sublix-stt-bench\shots\model-download-row-states.png`.
 - **Cần coordinator/PO:** (1) **giao gắn** `ModelDownloadRow` + catalog STT vào Cài đặt/Studio; (2) **Parakeet chưa đo được** (GitHub release nghẽn, HF mirror sai layout) — cần mạng ổn để đo lại; (3) **chưa đo CUDA RTX 3090** — toàn bộ số là CPU; (4) SAC chặn binary Rust mới build ở `%TEMP%` (os error 4551) — chờ reputation rồi chạy lại, **không tắt SAC**.
-
----
-
-### 2026-10-25 00:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-6`, **chưa commit** — chỉ JSX/CSS tab Tải video, **logic giữ nguyên 100%**).
-- **Giao diện mới (PLAN §4.4):** 1 cột max 1480px; ô nhập lớn + nút **Tải N link** ngay cạnh (Enter = tải, Shift+Enter xuống dòng); chip **Chất lượng / Phụ đề / ⚙ Nâng cao** (popover chứa cookies + 3 cờ reup + cắt đoạn); picker playlist dạng dải ngang; danh sách dạng **HÀNG** (thumbnail 112×63, pill nền tảng/chất lượng/phụ đề, thanh tiến độ + tốc độ + còn lại, 1 nút chính theo trạng thái) + lọc Tất cả/Đang tải/Đang đợi/Xong/Lỗi + ô lọc tên; menu **⋯/chuột phải dùng `ContextMenu` dùng chung** (6 mục: Mở Studio · Player ngoài · Hiện thư mục · Tải lại phụ đề · Sao chép link · Xoá); footer 1 dòng (thư mục + nền tảng hỗ trợ + bản quyền).
-- **Giữ nguyên:** `handleStartDownload`/`handleInspect`/`handleFetchSubs`, hàng đợi 3 song song, BUG-053 dedupe, listener sự kiện, BUG-045 (luôn mount), reup/batch/MP3. Thêm debounce 600 ms tự đọc link khi dán (tái dùng `handleInspect`).
-- **Verify:** `tsc` 0 lỗi + `npm run build` OK **trên bản sao HEAD + 6 file của tôi** (vì `SublixStudioView.tsx` worker R2A đang sửa dở — đã escalation); GUI instance riêng (exe patch 1420→1424, Vite 1424, CDP 9226 — đã tắt + gỡ junction/bản sao): picker **184/184 mục**, tải thật → **✓ Xong · 465 KB**, menu ⋯ **6/6 mục**, "Mở trong Studio" mở đúng video, reup `.info.txt` BOM 5 dòng đúng, Kuaishou → lỗi sớm. Ảnh: `%TEMP%\sublix-verify-dl\dl-{tab-after,row-active,menu-active,adv-active,kuaishou-active}.png`.
-- **Cần biết khi verify CDP:** DownloaderView **luôn mount** (BUG-045) → phải bấm tab "Tải video" TRƯỚC khi chụp; nếu không, ảnh sẽ là tab khác dù DOM vẫn thao tác được (bài học từ chính phiên này).
-
----
 
 ---

@@ -392,7 +392,7 @@ Không có quyết định nào không thể đảo ngược ở vòng 1 (chỉ 
 | **R2-4** Provider dịch chỉ đọc | ✅ Xong | Dòng "Ollama · qwen2.5:3b — **Đổi**" (mở Cài đặt); **xoá hẳn** 3 select model + 3 ô API key khỏi Studio |
 | R2-5 Cài đặt › Dịch thuật | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
 | R2-6 Tải video | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
-| R2-7 Live / Lịch sử / Tiến trình | 🟡 1/3 xong | **Live + Lịch sử ✅ (R2-7B)** — tách ra `src/views/live/{LiveView,liveLogic,liveTypes}.tsx/.ts` + `src/views/history/{HistoryView,historyLogic}.tsx/.ts` (+ 2 file `.css`). `SettingsView.tsx` **2823 → 2245 dòng**. Logic thuần tách riêng → `node --test scripts/live-history-tests/` (**40/40 PASS**). Sửa luôn **BUG-033** (hotkey `Ctrl+Shift+L` đọc closure cũ → nay đi qua `latestRef`). **Tiến trình (§4.7) ⏭ chưa làm** |
+| R2-7 Live / Lịch sử / Tiến trình | ✅ 3/3 xong | **Live + Lịch sử ✅ (R2-7B)** — tách ra `src/views/live/{LiveView,liveLogic,liveTypes}.tsx/.ts` + `src/views/history/{HistoryView,historyLogic}.tsx/.ts` (+ 2 file `.css`). `SettingsView.tsx` **2823 → 2245 dòng**. Logic thuần tách riêng → `node --test scripts/live-history-tests/` (**40/40 PASS**). Sửa luôn **BUG-033** (hotkey `Ctrl+Shift+L` đọc closure cũ → nay đi qua `latestRef`). · **Tiến trình ✅ (R2-7C)** — `src/views/processLogic.ts` + `processTypes.ts` (mới) + `ProcessCenterView.tsx/.css` (viết lại), **xoá** `ProcessCenterModal.tsx/.css` (TL-14: chỉ còn 1 giao diện); 6 chip lọc ngang (`Segmented`) + menu `⋯`; `node --test scripts/process-tests/` (**23/23 PASS**) |
 
 ### 7.1. Bảng "không mất chức năng" (checklist §2)
 
@@ -440,10 +440,23 @@ Mỗi control bị bỏ/chuyển đều còn **đường vào** mới:
 | Ô tìm kiếm (ở cột trái) | Ô tìm **trên đầu danh sách** + bộ đếm `x/y` |
 | Thẻ chi tiết câu (ở cột phải) | Cột phải "Chi tiết câu thoại" (bản gốc / bản dịch / nút "Sao chép câu này") |
 
+**Tiến trình (§4.7) — R2-7C**
+
+| Control cũ | Đường vào mới |
+|---|---|
+| 6 nút lọc **dọc** ở cột trái ("Tất cả tác vụ", "⚡ Đang xử lý", "💬 Phụ đề & Dịch thuật", "🎙️ Lồng tiếng & Phân vai", "⬇️ Tải video", "📦 Mô hình AI") | **6 chip lọc ngang** (`Segmented`) trên đầu danh sách, **kèm số đếm**: `Tất cả (6)` · `Đang chạy (3)` · `Phụ đề & Dịch (2)` · `Lồng tiếng (1)` · `Tải video (1)` · `Mô hình (2)`. Nhãn lấy từ hằng số `PROCESS_FILTERS` → **không còn ký tự lạ** ("Tải videoo", "Đang xử lýo") |
+| Nút "📁 Mở Thư Mục Thành Phẩm" | **Menu `⋯`** đầu danh sách → "📁 Mở Thư Mục Thành Phẩm" |
+| Nút "📥 Mở Thư Mục Tải Về" | **Menu `⋯`** → "📥 Mở Thư Mục Tải Về" |
+| Nút "🗑 Xóa Lịch Sử Tiến Trình" (đỏ, ở cột trái) | **Menu `⋯`** → "🗑 Xoá Lịch Sử Tiến Trình" (mục **nguy hiểm**, tách vạch) + **hộp xác nhận** "Xoá toàn bộ lịch sử tiến trình (N tác vụ)? Không thể hoàn tác." |
+| Thẻ "Động Cơ & Phần Cứng AI" (ghi cứng) | Đã gỡ ở R2-7 → cột phải "Trạng thái thật" (đọc config) + trỏ sang **Cài đặt › Trạng thái hệ thống** |
+| Thẻ "Hướng Dẫn & Lưu Ý" | **Câu hướng dẫn trong trạng thái rỗng** (riêng cho từng nhóm lọc) |
+| Nút "📊 Tiến Trình (N)" trên topbar → **modal ProcessCenter** | **Chip "⚡ N" trên tab "Tiến trình"** + **chip trạng thái** trên topbar → đi thẳng sang tab (đã có sẵn từ R2-2); **modal đã xoá** (TL-14) — nút "Mở Tiến Trình" của toast nền cũng chuyển sang tab |
+
 ### 7.2. Kiểm chứng
 
 - `npx tsc --noEmit` → **0 lỗi** · `npm run build` → **OK** · `node --test scripts/timeline-tests/` → **79/79 PASS**
 - **R2-7B (Live + Lịch sử):** `npx tsc --noEmit` → **0 lỗi** (cả repo) · `npm run build` → **OK** (104 module) · `node --test scripts/live-history-tests/` → **40/40 PASS** · `node --test scripts/settings-tests/` → **21/21 PASS**. Ảnh thật (Edge headless 1920×1080, app chạy thật + backend giả): tab **Live** (select gộp "Phụ đề hiển thị", ↻ cạnh select thiết bị, khối "⚙ Nâng cao" gấp, 1 nút chính) + tab **Lịch sử** (2 cột, ô tìm + `Sao chép tất cả` + split `Xuất .SRT` + `⋯`) → **render đúng**. `SettingsView.tsx` **2823 → 2245 dòng**.
 - ⚠️ `node --test scripts/timeline-tests/` → **89/91** (2 fail ở `estimate.test.ts`): do `src/lib/timeline/estimate.ts` đang **sửa dở** của worker khác (`rateKey` tại `estimate.ts:119`) — tại `HEAD` cùng bộ test **91/91 PASS** ⇒ không liên quan R2-7B.
+- **R2-7C (Tiến trình):** verify trên **bản sao HEAD + file của tôi** → `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** (103 module) · `node --test`: `process-tests` **23/23** · `live-history-tests` **40/40** · `settings-tests` **21/21** · `timeline-tests` **95/95**. Ảnh frontend-only (Edge headless 1920×1080): tab Tiến trình với dữ liệu giả (6 chip kèm số đếm + menu `⋯` 3 mục + hộp xác nhận xoá) và **app thật** (tab "Tiến trình" active, trạng thái rỗng có câu hướng dẫn) → **render đúng**.
 - GUI trên instance riêng (CDP 9225, Vite 1423, exe copy trỏ 1423): **8/9 PASS** — panel 5 bước render, MasterTopbar 6 tab, 25 control (mục tiêu ~20), provider chỉ đọc có nút "Đổi" và **0 ô API key**, chuột phải vai ra 7 mục menu, nút split + menu 4 mục, **hồi quy kéo khối + kéo handle In/Out vẫn chạy**.
 - ⚠️ Check "engine hiện 4 trạng thái" **không chạy được**: `src-tauri/target/debug/sublix.exe` (bản app PO đang dùng) **chưa có** lệnh `tts_engines_status` (lệnh đã có trong source `src-tauri/src/lib.rs:772`, build mới có, nhưng **Windows Application Control chặn chạy file exe vừa build**). UI xử lý graceful: hiện "Đang tải trạng thái engine TTS…" thay vì vỡ. Cần app build lại từ source hiện tại để thấy trạng thái thật.

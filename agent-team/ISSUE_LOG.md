@@ -32,6 +32,7 @@
 | `BUG-H16` | Sự kiện tiến trình tải model báo **`speed_bps = 0` ở event đầu tiên** (đo tốc độ theo cửa sổ 500 ms nhưng emit mỗi 250 ms) ⇒ UI hiện "— MB/s" và ETA rỗng lúc đầu | `src-tauri/src/model_download.rs` (`SpeedMeter`) | Đo tốc độ theo **cửa sổ trượt 1,2 s**, tối thiểu 200 ms mới tính ⇒ event đầu tiên đã có tốc độ + ETA | ✅ Fixed (task `TSK-FEAT-STT-ENGINES`) |
 | `BUG-H17` | Tải **release asset của GitHub bị nghẽn 0 byte** từ máy dev (cả `curl` lẫn `urllib`, retry 3 lần) trong khi Hugging Face tải bình thường | `src-tauri/src/model_download.rs` | Mọi model phải có **URL dự phòng** (HF mirror) + `Resume` bằng HTTP `Range`; không được coi "0 byte" là thành công | 🟡 Workaround (đã thêm `fallback_url`) |
 | `BUG-H18` | **2 lượt tải cùng 1 model chạy song song** ghi chung file `.part` ⇒ file hỏng (đúng kích thước nhưng **sai SHA-256**), không tự phát hiện | `src-tauri/src/model_download.rs` | Giữ **khoá in-process** theo `model_id` (`is_in_progress`): lượt thứ hai bị từ chối, không ghi cùng file; luôn verify byte **và** SHA-256 trước khi cài | ✅ Fixed (task `TSK-FEAT-STT-ENGINES`) |
+| `BUG-H20` | **PowerShell 5.1 làm hỏng file UTF-8**: `Get-Content -Raw` đọc file UTF-8 **không BOM** theo ANSI (Windows-1252) rồi `Set-Content -Encoding UTF8` ghi lại ⇒ **toàn bộ** file thành mojibake (`Tiến` → `Tiáº¿n`, `—` → `â€"`); `-Encoding UTF8` còn **thêm BOM** | mọi file `.ts/.tsx/.css` sửa bằng PowerShell | **Không dùng PowerShell để sửa file nguồn.** Dùng tool sửa file (edit/write) hoặc **Node** (`fs.readFileSync/writeFileSync` với `"utf8"`); nếu buộc dùng PS thì `Get-Content -Encoding UTF8` **và** `Set-Content -Encoding UTF8` phải đi **cùng nhau** (và nhớ BOM) | ✅ Fixed (task `TSK-UI-REDESIGN-R2-7C`) |
 | `BUG-085` | **Cài đặt ghi đè API key bằng chuỗi rỗng**: `fullConfig` nạp lúc mở app, key được nạp thẳng vào file sau đó → bấm "Lưu" ghi bản cũ (key = "") và **xoá key thật** (đã xảy ra với minimax/openrouter) | `src/views/settings/configMerge.ts` (mới), `SettingsView.tsx` | **Luôn đọc lại config từ đĩa ngay trước khi lưu**, gộp bằng hàm thuần; chỉ ghi field vừa sửa + key VỪA GÕ (rỗng = giữ nguyên); xoá key phải là hành động chủ động | ✅ Fixed |
 
 ---
@@ -569,6 +570,16 @@
   1. **Form ghi đè toàn bộ config là mẫu lỗi kinh điển** khi dữ liệu có thể bị thay đổi từ nguồn khác (script, agent, instance khác). Luôn `read-modify-write` trên bản mới nhất.
   2. **Ô nhập bí mật phải phân biệt "chưa nhập" với "xoá"** — dùng cờ dirty, không dùng chuỗi rỗng làm tín hiệu.
   3. Tách logic gộp thành **hàm thuần** để test được mà không cần app/Tauri.
+
+---
+
+### [BUG-H20] PowerShell 5.1 làm hỏng file UTF-8 (mojibake toàn file)
+- **Ngày:** 2026-10-25 | **Phát hiện bởi:** Mavis/mcode (task `TSK-UI-REDESIGN-R2-7C`) | **Status:** ✅ Fixed
+- **File:** `src/views/ProcessCenterView.css` (sinh lại từ `ProcessCenterModal.css`).
+- **Triệu chứng:** cả file CSS bị đổi thành mojibake — `Tiến` → `Tiáº¿n`, `—` → `â€"`, `§` → `Â§`; kiểm tra bằng `Get-Content` hiện text hỏng ngay sau khi **tự thêm** phần style mới bằng PowerShell.
+- **Root Cause:** PowerShell 5.1 `Get-Content -Raw` đọc file **UTF-8 không BOM** theo **ANSI/Windows-1252** ⇒ biến byte UTF-8 thành ký tự Latin-1; `Set-Content -Encoding UTF8` ghi lại những ký tự đó thành UTF-8 ⇒ **double-encoding toàn bộ file** (kể cả phần không sửa) + thêm **BOM**.
+- **Cách fix:** Sinh lại file bằng **Node** (`fs.readFileSync(path,"utf8")` → `fs.writeFileSync(path,s,"utf8")`) với nội dung khối mới lấy từ file riêng do tool viết; kiểm tra byte-level (`U+FFFD` = 0, không có `c3a1c2bac2bf`) trước khi bàn giao.
+- **Bài học:** **Đừng dùng PowerShell để sửa file nguồn trong repo này.** Mọi file `.ts/.tsx/.css` phải sửa bằng tool sửa file hoặc Node. Nếu buộc dùng PS: `Get-Content -Encoding UTF8` **và** `Set-Content -Encoding UTF8` phải đi **cùng nhau** (và phải chấp nhận BOM) — ngoài ra `git diff` sẽ hiện **toàn bộ** file là đổi (dấu hiệu mojibake toàn file).
 
 ---
 
