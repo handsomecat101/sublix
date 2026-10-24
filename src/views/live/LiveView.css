@@ -1,0 +1,367 @@
+/* TSK-UI-REDESIGN-R2-7B — style tab Live (UI_REDESIGN_PLAN §4.5).
+   Dùng token Cinema Dark của `src/App.css` nên tự đổi màu theo 4 theme. */
+
+.lv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lv-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lv-label {
+  font-size: 11.5px;
+  color: var(--t3);
+}
+
+.lv-value {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ac);
+}
+
+.lv-select {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-inset);
+  color: var(--t1);
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+}
+
+.lv-select:focus {
+  border-color: var(--ac);
+}
+
+.lv-select-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.lv-hint {
+  font-size: 11px;
+  color: var(--t4);
+  line-height: 1.45;
+}
+
+.lv-note {
+  font-size: 11px;
+  color: var(--t3);
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+}
+
+/* ---------- nút ---------- */
+.lv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-card-2);
+  color: var(--t2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, filter 0.15s ease;
+}
+
+.lv-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.lv-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lv-btn-secondary {
+  width: 100%;
+}
+
+.lv-btn-tiny {
+  padding: 2px 8px;
+  font-size: 10.5px;
+  border-radius: 6px;
+}
+
+.lv-btn-primary {
+  background: var(--grad-ac);
+  border-color: var(--ac-br);
+  color: #1a1209;
+  font-weight: 800;
+}
+
+.lv-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+  background: var(--grad-ac);
+  color: #1a1209;
+}
+
+.lv-btn-lg {
+  padding: 11px 28px;
+  border-radius: 24px;
+  font-size: 14px;
+  box-shadow: var(--shadow-btn);
+}
+
+.lv-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-card-2);
+  color: var(--t3);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lv-icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.lv-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- thiết bị ---------- */
+.lv-device-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lv-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.lv-level {
+  display: grid;
+  grid-template-columns: 1fr 70px 34px 48px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.lv-level.active {
+  background: var(--ok-soft);
+}
+
+.lv-level.selected {
+  outline: 1px solid var(--ac-br);
+}
+
+.lv-level-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t2);
+}
+
+.lv-level-bar {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.lv-level-fill {
+  display: block;
+  height: 100%;
+  background: var(--t4);
+  transition: width 0.2s ease;
+}
+
+.lv-level-fill[data-active="true"] {
+  background: var(--ok);
+}
+
+.lv-level-pct {
+  font-size: 10px;
+  color: var(--t4);
+  text-align: right;
+}
+
+/* ---------- nâng cao ---------- */
+.lv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--t2);
+}
+
+.lv-slider {
+  width: 100%;
+  accent-color: var(--ac);
+}
+
+/* ---------- giữa màn hình ---------- */
+.lv-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 24px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(30, 41, 59, 0.4) 0%,
+    rgba(10, 15, 25, 0.9) 100%
+  );
+  overflow: hidden;
+}
+
+.lv-wave {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 60px;
+}
+
+.lv-wave-bar {
+  width: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: height 0.2s ease;
+}
+
+.lv-wave-bar[data-live="true"] {
+  background: var(--ac);
+}
+
+.lv-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lv-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+
+.lv-dot[data-live="true"] {
+  background: var(--dang);
+  box-shadow: 0 0 10px var(--dang);
+}
+
+.lv-status-text {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--t1);
+}
+
+.lv-hero-hint {
+  max-width: 500px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--t3);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.lv-latest {
+  position: absolute;
+  bottom: 16px;
+  left: 20px;
+  right: 20px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.65);
+  text-align: center;
+}
+
+.lv-latest-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ac);
+}
+
+.lv-latest-orig {
+  font-size: 11.5px;
+  color: var(--t3);
+  margin-top: 2px;
+}
+
+/* ---------- luồng thoại ---------- */
+.lv-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+.lv-stream-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-card);
+}
+
+.lv-stream-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t1);
+  line-height: 1.4;
+}
+
+.lv-stream-orig {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+}
+
+.lv-stream-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--t4);
+  margin-top: 4px;
+}
+
+.lv-empty {
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--t3);
+  line-height: 1.5;
+}

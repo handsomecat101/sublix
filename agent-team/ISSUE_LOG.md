@@ -77,7 +77,7 @@
 | `BUG-030` | Âm lượng lệch tới 28× giữa các cụm amix (cụm lẻ được hưởng to bất thường) | `dubbing/mod.rs:812-846` | `amix=...:normalize=0` + volume từng nguồn; không dùng dropout_transition=0 | ✅ Fixed |
 | `BUG-031` | Rò rỉ listener async-unlisten (lặp lại BUG-007) ở FileSub + Dubbing; đổi tab → 2 job GPU dẫm nhau | `FileSubView.tsx:96-160`, `DubbingStudioView.tsx:83-121`, `file_sub.rs:207` | Cleanup phải hủy chính promise `listen()`; backend guard "đang chạy" như `live.rs:70` | ✅ Fixed |
 | `BUG-032` | Thả file mới giữa lúc đang xử lý → xóa tiến độ + kết quả cũ gán nhầm vào file mới | `FileSubView.tsx:104-109` | Mọi đường vào đổi state (drop/chọn) phải check `processing` bằng ref | ✅ Fixed |
-| `BUG-033` | Phím tắt Ctrl+Shift+L dùng cài đặt cũ (stale closure) — đổi model/ngôn ngữ không ăn theo (code CommandCode) | `SettingsView.tsx` (hotkey effect) | Handler trong keydown phải đi qua `latestRef` hoặc deps đầy đủ | 🔴 Open |
+| `BUG-033` | Phím tắt Ctrl+Shift+L dùng cài đặt cũ (stale closure) — đổi model/ngôn ngữ không ăn theo | `SettingsView.tsx` (hotkey effect) | Handler trong keydown phải đi qua `latestRef` hoặc deps đầy đủ | ✅ Fixed (task `TSK-UI-REDESIGN-R2-7B`) |
 | `BUG-034` | FileSubView không lưu cài đặt (đổi tab là mất); model trong config bị `useState` đóng băng bỏ qua | `FileSubView.tsx:57-62` | State người dùng phải đồng bộ 2 chiều với `AppConfig` | 🔴 Open |
 | `BUG-035` | CustomSelect không dùng được bàn phím; giá trị lạ hiện "chọn tùy chọn" nhưng vẫn gửi thật; dropdown bị cắt ở đáy | `CustomSelect.tsx:34,43`, `CustomSelect.css:112` | Custom control phải có đủ bàn phím + fallback hiển thị giá trị thật | 🔴 Open |
 | `BUG-036` | Kéo-thả lỏng: thư mục giả đuôi `.mp4` lọt, `.ts` (mã nguồn) lọt, path HTML5 là tên tương đối, path `file://` không chuẩn hóa | `FileSubView.tsx:78-93,279` | Validate is_file + path tuyệt đối trước khi chạm backend | 🔴 Open |
@@ -266,10 +266,11 @@
 - **Cách fix & Bài học:** Dùng `processingRef.current` và `busyRef.current` chặn ngay lập tức ở mọi lối vào đổi file (`handleSetSelectedFile`, `handlePickFile`, `handleSelectFile`, và sự kiện `drop`).
 
 ### [BUG-033] Phím tắt Ctrl+Shift+L dùng cài đặt cũ (stale closure) — code CommandCode
-- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open
+- **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** Mavis/mcode (`TSK-UI-REDESIGN-R2-7B`, 2026-10-25) | **Status:** ✅ Fixed
 - **File:** `SettingsView.tsx` (hotkey `useEffect`, deps `[isLive, overlayVisible]`)
 - **Root Cause:** Listener chỉ tái tạo khi `isLive`/`overlayVisible` đổi → `handleStartLive` được gọi là bản cũ, đọc model/ngôn ngữ/chunk ở thời điểm re-bind trước đó; nút bấm thì dùng giá trị mới.
 - **Cách fix & Bài học:** Handler trong keydown phải đi qua `latestRef` (hoặc deps đầy đủ). Phím tắt + handler async = cặp đôi dễ dính stale closure nhất.
+- **Đã fix:** `latestRef` giữ `{ start, stop, isLive, overlayVisible }`, đồng bộ trong `useEffect` chạy sau **mọi** render; effect keydown giờ `deps: []` và luôn gọi `latestRef.current` ⇒ hotkey và nút bấm dùng **cùng** bản handler mới nhất.
 
 ### [BUG-044] LỖ HỔNG BẢO MẬT: dán chuỗi `--cờ` vào ô link → yt-dlp chạy lệnh tùy ý
 - **Ngày:** 2026-10-04 | **Phát hiện bởi:** CommandCode | **Fix bởi:** — | **Status:** 🔴 Open

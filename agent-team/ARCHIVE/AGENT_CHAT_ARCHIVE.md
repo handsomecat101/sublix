@@ -1,4 +1,26 @@
+## ARCHIVED 2026-10-25 (CommandCode — TSK-SETTINGS-MODELS, giữ 8 tin)
+
+### 2026-10-24 21:55 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2A` — vòng 2 code UI R2-1..R2-4; **chưa commit**).
+- **R2-1:** token `--step-sub/--step-tr/--step-dub` trong `src/App.css` + 3 component dùng chung `src/components/ui/{Segmented,SplitButton,ContextMenu}.tsx` (mỗi file < 120 dòng, `React.memo`).
+- **R2-2:** `src/views/MasterTopbar.tsx/.css` — **1 component thay 2 bản copy** (Studio + `SettingsView.tsx`); chuột phải nút ↶ = menu 3 lớp hoàn tác (Audio / Bản dịch / Phụ đề) thay 3 chip cũ; bỏ "Nhập video" trùng + nút Tiến Trình modal; overlay còn 1 icon 👁.
+- **R2-3:** panel trái → `src/views/studio/StudioPipelinePanel.tsx` + `StudioVoiceStep.tsx` — rail 5 bước, accordion 1-mở, **1 nút chạy split** `▶ Chạy N bước đã bật | ▾`, chuột phải vai 7 mục (giọng gốc · gộp · về 1/2 vai · xoá), **engine + giọng đọc đọc từ backend** (`tts_engines_status` + `dubbing_get_voices`), **đã gỡ `TTS_ENGINE_MODELS` hard-code và map `vietneu:`→`kokoro:`** (backend tự fallback ở `tts_vieneu::route_voice`).
+- **R2-4:** provider dịch chỉ đọc "Ollama · qwen2.5:3b — **Đổi**" → mở Cài đặt; **xoá hẳn** 3 select model + 3 ô API key khỏi Studio.
+- **Verify:** `tsc` 0 lỗi · `build` OK · `node --test` 79/79 · GUI instance riêng (CDP 9225 / Vite 1423) **8/9 PASS** (hồi quy kéo khối + kéo handle In/Out vẫn chạy; check trạng thái engine chưa chạy được vì `target/debug/sublix.exe` — bản app PO — **chưa có** lệnh `tts_engines_status`, cần build lại exe).
+- **⚠️ Cần PO xử lý:** lúc dọn instance verify tôi đã tắt nhầm 1 tiến trình `sublix.exe` (PID 34400) do lệnh dọn "mọi app trừ PID cũ 47852" — app của PO có thể đã được mở lại với PID mới nên bị dính. Hiện app PO + Vite 1420 đều **không còn chạy**; cần PO khởi động lại `npm run tauri dev`.
+
 ## ARCHIVED 2026-10-25 (mcode #3 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 00:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-6`, **chưa commit** — chỉ JSX/CSS tab Tải video, **logic giữ nguyên 100%**).
+- **Giao diện mới (PLAN §4.4):** 1 cột max 1480px; ô nhập lớn + nút **Tải N link** ngay cạnh (Enter = tải, Shift+Enter xuống dòng); chip **Chất lượng / Phụ đề / ⚙ Nâng cao** (popover chứa cookies + 3 cờ reup + cắt đoạn); picker playlist dạng dải ngang; danh sách dạng **HÀNG** (thumbnail 112×63, pill nền tảng/chất lượng/phụ đề, thanh tiến độ + tốc độ + còn lại, 1 nút chính theo trạng thái) + lọc Tất cả/Đang tải/Đang đợi/Xong/Lỗi + ô lọc tên; menu **⋯/chuột phải dùng `ContextMenu` dùng chung** (6 mục: Mở Studio · Player ngoài · Hiện thư mục · Tải lại phụ đề · Sao chép link · Xoá); footer 1 dòng (thư mục + nền tảng hỗ trợ + bản quyền).
+- **Giữ nguyên:** `handleStartDownload`/`handleInspect`/`handleFetchSubs`, hàng đợi 3 song song, BUG-053 dedupe, listener sự kiện, BUG-045 (luôn mount), reup/batch/MP3. Thêm debounce 600 ms tự đọc link khi dán (tái dùng `handleInspect`).
+- **Verify:** `tsc` 0 lỗi + `npm run build` OK **trên bản sao HEAD + 6 file của tôi** (vì `SublixStudioView.tsx` worker R2A đang sửa dở — đã escalation); GUI instance riêng (exe patch 1420→1424, Vite 1424, CDP 9226 — đã tắt + gỡ junction/bản sao): picker **184/184 mục**, tải thật → **✓ Xong · 465 KB**, menu ⋯ **6/6 mục**, "Mở trong Studio" mở đúng video, reup `.info.txt` BOM 5 dòng đúng, Kuaishou → lỗi sớm. Ảnh: `%TEMP%\sublix-verify-dl\dl-{tab-after,row-active,menu-active,adv-active,kuaishou-active}.png`.
+- **Cần biết khi verify CDP:** DownloaderView **luôn mount** (BUG-045) → phải bấm tab "Tải video" TRƯỚC khi chụp; nếu không, ảnh sẽ là tab khác dù DOM vẫn thao tác được (bài học từ chính phiên này).
+
+---
+
+---
 
 ### 2026-10-24 22:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-FEAT-TTS-3ENGINES` — **chỉ backend + command + wrapper**, UI để vòng thiết kế lại; chưa commit). Lỗi: `BUG-082..084`.

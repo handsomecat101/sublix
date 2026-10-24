@@ -7,7 +7,7 @@
 //! - 2026 Local LLM Translation models (Qwen3-4B-Instruct-2507, Gemma-3-4B-IT, Qwen3-8B, Qwen2.5) + hot-swap GPU/CPU server
 //! - Overlay appearance controls (font size, bilingual original line, click-through mode)
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   sublix,
@@ -26,16 +26,20 @@ import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 import SublixStudioView from "./SublixStudioView";
 import DownloaderView from "./DownloaderView";
-import { StudioShell, ShellCard } from "./StudioShell";
+import { StudioShell } from "./StudioShell";
+// TSK-UI-REDESIGN-R2-7B: tab Live + Lịch sử tách riêng (UI_REDESIGN_PLAN §4.5/§4.6).
+import LiveView from "./live/LiveView";
+import HistoryView from "./history/HistoryView";
+import type { LiveSubPreview } from "./live/liveTypes";
+import { fromDisplayValue } from "./live/liveLogic";
 import { ChangelogModal } from "./ChangelogModal";
 import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
 import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconClapper, IconMic, IconClock,
-  IconFileText, IconEye, IconEyeOff,
-  IconPlay, IconStop, IconGlobe, IconSettings, IconTrash, IconRotateCw,
+  IconEye, IconEyeOff,
+  IconGlobe, IconSettings,
 } from "../icons";
-import spotHistoryUrl from "../assets/spot-history.jpg";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import MasterTopbar from "./MasterTopbar";
 // TSK-UI-REDESIGN-R2-5: các mục Cài đặt tách riêng (mỗi file < 300 dòng).
@@ -87,16 +91,6 @@ type Status =
  */
 type HardwarePreset = "cpu" | "gpu_mid" | "gpu_high" | "amd_igpu";
 
-interface LiveSubPreview {
-  id: number;
-  text: string;
-  original?: string;
-  timestamp?: number;
-  audio_duration?: number;
-  stt_duration?: number;
-  translate_duration?: number;
-}
-
 export default function SettingsView() {
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("default");
@@ -133,21 +127,8 @@ export default function SettingsView() {
   const [lastTranslatedTest, setLastTranslatedTest] = useState<string | null>(null);
   const [recentSubs, setRecentSubs] = useState<LiveSubPreview[]>([]);
 
-  const [audioTest, setAudioTest] = useState<{
-    device_name: string;
-    file_size_bytes: number;
-    peak_volume: number;
-    rms_volume: number;
-    has_audio: boolean;
-  } | null>(null);
-  const [deviceLevels, setDeviceLevels] = useState<Array<{
-    index: number;
-    name: string;
-    peak_volume: number;
-    has_audio: boolean;
-    error: string | null;
-  }> | null>(null);
-  const [scanning, setScanning] = useState<boolean>(false);
+  // TSK-UI-REDESIGN-R2-7B: `audioTest` / `deviceLevels` / `scanning` đã chuyển
+  // vào `LiveView` (state cục bộ của tab Live — không cần ở cấp SettingsView).
   const [appInfo, setAppInfo] = useState<{ version: string; name: string; description: string } | null>(null);
   const [isLive, setIsLive] = useState<boolean>(false);
 
@@ -820,7 +801,11 @@ export default function SettingsView() {
     }
   }
 
-  async function loadDevices() {
+  /**
+   * TSK-UI-REDESIGN-R2-7B: `useCallback` để truyền xuống `<LiveView/>` (React.memo)
+   * mà không phá cache. Chỉ dùng state setter (đã ổn định) nên deps rỗng.
+   */
+  const loadDevices = useCallback(async () => {
     try {
       const list = await sublix.listDevices();
       setDevices(list);
@@ -830,11 +815,11 @@ export default function SettingsView() {
     } catch (e) {
       setStatus({ kind: "error", message: `Failed to list devices: ${e}` });
     }
-  }
+  }, []);
 
   const liveBusyRef = useRef(false);
 
-  async function handleStartLive() {
+  const handleStartLive = useCallback(async () => {
     if (liveBusyRef.current || isLive) return;
     liveBusyRef.current = true;
     setStatus({ kind: "working", message: "Starting GPU Live Subtitle Pipeline..." });
@@ -862,9 +847,12 @@ export default function SettingsView() {
     } finally {
       liveBusyRef.current = false;
     }
-  }
+  }, [
+    isLive, selectedDevice, model, chunkSeconds,
+    outputMode, targetLang, language, translationModel, vadEnabled,
+  ]);
 
-  async function handleStopLive() {
+  const handleStopLive = useCallback(async () => {
     if (liveBusyRef.current || !isLive) return;
     liveBusyRef.current = true;
     setStatus({ kind: "working", message: "Stopping live stream..." });
@@ -877,20 +865,53 @@ export default function SettingsView() {
     } finally {
       liveBusyRef.current = false;
     }
-  }
+  }, [isLive]);
+
+  /** TSK-UI-REDESIGN-R2-7B: đổi lựa chọn của select gộp "Phụ đề hiển thị". */
+  const targetLangRef = useRef(targetLang);
+  targetLangRef.current = targetLang;
+
+  const handleDisplayModeChange = useCallback((value: string) => {
+    const next = fromDisplayValue(value, targetLangRef.current);
+    setOutputMode(next.outputMode);
+    setTargetLang(next.targetLang);
+  }, []);
+
+  /** Xoá danh sách tạm của luồng thoại (tab Live). */
+  const handleClearRecentSubs = useCallback(() => {
+    setRecentSubs([]);
+  }, []);
+
+  /** Xoá toàn bộ lịch sử (tab Lịch sử) + bỏ chọn câu đang xem. */
+  const handleClearHistory = useCallback(() => {
+    setRecentSubs([]);
+    setSelectedHistorySub(null);
+  }, []);
+
+  /**
+   * BUG-033 (đang 🔴 Open): hotkey cũ chỉ re-bind khi `isLive`/`overlayVisible`
+   * đổi → `handleStartLive` bị closure cũ, đổi model/ngôn ngữ rồi bấm
+   * Ctrl+Shift+L không ăn theo. Nay handler trong keydown đi qua `latestRef`
+   * nên luôn gọi bản MỚI NHẤT.
+   */
+  const latestRef = useRef({ start: handleStartLive, stop: handleStopLive, isLive, overlayVisible });
+  useEffect(() => {
+    latestRef.current = { start: handleStartLive, stop: handleStopLive, isLive, overlayVisible };
+  });
 
   // Hotkeys while the app has focus: Ctrl+Shift+L = toggle live, Ctrl+Shift+O = toggle overlay
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || !e.shiftKey || e.altKey) return;
       const k = e.key.toLowerCase();
+      const latest = latestRef.current;
       if (k === "l") {
         e.preventDefault();
-        if (isLive) void handleStopLive();
-        else void handleStartLive();
+        if (latest.isLive) void latest.stop();
+        else void latest.start();
       } else if (k === "o") {
         e.preventDefault();
-        if (overlayVisible) {
+        if (latest.overlayVisible) {
           sublix.hideOverlay().then(() => setOverlayVisible(false)).catch(() => {});
         } else {
           sublix.showOverlay().then(() => setOverlayVisible(true)).catch(() => {});
@@ -899,8 +920,7 @@ export default function SettingsView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive, overlayVisible]);
+  }, []);
 
   /**
    * TSK-UI-REDESIGN-R2-5 (BUG đã biết): LUÔN đọc config MỚI NHẤT từ đĩa rồi mới
@@ -1374,87 +1394,6 @@ export default function SettingsView() {
     }
   }
 
-  const filteredHistory = recentSubs.filter((item) => {
-    if (!historySearch.trim()) return true;
-    const term = historySearch.toLowerCase();
-    return (
-      item.text.toLowerCase().includes(term) ||
-      (item.original && item.original.toLowerCase().includes(term))
-    );
-  });
-
-  const handleCopyHistory = () => {
-    if (recentSubs.length === 0) return;
-    const text = recentSubs
-      .slice()
-      .reverse()
-      .map((s) => (s.original ? `[Gốc] ${s.original}\n[Dịch] ${s.text}\n` : `${s.text}\n`))
-      .join("\n");
-    navigator.clipboard.writeText(text);
-    setStatus({ kind: "success", message: `📋 Đã sao chép ${recentSubs.length} câu vào Clipboard!` });
-  };
-
-  const handleExportTxt = () => {
-    if (recentSubs.length === 0) return;
-    const text = recentSubs
-      .slice()
-      .reverse()
-      .map((s) => (s.original ? `${s.original}\n${s.text}\n` : `${s.text}\n`))
-      .join("\n");
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sublix-transcript-${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus({ kind: "success", message: "💾 Đã xuất file văn bản .txt thành công!" });
-  };
-
-  const handleExportSrt = () => {
-    if (recentSubs.length === 0) return;
-    let srt = "";
-    const items = recentSubs.slice().reverse();
-    const firstTs = items[0].timestamp ?? 0;
-
-    const formatTime = (ms: number) => {
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      const sec = Math.floor((ms % 60000) / 1000);
-      const millis = ms % 1000;
-      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(millis).padStart(3, "0")}`;
-    };
-
-    items.forEach((s, idx) => {
-      let startMs = 0;
-      let endMs = 0;
-      if (firstTs > 0 && s.timestamp) {
-        startMs = Math.max(0, s.timestamp - firstTs);
-        const durMs = Math.round((s.audio_duration ?? 2.5) * 1000);
-        endMs = startMs + Math.max(1000, durMs);
-      } else {
-        startMs = idx * 3000;
-        endMs = startMs + 2800;
-      }
-
-      srt += `${idx + 1}\n`;
-      srt += `${formatTime(startMs)} --> ${formatTime(endMs)}\n`;
-      if (s.original) {
-        srt += `${s.original}\n`;
-      }
-      srt += `${s.text}\n\n`;
-    });
-    // Add UTF-8 BOM so legacy media players / Notepad render Vietnamese properly
-    const blob = new Blob(["\uFEFF" + srt], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sublix-subtitles-${new Date().toISOString().slice(0, 10)}.srt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatus({ kind: "success", message: `🎬 Đã xuất file phụ đề chuẩn .srt (${items.length} câu) thành công!` });
-  };
-
   async function handleTestCapture() {
     setStatus({ kind: "working", message: "Recording 5 seconds... (play audio first!)" });
     const path = "sublix-test-capture.wav";
@@ -1760,409 +1699,26 @@ export default function SettingsView() {
       </div>
 
       {activeTab === "live" && (
-        <StudioShell
-          left={
-            <>
-              <ShellCard
-                icon={<IconSettings size={14} />}
-                title="Cấu Hình Nhận Dạng & Dịch"
-              >
-                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-                  <label style={{ fontSize: 11.5, opacity: 0.8 }}>Ngôn ngữ gốc (Source):</label>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="settings-select"
-                    style={{ width: "100%" }}
-                  >
-                    <option value="ja">🇯🇵 Japanese (Phim / Anime Nhật)</option>
-                    <option value="en">🇺🇸 English (YouTube / Meeting)</option>
-                    <option value="zh">🇨🇳 Chinese (Phim / Video Trung)</option>
-                    <option value="ko">🇰🇷 Korean (Phim / Video Hàn)</option>
-                    <option value="auto">🌐 Auto-detect (Tự động)</option>
-                  </select>
-                </div>
-
-                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-                  <label style={{ fontSize: 11.5, opacity: 0.8 }}>Chế độ xuất:</label>
-                  <select
-                    value={outputMode}
-                    onChange={(e) => setOutputMode(e.target.value as "original" | "translated")}
-                    className="settings-select"
-                    style={{ width: "100%" }}
-                  >
-                    <option value="translated">🌐 Dịch sang ngôn ngữ đích (Khuyên Dùng)</option>
-                    <option value="original">📝 Chỉ gõ chữ gốc (Không dịch)</option>
-                  </select>
-                </div>
-
-                {outputMode === "translated" && (
-                  <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-                    <label style={{ fontSize: 11.5, opacity: 0.8 }}>Ngôn ngữ đích (Target):</label>
-                    <select
-                      value={targetLang}
-                      onChange={(e) => setTargetLang(e.target.value)}
-                      className="settings-select"
-                      style={{ width: "100%" }}
-                    >
-                      <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
-                      <option value="en">🇺🇸 English</option>
-                      <option value="ja">🇯🇵 Japanese</option>
-                      <option value="zh">🇨🇳 Chinese</option>
-                      <option value="ko">🇰🇷 Korean</option>
-                    </select>
-                  </div>
-                )}
-
-                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <label style={{ fontSize: 11.5, opacity: 0.8 }}>Độ dài phân đoạn tối đa:</label>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ac)" }}>{chunkSeconds}s</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={2}
-                    max={8}
-                    step={1}
-                    value={chunkSeconds}
-                    onChange={(e) => setChunkSeconds(Number(e.target.value))}
-                    className="settings-slider"
-                  />
-                </div>
-
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={vadEnabled}
-                    onChange={(e) => setVadEnabled(e.target.checked)}
-                  />
-                  <span>✂️ Smart VAD (Cắt câu theo khoảng lặng)</span>
-                </label>
-              </ShellCard>
-
-              <ShellCard
-                icon={<IconMic size={14} />}
-                title="Thiết Bị Âm Thanh (WASAPI)"
-                actions={
-                  <button
-                    type="button"
-                    onClick={loadDevices}
-                    className="settings-btn-secondary"
-                    style={{ padding: "2px 8px", fontSize: 11 }}
-                    title="Làm mới danh sách thiết bị"
-                  >
-                    <IconRotateCw size={11} />
-                  </button>
-                }
-              >
-                <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-                  <select
-                    value={selectedDevice}
-                    onChange={(e) => setSelectedDevice(e.target.value)}
-                    className="settings-select"
-                    style={{ width: "100%" }}
-                  >
-                    <option value="default">Mặc định (Default Windows Audio)</option>
-                    {devices.map((d, i) => (
-                      <option key={d.id} value={`index:${i}`}>
-                        [{i}] {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (isLive) {
-                        setStatus({ kind: "error", message: "Hãy dừng Live trước khi quét thiết bị." });
-                        return;
-                      }
-                      setScanning(true);
-                      setStatus({ kind: "working", message: "Đang quét âm thanh tất cả thiết bị..." });
-                      try {
-                        const levels = await sublix.scanAudioLevels();
-                        setDeviceLevels(levels);
-                        const active = levels.filter((l) => l.has_audio);
-                        if (active.length === 0) {
-                          setStatus({ kind: "error", message: "🔇 Chưa thấy âm thanh phát. Hãy bật 1 video/nhạc trước!" });
-                        } else {
-                          setStatus({ kind: "success", message: `🔊 Tìm thấy ${active.length} thiết bị có tiếng.` });
-                        }
-                      } catch (e) {
-                        setStatus({ kind: "error", message: `Quét thất bại: ${e}` });
-                      } finally {
-                        setScanning(false);
-                      }
-                    }}
-                    className="settings-btn-secondary"
-                    disabled={scanning || isLive}
-                    style={{ flex: 1, fontSize: 11, padding: "5px 8px" }}
-                  >
-                    {scanning ? "⏳ Đang quét..." : "🔍 Quét Âm Thanh"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setStatus({ kind: "working", message: "Đang thử bắt 3s..." });
-                      try {
-                        const deviceIndex = selectedDevice === "default"
-                          ? undefined
-                          : Number(selectedDevice.replace("index:", ""));
-                        const result = await sublix.testAudio(deviceIndex);
-                        setAudioTest(result);
-                        if (result.has_audio) {
-                          setStatus({ kind: "success", message: `🔊 Bắt được âm thanh! Đỉnh ${(result.peak_volume * 100).toFixed(0)}%` });
-                        } else {
-                          setStatus({ kind: "error", message: "🔇 Không có tiếng trên thiết bị này. Hãy dùng 'Quét Âm Thanh'!" });
-                        }
-                      } catch (e) {
-                        setStatus({ kind: "error", message: `Thử thất bại: ${e}` });
-                      }
-                    }}
-                    className="settings-btn-secondary"
-                    disabled={isLive}
-                    style={{ fontSize: 11, padding: "5px 8px" }}
-                  >
-                    🔊 Thử 3s
-                  </button>
-                </div>
-
-                {audioTest && (
-                  <div className="settings-help" style={{ margin: "4px 0", fontSize: 11 }}>
-                    <strong>Thử:</strong> {audioTest.device_name} • {(audioTest.peak_volume * 100).toFixed(0)}% •{" "}
-                    {audioTest.has_audio ? "✓ Có tiếng" : "✗ Im lặng"}
-                  </div>
-                )}
-                {deviceLevels && deviceLevels.length > 0 && (
-                  <div className="settings-levels" style={{ maxHeight: 150, overflowY: "auto" }}>
-                    {deviceLevels.map((l) => {
-                      const pct = Math.min(100, l.peak_volume * 100);
-                      const isSelected = selectedDevice === `index:${l.index}`;
-                      return (
-                        <div
-                          key={l.index}
-                          className={`settings-level-row ${l.has_audio ? "active" : ""} ${isSelected ? "selected" : ""}`}
-                          style={{ padding: "4px 8px" }}
-                        >
-                          <span className="settings-level-name" style={{ fontSize: 11 }}>[{l.index}] {l.name}</span>
-                          <div className="settings-level-bar" style={{ flex: 1 }}>
-                            <div className="settings-level-bar-fill" style={{ width: `${pct}%` }} data-active={l.has_audio} />
-                          </div>
-                          <span className="settings-level-pct" style={{ fontSize: 10 }}>{pct.toFixed(0)}%</span>
-                          <button
-                            type="button"
-                            className="settings-btn-secondary settings-level-use"
-                            onClick={() => setSelectedDevice(`index:${l.index}`)}
-                            style={{ padding: "2px 6px", fontSize: 10 }}
-                          >
-                            {isSelected ? "✓" : "Chọn"}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </ShellCard>
-            </>
-          }
-          center={
-            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12 }}>
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "radial-gradient(ellipse at center, rgba(30, 41, 59, 0.4) 0%, rgba(10, 15, 25, 0.9) 100%)",
-                  borderRadius: 14,
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  padding: 24,
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-              >
-                {/* Visualizer wave pulses */}
-                <div style={{ display: "flex", alignItems: "center", gap: 5, height: 60, marginBottom: 20 }}>
-                  {[12, 28, 45, 20, 55, 75, 40, 60, 30, 70, 85, 45, 25, 65, 35, 18].map((h, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: 4,
-                        height: isLive ? `${h}%` : "15%",
-                        background: isLive ? "var(--ac)" : "rgba(255, 255, 255, 0.2)",
-                        borderRadius: 3,
-                        transition: "height 0.2s ease",
-                      }}
-                    />
-                  ))}
-                </div>
-
-                {/* Status Indicator */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      background: isLive ? "#ef4444" : "#22c55e",
-                      boxShadow: isLive ? "0 0 10px #ef4444" : "0 0 8px #22c55e",
-                    }}
-                  />
-                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 0.5 }}>
-                    {isLive ? "ĐANG BẮT ÂM THANH & DỊCH TRỰC TIẾP (LIVE STREAM)" : "SẴN SÀNG PHÁT LIVE"}
-                  </span>
-                </div>
-
-                <p style={{ maxWidth: 500, textAlign: "center", fontSize: 12.5, color: "var(--t3)", margin: "0 0 24px", lineHeight: 1.5 }}>
-                  {isLive
-                    ? "Sublix đang lắng nghe qua WASAPI Loopback, cắt câu thông minh bằng Smart VAD, nhận dạng và bắn phụ đề trực tiếp lên màn hình."
-                    : "Mở YouTube, phim, podcast hoặc game. Bấm 'Bắt Đầu Live' để phụ đề nổi tự động dịch theo thời gian thực."}
-                </p>
-
-                {/* Live Action Buttons */}
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  {!isLive ? (
-                    <button
-                      type="button"
-                      onClick={handleStartLive}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "10px 24px",
-                        borderRadius: 24,
-                        background: "var(--ac)",
-                        color: "#000",
-                        fontWeight: 800,
-                        fontSize: 14,
-                        border: "none",
-                        cursor: "pointer",
-                        boxShadow: "0 4px 14px rgba(232, 163, 61, 0.4)",
-                      }}
-                      title="Phím tắt: Ctrl+Shift+L"
-                    >
-                      <IconPlay size={16} /> Bắt Đầu Dịch Trực Tiếp Live
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleStopLive}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "10px 24px",
-                        borderRadius: 24,
-                        background: "#ef4444",
-                        color: "#fff",
-                        fontWeight: 800,
-                        fontSize: 14,
-                        border: "none",
-                        cursor: "pointer",
-                        boxShadow: "0 4px 14px rgba(239, 68, 68, 0.4)",
-                      }}
-                      title="Phím tắt: Ctrl+Shift+L"
-                    >
-                      <IconStop size={16} /> Dừng Dịch Trực Tiếp
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => sublix.showOverlay()}
-                    className="settings-btn-secondary"
-                    style={{ padding: "10px 18px", borderRadius: 24, fontSize: 13 }}
-                    title="Phím tắt: Ctrl+Shift+O"
-                  >
-                    <IconEye size={14} /> Mở Cửa Sổ Overlay
-                  </button>
-                </div>
-
-                {recentSubs.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 16,
-                      left: 20,
-                      right: 20,
-                      background: "rgba(0, 0, 0, 0.65)",
-                      backdropFilter: "blur(8px)",
-                      borderRadius: 10,
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      padding: "8px 16px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ac)" }}>
-                      {recentSubs[0]?.text}
-                    </div>
-                    {recentSubs[0]?.original && recentSubs[0]?.original !== recentSubs[0]?.text && (
-                      <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>
-                        {recentSubs[0]?.original}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          }
-          right={
-            <ShellCard
-              icon={<IconClock size={14} />}
-              title={`Luồng Thoại (${recentSubs.length})`}
-              actions={
-                recentSubs.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setRecentSubs([])}
-                    className="settings-btn-secondary"
-                    style={{ padding: "2px 8px", fontSize: 11 }}
-                    title="Xoá danh sách tạm"
-                  >
-                    <IconTrash size={11} />
-                  </button>
-                ) : undefined
-              }
-            >
-              {recentSubs.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
-                  {recentSubs.map((s) => (
-                    <div
-                      key={s.id}
-                      style={{
-                        padding: "8px 10px",
-                        background: "rgba(255, 255, 255, 0.03)",
-                        borderRadius: 8,
-                        border: "1px solid rgba(255, 255, 255, 0.05)",
-                      }}
-                    >
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "#f8fafc", lineHeight: 1.4 }}>
-                        {s.text}
-                      </div>
-                      {s.original && s.original !== s.text && (
-                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                          {s.original}
-                        </div>
-                      )}
-                      <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, display: "flex", gap: 6 }}>
-                        <span>#{s.id}</span>
-                        {s.stt_duration !== undefined && <span>STT: {(s.stt_duration * 1000).toFixed(0)}ms</span>}
-                        {s.translate_duration !== undefined && s.translate_duration > 0 && <span>LLM: {(s.translate_duration * 1000).toFixed(0)}ms</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: "center", padding: "24px 8px", color: "var(--t3)", fontSize: 12 }}>
-                  Chưa có lời thoại nào. Bấm <strong>Bắt Đầu Live</strong> để bắt đầu ghi nhận.
-                </div>
-              )}
-            </ShellCard>
-          }
+        <LiveView
+          language={language}
+          onLanguageChange={setLanguage}
+          outputMode={outputMode}
+          targetLang={targetLang}
+          onDisplayModeChange={handleDisplayModeChange}
+          chunkSeconds={chunkSeconds}
+          onChunkSecondsChange={setChunkSeconds}
+          vadEnabled={vadEnabled}
+          onVadEnabledChange={setVadEnabled}
+          devices={devices}
+          selectedDevice={selectedDevice}
+          onSelectedDeviceChange={setSelectedDevice}
+          onReloadDevices={loadDevices}
+          isLive={isLive}
+          recentSubs={recentSubs}
+          onClearRecentSubs={handleClearRecentSubs}
+          onStartLive={handleStartLive}
+          onStopLive={handleStopLive}
+          onStatus={setStatus}
         />
       )}
 
@@ -2729,171 +2285,15 @@ export default function SettingsView() {
       )}
 
       {activeTab === "history" && (
-        <StudioShell
-          left={
-            <>
-              <ShellCard
-                icon={<IconClock size={14} />}
-                title="Bộ Lọc & Tìm Kiếm"
-                badge={<span style={{ fontSize: 11, opacity: 0.8 }}>{filteredHistory.length}/{recentSubs.length}</span>}
-              >
-                <input
-                  type="text"
-                  placeholder="🔍 Tìm câu thoại..."
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                  className="history-search-input"
-                  style={{ width: "100%", boxSizing: "border-box" }}
-                />
-
-                <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 4 }}>
-                  {isLive ? "🔴 Đang tự động lưu câu mới khi phát..." : "⏸ Tạm dừng ghi"}
-                </div>
-              </ShellCard>
-
-              <ShellCard
-                icon={<IconSettings size={14} />}
-                title="Thao Tác Lịch Sử"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <button
-                    type="button"
-                    className="settings-btn-secondary"
-                    onClick={handleCopyHistory}
-                    disabled={recentSubs.length === 0}
-                    style={{ justifyContent: "center" }}
-                  >
-                    📋 Sao Chép Tất Cả
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-btn-primary"
-                    onClick={handleExportSrt}
-                    disabled={recentSubs.length === 0}
-                    style={{ justifyContent: "center" }}
-                  >
-                    🎬 Xuất File .SRT
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-btn-secondary"
-                    onClick={handleExportTxt}
-                    disabled={recentSubs.length === 0}
-                    style={{ justifyContent: "center" }}
-                  >
-                    📄 Xuất File .TXT
-                  </button>
-                  <button
-                    type="button"
-                    className="settings-btn-danger"
-                    onClick={() => {
-                      setRecentSubs([]);
-                      setSelectedHistorySub(null);
-                    }}
-                    disabled={recentSubs.length === 0}
-                    style={{ justifyContent: "center" }}
-                  >
-                    <IconTrash size={12} /> Xoá Toàn Bộ Lịch Sử
-                  </button>
-                </div>
-              </ShellCard>
-            </>
-          }
-          center={
-            <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
-              {filteredHistory.length > 0 ? (
-                <div className="history-list" style={{ gap: 8 }}>
-                  {filteredHistory.map((item) => {
-                    const isSelected = selectedHistorySub?.id === item.id;
-                    return (
-                      <div
-                        key={item.id}
-                        className={`history-item ${isSelected ? "selected" : ""}`}
-                        onClick={() => setSelectedHistorySub(item)}
-                        style={{
-                          cursor: "pointer",
-                          borderColor: isSelected ? "var(--ac)" : undefined,
-                          background: isSelected ? "rgba(232, 163, 61, 0.08)" : undefined,
-                        }}
-                      >
-                        <div className="history-item-top">
-                          <span style={{ fontWeight: 700, color: isSelected ? "var(--ac)" : undefined }}>#{item.id}</span>
-                          <span>
-                            {item.stt_duration ? `STT: ${item.stt_duration.toFixed(2)}s` : ""}
-                            {item.translate_duration ? ` • LLM: ${item.translate_duration.toFixed(2)}s` : ""}
-                          </span>
-                        </div>
-                        {item.original && (
-                          <div className="history-item-orig">{item.original}</div>
-                        )}
-                        <div className="history-item-trans">{item.text}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="history-empty" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                  <img className="spot-ill" src={spotHistoryUrl} alt="" style={{ maxWidth: 120, opacity: 0.6, marginBottom: 12 }} />
-                  <p style={{ color: "var(--t3)", fontSize: 13, textAlign: "center", maxWidth: 360 }}>
-                    {recentSubs.length === 0
-                      ? "Chưa có lời thoại nào được ghi nhận. Bắt đầu phát video và bật 'Dịch Trực Tiếp Live' để ghi nhận!"
-                      : "Không tìm thấy câu thoại nào khớp với từ khoá tìm kiếm."}
-                  </p>
-                </div>
-              )}
-            </div>
-          }
-          right={
-            <ShellCard
-              icon={<IconFileText size={14} />}
-              title="Chi Tiết Câu Thoại"
-            >
-              {selectedHistorySub ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 700, color: "var(--ac)" }}>Câu #{selectedHistorySub.id}</span>
-                    <span style={{ fontSize: 10.5, color: "var(--t3)" }}>
-                      {selectedHistorySub.stt_duration ? `STT: ${selectedHistorySub.stt_duration.toFixed(2)}s` : ""}
-                    </span>
-                  </div>
-
-                  {selectedHistorySub.original && (
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>Bản Gốc:</div>
-                      <div style={{ padding: "8px 10px", background: "rgba(0,0,0,0.3)", borderRadius: 6, fontSize: 12.5, fontStyle: "italic", color: "#cbd5e1" }}>
-                        {selectedHistorySub.original}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>Bản Dịch:</div>
-                    <div style={{ padding: "8px 10px", background: "rgba(0,0,0,0.3)", borderRadius: 6, fontSize: 13, fontWeight: 600, color: "#34d399" }}>
-                      {selectedHistorySub.text}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="settings-btn-secondary"
-                    onClick={() => {
-                      const textToCopy = selectedHistorySub.original
-                        ? `${selectedHistorySub.original}\n${selectedHistorySub.text}`
-                        : selectedHistorySub.text;
-                      navigator.clipboard.writeText(textToCopy);
-                    }}
-                    style={{ marginTop: 6, justifyContent: "center" }}
-                  >
-                    📋 Sao Chép Câu Này
-                  </button>
-                </div>
-              ) : (
-                <div style={{ textAlign: "center", padding: "20px 8px", color: "var(--t3)", fontSize: 12 }}>
-                  Bấm chọn một câu thoại trong danh sách để xem chi tiết bản gốc và bản dịch.
-                </div>
-              )}
-            </ShellCard>
-          }
+        <HistoryView
+          items={recentSubs}
+          search={historySearch}
+          onSearchChange={setHistorySearch}
+          selectedId={selectedHistorySub?.id ?? null}
+          onSelect={setSelectedHistorySub}
+          isLive={isLive}
+          onClearAll={handleClearHistory}
+          onStatus={setStatus}
         />
       )}
 

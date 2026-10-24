@@ -392,7 +392,7 @@ Không có quyết định nào không thể đảo ngược ở vòng 1 (chỉ 
 | **R2-4** Provider dịch chỉ đọc | ✅ Xong | Dòng "Ollama · qwen2.5:3b — **Đổi**" (mở Cài đặt); **xoá hẳn** 3 select model + 3 ô API key khỏi Studio |
 | R2-5 Cài đặt › Dịch thuật | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
 | R2-6 Tải video | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
-| R2-7 Live / Lịch sử / Tiến trình | ⏭ Chưa làm | Ngoài phạm vi dispatch này |
+| R2-7 Live / Lịch sử / Tiến trình | 🟡 1/3 xong | **Live + Lịch sử ✅ (R2-7B)** — tách ra `src/views/live/{LiveView,liveLogic,liveTypes}.tsx/.ts` + `src/views/history/{HistoryView,historyLogic}.tsx/.ts` (+ 2 file `.css`). `SettingsView.tsx` **2823 → 2245 dòng**. Logic thuần tách riêng → `node --test scripts/live-history-tests/` (**40/40 PASS**). Sửa luôn **BUG-033** (hotkey `Ctrl+Shift+L` đọc closure cũ → nay đi qua `latestRef`). **Tiến trình (§4.7) ⏭ chưa làm** |
 
 ### 7.1. Bảng "không mất chức năng" (checklist §2)
 
@@ -417,8 +417,33 @@ Mỗi control bị bỏ/chuyển đều còn **đường vào** mới:
 | "📥 Nhập video" (trùng "Mở video") | Bỏ (giữ nút "＋ Mở video") |
 | 4 chấm đổi theme | **Tạm giữ** trong vùng ngữ cảnh của topbar cho tới khi R2-5 thêm mục "Chủ đề" vào Cài đặt (theo §4.2 là chuyển hẳn sang Cài đặt) |
 
+**Live (§4.5) — R2-7B**
+
+| Control cũ | Đường vào mới |
+|---|---|
+| Select "Chế độ xuất" + select "Ngôn ngữ đích" (2 ô) | **1 select "Phụ đề hiển thị"** (📝 Gốc · Dịch sang 🇻🇳/🇺🇸/🇯🇵/🇨🇳/🇰🇷). Chọn "Gốc" **giữ nguyên** ngôn ngữ đích đã chọn (không mất lựa chọn) |
+| Nút "Quét Âm Thanh" | **Nút ↻ cạnh select thiết bị** (tooltip "Quét âm thanh — tìm thiết bị đang phát tiếng"); kết quả vẫn hiện bảng mức âm + nút "Chọn" |
+| Nút "↻" đầu card (làm mới danh sách thiết bị) | Giữ nguyên ở đầu card "Thiết bị âm thanh (WASAPI)" |
+| Select "Độ dài phân đoạn tối đa" + checkbox "Smart VAD" | Khối **"⚙ Nâng cao"** (gấp mặc định, ghi tắt tắt khi đóng) |
+| Nút "Mở Cửa Sổ Overlay" | Nút **👁 trên topbar** (TL-16) — không mất đường vào |
+| Nút "▶ Bắt đầu Live" + "■ Dừng Live" (2 nút) | **1 nút chính duy nhất** "▶ Bắt đầu Live" ↔ "■ Dừng Live" (đổi nhãn theo trạng thái) |
+| Cột phải "Luồng thoại" | Giữ nguyên, thêm nút 🗑 xoá danh sách tạm |
+
+**Lịch sử (§4.6) — R2-7B**
+
+| Control cũ | Đường vào mới |
+|---|---|
+| Cột trái 300 px chỉ chứa 4 nút | **Bỏ cột trái** → 2 cột: danh sách (ô tìm + thanh công cụ) \| chi tiết câu |
+| Nút "Sao chép tất cả" | Thanh công cụ đầu danh sách: **Sao chép tất cả** |
+| Nút "Xuất .SRT" + "Xuất .TXT" (2 nút) | **Split button `Xuất .SRT \| ▾`** → menu "Xuất .SRT" / "Xuất .TXT" |
+| Nút đỏ "Xoá toàn bộ lịch sử" (chiếm 1/4 màn hình) | **Menu `⋯` → "Xoá toàn bộ lịch sử"** + **hộp xác nhận** (nút nguy hiểm không còn nổi bật nhất màn hình) |
+| Ô tìm kiếm (ở cột trái) | Ô tìm **trên đầu danh sách** + bộ đếm `x/y` |
+| Thẻ chi tiết câu (ở cột phải) | Cột phải "Chi tiết câu thoại" (bản gốc / bản dịch / nút "Sao chép câu này") |
+
 ### 7.2. Kiểm chứng
 
 - `npx tsc --noEmit` → **0 lỗi** · `npm run build` → **OK** · `node --test scripts/timeline-tests/` → **79/79 PASS**
+- **R2-7B (Live + Lịch sử):** `npx tsc --noEmit` → **0 lỗi** (cả repo) · `npm run build` → **OK** (104 module) · `node --test scripts/live-history-tests/` → **40/40 PASS** · `node --test scripts/settings-tests/` → **21/21 PASS**. Ảnh thật (Edge headless 1920×1080, app chạy thật + backend giả): tab **Live** (select gộp "Phụ đề hiển thị", ↻ cạnh select thiết bị, khối "⚙ Nâng cao" gấp, 1 nút chính) + tab **Lịch sử** (2 cột, ô tìm + `Sao chép tất cả` + split `Xuất .SRT` + `⋯`) → **render đúng**. `SettingsView.tsx` **2823 → 2245 dòng**.
+- ⚠️ `node --test scripts/timeline-tests/` → **89/91** (2 fail ở `estimate.test.ts`): do `src/lib/timeline/estimate.ts` đang **sửa dở** của worker khác (`rateKey` tại `estimate.ts:119`) — tại `HEAD` cùng bộ test **91/91 PASS** ⇒ không liên quan R2-7B.
 - GUI trên instance riêng (CDP 9225, Vite 1423, exe copy trỏ 1423): **8/9 PASS** — panel 5 bước render, MasterTopbar 6 tab, 25 control (mục tiêu ~20), provider chỉ đọc có nút "Đổi" và **0 ô API key**, chuột phải vai ra 7 mục menu, nút split + menu 4 mục, **hồi quy kéo khối + kéo handle In/Out vẫn chạy**.
 - ⚠️ Check "engine hiện 4 trạng thái" **không chạy được**: `src-tauri/target/debug/sublix.exe` (bản app PO đang dùng) **chưa có** lệnh `tts_engines_status` (lệnh đã có trong source `src-tauri/src/lib.rs:772`, build mới có, nhưng **Windows Application Control chặn chạy file exe vừa build**). UI xử lý graceful: hiện "Đang tải trạng thái engine TTS…" thay vì vỡ. Cần app build lại từ source hiện tại để thấy trạng thái thật.

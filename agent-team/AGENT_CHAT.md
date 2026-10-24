@@ -9,6 +9,34 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7B` — R2-7B: UI tab **Live** + **Lịch sử**, **chưa commit**).
+- **Mới:** `src/views/live/{LiveView.tsx/.css, liveLogic.ts, liveTypes.ts}` + `src/views/history/{HistoryView.tsx/.css, historyLogic.ts}` — `SettingsView.tsx` **2823 → 2244 dòng** (−579). Logic thuần tách riêng (map select gộp, lọc lịch sử, định dạng SRT/TXT) → test `node --test scripts/live-history-tests/` **40/40 PASS**.
+- **Live:** 1 select "Phụ đề hiển thị" (gộp chế độ xuất + ngôn ngữ đích; chọn "Gốc" **giữ** ngôn ngữ đích đã chọn) · ↻ quét âm thanh cạnh select thiết bị · "⚙ Nâng cao" gấp (chunk + Smart VAD) · **1 nút chính** Bắt đầu/Dừng Live (bỏ nút Mở Overlay — dùng 👁 topbar) · cột phải "Luồng thoại" giữ nguyên.
+- **Lịch sử:** 2 cột (bỏ cột trái 300px) · ô tìm + `Sao chép tất cả` + split `Xuất .SRT▾` (menu SRT/TXT) + menu `⋯`→"Xoá toàn bộ lịch sử" **có hộp xác nhận** (nút nguy hiểm hết nổi bật nhất màn hình).
+- **Bonus — fix `BUG-033`** (đang 🔴 Open): hotkey `Ctrl+Shift+L` đọc closure cũ → nay handler trong keydown đi qua `latestRef` (đổi model/ngôn ngữ rồi bấm tắt sẽ ăn đúng). Chi tiết: `ISSUE_LOG.md`.
+- **Verify:** `tsc` 0 lỗi (repo, trước khi worker glossary tạo file mới) · `npm run build` OK · `live-history-tests` 40/40 + `settings-tests` 21/21 · ảnh thật Edge headless 1920×1080 (app chạy thật + backend giả) tab Live + Lịch sử render đúng. **Cảnh báo:** `timeline-tests` 89/91 — 2 fail do `src/lib/timeline/estimate.ts` đang sửa dở của worker khác (tại HEAD: 91/91 PASS), không liên quan task này.
+
+---
+### 2026-10-25 06:35 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-REFACTOR-SPLIT-300` — tách 4 module Rust > 300 dòng, **chỉ di chuyển code, không đổi hành vi, chưa commit**).
+- **Tách:** `model_download.rs` 774 → `model_download/{mod,progress,http,sha256}.rs` · `stt/stt_catalog.rs` 514 → `stt/stt_catalog/{mod,catalog_types,catalog_data,catalog_data_parakeet}.rs` · `stt/sherpa_asr.rs` 368 → `stt/sherpa_asr/{mod,sherpa_sidecar}.rs` · `translate/bench.rs` 338 → `translate/bench/{mod,score,dataset,bench_tests}.rs`. **File lớn nhất: 271 dòng** (tất cả 14 file đều < 300).
+- **API không đổi:** để so tổt **mới `pub` có trong HEAD đều có trong module mới** (kiểm tự động trước); đễt tên `pub use` để `crate::stt::stt_catalog::SttEngineSpec`, `crate::stt::sherpa_asr::transcribe`, `crate::model_download::EVENT` … vẫn giở nguyên. Đổi tên lệnh `in_progress_slot` → `pub(crate)` + `download_one` → `pub(super)` để module con dùng được.
+- **Verify:** `cargo test --lib` **197 pass / 0 fail** · `cargo build --example bench_translate` **OK** · `cargo clippy --lib`: 6 cảnh báo nừm trong 4 module đãu tách — để **là code di chuyển nguyên văn** (không phải cảnh báo mới) · không sửa `src/**`.
+- **Lưu ý:** đãnh có bố module Rust > 300 dòng khác vẫn còn tách: `dubbing/mod.rs` 4578 · `downloader/mod.rs` 2951 · `translate/server.rs` 1991 · `lib.rs` 1986 · `file_sub.rs` 905 · `stt/whisper_local.rs` 802 · `translate/mod.rs` 754.
+
+---
+
+### 2026-10-25 03:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-SETTINGS-MODELS` — **chỉ FRONTEND**, chưa commit).
+- **Mới:** `src/views/settings/SttSection.tsx` — danh sách engine từ `stt_engines_status` (catalog thật, **0 hard-code**), mỗi engine 1 `ModelDownloadRow` (Tải/Huỷ/Xoá + %/MB/s/ETA qua `model:download-progress`), Segmented **Engine mặc định** (chỉ engine đã tải → `stt_set_engine`), giữ **Tăng tốc Whisper (AUTO/CPU/CUDA)** + **Kiểm thử nhanh** cũ; bỏ danh sách Whisper trùng (catalog đã có whisper-base/turbo).
+- **TTS:** backend chỉ phát `tts:deps_progress` (log pip, **không %**) → nút hiện "⏳ Đang cài…" + dòng log cuối, **không bịa %**, hành vi cũ giữ nguyên.
+- **Logic thuần:** `modelUtils.ts` (`formatBytesVi`/`formatSpeedVi`/`formatEtaVi`/`progressPct`/`sortSttEngines`/`engineSummary`/`recommendSttEngine`) + `scripts/settings-tests/modelUtils.test.ts` (9 case) + `package.json`/`index.ts` để `node --test scripts/settings-tests/` chạy được (Node 24 không quét dir — cùng mẹo `timeline-tests`).
+- **Verify:** `node --test scripts/settings-tests/` **21/21 PASS** (12 cũ + 9 mới), `tsc` 0 lỗi, `npm run build` OK trên **bản sao HEAD + file của tôi**; ảnh frontend-only (Edge headless + stub Tauri, 4 engine gồm 1 đang tải/2 đã tải): `%TEMP%\sublix-verify-settings\settings-stt.jpg` · `settings-stt-tools.jpg` · `settings-tts2.jpg`.
+- **Cần biết:** `ModelDownloadRow` lấy % từ **event** nên ảnh tĩnh chỉ hiện trạng thái (Chưa tải/Xong) — muốn thấy thanh tiến trình phải chạy app thật (để R2-8).
+
+---
+
 ### 2026-10-24 23:34 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-FEAT-CONTEXT-TRANSLATE` — **đo lại + kiểm chứng lại toàn bộ**, **đính chính** kết luận ở tin 00:05; **chưa commit, không push**).
 - **Mới:** module `src-tauri/src/translate/pronoun_audit.rs` (+12 test) — **metric tất định** đếm đại từ, đo được **60/60 dòng** (không phụ thuộc LLM-giám khảo có parse được JSON không); phân biệt `ngươi`/`người`, `cậu`/`câu`, `bạn`/`bàn` trước khi bỏ dấu (nếu không sẽ đếm sai hàng loạt dòng).
@@ -72,25 +100,5 @@
 - **Đang làm:** mcode #1 `TSK-STUDIO-MODEL-PICKER` · mcode #2 `TSK-FEAT-CONTEXT-TRANSLATE` (+ `llm_reasoning_effort`, `translate_options_get/set`) · CommandCode `TSK-UI-REDESIGN-R2-5-7` · mcode #3 `TSK-FEAT-STT-ENGINES`.
 - **Tiếp theo:** gắn `ModelDownloadRow` + STT vào Studio/Cài đặt → Studio gọi dịch theo ngữ cảnh → R2-8 kiểm tra tổng trên app PO + Opus duyệt thẩm mỹ → push 1 lần. Quy tắc: Claude (Sonnet/Opus) chỉ cho việc khó/thẩm mỹ; còn lại mcode/CommandCode.
 - **Lưu ý:** key MiniMax + OpenRouter đã nạp vào config app (không in ra); Smart App Control chặn exe copy → verify GUI riêng chưa được (BUG-H09); không `taskkill` app PO theo tên.
-
----
-
-### 2026-10-24 21:55 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2A` — vòng 2 code UI R2-1..R2-4; **chưa commit**).
-- **R2-1:** token `--step-sub/--step-tr/--step-dub` trong `src/App.css` + 3 component dùng chung `src/components/ui/{Segmented,SplitButton,ContextMenu}.tsx` (mỗi file < 120 dòng, `React.memo`).
-- **R2-2:** `src/views/MasterTopbar.tsx/.css` — **1 component thay 2 bản copy** (Studio + `SettingsView.tsx`); chuột phải nút ↶ = menu 3 lớp hoàn tác (Audio / Bản dịch / Phụ đề) thay 3 chip cũ; bỏ "Nhập video" trùng + nút Tiến Trình modal; overlay còn 1 icon 👁.
-- **R2-3:** panel trái → `src/views/studio/StudioPipelinePanel.tsx` + `StudioVoiceStep.tsx` — rail 5 bước, accordion 1-mở, **1 nút chạy split** `▶ Chạy N bước đã bật | ▾`, chuột phải vai 7 mục (giọng gốc · gộp · về 1/2 vai · xoá), **engine + giọng đọc đọc từ backend** (`tts_engines_status` + `dubbing_get_voices`), **đã gỡ `TTS_ENGINE_MODELS` hard-code và map `vietneu:`→`kokoro:`** (backend tự fallback ở `tts_vieneu::route_voice`).
-- **R2-4:** provider dịch chỉ đọc "Ollama · qwen2.5:3b — **Đổi**" → mở Cài đặt; **xoá hẳn** 3 select model + 3 ô API key khỏi Studio.
-- **Verify:** `tsc` 0 lỗi · `build` OK · `node --test` 79/79 · GUI instance riêng (CDP 9225 / Vite 1423) **8/9 PASS** (hồi quy kéo khối + kéo handle In/Out vẫn chạy; check trạng thái engine chưa chạy được vì `target/debug/sublix.exe` — bản app PO — **chưa có** lệnh `tts_engines_status`, cần build lại exe).
-- **⚠️ Cần PO xử lý:** lúc dọn instance verify tôi đã tắt nhầm 1 tiến trình `sublix.exe` (PID 34400) do lệnh dọn "mọi app trừ PID cũ 47852" — app của PO có thể đã được mở lại với PID mới nên bị dính. Hiện app PO + Vite 1420 đều **không còn chạy**; cần PO khởi động lại `npm run tauri dev`.
-
----
-
-### 2026-10-25 00:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-6`, **chưa commit** — chỉ JSX/CSS tab Tải video, **logic giữ nguyên 100%**).
-- **Giao diện mới (PLAN §4.4):** 1 cột max 1480px; ô nhập lớn + nút **Tải N link** ngay cạnh (Enter = tải, Shift+Enter xuống dòng); chip **Chất lượng / Phụ đề / ⚙ Nâng cao** (popover chứa cookies + 3 cờ reup + cắt đoạn); picker playlist dạng dải ngang; danh sách dạng **HÀNG** (thumbnail 112×63, pill nền tảng/chất lượng/phụ đề, thanh tiến độ + tốc độ + còn lại, 1 nút chính theo trạng thái) + lọc Tất cả/Đang tải/Đang đợi/Xong/Lỗi + ô lọc tên; menu **⋯/chuột phải dùng `ContextMenu` dùng chung** (6 mục: Mở Studio · Player ngoài · Hiện thư mục · Tải lại phụ đề · Sao chép link · Xoá); footer 1 dòng (thư mục + nền tảng hỗ trợ + bản quyền).
-- **Giữ nguyên:** `handleStartDownload`/`handleInspect`/`handleFetchSubs`, hàng đợi 3 song song, BUG-053 dedupe, listener sự kiện, BUG-045 (luôn mount), reup/batch/MP3. Thêm debounce 600 ms tự đọc link khi dán (tái dùng `handleInspect`).
-- **Verify:** `tsc` 0 lỗi + `npm run build` OK **trên bản sao HEAD + 6 file của tôi** (vì `SublixStudioView.tsx` worker R2A đang sửa dở — đã escalation); GUI instance riêng (exe patch 1420→1424, Vite 1424, CDP 9226 — đã tắt + gỡ junction/bản sao): picker **184/184 mục**, tải thật → **✓ Xong · 465 KB**, menu ⋯ **6/6 mục**, "Mở trong Studio" mở đúng video, reup `.info.txt` BOM 5 dòng đúng, Kuaishou → lỗi sớm. Ảnh: `%TEMP%\sublix-verify-dl\dl-{tab-after,row-active,menu-active,adv-active,kuaishou-active}.png`.
-- **Cần biết khi verify CDP:** DownloaderView **luôn mount** (BUG-045) → phải bấm tab "Tải video" TRƯỚC khi chụp; nếu không, ảnh sẽ là tab khác dù DOM vẫn thao tác được (bài học từ chính phiên này).
 
 ---

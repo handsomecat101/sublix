@@ -24,6 +24,7 @@
 | **Claude Sonnet 5.5** | CHỈ việc khó thật (kiến trúc, bug khó mà thợ khác 2 lần không xong) | **Tốn usage — hạn chế tối đa** |
 | **Claude Opus 5.5** | CHỈ phần **thẩm mỹ / logic thiết kế giao diện** + duyệt UI cuối so với mockup | Thợ khác code theo thiết kế của Opus |
 
+- **Chia việc không chồng chéo (PO nhắc 2026-10-25):** trước khi giao, liệt kê file mỗi thợ được sửa; hai thợ KHÔNG cùng sửa 1 file. File dùng chung (`lib.rs`, `config.rs`, `tauri.ts`, `types.ts`) chỉ cho "thêm cuối file / thêm 1 field", dặn re-read trước khi sửa. Màn nằm trong file người khác đang sửa → làm component file mới trước, chờ người kia xong mới thay vào (mẫu: Live/Lịch sử trong SettingsView). Thợ xong → báo ngay thợ đang chờ file đó.
 - Review của thợ yếu hơn cho thợ mạnh hơn chỉ là **tham khảo** — người điều phối tự kiểm chứng trước khi bắt sửa.
 - PO bận nhiều dự án: **không** giao PO việc kiểm thử thủ công (nghe mù, chấm điểm…). Tự quyết bằng review công khai + số đo máy; chỉ hỏi PO quyết định thật sự của PO (ngân sách cloud, đường một chiều như tắt Smart App Control).
 - Chất lượng phải thể hiện ở từng chi tiết cho người dùng (thanh tiến trình, ước tính thời gian, trạng thái rõ) — Zero-Button UX (không nút thừa), Cinema Dark, tiếng Việt có dấu.
