@@ -27,6 +27,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+// TSK-FEAT-TTS-3ENGINES: engine TTS mới + chuẩn hóa số tiếng Việt (mỗi module < 300 dòng).
+pub mod vi_normalize;
+
 static CURRENT_GENERATION: AtomicU64 = AtomicU64::new(0);
 static CANCELLED_GENERATION: AtomicU64 = AtomicU64::new(0);
 static ACTIVE_CHILD_PID: AtomicU32 = AtomicU32::new(0);
