@@ -12,22 +12,28 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.35` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | trên nhánh `fix/voice-timeline-mojibake` (`origin` = `https://github.com/handsomecat101/sublix.git`) |
-| **Trạng Thái** | 🟢 Sẵn sàng làm việc (version đồng bộ `0.11.35` ở 4 nguồn + 2 tiêu đề cửa sổ native; guard `npm run verify:version` PASS exit 0; `npx tsc --noEmit` 0 lỗi) |
+| **Bản Build Hiện Tại** | `v0.11.36` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
+| **Git Commit** | nhánh `master` @ `e61ba07` (`origin` = `https://github.com/handsomecat101/sublix.git`) — **đã merge hết nhánh fork**, `master` == `fix/voice-timeline-mojibake` |
+| **Workspace Máy Dev** | `C:\AI Project\Sublix` (máy: Win11 11 Home build 26200, AMD Ryzen AI Max 390, 31 GB RAM, **không có GPU NVIDIA**) |
+| **Trạng Thái** | 🟢 Sẵn sàng làm việc — `cargo build` OK, `cargo test --lib` **60/60 PASS**, `npx tsc --noEmit` 0 lỗi, `npm run build` OK, guard `npm run verify:version` PASS exit 0 (6/6 nguồn = `0.11.36`); app chạy dev + verify GUI qua CDP (port 9223) |
+| **Provider Dịch Đang Dùng** | `ollama` (`qwen2.5:3b`, chạy **iGPU qua ROCm**) — vì `llama-server.exe` bị Smart App Control chặn, xem `BUG-H09` |
+| **Preset Phần Cứng** | **4 preset**: Thuần CPU · GPU Tầm Trung (4-8GB) · GPU Khủng (12-24GB) · **GPU Tích Hợp AMD (Radeon / Ryzen AI)** — preset AMD dùng Ollama + iGPU |
+| **Pipeline A→Z** | ✅ **Verify đầy đủ** trên máy này: Video → Whisper STT (CPU) → sherpa phân vai → Ollama dịch (**iGPU**) → Kokoro TTS → ffmpeg xuất (2 track audio + subtitle). File: `%APPDATA%\com.sublix.desktop\downloads\A2Z_TEST_EN_dubbed.mp4` |
 
 ---
 
-## 2. ✅ ĐÃ ĐẠT / ❌ CHƯA ĐẠT (Phiên 2026-10-23)
+## 2. ✅ ĐÃ ĐẠT / ❌ CHƯA ĐẠT (Phiên 2026-10-24)
 
 | Hạng mục | Trạng thái | Bằng chứng | Ai xác nhận |
 |----------|-----------|-----------|------------|
+| **Preset AMD iGPU (v0.11.36)** | ✅ ĐẠT | 4 card preset hiện trong UI (sidebar + grid); bấm → config `translation_provider=ollama`, `ollama_model=qwen2.5:3b`, `stt_model=base`, `stt_engine=cpu`; dịch thử trong app → *"Kiểm tra dịch thoại thành công!"* | Mavis (verify GUI qua CDP + screenshot) |
+| **iGPU được tận dụng thật** | ✅ ĐẠT | Ollama log: `library=ROCm compute=gfx1151 "AMD Radeon(TM) 8050S" 12.2 GiB`, `offloaded 37/37 layers to GPU`; benchmark `qwen2.5:3b` **GPU 32,83 tok/s vs CPU 15,53 tok/s (×2,11)** | Mavis (đo bằng `ollama ps` + benchmark `num_gpu`) |
+| **Ollama timeout + Qwen3 thinking (BUG-H10)** | ✅ ĐẠT | Timeout 25s→120s, batch 60s→300s, thêm `"think": false`; `qwen3:4b` sinh 548-2123 token suy luận (52-112s) → `qwen2.5:3b` **6,0s** | Mavis (đọc `slot print_timing` trong log Ollama) |
+| Guard version `npm run verify:version` | ✅ ĐẠT | PASS exit 0, 6/6 nguồn = `0.11.36` | Mavis |
+| TypeScript `npx tsc --noEmit` | ✅ ĐẠT | exit 0, 0 lỗi | Mavis |
 | BUG-074 — Xuất video có tiếng Việt (map `vietneu:` → `kokoro:` ở backend) | ✅ ĐẠT | File `StarCraft…_dubbed.mp4` có track `aac` thứ 2; đối chiếu giọng: correlation với giọng Kokoro = **0,6921** (track AI) vs **0,0346** (track gốc) | Mavis (đo bằng ffprobe + script tương quan) |
 | BUG-075 — TTS batch mode (nạp model 1 lần) | ✅ ĐẠT | Batch 5 câu **16,1s** (legacy 62s); xuất 78 câu ~**2 phút**; per-line 12,4s → ~1,2s | Mavis (đo trực tiếp trên app live) |
-| Guard version `npm run verify:version` | ✅ ĐẠT | PASS exit 0, 6/6 nguồn = `0.11.35` | Mavis |
-| TypeScript `npx tsc --noEmit` | ✅ ĐẠT | exit 0, 0 lỗi | Mavis |
 | Video Trung Quốc 26 phút (323 câu) trong app | ❌ CHƯA ĐẠT | Project bị thay thế trong app lúc anh tự chạy A→Z trên StarCraft; cần nạp lại video + chạy lại STT/dịch | Chờ anh Tuấn quyết định có chạy lại không |
-| `cargo test --lib` cho bản vá mới | ⚠️ CHƯA CHẠY | Anh yêu cầu dừng test; bằng chứng thay thế = export thật + ffprobe + đối chiếu giọng | Mavis (đã ghi vào AGENT_CHAT) |
 
 ---
 
@@ -49,6 +55,8 @@
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
 | `TSK-018` | Fix Đợt 2: Lifecycle tiến trình ma (BUG-002, BUG-003) & Async Tauri (BUG-010) | **CommandCode** | 🔴 HIGH | 🟡 Đang làm (khóa 2026-10-12) | `src-tauri/src/lib.rs`, `src-tauri/src/dubbing/mod.rs`, `src-tauri/src/downloader/mod.rs` (dự kiến) |
+| `TSK-FEAT-TTS-3ENGINES` | Thêm 3 lựa chọn giọng đọc tiếng Việt mới (VieNeu v3 Turbo thật / ZeroTTS / cloud Google Chirp3 + FPT.AI) + tải model trong app + sửa lỗi đọc số (vi_normalize) | **Claude Sonnet 5.5 (Orca worker)** | 🔴 HIGH | 🟡 Đang làm (khóa 2026-10-24) | `src-tauri/src/dubbing/**` (tts_vieneu/tts_zerotts/tts_cloud/vi_normalize), `src-tauri/scripts/**`, `src-tauri/src/config.rs`, `src/views/SettingsView.tsx/.css`; chỉ THÊM dòng ở `lib.rs`, `src/lib/tauri.ts`, `types.ts` |
+| `TSK-UI-REDESIGN-P1` | Thiết kế lại giao diện 6 tab (ưu tiên Studio + Tải video) — vòng 1: khảo sát + thiết kế + mockup, KHÔNG sửa code app | **Claude Opus 5.5 (Orca worker)** | 🟠 MEDIUM | 🟡 Đang làm (khóa 2026-10-24) | `docs/UI_REDESIGN_PLAN.md`, `docs/ui-mockups/**` |
 
 ---
 
@@ -67,6 +75,16 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-FEAT-DL-PLATFORMS-REUP` | Thêm 8 nền tảng tải video (Instagram Reels/Facebook/Twitch/Kick/Dailymotion/VK/Pinterest/Snapchat) + khu "Tùy chọn reup" (info.txt, download-archive, thumbnail, cắt đoạn) + sửa lỗi kuaishou/migu (báo "yt-dlp chưa hỗ trợ" NGAY, không gợi ý cập nhật) | **CommandCode (Orca worker)** | 2026-10-24 | ✅ `cargo test --lib` **77/77 PASS** (+10 test mới), `tsc` 0 lỗi, `npm run build` OK; chạy THẬT (đúng `build_download_command`): IG Reel → `.mp4`+`.jpg`+`.info.txt` (BOM, 5 dòng đầu đúng tiếng Việt), tải lần 2 → **"Đã tải trước đó"** (archive), Pinterest cắt `05-15s` → ffprobe **10.000000s**; chưa commit — chờ PO duyệt |
+| `TSK-RES-VI-VOICE` | Nghiên cứu + đo thật model giọng đọc tiếng Việt (≥12 ứng viên; 11 model × 3 câu tạo WAV thật + WER/CER + RTF + nghiêng điệu F0 + DNSMOS) — chỉ nghiên cứu, KHÔNG sửa code app | **mcode #2 (Orca worker)** | 2026-10-24 | ✅ `docs/VI_VOICE_MODELS_2026.md` (3 phần, bảng 20 ứng viên offline + 13 cloud, bảng đo 11 model) + `%TEMP%\sublix-voice-bench\index.html` (30 file nghe thử); **Kokoro hiện tại bỏ rơi ngày tháng (WER S3 30%)**; **VieNeu-TTS v3 Turbo clone đạt WER/CER 0%** và RTF 0.92 (fp32) — ứng viên #1 (Apache-2.0); phát hiện `BUG-H13` Edge-TTS trả 0 byte không retry; F5-TTS loại (WER S3 40%, RTF 43) |
+| `TSK-TIMELINE-FIX-DND-RANGE` | Timeline Studio: kéo thả khối (dời/trim/hít/chặn chồng/undo) + vùng In/Out chạy thật trên câu trong vùng + fix Ctrl+click gộp 1 câu + voice giật ở 1.5x + ducking | **Claude Sonnet 5.5 (Orca worker)** | 2026-10-24 | ✅ `BUG-076..081`; `tsc` 0 lỗi, `npm run build` OK; GUI instance riêng CDP 9224: dời/trim/nhóm/hít/Esc/undo đạt, Ctrl+click `[6]`→`[2,6,7]`, voice 1.5x 10→4 lần tua, vùng In/Out: 4 lệnh chỉ đổi câu trong vùng (câu ngoài nguyên vẹn); chưa commit — chờ PO duyệt |
+| `TSK-RES-DL-PLATFORMS` | Nghiên cứu mở rộng tab Tải video sang nền tảng khác phục vụ reup + chạy thử yt-dlp thật (chỉ đọc, KHÔNG sửa code) | **CommandCode (Orca worker)** | 2026-10-24 | ✅ `docs/DOWNLOADER_PLATFORM_EXPANSION.md` — chạy thử THẬT 29 nền tảng (yt-dlp 2026.10.21, 11 nền tảng tải được: FB/IG Reel/Twitch/Kick/Dailymotion/VK/Niconico/Pinterest/Snapchat/MangoTV/YouTube); phát hiện **Threads/Kuaishou/Kwai/Migu/Lemon8 không có extractor** (Kuaishou+Migu trong `get_platform` là lỗi): top-8 nền tảng + top-5 tính năng reup (S/M/L) |
+| `TSK-TIMELINE-INTEGRATE-MODULES` | Gắn 6 module timeline (timecode, shuttle, markers, trackLock, clipboard, autoFollow) + TimecodeInput vào `SublixStudioView.tsx` | **Mavis/mcode (Orca worker)** | 2026-10-24 | ✅ Gắn đủ 6 tính năng vào `SublixStudioView.tsx` (import 6 module, alias `formatTimecode`, `getEffectiveRate` 1 nguồn tốc độ, guard khoá track ở move/trim/split/delete/edit-text/paste, marker lưu project cache); `node --test` 79/79 PASS, `tsc` 0 lỗi, `npm run build` OK; **GUI instance riêng (CDP 9224): 22/22 PASS** (timecode 20s, Ctrl+C/V dán 2 câu tại 30s, auto-follow lật trang, L L→2x, J lùi, K+L nhích 1 frame 0.04s, M/Shift+M/Ctrl+Shift+M, khoá track chặn kéo + mở khoá kéo được, hồi quy Ctrl+click của Sonnet OK); app PO 9223 không bị đụng |
+| `TSK-TIMELINE-MODULES-EASY` | Viết sẵn 6 module timeline kiểu Premiere (timecode, shuttle, markers, trackLock, clipboard, autoFollow) + TimecodeInput.tsx + unit test — file RIÊNG, CHƯA gắn vào SublixStudioView | **Mavis/mcode (Orca worker)** | 2026-10-24 | ✅ `src/lib/timeline/` (6 module TS thuần) + `src/views/studio/TimecodeInput.tsx` + `scripts/timeline-tests/` (**79 test, node --test 79/79 PASS**) + `docs/TIMELINE_INTEGRATION_PLAN.md`; `tsc` 0 lỗi, `npm run build` OK; **chưa gắn vào app** (chờ Sonnet xong `SublixStudioView.*`) |
+| `TSK-RES-TIMELINE-GAP` | Nghiên cứu gap timeline Sublix vs Premiere Pro + khảo sát 9 dự án OSS (chỉ đọc, không sửa code) | **Mavis/mcode (Orca worker)** | 2026-10-24 | ✅ `docs/TIMELINE_GAP_ANALYSIS.md` — bảng 43 dòng tính năng (Có/Thiếu/Lỗi + file:dòng) + 9 dự án OSS có license + top-5 khuyến nghị; xác định 5 lỗi gốc gây "In/Out không hoạt động" (lọc vùng chứa-trong `:3052`/`:3206`, TTS nuốt lỗi `:3267`, mất dữ liệu `:2982`/`:3528`) |
+| `TSK-FEAT-DL-BATCH-AUDIO` | Tab Tải video: tải nhiều link 1 lần + mở rộng playlist (`--flat-playlist -J`, checkbox, trần 200) + chế độ chỉ tải âm thanh MP3/M4A | **Claude Code (Orca worker)** | 2026-10-24 | ✅ `cargo test --lib` 67/67 (+7), tsc 0, build OK; yt-dlp thật playlist 4/13 mục + 4 file mp3 (ffprobe OK); GUI CDP verify; chưa commit — chờ PO duyệt |
+| `TSK-FEAT-AMD-IGPU-PRESET` | Thêm preset thứ 4 "GPU Tích Hợp AMD (Radeon / Ryzen AI)" + lệnh `ollama_models` + dropdown model + fix timeout/thinking Ollama | **Mavis (MiniMax-M3)** | 2026-10-24 | ✅ 3 preset cũ giữ nguyên; preset AMD dịch qua Ollama chạy **iGPU ROCm** (32,8 vs 15,5 tok/s); dịch thử app ✅; `BUG-H10`; v0.11.36 |
+| `TSK-SETUP-MACHINE-2026-10-23` | Dựng môi trường máy mới (clone repo → toolchain → build → verify E2E) | **Mavis (MiniMax-M3)** | 2026-10-23 | ✅ `C:\AI Project\Sublix` clone `master`@`e61ba07`; Rust 1.99.1 MSVC + VS BuildTools 2022 + yt-dlp; `cargo test --lib` 60/60; app dev chạy OK; STT whisper 2,6s + dịch Ollama ✅; phát hiện `BUG-H09` |
 | `TSK-FIX-KOKORO-EXPORT-074-075` | Sửa "Xuất video mất tiếng Việt" (`vietneu:` → `kokoro:` ở backend) + Kokoro batch mode (12,4s/câu → ~1,2s/câu) | **Mavis (MiniMax-M3)** + Worker agent | 2026-10-23 | ✅ Export thật 78 câu ~2 phút, file có track AI; đối chiếu giọng corr 0,69 vs 0,03; `BUG-074`, `BUG-075`; v0.11.35 |
 | `TSK-FIX-VERSION-DRIFT-073` | Đồng bộ version 4 nguồn + 2 tiêu đề cửa sổ native (drift `v0.11.32` còn sót trong `tauri.conf.json`) & tạo lại guard `scripts/check_version.ps1` + npm `verify:version` | **Mavis (MiniMax-M3)** | 2026-10-20 | ✅ 4 nguồn = `0.11.34`; guard PASS exit 0 / negative test `[LECH]` exit 1; `tsc` 0 lỗi; `BUG-073` |
 | `TSK-FIX-STUDIO-REPLACE-EXPORT-VLC` | Sửa lỗi không đổi được video trong Studio (dội ngược file cũ) & Xuất Softsub / Multi-track Audio chuẩn VLC | **Antigravity** | 2026-10-13 | ✅ Bỏ deps filePath, tập trung handleLoadNewVideoFile + onClearPendingFile; FFmpeg Softsub & Multi-track VLC; Modal UI cấu hình xuất; v0.11.33 |
@@ -118,4 +136,6 @@
 
 ## 🔴 Blockers (Nếu có)
 
-*Không có blocker nào tại thời điểm này.*
+- **`BUG-H09` — Smart App Control chặn `llama-server.exe`** (Win11 bật SAC, binary llama.cpp chưa ký). Provider dịch GGUF **không** dùng được trên máy này → **đã có preset AMD iGPU** dùng Ollama (ROCm) + verify ✅. Muốn dùng lại GGUF thì phải tắt Smart App Control (đường **một chiều**, bật lại phải reset Windows) — **cần PO quyết định**, chưa tự ý đụng vào.
+- **Chưa có NVIDIA GPU trên máy dev này** → CUDA pipeline (`binaries/cuda/`) **đã chuẩn bị sẵn** nhưng **chưa test được**; cần máy có RTX để verify nhánh CUDA.
+- **Chưa chạy pipeline A→Z thật** trên máy này (mới verify từng bước riêng: STT ✅, dịch ✅, preset ✅).

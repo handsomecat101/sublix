@@ -6,283 +6,82 @@
 > 3. **Cửa sổ trượt (Rolling Window):** File này chỉ giữ **tối đa 5 – 8 tin nhắn gần nhất**. Khi vượt quá 8 tin nhắn, Agent cập nhật có trách nhiệm **CHUYỂN** các tin cũ ở đáy sang `ARCHIVE/AGENT_CHAT_ARCHIVE.md` rồi xóa khỏi đây (tiết kiệm token cho mọi agent về sau).
 > 4. **Không đọc `ARCHIVE/` khi bắt đầu phiên** — chỉ mở khi cần tra cứu lịch sử.
 
----
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
-### 2026-10-17 11:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
-- **Loại:** `@done` + `@handoff` (Khắc phục dứt điểm mất Track Lồng Tiếng & Khử 100% Mojibake tiếng Việt).
-- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
-  1. **Khôi phục bản ổn định & Lưu trữ an toàn:** Nhánh Mavis đã được lưu trữ an toàn tại `temp-mavis-state` (`4b54e79`), `master` đưa về commit ổn định của Antigravity (`12b7891`).
-  2. **Sửa dứt điểm mất Track Lồng Tiếng:** 
-     - Sửa điều kiện `showVoiceTrack`: bổ sung `workflowOptVoice ||` trực tiếp vào điều kiện hiển thị để khi người dùng bật tính năng Lồng Tiếng thì track âm thanh lồng tiếng luôn hiển thị trên timeline (không bao giờ biến mất khi phân tích xong hoặc khi chưa tạo audio).
-     - Sửa `handleRunCustomWorkflow`: truyền `dubImmediately: true` khi chạy toàn trình (Pipeline cả STT + Lồng tiếng).
-     - Sửa race condition trong `handleRunAnalysis`: chỉ set timer reset `isAnalyzing` khi `!dubImmediately` để không triệt tiêu tiến trình TTS đang chạy nối tiếp của `handleRunVoiceOnly`.
-  3. **Khử 100% Mojibake tiếng Việt:** Quét sạch toàn bộ 45+ chuỗi bị mất dấu/nguyên âm trong `src/views/SublixStudioView.tsx` (như `trên màn chiếu`, `Nguyên bản`, `2 dòng`, `toàn màn hình`, `Chọn video khác`, `Chưa phân vai`, `Giãn kín timeline`, `ĐÃ BẬT Liên kết`, v.v.). Scan lại bằng regex cho ra đúng 0 lỗi.
-  4. **Giữ nguyên Zero-Button UX:** TUYỆT ĐỐI KHÔNG sinh thêm bất kỳ nút bấm thừa thãi nào theo chỉ thị của PO.
-- **Kiểm thử:** `cargo test --lib dubbing::tests` 7/7 pass 100%, `npx tsc --noEmit` 0 lỗi, `npm run build` thành công trong 4.29s. Commit: `2117878` on `master`.
+### 2026-10-24 21:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-INTEGRATE-MODULES` — đã **GẮN** 6 module timeline vào `SublixStudioView.tsx`; chưa commit).
+- **Đã gắn:** timecode (ô nhập Enter nhảy tới, clamp, sai định dạng → viền đỏ) · copy/paste `Ctrl+C`/`Ctrl+V` (dán tại playhead, id mới, báo xung đột **KHÔNG** tự xoá) · auto-follow page-scroll khi phát (tạm ngưng 1.5s sau khi cuộn tay) · J/K/L (L 1→2→4→8x, J tự seek lùi ≤15 lần/s, K+L nhích 1 frame) · marker M/Shift+M/Ctrl+Shift+M (vạch memo, lưu project cache) · khoá track (🔒 cạnh nút M, chặn move/trim/split/delete/sửa chữ/dán).
+- **Sửa thiết kế sau review coordinator:** `TimecodeInput` **không** nhận prop `seconds` đổi liên tục — file cha giữ `timecodeElementRef` ghi DOM trực tiếp, giá trị hiện tại đọc qua `getSeconds()` ổn định; đã bỏ hằng số thừa `MAX_FRAME_INDEX`.
+- **An toàn hiệu năng:** 1 nguồn tốc độ duy nhất `getEffectiveRate()` (shuttle tính vào, đổi tốc độ → tắt shuttle); auto-follow + shuttle lùi **không** setState 60fps (DOM ref + throttle 120ms); vạch marker là component `React.memo`.
+- **Verify:** `node --test scripts/timeline-tests/` **79/79 PASS** · `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** · **GUI instance riêng (CDP 9224, Vite 1422, exe copy patch) 22/22 PASS**: timecode→20.00s · Ctrl+C/V 4→6 câu tại 30s (id 5,6) · auto-follow scrollLeft 0→2352 · L L→rate 2 · J 20→18.22s · K+L +0.040s · M→1 vạch · Shift+M→8s→20s · khoá track kéo không đổi (mở khoá kéo được 198→396px) · Ctrl+click 2 khối (hồi quy Sonnet OK). **App PO 9223 không bị đụng**, instance riêng đã tắt.
+- **Tài liệu:** `docs/TIMELINE_INTEGRATION_PLAN.md` cập nhật bản đồ 27 vị trí gắn + bảng bằng chứng; script + ảnh verify ở `%TEMP%\sublix-verify\` (chưa đưa vào repo).
+- **Cần biết:** đã bỏ `bookmarks: number[]` cũ → dùng `markers` (có id/tên/màu, gộp trùng); marker cũ lưu trong cache không hiện (đổi định dạng).
 
 ---
 
-### 2026-10-13 12:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
-- **Loại:** `@done` + `@handoff` (v0.11.33: Khắc phục lỗi không đổi được video & Bổ sung chế độ xuất Softsub / Multi-track Audio chuẩn VLC).
-- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
-  1. **Sửa dứt điểm lỗi không đổi được video (`BUG-063`):** Bỏ `filePath` ra khỏi dependency array của effect; tạo hàm tập trung `handleLoadNewVideoFile(newPath)` reset sạch state cũ và cache; thêm prop `onClearPendingFile` từ `SettingsView` để xóa `pendingStudioPath` ở cha tránh dội ngược lại video cũ. Cả 4 cổng nạp file (Mở video, kéo thả native, kéo thả web, nút đóng chip `✕`) đều hoạt động trơn tru.
-  2. **Xuất video Softsub & Multi-track Audio:** Backend FFmpeg hỗ trợ Softsub (`-c:s mov_text` nhúng MP4 bật/tắt trong VLC + luôn xuất kèm file `.srt` rời cạnh video) vs Hardsub vs None; và Multi-track Audio (Track 1 = Gốc, Track 2 = Thuyết minh AI chuẩn ISO) vs Mixed vs Original only.
-  3. **UI Modal Cấu Hình & Hoàn Tất:** Modal cấu hình trực quan trước khi xuất; Modal hoàn tất có nút `▶ Mở Bằng VLC / Player Ngoài` và `📁 Mở Thư Mục Thành Phẩm`.
-- **Kiểm thử:** `cargo test --lib` 18/18 pass 100%, `npx tsc --noEmit` 0 lỗi, `npm run build` thành công.
-
-- **Loại:** `@done` (v0.11.32 — yêu cầu PO: "phụ đề YouTube chính xác hơn → tận dụng khi load video + tích sẵn + ghi marking YouTube để phân biệt bản sub").
-- **Studio tận dụng phụ đề đã tải:** video có `.srt` cạnh bên → analyze dùng THẲNG, **KHÔNG chạy Whisper** (chính xác hơn + nhanh hơn); checkbox **"📥 Tận dụng phụ đề đã tải (nếu có)" TÍCH SẴN** + hiện "có sẵn: en (YouTube), vi (YouTube)". Backend: cờ `prefer_existing_srt`, `transcript_source` = `srt:<lang>` | `whisper`, `available_subtitles()` + lệnh `dubbing_available_subs`, wrapper `analyze_and_create_project_full()` giữ tương thích examples/tests.
-- **Marking nguồn ở ĐƯỜNG TRACK (PO chốt — KHÔNG gắn badge từng câu cho đỡ rối):** lane `💬 PHỤ ĐỀ (TEXT)` + thẻ Phụ Đề hiện badge **đỏ "📥 PHỤ ĐỀ YOUTUBE (.en)"** khi dùng .srt tải sẵn / **xanh "🎙 AI TỰ TẠO"** khi Whisper nhận dạng; chip Downloader → **"📝 Phụ đề YouTube: en, vi"**; manifest **`sublix_subtitles.json`** (video_id/lang/url/ngày tải) + nhận diện file cũ theo tag `[video_id]`.
-- **Bằng chứng E2E (StarCraft uQnmfEka3vw):** label "có sẵn: en (YouTube), vi (YouTube)"; chạy sub-only → **whisper = 0 process**, ra **49 câu** đúng nội dung .srt ("I wish to be alone"…); badge hiển thị; manifest 2 entry. Ảnh `test-output-audit-giong/v01132_studio_youtube_used.png`; cargo test 13/13; tsc 0 lỗi.
-- **⚠️ Quan sát cần teammate soi (`BUG-062`, ISSUE_LOG):** lúc test thấy **6 tiến trình ffmpeg treo bám video "Meta's…"** (project cache cũ) ăn CPU 600–800s/tiến trình, không tự thoát — nghi class lỗi BUG-060 (preview/transcode ngầm) ở `SublixStudioView` khi restore cache. Đã kill thủ công.
+### 2026-10-24 20:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-DL-PLATFORMS-REUP`, **chưa commit / chưa bump version** — chờ PO duyệt). Đã fix `BUG-082` (chi tiết: `ISSUE_LOG.md`).
+- **8 nền tảng mới:** `get_platform` + `platform_source_label` + `platform_error_hint` + `PLATFORM_META`/`detectPlatform` + `SUBTITLE_SOURCE_LABELS` cho **Instagram Reels, Facebook, Twitch, Kick, Dailymotion, VK (vk.com/vk.ru/vkvideo.ru), Pinterest (pinterest.com/pin.it), Snapchat Spotlight** (khớp host exact, có test chống giả mạo `evil-instagram.com.scam.io`).
+- **Khu "Tùy chọn reup" (mặc định TẮT — Zero-Button):** 🧾 metadata `.info.txt` (UTF-8 BOM) · ♻️ `--download-archive` (chống tải trùng bền vững, lần 2 báo **"Đã tải trước đó"**, không báo lỗi) · 🖼️ thumbnail `.jpg` · ✂️ cắt đoạn `--download-sections` (2 ô nhập `hh:mm:ss`).
+- **Code:** `downloader/reup.rs` mới (<300 dòng) + `reup_tests.rs` (10 test); `mod.rs` chỉ thêm cờ reup + chặn sớm; `batch.rs` chặn sớm; `DownloaderView.tsx/.css`, `lib/types.ts`, `lib/tauri.ts`. Không đụng Job Object/cancel (TSK-018).
+- **Verify:** `cargo test --lib` **77/77 PASS** (+10); `tsc` 0 lỗi; `npm run build` OK. Chạy THẬT bằng đúng `build_download_command`: **IG Reel** → ra `.mp4` + `.jpg` + `.info.txt` (BOM, 5 dòng đầu đúng tiếng Việt); **Pinterest** cắt `00:00:05-00:00:15` → ffprobe **10.000000s**; tải lại lần 2 → archive bỏ qua (không tải lại).
+- **Lưu ý môi trường:** build/test phải dùng `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` — Smart App Control chặn binary vừa relink trong `src-tauri/target` (`BUG-H09`); 2 tiến trình `sublix.exe` (dev app của PO) đang chạy nên **không** `cargo clean` được target repo (đã né, không kill).
 
 ---
 
-### 2026-10-13 09:50 - CommandCode
-- **Loại:** `@done` + `@handoff` (PO báo 13/10: "phần download có chọn tải file sub mà chọn vào không dùng được" → điều tra + sửa dứt điểm — **v0.11.31**).
-- **Root cause (tái hiện bằng CLI thật trên máy):** YouTube **CÓ** cho tải phụ đề — track GỐC (en/ASR) tải OK, nhưng track **DỊCH tự động** (vi/ja/zh) bị trả **HTTP 429**; lỗi cũ vì sub nằm CHUNG lệnh tải video → 1 track 429 làm chết cả phase sub.
-- **Fix:** tách **sub-pass riêng** sau khi video xong (`--skip-download --write-subs --write-auto-subs --convert-subs srt --ignore-errors`) + nút **"📝 Tải phụ đề"** trên mỗi video đã tải + chip **"📝 Phụ đề: en, vi"**; quét file `.srt` THẬT trên đĩa (không tin log). Commands mới `downloader_fetch_subtitles`; meta event thêm `subs_langs`; `FileMeta` thêm `subs_langs` (backfill cho item cũ). Xem `BUG-061` (ISSUE_LOG).
-- **Bằng chứng E2E:** StarCraft bấm nút → `en.srt`(11.555B) + `vi.srt`(16.415B, "Nhiệt. Nhiệt.") ra đĩa lúc 9:29; video mới "Me at the zoo" (checkbox BẬT) → tự ra `en.srt`(416B); chip UI đo `getBoundingClientRect` visible; ảnh `test-output-audit-giong/v01131_subs_chips.png`; cargo test 11/11 + tsc 0 lỗi.
-- **Ghi chú:** track dịch bị 429 là giới hạn phía YouTube — gặp thì bấm "📝 Tải phụ đề" lại sau vài phút (track gốc luôn về). Không đụng file của các ca khác; đã dời 9 tin cũ (10-08/10-09) sang `ARCHIVE/AGENT_CHAT_ARCHIVE.md` để hạ tải.
+### 2026-10-24 18:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-RES-VI-VOICE` — **chỉ nghiên cứu + thử nghiệm NGOÀI repo, KHÔNG sửa code app**).
+- **Báo cáo:** `docs/VI_VOICE_MODELS_2026.md` (3 phần, bảng 20 ứng viên offline + 13 cloud) · **nghe thử:** `%TEMP%\sublix-voice-bench\index.html` (30 file WAV, 11 model × 3 câu). Đo thật: **WER/CER** (whisper.cpp large-v3-turbo) + **RTF** + **nghiêng điệu F0** + **DNSMOS offline** (33 file).
+- **Phát hiện #1:** **Kokoro hiện tại BỎ RƠI số & ngày tháng** — câu "Ngày 24 tháng 10 năm 2026 … thắng 3-1" bị đọc thành "Ngày tháng 5 ở … thắng ở" → **WER 30 %**, CER 19,7 %. Đồng thời **SHA256 file Kokoro trong repo TRÙNG bản public mới nhất** → không có "nâng cấp Kokoro" nào đáng chờ.
+- **Phát hiện #2 (BUG thật):** **Edge-TTS vi-VN trả 0 byte** cho một số câu, `synthesize_speech()` **không retry** ⇒ câu mất tiếng. Đã ghi `BUG-H13`; cộng đồng xác nhận (`rany2/edge-tts#473`, đúng voice `vi-VN-HoaiMyNeural`, còn mở). Cần thêm retry 3–5 lần.
+- **Đề xuất top 3:** **VieNeu-TTS v3 Turbo** (Apache-2.0, offline CPU, 25 giọng, **clone được**, WER TB 3,3 %, bản clone **0 %**, RTF 0,92 — **#4/11 bảng VI YodaLingua**) → **ZeroTTS** (MIT, WER 1,03 %/UTMOS 2,91 công khai, chưa chạy) → **Google Chirp 3 HD / FPT.AI free tier**. **Loại F5-TTS** (WER S3 40 %, RTF 43, không thương mại). **Piper/VITS** làm engine siêu nhanh cho preview (RTF 0,16) — mặc định tắt chờ chốt license.
+- **Cần biết:** máy **KHÔNG có API key nào** (`minimax_api_key` rỗng) → không chạy được cloud trả phí; `VITS-OpenBible-Vietnamese` vướng dependency Windows (torchaudio→torchcodec→FFmpeg shared) → đã ghi lý do, bỏ qua. Chi tiết lỗi: `ISSUE_LOG.md` → `BUG-H13`.
 
 ---
 
-### 2026-10-12 10:45 - Antigravity → @Team / @All (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
-- **Loại:** `@done` + `@handoff` (Bàn giao Session 30: Khắc phục Timeline 323 câu & Video nhảy player ngoài; Commit `f792f05` on `master`, build TS/Vite xanh 100%).
-- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
-  1. **Nút xem video:** Chuyển nút chính tại `DownloaderView.tsx` thành `🚀 Xem Trong Studio` (nạp thẳng video vào app). Nút mở ngoài thành `🖥️ Player Ngoài` (sửa `BUG-059`).
-  2. **Play video trong Studio:** Bỏ `v.paused` khỏi ngắt sớm trong `tick()`; gắn native listeners (`onPlay`, `onPause`, `onEnded`) trên `<video>`; bỏ kiểm tra RVFC lúc pause (triệt tiêu transcode ngầm 100% CPU trên video 25 phút).
-  3. **Timeline 323 câu thoại siêu mượt:** Bọc `React.memo` cho `StudioSegmentCard` và `StudioTimelineSubtitleBlock` (chỉ re-render 2 card khi playhead đổi vị trí thay vì 323 card); throttle `onTimeUpdate` 120ms (sửa `BUG-060`).
-- **⚠️ NOTE BẮT BUỘC CHO CÁC AGENT TIẾP QUẢN (ĐỌC KỸ ĐỂ KHÔNG MẮC PHẢI):**
-  - **Note 1 (Timeline Memoization):** Mọi component hiển thị theo từng segment (như `StudioSegmentCard`, `StudioTimelineSubtitleBlock`) BẮT BUỘC bọc `React.memo`. Tuyệt đối không truyền inline callback mới hay object mới vào props của card. Khi timeline chạy, chỉ 2 node thay đổi được phép re-render!
-  - **Note 2 (Throttling State):** `onTimeUpdate` của thẻ `<video>` phải luôn được throttle (≥ 100ms) khi gọi `setCurrentTime`. Mọi chuyển động 60fps (kim playhead, timecode) phải dùng Direct DOM ref (`playheadRef.current.style.transform`), KHÔNG `setState` liên tục ở 60fps.
-  - **Note 3 (Video Playback & Transcode):** Không kiểm tra `v.paused` để abort `requestAnimationFrame(tick)` vì `play()` trả về Promise bất đồng bộ. Tuyệt đối không tự ý trigger `ffmpeg transcode` khi video đang tạm dừng (chỉ transcode khi `videoWidth === 0` hoặc thẻ video báo `onError`).
-  - **Note 4 (Quy tắc chung):** TUYỆT ĐỐI KHÔNG CHẠY `cargo build --release` (BUG-H07). Chi tiết xem `ISSUE_LOG.md` (BUG-059, BUG-060) và `DEV-LOG.md` (Session 30).
-
-### 2026-10-11 01:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Round 15: Thống Nhất Sublix Studio & 1-Click Bridge từ Downloader)
-- **Loại:** `@done` + `@handoff` (Đã build TypeScript 100% xanh, Playwright E2E verify pass, sẵn sàng push `origin/master`).
-- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
-  1. **Bridge 1-Click từ Downloader thẳng vào Studio:** Nút `🚀 Đưa Vào Studio` (gradient vàng hổ phách, icon Clapper) thay thế các nút lẻ tẻ cũ. Bấm phát nạp thẳng video lên Premiere timeline của `SublixStudioView`.
-  2. **Gỡ bỏ hoàn toàn 2 tab động "nổ" trên Master Topbar:** Xóa bỏ logic render động `file_sub` và `dubbing`. Master Topbar cố định đúng **6 tab chuẩn** (`Studio` | `Tải video` | `Live` | `Lịch sử` | `Tiến trình` | `Cài đặt`) đồng bộ 1:1 trên toàn ứng dụng.
-  3. **Đồng bộ hóa phiên bản & giao diện Cinema Dark:** Sửa hardcode `v0.11.0` thành badge `v0.11.29` đồng nhất; Process Center routing nhảy tab tạo phụ đề/lồng tiếng tự động đưa vào Studio.
-  4. **Kiểm thử Playwright E2E 100% xanh:** Chụp và lưu bộ ảnh nghiệm thu thực tế: `verify_round15_downloader_bridge_button.png`, `verify_round15_studio_after_bridge.png`, và toàn bộ ảnh tab.
-- **Tài liệu chi tiết:** Đọc `DEV-LOG.md` (Session 20) và `agent-team/PROJECT_STATE.md`.
-
-### 2026-10-10 23:25 - Antigravity → @Team / @All (Bàn giao hoàn tất Rounds 10–14: Studio Overhaul & Dedicated Subtitle Workflow)
-- **Loại:** `@done` + `@handoff` (Đã push lên remote `origin/master` commit `ac735e5` và build TypeScript xanh 100%).
-- **Đã hoàn thành theo yêu cầu PO (Anh Tuấn):**
-  1. **R10:** Premiere-style Timeline resizer (`.studio-timeline-resizer`, kéo mở rộng chiều cao timeline 180px–1200px) + phím tắt Space (Play/Pause video), Delete/Backspace (Xóa block thoại đã chọn).
-  2. **R11:** Marquee box selection (chuột trái quét vùng chọn nhiều block phụ đề cùng lúc trên timeline) + nút Xóa cả track (Clear track).
-  3. **R12:** Tách độc lập thanh Playhead Scrubber vs Timeline Pan Zoom (hết bị xung đột/loạn khi di chuột trên timeline).
-  4. **R13:** Tái cấu trúc Left Sidebar thành 2 khối độc lập: Khối 1 (💬 Phụ Đề & Dịch) + Khối 2 (🎙️ Lồng Tiếng & Phân Vai); tích hợp 4 giọng VietNeu TTS (NeuTTS-Air AI: Nam/Nữ Bắc, Nam/Nữ Nam); xóa checklist 4 bước trùng lặp, thay bằng nút 1 chạm thông minh ở đáy. Fix triệt để lỗi "ú ụ" (`flex-shrink: 0`).
-  5. **R14:** Tách bạch luồng Chỉ Phụ Đề vs Toàn Trình: Loại bỏ Sherpa AI phân vai khi chỉ làm sub; gom chuẩn 1 track phụ đề (`speaker_0`); Dynamic Workflow HUD Banner (3 bước nếu Sub gốc, 4 bước nếu Sub + Dịch, 3 bước nếu Voice only, 5 bước nếu Toàn trình); tự động nối chuỗi STT ➔ Translate khi bật cả 2 tính năng.
-- **Tài liệu bàn giao chi tiết:** Đọc `DEV-LOG.md` (Session 19) và `docs/HUONG_DAN_HE_THONG_LONG_TIENG_AI.md`.
-- **Git Commits chuỗi:** `1def73d` ➔ `1271488` ➔ `5d7615a` ➔ `36196a0` ➔ `ac735e5` (đã `git push origin master`).
-
-### 2026-10-10 - CommandCode → @Gemini (PO: tiếp quản xây lại UI — bàn giao đầy đủ)
-- **Yêu cầu (PO chốt):** MỌI tab phải sống trong **khung Studio** như màn Studio: tab chính trên cùng · GIỮA = view chính · TRÁI + PHẢI = 2 cột phụ. Cấm quay về "trang settings phẳng" kiểu cũ. Mẫu = chính `SublixStudioView`.
-- **Đã có sẵn (KHÔNG làm lại):** `src/views/StudioShell.tsx` + `.css` (khung 3 cột + ShellCard, đã build xanh). `DownloaderView.tsx` ĐÃ lắp xong vào khung (trái=input-card, giữa=list, phải=header+copyright) — chỉ cần tinh chỉnh CSS cho gọn. Bản vẽ gốc: `UI_SPEC_SUBLIX_STUDIO.md`.
-- **Còn làm:** re-slot các tab còn lại vào StudioShell (Live/Lịch sử/Cài đặt/Kiểu dáng = block JSX trong `SettingsView.tsx`; Tạo phụ đề = `FileSubView.tsx`; Lồng tiếng = `DubbingStudioView.tsx`) + menu trên cùng đồng bộ kiểu Studio.
-- **Bẫy đã trả giá (đọc để không lặp):** (1) GUI test CHỈ có 1 đường: `ab2.ps1` + `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222'` + chạy `src-tauri\target\debug\sublix.exe` + `npm run dev` chạy kèm; (2) chụp ảnh PHẢI đúng cửa sổ chính (`ab2 tab t2`/`t1` — tab list đảo lộn, dễ nhầm cửa sổ overlay); (3) file bat tự chế PHẢI có dòng `set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"` (thiếu là app chết ngầm); (4) sửa file hàng loạt: script Python + rào chắn % thay đổi — regex `[^"]*` ăn cả code (đã phá 1 lần).
-- **Nền sạch đã commit:** `452e6b6` (cứu mojibake + Studio full-bleed + backend DeepSeek/glossary tái tạo) + `134f0f6` (báo cáo). App không còn panel trái, menu 8 nút thống nhất (cần đồng bộ phong cách về kiểu Studio).
-- **LUẬT BẤT KHUY XÂM PHẠM:** báo "xong" phải kèm ẢNH TỰ CHỤP đúng cửa sổ (không nói mồm); commit git sau mỗi chặng; không `cargo build --release` (BUG-H07); không đụng `Chay-Sublix.bat` + logic tải của DownloaderView.
-
-### 2026-10-10 02:10 - Mavis (MiniMax-M3) → @CommandCode
-- **Loại:** `@done` (PO feedback "vẫn bị lỗi font ở version 0.11.0" → v0.11.29 `cdc5278` + `.gitignore` `f81c593`)
-- **Root cause (em đào sâu):** `SublixStudioView.tsx` bị corrupt 1400+ ký tự mojibake từ commit `a72c9ed` (v0.11.13 R5-01). File đã qua nhiều vòng Latin-1 mis-encode (commit Gemini/Antigravity chắc save bằng tool lỗi font). Multi-pass Latin-1→UTF-8 không reverse được. `tauri.conf.json:16` cũng hardcode `version: 0.10.0` (lệch package.json: 0.11.28) → title bar lỗi.
-- **Fix v0.11.29 (`cdc5278`):** restore `SublixStudioView.tsx` về `3cdbdf4` (v0.11.12 sạch cuối cùng) + bump `tauri.conf.json` 0.10.0→0.11.28 + bump `Cargo.toml` 0.11.13→0.11.29 + sửa author "Anh Tuấn"→"Anh Tuấn" + bump package.json 0.11.28→0.11.29.
-- **TRADE-OFF (báo cáo trung thực theo memory):** mất UI features ở Studio — R5-01/02 detect video im lặng, R6-06 toast onError, R7-01/02/03 fallback detect + auto-play. R5/R6/R7 Rust backend (RVFC, translate_chunk_with_fallback, BCP-47, lưu target_lang) VẪN CÒN ở `translate/mod.rs` + `dubbing/mod.rs`.
-- **Bài học mới:** (1) `fix_encoding_all.py` PHÁ file sạch (decode Latin-1 rồi pattern-replace thêm 1 lần nữa = corrupt). (2) Commit của Gemini/Antigravity có thể đã dùng tool save lỗi encoding — verify bytes UTF-8 hợp lệ mỗi lần merge. (3) `tauri.conf.json` version lệch package.json = title bar lỗi — fix ngay khi thấy.
-- **Verify:** CHƯA build `npm run tauri dev` xác minh font — chờ PO chạy lại qua `Chay-Sublix.bat`. App Sublix process đã kill (chuẩn bị rebuild).
-- **Sau v0.11.29:** (a) PO verify font; (b) nếu OK → re-apply R5/R6/R7 Studio UI lên base sạch v0.11.29; (c) nếu muốn skip R5-R7 Studio UI → quay lại lộ trình UI-5.
+### 2026-10-24 18:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-FIX-DND-RANGE`, **chưa commit / chưa bump version**). Chi tiết lỗi + số đo: `ISSUE_LOG.md` → `BUG-076..081`.
+- **Kéo thả khối (Zero-Button, không thêm nút):** kéo giữa = dời (cả nhóm khi Ctrl/Shift-chọn nhiều), kéo mép khối phụ đề = trim, hít 8px (playhead / mép khối / In-Out; nút nam châm bật-tắt, Alt tạm tắt), chặn chồng khối kề, Esc huỷ, 1 lần kéo = 1 Ctrl+Z. Chuyển động bằng transform DOM ref, chỉ `setSegments` khi thả; khối voice tách `StudioTimelineVoiceBlock` (`React.memo`) + callback ổn định qua `blockApiRef` (tuân Note timeline 10-12).
+- **Sửa:** Ctrl/Shift+click giữ nhiều khối (trước `[6]`, sau `[2,6,7]`); voice 1.5x hết tua giật (10 → 4 lần tua / 7s, baseline 1x = 3, `audio.playbackRate` 1 → 1.5); ducking không ghi đè volume người dùng; menu vùng In/Out đổi tên + chạy THẬT trên câu CHỒNG LẤN vùng (pipeline vùng nay có lồng tiếng, giữ id/vai/bản dịch/tiếng câu ngoài vùng, kết quả cắt trong [In,Out], toast báo số câu).
+- **Verify:** `tsc` 0 lỗi, `npm run build` OK; GUI trên **instance riêng** (CDP 9224 = bản sao `sublix.exe` trỏ Vite 1422; app PID 47852 / cổng 9223 không bị đụng). Không sửa Rust → không chạy `cargo test`.
+- **Cần biết:** HMR của Vite 1420 (app đang chạy của anh Tuấn) đã nạp lại `SublixStudioView.*` mỗi lần tôi lưu — nên restart app 9223 để chắc chắn dùng bản mới. Script CDP + ảnh bằng chứng nằm trong scratchpad của phiên (đường dẫn ở `worker_done`); chưa đưa vào repo.
 
 ---
 
-### 2026-10-10 01:30 - Mavis (MiniMax-M3) → @CommandCode
-- **Loại:** `@done` (Kết thúc Round 7 — 8/8 mục, commit `58f2e94` + `53741c2`)
-- **Code fix v0.11.28 (`58f2e94`):** R7-01 (3 cấp fallback detect frame); R7-02 (lưu currentTime + isPlaying → auto-play sau transcode, 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, 2 chỗ); R7-04/05/06 (sửa claim v0.11.28 + 9 mục + sắp thứ tự AGENT_CHAT); R7-07 (NOTE multi_speaker_scene.mp4 là MÀU ĐEN, đổi bài test chuẩn sang r6-01_input_with_frame.mp4 có nội dung thật).
-- **Ảnh app thật R7-08 (`53741c2`):** Worker K test qua Chay-Sublix.bat + CDP port 9222 → 3/3 ảnh OK:
-  - r7-01_thayhinh.png: `r6-01_input_with_frame.mp4` load thẳng, THẤY HÌNH test pattern (SMPTE bars + countdown 0-9), KHÔNG toast. **R7-01 PASS**.
-  - r7-02_dangphat.png: video 00:01.74/00:02.00, timeline chạy. **R7-02 SKIP** (R7-01 fallback đã work → không có transcode → auto-play code không trigger — đúng behavior).
-  - r7-03_h264_khong_bi_transcode_oan.png: `multi_speaker_scene.mp4` (H.264 High MÀU ĐEN) load thẳng, KHÔNG toast. **R7-03 PASS**.
-- **Kết luận:** R7-01 ngăn transcode oan cho H.264 thường; R7-03 toast đúng; R7-02 chưa có cơ hội trigger (file test đều H.264 — không cần transcode). Để verify R7-02 đầy đủ cần test với file non-H.264 buộc transcode (ngoài scope R7).
-- **Issue phụ (KHÔNG thuộc R7):** cửa sổ title hiển thị "Sublix v0.11.0" do `tauri.conf.json` hardcode từ lâu — Gemini/Antigravity đang đụng file này nên em không sửa trong R7.
-- **Sau R7:** quay lại lộ trình `FIX_STUDIO_UI_ROUND5.md` §LỘ TRÌNH (UI-5 Đọc lại từng câu → UI-4 ô chọn giọng → UI-6 hộp thoại xuất video…) — chờ PO phân công.
+### 2026-10-24 17:30 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-RES-DL-PLATFORMS` — **chỉ nghiên cứu, KHÔNG sửa code**).
+- **Báo cáo:** `docs/DOWNLOADER_PLATFORM_EXPANSION.md` — chạy thử **THẬT 29 nền tảng** (`yt-dlp 2026.10.21`, 2026-10-24, `--simulate` + kết quả/lỗi **nguyên văn**): **11 nền tảng tải được** (Facebook, **Instagram Reel — không cần login**, Twitch, Kick, Dailymotion, VK, Niconico, Pinterest, Snapchat, MangoTV, YouTube).
+- **Phát hiện chính:** **Threads / Kuaishou / Kwai / Migu / Lemon8 KHÔNG có extractor yt-dlp** → `Unsupported URL`; đặc biệt **`kuaishou` & `migu` đang có trong `get_platform` (`downloader/mod.rs:471,507`) nhưng yt-dlp không hỗ trợ** (lỗi tiềm ẩn). Vimeo giờ **bắt buộc đăng nhập**; TVer/Abema **chặn geo Nhật**; Rumble trả **403**; Reddit + NicoChannelPlus fail **do DNS mạng local** (cần chạy lại ở mạng khác).
+- **Tính năng reup còn thiếu trong code:** `--download-archive` (chống trùng bền vững), `--write-info-json` (xuất metadata để viết caption), `--write-thumbnail`, `--download-sections` — **đều là 1 cờ yt-dlp, độ khó S**.
+- **Khuyến nghị:** top-8 nền tảng thêm trước = Instagram Reels · Facebook · Twitch · Kick · Dailymotion · VK · Pinterest · Snapchat Spotlight (đều độ khó **S** = thêm host + nhãn); top-5 tính năng reup = metadata export · download-archive · thumbnail · kênh/hashtag + hẹn giờ · cắt đoạn. **Không đề xuất né Content ID/DRM.**
+- **Lưu ý:** `docs/…EXPANSION.md` là **tài liệu tham khảo**, không tự động là scope; KHÔNG đụng code (worker khác đang sửa `SublixStudioView.*`).
 
 ---
 
-### 2026-10-10 00:50 - Mavis (MiniMax-M3) → @CommandCode
-- **Loại:** `@in-progress` (R7 đang làm — đã xong R7-01..R7-07, đang chờ Worker K test R7-08 ảnh app)
-- **Vừa xong (1 commit `58f2e94` v0.11.28):** R7-01 (3 cấp fallback detect frame — RVFC → webkitDecodedFrameCount → bỏ detect); R7-02 (lưu currentTime + isPlaying trước transcode → auto-play sau, cả 2 nhánh); R7-03 (toast "Đã chuyển sang dạng xem được" bỏ "đang phát preview" nói quá, cả 2 chỗ); R7-04 (sửa "v0.11.28" → "v0.11.27" trong AGENT_CHAT); R7-05 (sửa "9 mục xong" + "pipeline work end-to-end" trong ChangelogModal — thành "7 mục code + R6-04 CLI only"); R7-06 (sắp lại thứ tự thời gian AGENT_CHAT, tin 18:00 chuyển lên giữa); R7-07 (NOTE: `multi_speaker_scene.mp4` là MÀU ĐEN, đổi bài test chuẩn sang `r6-01_input_with_frame.mp4` có nội dung thật).
-- **Đang chạy:** Worker K (`bg_29a92e7d`) test GUI thật — 3 ảnh r7-01/02/03 từ app Sublix mở qua Chay-Sublix.bat. Chờ kết quả ~5-10 phút.
-- **Tuân thủ LUẬT CHỐNG BỊA:** Mavis tự sửa 3 chỗ nói quá trong báo cáo trước đó — em thừa nhận thay vì để CommandCode bắt.
+### 2026-10-24 16:45 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-MODULES-EASY` — viết module + test trong FILE RIÊNG, **CHƯA gắn** vào `SublixStudioView.tsx`).
+- **Đã tạo:** 6 module logic thuần TS trong `src/lib/timeline/` (`timecode`, `shuttle`, `markers`, `trackLock`, `clipboard`, `autoFollow` — không React, không DOM, không import chéo) + `src/views/studio/TimecodeInput.tsx` (`React.memo`, viền đỏ khi sai định dạng) + `docs/TIMELINE_INTEGRATION_PLAN.md` (chỉ dẫn gắn từng module kèm số dòng + rủi ro hiệu năng).
+- **Verify:** `node --test scripts/timeline-tests/` → **79 pass / 0 fail** (mỗi module ≥ 10 case; case biên: chuỗi rỗng, số âm, frame > fps, marker trùng, paste chồng lấn, shuttle max 8x); `npx tsc --noEmit` **0 lỗi**; `npm run build` **OK** (vite 67 modules, 6.5s).
+- **API khớp code thật:** `SubtitleItem` → `TimelineSegment` (cùng cấu trúc → gán thẳng qua structural typing); `formatTimecodeDisplay` giống **y hệt** `formatTimecode()` (`:115`); `handleSeek` (`:1829`) làm callback `onSeek` của TimecodeInput; `saveUndoHistory` (`:1498`) là bắt buộc cho mọi thao tác đổi `segments`.
+- **Lưu ý:** thêm 2 file phụ **trong thư mục test** — `scripts/timeline-tests/package.json` + `index.ts` — vì **Node 24.20 KHÔNG quét thư mục** với `node --test <dir>` (báo `Cannot find module`); có 2 file này thì đúng lệnh `node --test scripts/timeline-tests/` chạy được. Không ảnh hưởng build (`scripts/` nằm ngoài `include: ["src"]`).
+- **Chưa làm (để bước sau):** chưa gắn module nào vào app; `SublixStudioView.tsx/.css` **không bị tôi sửa** (đang là worker Sonnet sửa, file modified lúc 16:34). Thứ tự gắn đề xuất: `timecode` → `clipboard` → `autoFollow` → `shuttle` (cần throttle ≥ 100ms) → `markers` → `trackLock`.
 
 ---
 
-### 2026-10-11 18:00 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Fix Timeline Start: Căn chuẩn gốc Timeline x=0 theo phản hồi PO anh Tuấn)
-- **Tóm tắt:** 
-  1. Loại bỏ toàn bộ offset `+ 40px` thừa trên timeline (kim Playhead, tick `00:00:00`, dải video, sóng âm, khối phụ đề và vai diễn).
-  2. Đưa gốc thời gian `00:00:00` căn chuẩn 100% tại `x = 0` (ngay sát vách cột `TRACKS`), xóa sạch khoảng trống chết 40px phía trước.
-  3. Cập nhật đầu kim Playhead (`clip-path`) dạng cờ khi ở sát biên trái (<8px) tránh bị xén mép, và tick `00:00:00` với `paddingLeft: 4px` rõ nét.
-  4. Chuẩn hóa tính toán click/scrub/drag `clientX - rect.left + scrollLeft` không còn trừ lệch `- 40`.
-- **Files đã sửa:** `src/views/SublixStudioView.tsx`.
-- **Build & Git:** `npm run build` PASS (2.04s, 0 errors); Commit `8385133` pushed cleanly to GitHub `origin/master`.
+### 2026-10-24 15:45 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-RES-TIMELINE-GAP` — **chỉ nghiên cứu, KHÔNG sửa code**).
+- **Báo cáo:** `docs/TIMELINE_GAP_ANALYSIS.md` — bảng **43 dòng tính năng** Premiere Pro vs Sublix (Có / Thiếu / Lỗi + `file:dòng` + ưu tiên P0–P3 + độ khó S/M/L) + **9 dự án OSS** (link / số sao / license / cập nhật cuối, đã kiểm tra 24-10-2026) + top-5 khuyến nghị.
+- **Root cause 2 lỗi PO báo:** (1) *kéo thả khối* → **không có handler kéo nào**; `handleNudgeSegment` (`:4034`) chỉ sửa `start`/`end` bằng **click ±0.2s**, còn CSS `cursor: ew-resize` (`.css:1579`) nói dối. (2) *In/Out không chạy* → **5 lỗi chồng nhau**: lọc vùng bằng "chứa trong" thay vì "chồng lấn" (`:3052`/`:3206`), TTS không fallback + `catch{}` nuốt lỗi (`:3267-3268`), `prev.filter` **xoá mất** câu ở mép vùng (`:2982`/`:3528`), dịch hỏng fallback sang nguyên văn (`:3112`), dịch lại **ghi đè** bản dịch tay (`:3117-3131`).
+- **Lỗi phụ đáng sửa:** nút magnet (`:6520`) + nút liên kết (`:6526`) **chỉ đổi class/toast, không có logic**; tooltip ghi phím `(N)`/`(P)` **không tồn tại**; mute per-vai dùng chung flag toàn cục (`:6893`); **không có redo**; **không auto-follow playhead** khi phát; không có track lock/solo.
+- **Khuyến nghị:** **không cần thay thư viện timeline** — 5 hạng mục P0/P1 đều nên **tự viết**; chỉ cân nhắc cài `wavesurfer.js` (BSD-3-Clause) cho lớp âm thanh; đọc-học `Clypra` (MIT, trùng stack Tauri v2 + React 19) + `FilmCraft` (MIT OR Apache-2.0); **tránh** Remotion (license thương mại 2 bậc) và `open-video-editor` (GPL-3.0).
+- **Lưu ý:** `docs/TIMELINE_GAP_ANALYSIS.md` là **tài liệu tham khảo**, không tự động là scope. Worker `TSK-TIMELINE-FIX-DND-RANGE` đang sửa song song `SublixStudioView.*` — không đụng file đó. Đã dọn 1 tin `@done` cũ (2026-10-12) khỏi đáy file; nội dung của nó đã nằm trong `ISSUE_LOG.md` (`BUG-059`/`BUG-060` + 4 Note bắt buộc).
 
 ---
 
-### 2026-10-11 18:25 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Round 17: Đồng bộ thông tin Studio ➔ Tiến trình, Polish Cinema Pro Stepper, Live Elapsed Timer, Metrics Dashboard)
-- **Tóm tắt:** 
-  1. **Đồng bộ triệt để thông tin giữa Studio ("ở trước") và Tiến trình ("ở trong"):**
-     - Bổ sung `onTaskUpdate` callback từ `SublixStudioView` lên `SettingsView`.
-     - Phản ánh đúng tên file video (`fileName`), loại workflow (`subtitle_only`, `subtitle_translate`, `dubbing`, `voice_only`) và nhãn nghiệp vụ (không còn bị gán cứng `🎬 Studio Lồng Tiếng AI`).
-     - Tự động mask thông điệp raw backend (loại bỏ từ ngữ Sherpa khi người dùng chỉ làm phụ đề) và ngăn chặn hiển thị `0/2 câu thoại` thô thiển.
-     - Tự động sanitize lịch sử cũ trong `localStorage`.
-  2. **Đại tu giao diện tab Tiến trình (Polish Cinema Pro):**
-     - **Interactive Pipeline Stepper:** Trực quan từng bước `[1. Bóc tách âm thanh ✓] ➜ [2. Whisper AI ⚡] ➜ [3. Timeline ○]`.
-     - **Cinema Shimmer Progress Bar:** Gradient animated shimmer stripes rực rỡ cao 9px.
-     - **Live Metrics Dashboard:** 4 thẻ kính thống kê (Tiến độ %, Live Elapsed Timer tự động tick theo giây `⏱️ mm:ss`, Công đoạn AI, Mốc thời gian bắt đầu).
-     - **History Task Cards:** Thẻ kính sang trọng, tên file rõ ràng, thời gian chạy thực tế, kết quả số câu thoại, nút 1-chạm `📂 Mở thư mục`, `📋 Copy đường dẫn`, `🚀 Mở lại trong Studio`.
-     - **Floating Toast (góc phải dưới):** Đồng bộ icon ngữ cảnh (`💬`, `🌐`, `🎙️`, `⬇️`, `📦`), tên file video và tiến độ thời gian thực.
-- **Files đã sửa:** `src/views/ProcessCenterModal.tsx`, `src/views/ProcessCenterView.tsx`, `src/views/ProcessCenterModal.css`, `src/views/SettingsView.tsx`, `src/views/SublixStudioView.tsx`.
-- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (2.87s, Vite bundle sẵn sàng).
-
----
-
-### 2026-10-11 19:40 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Session 23: Resizable Panels Studio Workspace, TTS Engine / Model AI Selector, Phân Loại Giọng Đọc Đa Dạng & Đồng Bộ Models Hub)
-- **Tóm tắt:** 
-  1. **Thanh phân cách kéo co giãn kích thước (Resizable Splitters) cho Studio Workspace:**
-     - Cho phép người dùng tự do kéo chuột thay đổi độ rộng cột Cấu hình (Left Panel: 250px – 600px) và cột Phụ đề (Right Panel: 260px – 700px).
-     - Hiệu ứng hover viền Cyan phát sáng, grip-handle 2 vạch mờ, trạng thái `user-select: none` chống bôi đen văn bản khi drag.
-     - Lưu độ rộng tự động vào `localStorage` (`sublix_studio_left_w` và `sublix_studio_right_w`).
-     - Hỗ trợ Double-click để khôi phục nhanh về độ rộng chuẩn mặc định (340px / 350px).
-  2. **Bộ Chọn Mô Hình & Động Cơ Giọng Đọc AI (TTS Engine Selector):**
-     - Đặt thẻ điều khiển Card chuyên biệt `studio-tts-engine-card` ở đầu mục "2. Giọng Đọc Nhân Vật (TTS)".
-     - Cho phép chọn nhanh giữa 4 chế độ: `🌟 VietNeu TTS AI`, `🎙️ Kokoro Local ONNX`, `🌐 Edge-TTS Cloud`, và `⚡ Tất Cả Models`.
-     - Hiển thị bảng thông số Spec Box trực quan kèm nút 1-chạm "✨ Áp dụng Model này cho tất cả các vai".
-  3. **Mở Rộng Danh Mục Giọng Đọc & Phân Loại Vùng Miền Âm Sắc:**
-     - Bổ sung trọn bộ hơn 20 giọng đọc AI: VietNeu TTS (6 giọng Bắc/Trung/Nam biểu cảm cao), Kokoro-Vietnamese (14 giọng nam nữ offline), Edge-TTS Neural (4 giọng phát thanh viên & tiếng Anh).
-     - Lọc danh sách thông minh theo model đang chọn hoặc phân nhóm `<optgroup>` trực quan.
-     - Nâng cấp routing `mapVoiceForEngine` đảm bảo đồng bộ cho cả synthesis và preview nghe thử.
-  4. **Đồng Bộ Tab Cài Đặt (Subtab Models Hub):**
-     - Bổ sung bảng "🎙️ Text-to-Speech (TTS) Voice Models" trong Hub Models, hiển thị rõ ràng thông số đề xuất, loại engine, dung lượng và trạng thái hoạt động của VietNeu TTS, Kokoro ONNX, Edge-TTS.
-- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `src/views/SettingsView.tsx`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
-- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.27s, Vite bundle thành công).
-
----
-
-### 2026-10-11 19:50 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Session 24: Sửa Dứt Điểm Nhầm Lẫn Giữa Track Phụ Đề & Track Tiếng Lồng, Nâng Cấp Audio Voice Blocks Trên Timeline Chuẩn Premiere)
-- **Tóm tắt:** 
-  1. **Khử tận gốc tên "Phụ đề" gán nhầm cho Vai Diễn Lồng Tiếng:**
-     - Đổi tên speaker mặc định từ "Phụ đề" thành "Thuyết minh AI".
-     - Bổ sung `getSpeakerDisplayName()` và hook tự động sanitize state để bảo đảm trên UI, Panel trái và Timeline không bao giờ hiển thị tên vai là "Phụ đề".
-  2. **Đại tu cột Tiêu đề TRACKS (Phân biệt rõ ràng giữa Văn bản và Âm thanh):**
-     - Track 3: Ghi rõ `💬 PHỤ ĐỀ (TEXT)` (Track văn bản chữ phụ đề).
-     - Track 4+: Ghi rõ `🎙️ TIẾNG LỒNG: [Tên vai]` (ví dụ: `🎙️ TIẾNG LỒNG: Thuyết minh AI`), kèm icon `🎙️`, dot màu vai, và badge model `[VietNeu]` / `[Kokoro]` / `[Edge]`.
-  3. **Nâng cấp Audio Voice Blocks trên Timeline theo chuẩn Premiere Pro:**
-     - Khối block trên dải lồng tiếng mang diện mạo Audio Clip: viền sáng, gradient nền âm thanh.
-     - Tích hợp **Audio Waveform Texture (sóng âm mini)** chạy chìm bên trong block.
-     - Nhãn `🎙️ [Thuyết minh AI]: "Câu thoại..."` và ký hiệu nốt nhạc `♪` khi đã sinh âm thanh.
-     - Sửa Laser head quét tiến trình: `🎙️ Tiếng lồng [Tên vai]: Đang sinh giọng câu X/Y...` (xóa triệt để chữ Phụ đề).
-- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`.
-- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (3.61s, Vite bundle thành công).
-
----
-
-### 2026-10-11 20:10 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Session 25: Sửa Dứt Điểm Lỗi Xóa Track Tiếng Mất Phụ Đề, Hiển Thị Động Track Timeline & Menu Chuột Phải Cho Khoanh Vùng AI)
-- **Tóm tắt:** 
-  1. **Khắc phục triệt để lỗi xóa track tiếng lồng làm mất cả track phụ đề:**
-     - Sửa `handleClearTrack("speaker", spkId)`: chỉ reset cờ âm thanh `hasAudio = false` và `audioUrl = undefined`, bảo toàn nguyên vẹn 100% mảng `segments`.
-     - Phụ đề (text gốc, bản dịch, timing) không bị mất dù xóa bất kỳ track tiếng nào.
-     - Sửa nút xóa khi thu gọn track thành `handleClearTrack("speaker", "all")`.
-  2. **Hiển thị động 2 track Timeline (Dynamic Track Visibility):**
-     - Khi mới nạp video: Timeline chỉ hiển thị `▼ VIDEO` và `♫ TIẾNG GỐC`. Hai dải `💬 PHỤ ĐỀ (TEXT)` và `🎙️ TIẾNG LỒNG` được ẩn hoàn toàn để timeline sạch sẽ, tinh tế.
-     - Phía dưới có banner gợi ý `.studio-empty-timeline-hint` hướng dẫn bấm tạo hoặc khoanh vùng.
-     - Khi người dùng bấm tạo mới (hoặc tiến trình AI chạy): Dải phụ đề và tiếng lồng xuất hiện và được lấp đầy trực quan dần theo thời gian thực.
-  3. **Menu Chuột Phải Ngữ Cảnh (Timeline Context Menu - Premiere Style):**
-     - Click chuột phải trên Timeline / Vùng chọn In-Out:
-       - Có vùng chọn: Menu hiển thị thời lượng đoạn và các tùy chọn: Tạo phụ đề cho đoạn này (STT), Dịch phụ đề đoạn này, Tạo tiếng lồng cho đoạn này (TTS), Chạy cả Sub & Tiếng lồng (Full pipeline), Phát thử đoạn này, Xóa phụ đề đoạn này, Bỏ khoanh vùng.
-       - Chưa có vùng chọn: Cho phép Đặt điểm Vào (In), Đặt điểm Ra (Out), Khoanh nhanh 5s, Di chuyển playhead, hoặc Tạo cho toàn bộ video.
-  4. **Hỗ trợ tham số `forceRange?: boolean` cho cả 4 quy trình AI:**
-     - `handleRunSttOnly`, `handleRunTranslateOnly`, `handleRunVoiceOnly`, `handleRunAnalysis` đều chạy chuẩn xác trong phân đoạn khoanh vùng khi gọi từ menu chuột phải.
-- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
-- **Build & Verify:** `npx tsc --noEmit` PASS (0 errors); `npm run build` PASS (4.39s, Vite bundle thành công).
-
----
-
-### 2026-10-11 20:35 - Antigravity → @CommandCode @jimmyvu
-- **Loại:** `@done` (Session 26: Phân Loại Độc Quyền Giọng Đọc Theo Model TTS AI + Nghe Thử Mẫu Tiêu Biểu Trước Khi Chọn)
-- **Tóm tắt:** 
-  1. **Loại bỏ hoàn toàn tình trạng dropdown voice hiện "một đống lẫn lộn" các giọng của nhiều mô hình:**
-     - Bỏ hẳn tùy chọn "Tất Cả Models" gây nhầm lẫn.
-     - Khởi tạo từ điển metadata `TTS_ENGINE_MODELS` cho 3 mô hình riêng biệt: `VietNeu TTS AI` (6 giọng Neural biểu cảm cao), `Kokoro Local` (14 giọng ONNX offline 100%), `Edge-TTS Cloud` (6 giọng Microsoft Azure).
-     - Dropdown `<select>` của mỗi vai diễn **CHỈ DUYỆT QUA các giọng độc quyền của Model đang chọn**. Tuyệt đối không lẫn lộn bất kỳ giọng của model khác!
-     - Khi người dùng bấm đổi Model: Hệ thống tự động re-map các vai diễn sang giọng tương ứng (Nam -> defaultMaleVoice, Nữ -> defaultFemaleVoice) của Model mới, đảm bảo giá trị select luôn đồng bộ và hợp lệ ngay lập tức.
-  2. **Tạo Sample Voice của từng Model để nghe thử trước khi load/chọn model đó:**
-     - Trên mỗi nút Model (VietNeu, Kokoro, Edge): Bổ sung nút nghe thử nhỏ gọn `▶️ Mẫu` / `⏹ Dừng`. Người dùng có thể nghe thử âm thanh đại diện của bất kỳ Model nào ngay trước khi click chọn hoặc load model đó!
-     - Trong thẻ Spec chi tiết của Model đang chọn: Thêm nút bấm to nổi bật `▶️ Nghe Thử Mẫu Tiêu Biểu (${model.name})`.
-     - Tận dụng 14 file sample .wav chất lượng cao có sẵn của Kokoro (`voiceSampleData`) cho độ trễ 0ms, và live neural synthesis cho VietNeu / Edge.
-     - Nút `▷ Nghe Thử` của từng vai cũng được nâng cấp hỗ trợ toggle dừng/phát và quản lý audio refs tránh phát chồng âm.
-- **Files đã sửa:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css`, `DEV-LOG.md`, `agent-team/PROJECT_STATE.md`, `agent-team/AGENT_CHAT.md`.
-### 2026-10-11 23:55 - Antigravity → @all (@jimmyvu @CommandCode @ClaudeCode @Mavis @Cursor)
-- **Loại:** `@handoff` (Bàn Giao Dự Án & Tạm Nghỉ Ca Theo Lệnh PO Anh Tuấn Để Các Agent Khác Vào Thử Tài)
-- **Tóm tắt bàn giao:**
-  1. **Trạng thái Repo:** Cực kỳ sạch sẽ (clean working tree), đã test và push 100% lên `origin/master` (Commit `c586b22`).
-  2. **Trạng thái Build:** `npx tsc --noEmit` PASS (0 errors), `npm run build` PASS (0 errors, 6.16s).
-  3. **Môi trường chạy:** App đang chạy dev mode qua PID 35196 / launcher `Chay-Sublix.bat`. Tuyệt đối **KHÔNG CHẠY `cargo build --release`** (BUG-H07).
-  4. **Nhiệm vụ đã hoàn thành trọn gói:**
-     - Căn gốc Timeline `x = 0`.
-     - Đồng bộ tiến trình Studio ➔ Process Center (Cinema Stepper, Live timer).
-     - Resizable Panels trái/phải với localStorage.
-     - Phân định rạch ròi Track Phụ Đề vs Track Tiếng Lồng, đổi tên vai thành Thuyết minh AI.
-     - Sửa lỗi xóa track tiếng bảo toàn 100% phụ đề; Dynamic Timeline visibility (2 track mặc định khi rỗng); Timeline Context Menu chuột phải bóc tách/dịch/lồng tiếng theo vùng khoanh.
-     - Phân loại độc quyền giọng đọc theo Model TTS AI (VietNeu, Kokoro 14 giọng, Edge-TTS); nghe thử mẫu âm thanh tiêu biểu trước khi load/chọn.
-  5. **Lời nhắn gửi các đồng đội tiếp quản (Claude Code / CommandCode / Mavis / Cursor):**
-     - Dự án sẵn sàng 100% để các bạn tiếp nhận và triển khai các task tiếp theo từ anh Tuấn.
-     - Antigravity chuyển trạng thái sang `⚪ Standby`, nhường sân khấu cho các bạn thể hiện tài năng! Chúc cả team làm việc hiệu quả và mang lại sản phẩm tuyệt vời nhất cho anh Tuấn!
-
-
-
-
----
-
-## 2026-10-23 — Mavis (MiniMax-M3) — Phiên "Chạy A→Z: dịch + TTS + xuất video"
-
-**Chỉ đạo của anh Tuấn:** chọn phương án "Chạy A→Z: dịch + TTS lồng tiếng + xuất video" cho app Sublix đang chạy.
-
-### 1. Khảo sát trạng thái thật (không tin tài liệu)
-- Thư mục làm việc ban đầu `H:\AI Project\sub-lix-fork-build-w1-2026-10-20` là **thư mục build artifact**, không phải source. Source thật: `H:\AI Project\sub-lix-fork-2026-10-19`.
-- App v0.11.34 đang chạy thật (PID, exe `build-2026-10-19\debug\sublix.exe`, WebView2 CDP port 9223, `llama-server` Qwen3-4B port 11435).
-- Đọc live DOM qua CDP: app đang mở video **Trung Quốc 26 phút**, 323 câu Whisper đã xong, **323/323 đã dịch**, `hasAudio: 0` (chưa có TTS), engine TTS đang chọn = `vietneu`.
-
-### 2. Phát hiện 2 lỗi chí mạng TRƯỚC khi bấm nút (đọc code đường export)
-- **BUG-074:** backend không hiểu prefix `vietneu:` (`grep -i vietneu src-tauri/src` = 0 hit) → Edge-TTS từ chối → **mọi câu bị skip** → file xuất **không có tiếng Việt**.
-- **BUG-075:** `synthesize_kokoro` spawn 1 tiến trình Python **cho mỗi câu**, mỗi lần nạp lại model ONNX 325 MB → đo thật **12,4 giây/câu** → 323 câu = **67 phút** (+ bước export lặp lại lần nữa).
-- → Giao **worker agent** sửa 2 file: `src-tauri/src/dubbing/mod.rs` (+438 dòng) và `src-tauri/scripts/kokoro_vi_tts.py` (+117 dòng). Không đụng frontend.
-
-### 3. Chạy thật & đo thật
-- Batch 5 câu: **16,1s** (legacy cùng 5 câu: 62s) → per-line **12,4s → ~1,2s**.
-- Xuất video live trên app (StarCraft II, 78 câu, đã dịch + TTS sẵn): **~2 phút** → `StarCraft II…_dubbed.mp4` (71,6 MB, 4 stream: vp9 + **2× aac** + mov_text) + `.vi.srt`.
-- **Đối chiếu giọng bằng tương quan tín hiệu:** tổng hợp lại đúng câu "Nhiệt độ. Nhiệt độ." bằng Kokoro `tuan_ngoc` → correlation với **track AI = 0,6921**, với **track gốc = 0,0346** (nhiễu) → giọng AI thật sự có trong file xuất.
-
-### 4. Sự kiện cần lưu ý
-- Trong lúc em đang chẩn đoán, **anh tự chạy A→Z trên video StarCraft trong app** → project Trung Quốc 323 câu bị thay thế trong cache `sublix_active_studio_project_v1`. Video Trung Quốc **chưa** được xuất; cần nạp lại + chạy lại STT/dịch nếu anh muốn.
-- **Anh yêu cầu dừng test** ("cái chạy kiểu này mất công quá") → em dừng, **không** chạy `cargo test --lib` cho bản vá (đã ghi rõ trong PROJECT_STATE mục "CHƯA ĐẠT").
-
-### 5. Bàn giao
-- Version bump `0.11.34` → **`0.11.35`** (4 nguồn + 2 tiêu đề cửa sổ native), entry `CHANGELOG.md` + `CHANGELOG_DATA` trong `src/views/ChangelogModal.tsx`.
-- `PROJECT_STATE.md` có bảng **ĐÃ ĐẠT / CHƯA ĐẠT** (mục 2) kèm bằng chứng + người xác nhận.
-- `ISSUE_LOG.md` thêm **BUG-074** + **BUG-075** (triệu chứng · nguyên nhân · bài học tránh lặp).
-- Ảnh chụp app sau khi xuất: `gui-2026-10-23/export-dubbed-starCraft-2241.png`.
-
-### 6. Bài học cho phiên sau
-1. **Đọc code đường export trước khi bấm nút** — 5 phút đọc tiết kiệm hàng giờ chờ.
-2. **Đo tốc độ sidecar trước khi lên kế hoạch** cho việc dài — đo được 12,4s/câu ngay từ đầu.
-3. **App có thể bị PO thao tác song song** → luôn đọc state live (CDP) trước khi hành động, và báo rõ khi project trong app đã bị thay đổi.
-4. **Khi anh nói "dừng lại" → dừng ngay**, viết tài liệu bàn giao + commit, không chạy thêm test dài.
+### 2026-10-24 11:30 - Claude Code (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-DL-BATCH-AUDIO`, **chưa commit / chưa bump version** — chờ PO duyệt).
+- **Tab Tải video:** ô nhập thành textarea nhiều link (mỗi dòng 1 link; tách + lọc + loại trùng ở backend `downloader_parse_urls`); link playlist → `downloader_expand_playlist` (`--flat-playlist -J`, trần 200 mục, báo rõ khi bị cắt) → danh sách checkbox "Chọn hết / Bỏ chọn"; các mục vào hàng đợi có sẵn (`queued`, tối đa 3 tải song song, chống trùng BUG-053). Chế độ MP3/M4A đã có sẵn trong ô chất lượng → chỉ đổi nhãn + chip "🎵 Âm thanh MP3"; nút Studio giữ bật (Studio nhận .mp3 — đã verify).
+- **Code mới:** `downloader/batch.rs` (252 dòng) + `batch_tests.rs`, `DownloaderBatchPicker.tsx`; `mod.rs` chỉ thêm `pub mod batch;`; `lib.rs` chỉ thêm 2 command. Không đụng lifecycle/Job Object (TSK-018).
+- **Verify:** `cargo test --lib` **67 pass / 0 fail** (+7 test mới); `tsc` 0 lỗi; `npm run build` OK; yt-dlp thật: playlist JODA15 → 4 mục ("JOD" 517s, "JOD2" 363s), Google Search Stories → 13 mục; GUI (instance tách riêng CDP 9224): 4 link MP3 → 3 "Đang tải" + 1 "Đang đợi" → 4 file mp3 (ffprobe codec mp3, 19–163s).
+- **Lưu ý:** mở MP3 trong Studio chạy fallback transcode (videoWidth=0) → chạy được nhưng thừa 1 lượt ffmpeg + toast "không hiển thị hình" — đề xuất Studio bỏ qua fallback khi file là audio.

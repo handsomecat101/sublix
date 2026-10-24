@@ -20,7 +20,13 @@
 | `BUG-H06` | Phân vai Diarization bị gán 1 người nói do mốc SRT Whisper liên tục (`pause = 0`) | `src-tauri/src/dubbing/mod.rs` | Kích hoạt đổi vai khi câu trước kết thúc bằng dấu chấm/chấm than/hỏi (`prev_ends_terminal`) | ✅ Fixed |
 | `BUG-H07` | Lỗi WebView2 `ERR_CONNECTION_REFUSED` do build bằng `cargo build` thô | Tauri Build / Config | CẤM dùng `cargo build --release` để build app; bắt buộc dùng `npx tauri build --no-bundle` (hoặc chạy dev mode `npm run tauri dev`) | ✅ Fixed |
 | `BUG-H08` | Dev mode: app ghi file runtime (samples/model) vào `src-tauri/models/...` → `tauri dev` watcher tưởng đổi code → **tự restart & giết tiến trình đang chạy** (tạo mẫu nghe thử tạo ra 0 file) | `config.rs` app_base_dir (dev = `CARGO_MANIFEST_DIR`) + tauri dev watcher | GUI-test tính năng ghi model: chạy `npm run tauri dev -- --no-watch`; release không dính | 🟡 Workaround |
+| `BUG-H09` | Win11 có **Smart App Control** bật → WDAC chặn `llama-server.exe` (chưa ký): *"An Application Control policy has blocked this file"* → dịch offline GGUF fail, nhưng `whisper-cli.exe` vẫn chạy | `translate/server.rs` (spawn `llama-server.exe`), `stt/whisper_local.rs` | Sẵn sàng provider **Ollama** (binary có chữ ký hợp lệ) làm fallback; không `Unblock-File` (file không có MOTW); muốn dùng GGUF thì phải tắt SAC | 🔴 Open |
+| `BUG-H10` | Provider Ollama timeout 25s (batch 60s) → dịch fail *"operation timed out"*; Qwen3 bản **"Thinking"** sinh 500-2100 token suy luận (mất 50-110s) | `translate/server.rs` (`translate_via_ollama`, `translate_batch_via_ollama`) | Timeout Ollama ≥120s (lần nạp model đầu mất 45-95s) + gửi `"think": false`; preset AMD ưu tiên **Qwen2.5-3B** (không thinking, ~6s) thay vì Qwen3-4B | ✅ Fixed |
+| `BUG-H11` | App **ép binary whisper-CUDA** dù người dùng đã chọn STT engine = "CPU" → Whisper fail *"không tạo được phụ đề"* (đúng lệnh CLI chạy thì tốt) | `stt/whisper_local.rs` (`find_whisper_cli_with_engine`) | Chọn binary theo `stt_engine_preference`: Cpu→CPU, Cuda→CUDA (fallback CPU), Auto→CUDA trước | ✅ Fixed |
+| `BUG-H12` | Xuất video fail *"FFmpeg amix chunk render failed"* trên ffmpeg 8+ | `dubbing/mod.rs` (`render_amix_chunk`, remux) | ffmpeg 9 đã **gỡ `-filter_complex_script`** → truyền graph trực tiếp qua `-filter_complex` (Rust không qua shell nên không lỗi quoting) | ✅ Fixed |
 | `BUG-063` | Studio không đổi được video khác do effect dính `filePath` & Thiếu xuất Softsub / Multi-track Audio | `SublixStudioView.tsx`, `dubbing/mod.rs` | Bỏ state nội bộ khỏi deps của prop sync effect, tập trung reset state qua `handleLoadNewVideoFile` và gọi `onClearPendingFile` | ✅ Fixed |
+| `BUG-082` | `kuaishou` & `migu` vẫn được `get_platform` nhận diện nhưng **yt-dlp (2026.10.21) KHÔNG có extractor** → dán link sẽ ăn `Unsupported URL`; hint cũ còn khuyên "cập nhật yt-dlp" (vô ích vì upstream chưa hỗ trợ) | `downloader/mod.rs`, `downloader/reup.rs`, `downloader/batch.rs` | Chặn **SỚM** ở `fetch_video_info`/`start_download`/`expand_playlist` + báo tiếng Việt rõ ràng, KHÔNG gợi ý cập nhật yt-dlp | ✅ Fixed |
+| `BUG-H13` | Edge-TTS vi-VN **trả 0 byte** cho một số câu tiếng Việt; `synthesize_speech()` không retry ⇒ câu đó **mất tiếng** trong bản dịch | `dubbing/mod.rs` (`synthesize_speech`) | Retry 3–5 lần (giãn 1–1,5 s) + kiểm tra file đầu ra > 0 byte; coi Edge-TTS là fallback, không phải mặc định | 🔴 Open |
 
 ---
 
@@ -140,6 +146,16 @@
 | ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-073` | Version drift: field `version` = 0.11.33 nhưng 2 tiêu đề cửa sổ native còn sót `v0.11.32`; script guard `check_version.ps1` bị mất trong lúc rollback | `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` | Bump version phải sửa CẢ 4 nguồn + 2 tiêu đề cửa sổ, và chạy `npm run verify:version` trước khi commit | ✅ Fixed |
+
+### 🧾 Lỗi Fix Tại Timeline Studio — Kéo thả / Vùng In-Out / Tốc độ (Claude Sonnet 5.5 Orca worker — 2026-10-24):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-076` | Timeline Studio **không kéo thả được khối** (kéo giữa = không dời, kéo mép = không trim; mép chỉ bấm nhích ±0.2s) | `src/views/SublixStudioView.tsx` | Khối timeline phải tự có `mousedown→drag` (transform DOM ref, commit `setSegments` khi thả, 1 bước Undo, snap ~8px, chặn chồng khối kề); marquee/scrub không được ăn mousedown của khối | ✅ Fixed |
+| `BUG-077` | Ctrl/Shift+click chọn nhiều bị **gộp về 1 câu** — có 4 chỗ ép selection theo playhead (`handleSeek`, `onSeeked` native + prop JSX, effect `[currentTime,isPlaying,segments]`); effect còn reset selection mỗi khi `segments` đổi | `src/views/SublixStudioView.tsx` | Auto-follow selection CHỈ khi đang phát & không `multiSelectLockRef`; click chọn khối dùng `handleSeek(t, keepSelection=true)`; grep MỌI `setSelectedSegIds([match.id])` khi đổi logic chọn | ✅ Fixed |
+| `BUG-078` | Tiếng lồng **tua giật khi tốc độ ≠ 1x**: video `playbackRate=1.5` nhưng audio lồng luôn 1x → lệch 0,5s/giây → `syncVoicePlayback` seek lại ~mỗi 0,7s (đo: 10 lần tua/7s ở 1.5x) | `src/views/SublixStudioView.tsx` (`syncVoicePlayback`) | Audio lồng phải `playbackRate = defaultPlaybackRate = playbackSpeed` mỗi lần nạp `src` (load reset rate về default) và khi đổi tốc độ | ✅ Fixed |
+| `BUG-079` | Ducking: lúc kết thúc lồng tiếng ghi đè volume người dùng vừa chỉnh; volume = 0 bị "bật lại" thành 1.0 | `src/views/SublixStudioView.tsx` (`stopVoicePlayback`) | Chỉ khôi phục volume cũ nếu volume hiện tại còn = mức đã duck; volume ≈ 0 thì không duck | ✅ Fixed |
+| `BUG-080` | Lệnh vùng In/Out sai: lọc "nằm TRỌN trong vùng" bỏ câu bị cắt ngang; pipeline vùng không lồng tiếng; đánh số lại id + thay cả roster → tiếng ghi nhầm câu / câu ngoài vùng mất vai; câu mới tràn quá Out đè câu kế; lỗi dịch/TTS bị nuốt; vùng 0 giây | `src/views/SublixStudioView.tsx` | Một quy tắc "câu thuộc vùng" duy nhất (chồng lấn: `isSegInRange`); thay câu bằng `mergeRangeSegments` (giữ id/vai câu ngoài vùng, cắt kết quả trong [In,Out]); bước TTS nối tiếp chỉ nhận `onlyIds` | ✅ Fixed |
+| `BUG-081` | `isAnalyzing` kẹt `true` mãi (nút/menu AI khóa) khi pipeline `dubImmediately` bị lỗi hoặc ra 0 câu — `finally` chỉ nhả cờ khi `!dubImmediately`, `handleRunVoiceOnly` thoát sớm không nhả | `src/views/SublixStudioView.tsx` (`handleRunAnalysis`, `handleRunVoiceOnly`) | Mọi lối thoát của tác vụ chạy nối tiếp phải nhả cờ busy (kể cả `return` sớm và nhánh catch) | ✅ Fixed |
 
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
@@ -425,5 +441,105 @@
   3. **`export_dubbed_video` gom câu theo giọng → gọi batch 1 lần/giọng**, tái dùng file đã tổng hợp; giữ nguyên fallback từng câu, retry-then-skip, sự kiện tiến trình, atempo stretch, amix, mux.
   4. **Bài học:** khi một sidecar nạp model nặng, **luôn thiết kế đường batch** — đừng gọi 1 tiến trình cho mỗi item. Đo `tổng thời gian / số item` trước khi lên kế hoạch cho video dài.
   5. **Bài học:** đường export **tự tổng hợp lại TTS** ⇒ chạy bước "TTS trong UI" trước là tốn công vô nghĩa với mục tiêu tạo file. Với mục tiêu "có file xuất", bỏ qua bước preview TTS.
+
+---
+
+### [BUG-076..081] Timeline Studio: kéo thả khối, Ctrl+click, tốc độ voice, vùng In/Out (TSK-TIMELINE-FIX-DND-RANGE)
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** PO (kéo thả + khoanh vùng không chạy) + coordinator đọc code | **Fix bởi:** Claude Sonnet 5.5 (Orca worker) | **Status:** ✅ Fixed (verify GUI instance riêng CDP 9224)
+- **File:** `src/views/SublixStudioView.tsx`, `src/views/SublixStudioView.css` (không đổi backend Rust)
+- **BUG-076 (không kéo thả được):** `handleTimelineMouseDown` bỏ qua mọi mousedown trên `.studio-timeline-block` (để marquee không vẽ) nhưng KHÔNG có handler kéo nào thay thế; tay nắm mép chỉ có `onClick` nhích ±0,2s. Tái hiện: kéo #3 +120px → start/end không đổi. **Fix:** `handleBlockMouseDown` (move/trim-start/trim-end, nhóm khi multi-select), transform trực tiếp trên DOM + `snapLineRef`/`dragTipRef`, chỉ `setSegments` khi thả (1 `saveUndoHistory`), snap 8px (playhead/mép khối/In-Out/0/hết video, nút nam châm `magnetSnap` + Alt tắt), chặn chồng khối kề, Esc hủy, tự cuộn ngang; khối tiếng lồng tách thành `StudioTimelineVoiceBlock` (`React.memo`) và chỉ "dời" (clip TTS giữ độ dài).
+- **BUG-077 (Ctrl+click gộp 1 câu):** `handleSelectSegmentWithModifier` gọi `handleSeek(seg.start)` → `handleSeek` + `video onSeeked` (native + prop JSX) + effect `[currentTime,isPlaying,segments]` đều ép `selectedSegIds=[match.id]`. Effect còn reset selection mỗi khi `segments` đổi (sửa chữ/nhích/đổi vai). Còn lỗi phụ: khối kề nhau (`A.end == B.start`) bị chọn nhầm khối trước vì so sánh `<=` hai đầu. **Fix:** `multiSelectLockRef` + `handleSeek(t, keepSelection)`; auto-follow chỉ khi ĐANG PHÁT; Ctrl/Cmd = toggle, Shift = chọn dải; Delete xóa cả nhóm. Đo: Ctrl+click #2,#6,#7 → trước `[6]`, sau `[2,6,7]` (giữ nguyên sau 1,8s).
+- **BUG-078 (voice giật ở 1.5x):** `va.playbackRate` không bao giờ được đặt → audio 1x, video 1,5x → `expectedTime` lệch +0,5s mỗi giây → `Math.abs(...)>0.35` tua lại ~mỗi 0,7s. Lưu ý: gán `src` mới reset `playbackRate` về `defaultPlaybackRate` → phải đặt cả hai. Đo (clip 12s, phát 7s): trước 1.5x = **10 lần tua** khi đang phát (vị trí 2.19→10.87, đều ~1s/lần), `audio.playbackRate=1`; sau = **4 lần** (chỉ trong 1,7s đầu clip = độ trễ nạp, ngang baseline 1x = 3), `audio.playbackRate=1.5`.
+- **BUG-079 (ducking):** `stopVoicePlayback` luôn `v.volume = giá trị trước duck`; nếu người dùng chỉnh volume trong lúc duck bị ghi đè, volume 0 bị lưu thành 1.0. **Fix:** `duckedVolumeRef` + chỉ khôi phục khi volume còn = mức đã duck; volume≈0 → không duck.
+- **BUG-080 (lệnh vùng):** (1) lọc `s.start>=in-0.2 && s.end<=out+0.2` bỏ mọi câu bị cắt ngang mép → vùng nhỏ báo "không có câu"; (2) menu "Chạy Cả Sub & Lồng Tiếng" gọi `handleRunAnalysis(true)` KHÔNG `dubImmediately` → không hề lồng tiếng; (3) ghép kết quả: đánh số lại `id=idx+1` + `setSpeakers(roster mới)` → bước TTS nối tiếp ghi audio theo id cũ vào NHẦM câu ngoài vùng, câu ngoài vùng mất vai; Hoàn tác đối chiếu bản dịch theo id bị lệch; (4) câu Whisper mới có thể tràn quá Out (đo: Out 25,00 → câu cuối kết thúc 27,48, đè câu kế); (5) `catch{}` nuốt lỗi TTS, dịch lỗi ghi nguyên văn gốc; (6) vùng In=Out (click ruler ở chế độ R) vẫn là "có vùng". **Fix:** `isSegInRange` (chồng lấn) cho dịch/TTS/xóa/đếm; `expandRangeToSegmentEdges` nới vùng tới mép câu trước khi bóc tách; `mergeRangeSegments` giữ id/vai/bản dịch/tiếng câu ngoài vùng, cắt kết quả trong [In,Out]; roster được GIỮ; TTS nối tiếp chỉ nhận `onlyIds`; đếm + toast lỗi; `runRangeAction` chặn chạy chồng và báo số câu bị ảnh hưởng; menu đổi tên theo yêu cầu ("Dịch lại vùng", "Tạo lại tiếng lồng vùng", "Bóc tách + dịch + lồng tiếng vùng").
+- **BUG-081 (kẹt isAnalyzing):** `handleRunAnalysis(dubImmediately=true)`: `finally` không nhả `isAnalyzing`; nếu phân tích lỗi hoặc ra 0 câu thì `handleRunVoiceOnly` thoát sớm cũng không nhả → UI "đang xử lý" mãi. **Fix:** `analysisFailed` + `bailOut()` nhả cờ.
+- **Bài học:** (a) khối timeline là con của `React.memo` → callback phải ổn định (`blockApiRef` + `useCallback([])`), logic thật đọc qua ref; (b) mọi đường "đồng bộ selection theo playhead" phải dùng chung 1 cờ khóa — grep `setSelectedSegIds([match.id])` có 4 chỗ; (c) đo voice bằng *số lần tua khi clip đang phát*, không đếm tổng `currentTime=` (offset khởi động và reset về 0 làm nhiễu); (d) **KHÔNG** dùng `Get-Content/Set-Content` của PowerShell 5.1 để sửa file có tiếng Việt (BUG-H02) — dùng công cụ Edit/Write.
+
+---
+
+### [BUG-H09] Smart App Control (WDAC) chặn `llama-server.exe` — dịch offline GGUF fail trên Windows 11
+- **Ngày:** 2026-10-23 | **Phát hiện bởi:** Mavis khi dựng môi trường máy mới | **Status:** 🔴 Open (đã có workaround qua Ollama)
+- **File:** `src-tauri/src/translate/server.rs` (spawn `llama-server.exe`), `src-tauri/src/stt/whisper_local.rs` (spawn `whisper-cli.exe`)
+- **Triệu chứng:** `llama-server.exe` không chạy được → *"Program 'llama-server.exe' failed to run: An Application Control policy has blocked this file"*. App vẫn mở, UI vẫn render, nhưng nút dịch GGUF im lặng fail. `whisper-cli.exe` **chạy bình thường**.
+- **Root Cause:** Windows 11 bật **Smart App Control** (`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy\VerifiedAndReputablePolicyState = 1`) → policy WDAC yêu cầu *"Enterprise signing level"*. `llama-server.exe` (llama.cpp b10472/b11829) **không có chữ ký Authenticode** và **không có SmartScreen reputation** → bị chặn. `whisper-cli.exe` (whisper.cpp v1.7.6, phổ biến) có reputation nên qua. Event log: `Microsoft-Windows-CodeIntegrity/Operational`, ID **3033/3077**, Policy ID `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`.
+- **Đã loại trừ:** `Unblock-File` (file **không** có stream `Zone.Identifier` — không phải Mark-of-the-Web); thử nhiều release llama.cpp (b10472, b11829) → **tất cả đều bị chặn** → không phải doanh cũ release; máy **không** join domain (WORKGROUP) → không phải policy doanh nghiệp.
+- **Workaround (đã áp dụng & verify):** dùng provider **Ollama** (`translation_provider = "ollama"`) — `ollama.exe` có chữ ký hợp lệ (Ollama Inc.) nên SAC cho phép. Test trong app: ✅ *"Kiểm tra dịch thoại thành công!"*. STT vẫn dùng `whisper-cli.exe` + `ggml-base.bin` (2,6s/clip CPU).
+- **Bài học cho Dev sau:**
+  1. **Binary tải từ Internet không ký sẽ bị chặn trên máy người dùng** — đây là rủi ro *distribution* thật của Sublix, không chỉ là vấn đề máy dev. Cần kiểm tra trên máy người dùng có SAC bật (Windows 11 mặc định **bật**).
+  2. **Luôn sẵn sàng provider ký hợp lệ** (Ollama / MiniMax Cloud) làm đường dịch thay cho GGUF embedded.
+  3. Muốn dùng lại GGUF trên máy có SAC: phải **tắt Smart App Control** (Windows Security → App & browser control) — đây là **đường một chiều**, bật lại phải reset Windows. Nên hỏi PO trước khi đụng vào.
+  4. Khi debug "binary không chạy": đọc `Microsoft-Windows-CodeIntegrity/Operational` (ID 3033/3077) + kiểm tra `Get-AuthenticodeSignature` — nhanh hơn nhiều so với đoán.
+
+---
+
+### [BUG-H10] Ollama timeout quá ngắn + Qwen3 "Thinking" làm dịch chậm 20×
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** Mavis khi verify preset AMD iGPU | **Status:** ✅ Fixed (v0.11.36)
+- **File:** `src-tauri/src/translate/server.rs` (`translate_via_ollama`, `translate_batch_via_ollama`)
+- **Triệu chứng:** bấm *"🧪 Dịch Thử Nghiệm Ngay"* → *"❌ Lỗi kết nối: HTTP POST to Ollama ... operation timed out"*.
+- **Root cause (2 tầng, đo được từ log Ollama `slot print_timing`):**
+  1. **Timeout 25s quá ngắn.** Request đầu tiên phải **nạp model vào RAM/VRAM** — đo thật **45–95s** (model 2,3 GB + biên dịch graph GPU). Timeout cũ chặn trước khi phản hồi về.
+  2. **Qwen3 trên Ollama là bản "Thinking".** `qwen3:4b` → `general.name = Qwen3 4B Thinking 2507`, template `[tools thinking completion]` → sinh **548–2123 token suy luận** cho một câu dịch 5 từ (đo: `n_gen` tăng liên tục, `tg ≈ 13-45 tok/s`). Tổng thời gian **52–112s**.
+  3. **Đo đối chiếu:** `qwen2.5:3b` (không thinking) trả lời trong **6,0s** → chênh lệch **~20×** cho cùng một câu.
+- **Fix:**
+  1. `translate_via_ollama`: timeout **25s → 120s**; `translate_batch_via_ollama`: **60s → 300s** (batch nhiều câu + nạp model lần đầu).
+  2. Thêm `"think": false` vào body của cả 2 hàm (Ollama bỏ qua với model không hỗ trợ).
+  3. Preset **AMD iGPU** ưu tiên **`qwen2.5:3b`** (không thinking, nhanh, vừa 12,2 GiB VRAM của iGPU) thay vì `qwen3:4b`.
+- **Bài học:**
+  1. **Timeout của provider LLM phải tính cả thời gian nạp model**, không chỉ thời gian sinh token.
+  2. **Model "Thinking" là kẻ giết ngầm** cho pipeline phụ đề: sinh token suy luận vô dụng + có thể lọt reasoning vào phụ đề. Phải chặn ở tầng request (`think: false`), không chỉ lọc hậu kỳ bằng `post_process`.
+  3. Khi so sánh 2 model, **đo cả `n_gen`** (số token sinh ra) chứ không chỉ tổng thời gian — nhiều token sinh ra chỉ để suy luận rồi bị bỏ.
+
+---
+
+### [BUG-H11] App ép binary whisper-CUDA dù người dùng đã chọn engine "CPU"
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** Mavis (máy chỉ có GPU AMD) | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/stt/whisper_local.rs` (`find_whisper_cli_with_engine`, `ensure_binary_with_engine`), + `dubbing/mod.rs`, `file_sub.rs`, `lib.rs`
+- **Triệu chứng:** *"Lỗi phân tích: Whisper không tạo được phụ đề cho tệp này."* — nhưng **chạy đúng lệnh whisper-cli thủ công thì ra kết quả bình thường** (4,8 s, SRT đúng).
+- **Root cause:** `find_whisper_cli_with_engine()` **luôn ưu tiên binary CUDA nếu tồn tại**, không đọc `stt_engine_preference` trong config. Máy có sẵn `binaries/whisper-cuda/` (để dành cho máy NVIDIA) → app luôn spawn binary CUDA → máy không có NVIDIA (hoặc người dùng đã chọn CPU) → whisper fail, lỗi báo chung chung.
+- **Fix:** thêm `ensure_binary_with_engine_pref(pref)` + `find_whisper_cli_with_engine(pref)`:
+  - `Cpu` → **luôn** binary CPU (bỏ qua CUDA hoàn toàn)
+  - `Cuda` → ưu tiên CUDA, không có thì fallback CPU (an toàn)
+  - `Auto` → CUDA trước, không có thì CPU (giữ hành vi cũ)
+  - 3 call-site đọc `stt_engine_preference` từ `AppConfig`.
+- **Bài học:** **cấu hình engine của người dùng phải được tôn trọng ở tầng chọn binary**, không chỉ ở tầng UI. Khi debug "AI fail", **chạy lại đúng binary + đúng tham số thủ công** để tách lỗi "app chọn sai binary" khỏi lỗi "binary/model hỏng".
+
+---
+
+### [BUG-H12] Xuất video fail trên ffmpeg 8+ — `-filter_complex_script` đã bị gỡ
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** Mavis | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/dubbing/mod.rs` (`render_amix_chunk`, `render_combined_speech_track`, nhánh remux phụ đề)
+- **Triệu chứng:** *"❌ Lỗi xuất video: FFmpeg amix chunk render failed"* — không có file output, không có log ffmpeg (Rust chỉ kiểm tra `status.success()`).
+- **Root cause:** **ffmpeg 9.0.2 đã gỡ option `-filter_complex_script`** (còn từ ffmpeg ≤ 7.x). Chạy lại lệnh ffmpeg thủ công cho thấy: `Unrecognized option 'filter_complex_script'.` → ffmpeg exit != 0 → app báo lỗi chung. Máy của PO dùng ffmpeg 6/7 nên không dính.
+- **Fix:** truyền **graph trực tiếp** qua `-filter_complex` (2 call-site). Rust `Command::arg()` không qua shell → không lỗi quoting với `[ ] | ; :`; độ dài graph rất nhỏ (mỗi chunk ≤ 28 input ≈ 1 KB) nên không vướng giới hạn 32 KB của Windows.
+- **Bài học:**
+  1. **Khi lỗi ffmpeg chỉ hiện "command failed", phải chạy lại lệnh thủ công để xem stderr** — Rust code hiện bỏ qua stderr khi spawn ffmpeg, làm mất thông tin quan trọng nhất.
+  2. **Tương thích ffmpeg phải được kiểm tra theo phiên bản**, không giả định option còn tồn tại. `-filter_complex_script` là ví dụ điển hình (mất từ ffmpeg 8).
+  3. Nên log stderr của ffmpeg vào thông báo lỗi để người dùng tự chẩn đoán được.
+
+---
+
+### [BUG-H13] Edge-TTS vi-VN trả về 0 byte cho một số câu tiếng Việt — không retry ⇒ mất tiếng trong bản dịch
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** mcode #2 (Orca worker, task `TSK-RES-VI-VOICE`) khi benchmark giọng đọc | **Status:** 🔴 Open (chưa sửa — task này chỉ nghiên cứu, KHÔNG sửa code app)
+- **File:** `src-tauri/src/dubbing/mod.rs` (`synthesize_speech()` — lệnh `edge-tts --text … --write-media …`), `find_edge_tts()`
+- **Triệu chứng:** endpoint read-aloud của Microsoft **trả về 0 byte** cho một số câu tiếng Việt; `edge-tts` exit ≠ 0 với `NoAudioReceived`. Vì `synthesize_speech()` coi exit code khác 0 là lỗi ngay và **không retry**, câu đó **không có tiếng** trong bản dịch (hoặc cả job đổ lỗi).
+- **Root cause (đo được, `edge-tts` 7.3.1, voice `vi-VN-HoaiMyNeural`):**
+  1. Lỗi **có tính thất thường**: cùng một câu fail rồi lại thành công ở lần thử sau (giãn cách ~1,2–1,5 s). Trong 3 câu thử nghiệm cần **2 lần retry**.
+  2. Một số chuỗi **gần như luôn fail** (ví dụ câu chứa `ô`), số khác chỉ fail ~30% lần thử. Không phải lỗi mã hóa tiếng Việt nói chung (ASCII và câu ngắn có dấu vẫn chạy).
+  3. **Cả Python API lẫn CLI đều lỗi** → không phải lỗi wrapper của Sublix, mà lỗi ở tầng endpoint.
+- **Cách phòng tránh (đề xuất, chưa áp dụng):** trong `synthesize_speech()` thêm vòng retry **3–5 lần, giãn cách 1–1,5 s**, và kiểm tra **file MP3 đầu ra > 0 byte** trước khi coi là thành công. Ngoài ra nên coi Edge-TTS là **fallback dự phòng**, không phải mặc định — vì nó còn vấn đề giấy phép thương mại.
+- **Tài liệu:** `docs/VI_VOICE_MODELS_2026.md` §Phụ lục A (kèm script tái hiện).
+
+---
+
+### [BUG-082] `kuaishou`/`migu` có trong `get_platform` nhưng yt-dlp KHÔNG hỗ trợ — dán link ăn `Unsupported URL`
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** CommandCode (Orca worker, task `TSK-RES-DL-PLATFORMS` → sửa trong `TSK-FEAT-DL-PLATFORMS-REUP`) | **Status:** ✅ Fixed
+- **File:** `src-tauri/src/downloader/mod.rs` (`get_platform`, `platform_error_hint`, `fetch_video_info`, `start_download`), `downloader/reup.rs` (mới), `downloader/batch.rs` (`expand_playlist`)
+- **Triệu chứng:** Dán link Kuaishou/Migu vào tab Tải video → UI hiện đúng tên nền tảng ("Kuaishou (快手)" / "Migu (咪咕)") nhưng tải thất bại với `ERROR: Unsupported URL`. Hint cũ còn khuyên *"Hãy cập nhật yt-dlp (pip install -U yt-dlp)"* — sai hướng.
+- **Root cause:** `get_platform` nhận diện host `kuaishou.com`/`gifshare`… và `migu.cn` (kế thừa hermes-downloader), **nhưng `yt-dlp --list-extractors` (2026.10.21) KHÔNG có extractor nào** cho hai nền tảng này → luôn `Unsupported URL`. Việc "cập nhật yt-dlp" không giải quyết được.
+- **Fix:** thêm `reup::unsupported_platform_message()` và gọi **ngay đầu** `fetch_video_info`, `start_download`, `expand_playlist` → fail sớm, rõ ràng, **không spawn yt-dlp**. Đổi câu hint `Unsupported URL` thành báo thẳng, bỏ gợi ý cập nhật (áp dụng cho mọi nền tảng chưa có extractor).
+- **Bài học:**
+  1. `get_platform` chỉ là *nhận diện để hiển thị*, **không** đồng nghĩa yt-dlp tải được — phải đối chiếu `yt-dlp --list-extractors` trước khi cho người dùng dán link.
+  2. "Cập nhật yt-dlp" chỉ đúng khi extractor tồn tại nhưng bản cũ; với nền tảng upstream chưa hỗ trợ thì phải nói thẳng là không tải được.
+  3. Danh sách nền tảng không hỗ trợ nên **gom vào 1 hằng số** (`UNSUPPORTED_PLATFORMS`) để dễ cập nhật khi yt-dlp thêm extractor mới.
 
 ---
