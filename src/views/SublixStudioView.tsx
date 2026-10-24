@@ -2,7 +2,7 @@
 //! Reverse-Engineered from EZMAXSUB (ezmaxsoft.com) benchmark.
 //! Specification: agent-team/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
 
-import { useState, useEffect, useRef, memo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, memo, useCallback } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -43,6 +43,47 @@ import {
   IconCheck,
 } from "../icons";
 import "./SublixStudioView.css";
+
+// [TSK-TIMELINE-INTEGRATE-MODULES] 6 module timeline thuần TS (src/lib/timeline/).
+// `formatTimecode` của file này được thay bằng `formatTimecodeDisplay` của module
+// (kết quả GIỐNG HỆT từng ký tự) để không còn 2 hàm format trùng nhau.
+import {
+  clampSeconds,
+  formatTimecodeDisplay as formatTimecode,
+} from "../lib/timeline/timecode";
+import {
+  applyShuttleKey,
+  computeShuttleSeek,
+  createShuttleState,
+  frameStepSeconds,
+  shuttlePlaybackRate,
+  type ShuttleKey,
+  type ShuttleState,
+} from "../lib/timeline/shuttle";
+import {
+  findNextMarker,
+  findPrevMarker,
+  toggleMarker,
+  type TimelineMarker,
+} from "../lib/timeline/markers";
+import {
+  blockedTracks,
+  createTrackLockState,
+  editBlockedReason,
+  isEditBlocked,
+  isTrackLocked,
+  speakerTrackKey,
+  toggleTrackLock,
+  type TrackKey,
+  type TrackLockState,
+} from "../lib/timeline/trackLock";
+import {
+  copyToClipboard,
+  pasteFromClipboard,
+  type ClipboardPayload,
+} from "../lib/timeline/clipboard";
+import { computeFollowScroll } from "../lib/timeline/autoFollow";
+import { TimecodeInput } from "./studio/TimecodeInput";
 
 export interface StudioTaskUpdatePayload {
   id?: string;
@@ -112,11 +153,76 @@ const SPEAKER_COLORS = [
   "#8B5E3C", // Brown
 ];
 
-function formatTimecode(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  const ms = Math.floor((secs % 1) * 100);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
+// [TSK-TIMELINE-INTEGRATE-MODULES] `formatTimecode` đã chuyển sang module
+// `src/lib/timeline/timecode.ts` (import ở đầu file) — kết quả GIỐNG HỆT bản cũ.
+
+function round2(n: number): number {
+  return Number(n.toFixed(2));
+}
+
+// Một câu "thuộc vùng In/Out" khi khoảng thời gian của nó CHỒNG LẤN vùng (kể cả bị cắt ngang mép).
+// Quy tắc DUY NHẤT cho: dịch lại vùng / tạo lại tiếng lồng vùng / xóa trong vùng / đếm câu ở menu.
+function isSegInRange(s: { start: number; end: number }, rangeStart: number, rangeEnd: number): boolean {
+  return s.end > rangeStart && s.start < rangeEnd;
+}
+
+// Mở rộng vùng ra tới mép các câu bị In/Out cắt ngang → bóc tách lại KHÔNG làm mất nửa câu.
+function expandRangeToSegmentEdges(
+  segs: Array<{ start: number; end: number }>,
+  rangeStart: number,
+  rangeEnd: number
+): { start: number; end: number } {
+  let a = rangeStart;
+  let b = rangeEnd;
+  for (let i = 0; i < 4; i++) {
+    let changed = false;
+    for (const s of segs) {
+      if (s.start < a && s.end > a) {
+        a = s.start;
+        changed = true;
+      }
+      if (s.start < b && s.end > b) {
+        b = s.end;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return { start: a, end: b };
+}
+
+// Ghép kết quả bóc tách của một vùng vào danh sách câu hiện có:
+// - câu cũ chồng lấn vùng bị thay; câu ngoài vùng giữ NGUYÊN (id, bản dịch, tiếng lồng)
+// - câu mới bị cắt trong [start, end] và không chồng lên câu giữ lại / câu mới liền trước
+// - id câu mới = max(id cũ)+1… (không đánh số lại → Hoàn tác & chọn nhiều không bị lệch id)
+function mergeRangeSegments<T extends { id: number; start: number; end: number }>(
+  prev: T[],
+  fresh: T[],
+  rangeStart: number,
+  rangeEnd: number
+): { segments: T[]; newIds: Set<number>; replaced: number; dropped: number } {
+  const kept = prev.filter((s) => !isSegInRange(s, rangeStart, rangeEnd));
+  let nextId = prev.reduce((mx, s) => Math.max(mx, s.id), 0) + 1;
+  const added: T[] = [];
+  let dropped = 0;
+  let lastEnd = rangeStart;
+  for (const n of [...fresh].sort((a, b) => a.start - b.start)) {
+    let s0 = Math.max(n.start, rangeStart, lastEnd);
+    let e0 = Math.min(n.end, rangeEnd);
+    const m = (s0 + e0) / 2;
+    for (const k of kept) {
+      if ((k.start + k.end) / 2 <= m) s0 = Math.max(s0, k.end);
+      else e0 = Math.min(e0, k.start);
+    }
+    if (e0 - s0 < 0.2) {
+      dropped++;
+      continue;
+    }
+    added.push({ ...n, id: nextId++, start: round2(s0), end: round2(e0) });
+    lastEnd = e0;
+  }
+  const segments = [...kept, ...added].sort((a, b) => a.start - b.start);
+  return { segments, newIds: new Set(added.map((a) => a.id)), replaced: prev.length - kept.length, dropped };
 }
 
 interface StudioSegmentCardProps {
@@ -305,6 +411,7 @@ interface StudioTimelineSubtitleBlockProps {
   isSelected: boolean;
   isMultiSelected: boolean;
   onBlockClick: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+  onBlockMouseDown: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
   onNudge: (segId: number, field: "start" | "end", delta: number) => void;
 }
 
@@ -315,6 +422,7 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
   isSelected,
   isMultiSelected,
   onBlockClick,
+  onBlockMouseDown,
   onNudge,
 }: StudioTimelineSubtitleBlockProps) {
   const left = (seg.start / totalDur) * timelineWidth;
@@ -334,7 +442,8 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
         borderColor: "#2dd4bf",
       }}
       onClick={(e) => onBlockClick(seg, e)}
-      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}${seg.source ? `  •  Nguồn: ${seg.source === "youtube" ? "Phụ đề YouTube (đã tải)" : "AI tự nhận dạng (Whisper)"}` : ""}`}
+      onMouseDown={(e) => onBlockMouseDown(seg, e)}
+      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}${seg.source ? `  •  Nguồn: ${seg.source === "youtube" ? "Phụ đề YouTube (đã tải)" : "AI tự nhận dạng (Whisper)"}` : ""}  •  Kéo giữa = dời, kéo mép = cắt (Alt = tắt hít)`}
     >
       {!isCompact && (
         <div
@@ -343,7 +452,7 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
             e.stopPropagation();
             onNudge(seg.id, "start", -0.2);
           }}
-          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+          title="Kéo để cắt đầu câu • Bấm = lùi 0.2s"
         />
       )}
       {!isCompact && (
@@ -358,6 +467,104 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
             e.stopPropagation();
             onNudge(seg.id, "end", 0.2);
           }}
+          title="Kéo để cắt cuối câu • Bấm = giãn 0.2s"
+        />
+      )}
+    </div>
+  );
+});
+
+interface StudioTimelineVoiceBlockProps {
+  seg: SubtitleItem;
+  voiceDur: number;
+  totalDur: number;
+  timelineWidth: number;
+  spkName: string;
+  spkColor: string;
+  /** false ở chế độ mỗi vai 1 lane (tên vai đã nằm ở header lane) */
+  showSpeakerTag?: boolean;
+  isSelected: boolean;
+  isMultiSelected: boolean;
+  isSpeaking: boolean;
+  onBlockClick: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+  onBlockMouseDown: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+  onNudge: (segId: number, field: "start" | "end", delta: number) => void;
+}
+
+// Khối tiếng lồng trên track voice: memo như khối phụ đề (Note 1 — AGENT_CHAT 2026-10-12).
+// Kéo = dời cả câu (start/end cùng dịch); độ dài clip TTS cố định nên không có trim.
+const StudioTimelineVoiceBlock = memo(function StudioTimelineVoiceBlock({
+  seg,
+  voiceDur,
+  totalDur,
+  timelineWidth,
+  spkName,
+  spkColor,
+  showSpeakerTag = true,
+  isSelected,
+  isMultiSelected,
+  isSpeaking,
+  onBlockClick,
+  onBlockMouseDown,
+  onNudge,
+}: StudioTimelineVoiceBlockProps) {
+  const left = (seg.start / totalDur) * timelineWidth;
+  const width = Math.max(3, (voiceDur / totalDur) * timelineWidth);
+  const isCompact = width < 30;
+  const hasAudio = !!seg.hasAudio;
+
+  return (
+    <div
+      data-seg-id={seg.id}
+      className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${isSpeaking ? "is-speaking" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
+      style={{
+        left: `${left}px`,
+        width: `${width}px`,
+        background: hasAudio ? `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)` : `rgba(255, 255, 255, 0.04)`,
+        borderColor: hasAudio ? spkColor : `rgba(255, 255, 255, 0.25)`,
+        borderStyle: hasAudio ? "solid" : "dashed",
+      }}
+      onClick={(e) => onBlockClick(seg, e)}
+      onMouseDown={(e) => onBlockMouseDown(seg, e)}
+      title={
+        hasAudio
+          ? `[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.start + voiceDur)}] Bấm để nghe lại • Kéo để dời câu (Alt = tắt hít)`
+          : `[Chưa lồng tiếng: ${spkName}] Bấm để tạo & nghe thử câu này`
+      }
+    >
+      {hasAudio && <div className="studio-voice-wave-texture" />}
+      {!isCompact && hasAudio && (
+        <div
+          className="studio-timeline-block-handle left"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNudge(seg.id, "start", -0.2);
+          }}
+          title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
+        />
+      )}
+      {!isCompact && (
+        <div className="studio-voice-block-inner">
+          <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
+            🎙️
+          </span>
+          {showSpeakerTag && (
+            <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
+              [{spkName}]:
+            </strong>
+          )}
+          <span className="studio-voice-block-text" style={{ opacity: hasAudio ? 1 : 0.7 }}>
+            {seg.translated || seg.original}
+          </span>
+        </div>
+      )}
+      {!isCompact && hasAudio && (
+        <div
+          className="studio-timeline-block-handle right"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNudge(seg.id, "end", 0.2);
+          }}
           title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
         />
       )}
@@ -365,8 +572,51 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
   );
 });
 
-export type TtsEngineKey = "vietneu" | "kokoro" | "edge";
+/**
+ * [TSK-TIMELINE-INTEGRATE-MODULES] Vạch marker trên thước thời gian.
+ *
+ * MEMO HOÁ (Note 1 — AGENT_CHAT 2026-10-12): component này KHÔNG được re-render
+ * theo playhead. Props phải ổn định:
+ * - `markers`: mảng state, chỉ đổi khi thêm/xoá marker.
+ * - `onMarkerClick`: callback ổn định (useCallback / qua ref).
+ * Vì vậy khi timeline phát, parent render lại (mỗi 120ms) mà vạch marker
+ * KHÔNG render lại → không tốn CPU.
+ */
+const StudioTimelineMarkerLines = memo(function StudioTimelineMarkerLines({
+  markers,
+  timelineWidth,
+  totalDur,
+  onMarkerClick,
+}: {
+  markers: TimelineMarker[];
+  timelineWidth: number;
+  totalDur: number;
+  onMarkerClick: (time: number) => void;
+}) {
+  if (markers.length === 0) return null;
+  const dur = Math.max(1, totalDur);
+  return (
+    <>
+      {markers.map((marker) => (
+        <div
+          key={marker.id}
+          className="studio-timeline-marker-line"
+          style={{
+            left: `${(marker.time / dur) * timelineWidth}px`,
+            background: marker.color ?? "#38bdf8",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkerClick(marker.time);
+          }}
+          title={`Marker: ${formatTimecode(marker.time)}`}
+        />
+      ))}
+    </>
+  );
+});
 
+export type TtsEngineKey = "vietneu" | "kokoro" | "edge";
 export interface VoiceOption {
   id: string;
   label: string;
@@ -478,6 +728,8 @@ interface SavedStudioProject {
   currentTime: number;
   sttLang?: string;
   targetLang?: string;
+  /** [TSK-TIMELINE-INTEGRATE-MODULES] Marker trên timeline (lưu cùng project cache). */
+  markers?: TimelineMarker[];
 }
 
 export default function SublixStudioView({
@@ -685,7 +937,16 @@ export default function SublixStudioView({
     currentY: number;
   } | null>(null);
   const isMarqueeSelectingRef = useRef<boolean>(false);
+  // Dùng chung cho marquee VÀ kéo thả khối: true trong ~150ms sau khi thả → nuốt cú click đi kèm.
   const didJustMarqueeRef = useRef<boolean>(false);
+  // true khi người dùng CHỦ ĐỘNG chọn ≥2 khối (Ctrl/Shift+click, marquee) → seek/phát/đổi segments
+  // KHÔNG được tự ép lại selection về 1 câu (BUG-A). Reset khi click thường / click vùng trống / seek thủ công.
+  const multiSelectLockRef = useRef<boolean>(false);
+  // Kéo thả khối (Premiere-style): element chỉ dẫn DOM trực tiếp, KHÔNG setState khi đang kéo.
+  const snapLineRef = useRef<HTMLDivElement | null>(null);
+  const dragTipRef = useRef<HTMLDivElement | null>(null);
+  const dragAbortRef = useRef<(() => void) | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
 
   // ROUND-12: Timeline Tool Mode (Tách riêng chế độ Chọn vs Tua timeline)
   const [timelineToolMode, setTimelineToolMode] = useState<"select" | "scrub" | "range">("select");
@@ -768,6 +1029,9 @@ export default function SublixStudioView({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const animFrameRef = useRef<number | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  // Ref để syncVoicePlayback (closure cũ trong native listener) luôn đọc tốc độ mới nhất (BUG-B).
+  const playbackSpeedRef = useRef<number>(1.0);
+  playbackSpeedRef.current = playbackSpeed;
   const [videoPlayError, setVideoPlayError] = useState<boolean>(false);
   // ROUND-4 R4-01: path to ffmpeg-transcoded preview (H.264/AAC baseline).
   // null = original file. Set when WebView2 fails to decode the original codec.
@@ -811,6 +1075,8 @@ export default function SublixStudioView({
   // Mốc tick tự co giãn (1s/5s/30s/1min/5min...) theo pxPerSec, không cố định 5s nữa.
   const [zoomLevel, setZoomLevel] = useState<number>(100); // % viewport (100 = full video)
   const [magnetSnap, setMagnetSnap] = useState<boolean>(true);
+  const magnetSnapRef = useRef<boolean>(true);
+  magnetSnapRef.current = magnetSnap;
   const [linkTracks, setLinkTracks] = useState<boolean>(true);
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -850,6 +1116,7 @@ export default function SublixStudioView({
     hasRange: boolean;
     inPoint: number | null;
     outPoint: number | null;
+    segCount: number;
   }
   const [timelineContextMenu, setTimelineContextMenu] = useState<TimelineContextMenuState | null>(null);
 
@@ -868,10 +1135,47 @@ export default function SublixStudioView({
     };
   }, [timelineContextMenu]);
 
-  // Bookmarks & Toast notification
-  const [bookmarks, setBookmarks] = useState<number[]>([]);
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Marker (thay `bookmarks: number[]` cũ):
+  // có id/tên/màu, gộp trùng (<0.05s), tìm marker trước/sau, lưu theo project.
+  const [markers, setMarkers] = useState<TimelineMarker[]>(cachedProject?.markers || []);
+  const markersRef = useRef<TimelineMarker[]>(markers);
+  markersRef.current = markers;
+
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Khoá track (Premiere): chặn kéo/trim/split/xoá/sửa chữ/dán.
+  const [trackLocks, setTrackLocks] = useState<TrackLockState>(createTrackLockState());
+  const trackLocksRef = useRef<TrackLockState>(trackLocks);
+  trackLocksRef.current = trackLocks;
+
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Clipboard (copy/paste câu thoại) — ref để không re-render.
+  const clipboardRef = useRef<ClipboardPayload>({ segments: [], baseTime: 0 });
+
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Shuttle J/K/L — state trong ref (không re-render 60fps).
+  const shuttleRef = useRef<ShuttleState>(createShuttleState());
+  const kHeldRef = useRef(false);
+  const shuttlePosRef = useRef(0);
+  const lastShuttleSeekRef = useRef(0);
+  const shuttleRafRef = useRef<number | null>(null);
+
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Auto-follow: mốc thời gian người dùng vừa cuộn tay
+  // (chặn auto-follow trong 1.5s) + mốc đánh dấu lần cuộn DO TA tạo ra.
+  const userScrollAtRef = useRef(0);
+  const autoScrollAtRef = useRef(0);
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
+
+  /**
+   * [TSK-TIMELINE-INTEGRATE-MODULES] Tốc độ phát ĐANG HIỆU LỰC.
+   * Nguồn tốc độ DUY NHẤT: nếu shuttle J/K/L đang tua → rate của shuttle;
+   * ngược lại → rate người dùng chọn ở nút tốc độ (`playbackSpeed`).
+   * Mọi chỗ gán `playbackRate` (video + audio lồng) đều đọc hàm này để
+   * không có 2 nguồn tốc độ đánh nhau.
+   */
+  const getEffectiveRate = (): number => {
+    const st = shuttleRef.current;
+    if (st.direction === "forward") return st.rate;
+    return playbackSpeedRef.current;
+  };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -937,6 +1241,8 @@ export default function SublixStudioView({
           currentTime: 0,
           sttLang,
           targetLang,
+          // [TSK-TIMELINE-INTEGRATE-MODULES] Lưu marker cùng project cache.
+          markers,
         };
         localStorage.setItem(STUDIO_PROJECT_CACHE_KEY, JSON.stringify(payload));
       } catch (err) {
@@ -944,7 +1250,7 @@ export default function SublixStudioView({
       }
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang]);
+  }, [filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
 
   // R5-01: cleanup loadedMetadataTimer khi component unmount hoặc đổi file
   // (tránh setState sau khi component đã unmount → React warning).
@@ -1123,8 +1429,10 @@ export default function SublixStudioView({
       setVideoPlayError(false);
       // R4-04: Re-apply playbackRate khi metadata load — trnh bug "đổi video khi
       // đang 1.5x → element reset v 1x nhưng UI vẫn ku 1.5x (ni dối)".
-      if (videoRef.current.playbackRate !== playbackSpeed) {
-        videoRef.current.playbackRate = playbackSpeed;
+      // [TSK-TIMELINE-INTEGRATE-MODULES] dùng getEffectiveRate() để không đè rate của shuttle.
+      const effRate = getEffectiveRate();
+      if (videoRef.current.playbackRate !== effRate) {
+        videoRef.current.playbackRate = effRate;
       }
       // Kiểm tra nếu WebView2 không decode được kích thước sau 1.2s -> kích hoạt transcode fallback.
       if (loadedMetadataTimerRef.current !== null) {
@@ -1186,6 +1494,8 @@ export default function SublixStudioView({
   const activeVoiceSegRef = useRef<number | null>(null);
   const finishedVoiceSegRef = useRef<number | null>(null);
   const videoVolumeBeforeDuckRef = useRef<number | null>(null);
+  // Âm lượng video NGAY SAU khi hạ (duck) — để biết người dùng có tự chỉnh volume trong lúc duck hay không.
+  const duckedVolumeRef = useRef<number | null>(null);
   const isFetchingTtsRef = useRef<Set<number>>(new Set());
   const [currentPlayingVoiceSegId, setCurrentPlayingVoiceSegId] = useState<number | null>(null);
 
@@ -1239,10 +1549,15 @@ export default function SublixStudioView({
     setCurrentPlayingVoiceSegId(null);
     const v = videoRef.current;
     if (v) {
-      // Khôi phục âm lượng video gốc về mức ban đầu trước khi ducking
+      // Khôi phục âm lượng video gốc về mức ban đầu trước khi ducking —
+      // NHƯNG nếu người dùng tự chỉnh volume trong lúc duck thì giữ nguyên mức họ vừa chỉnh.
       if (videoVolumeBeforeDuckRef.current !== null) {
-        v.volume = videoVolumeBeforeDuckRef.current;
+        const ducked = duckedVolumeRef.current;
+        if (ducked === null || Math.abs(v.volume - ducked) < 0.01) {
+          v.volume = videoVolumeBeforeDuckRef.current;
+        }
         videoVolumeBeforeDuckRef.current = null;
+        duckedVolumeRef.current = null;
       }
       v.muted = isOriginalMutedRef.current;
     }
@@ -1312,6 +1627,12 @@ export default function SublixStudioView({
         if (va.paused && !paused) {
           va.play().catch(() => {});
         }
+        // BUG-B: audio lồng phải chạy cùng tốc độ với video, nếu không lệch pha → tua giật liên tục.
+        // [TSK-TIMELINE-INTEGRATE-MODULES] rate hiệu lực (shuttle J/K/L được tính cả vào).
+        const vaRate = getEffectiveRate();
+        if (va.playbackRate !== vaRate) {
+          va.playbackRate = vaRate;
+        }
         const expectedTime = Math.max(0, now - seg.start);
         if (Math.abs(va.currentTime - expectedTime) > 0.35) {
           try {
@@ -1333,7 +1654,12 @@ export default function SublixStudioView({
     setCurrentPlayingVoiceSegId(seg.id);
 
     const offset = Math.max(0, now - seg.start);
+    // Mỗi lần nạp src, trình duyệt reset playbackRate về defaultPlaybackRate → đặt cả hai (BUG-B).
+    // [TSK-TIMELINE-INTEGRATE-MODULES] dùng rate hiệu lực (có tính shuttle J/K/L).
+    const loadRate = getEffectiveRate();
+    va.defaultPlaybackRate = loadRate;
     va.src = seg.audioUrl;
+    va.playbackRate = loadRate;
 
     const playVoiceClip = () => {
       try {
@@ -1341,6 +1667,7 @@ export default function SublixStudioView({
       } catch {
         /* noop */
       }
+      va.playbackRate = playbackSpeedRef.current;
       va.play().catch((e) => console.warn("R32: voice play failed:", e));
     };
 
@@ -1351,9 +1678,12 @@ export default function SublixStudioView({
     }
 
     // AUDIO DUCKING CHUẨN: Giảm nhỏ âm lượng video gốc xuống 20% khi có giọng lồng tiếng, KHÔNG tắt hẳn tiếng nền!
-    if (videoVolumeBeforeDuckRef.current === null) {
-      videoVolumeBeforeDuckRef.current = v.volume > 0 ? v.volume : 1.0;
-      v.volume = Math.max(0.05, Math.min(videoVolumeBeforeDuckRef.current * 0.25, 0.20));
+    // Volume đang = 0 (người dùng tắt tiếng) → không duck, và không "bật lại" thành 1.0 khi kết thúc.
+    if (videoVolumeBeforeDuckRef.current === null && v.volume > 0.001) {
+      const original = v.volume;
+      videoVolumeBeforeDuckRef.current = original;
+      v.volume = Math.min(original, Math.max(0.05, Math.min(original * 0.25, 0.2)));
+      duckedVolumeRef.current = v.volume;
     }
 
     va.onended = () => {
@@ -1393,17 +1723,21 @@ export default function SublixStudioView({
       finishedVoiceSegRef.current = null;
       const curT = v.currentTime;
       setCurrentTime(curT);
-      const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
-      if (match) {
-        setSelectedSegId(match.id);
-        selectedSegIdRef.current = match.id;
-        setSelectedSegIds([match.id]);
-        selectedSegIdsRef.current = [match.id];
-      } else {
-        setSelectedSegId(0);
-        selectedSegIdRef.current = 0;
-        setSelectedSegIds([]);
-        selectedSegIdsRef.current = [];
+      // BUG-A: seek thủ công (handleSeek) đã tự xử lý selection; ở đây chỉ auto-follow khi ĐANG PHÁT
+      // và không có multi-select chủ động — nếu không, Ctrl/Shift+click bị ép về 1 câu.
+      if (isPlayingRef.current && !multiSelectLockRef.current) {
+        const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
+        if (match) {
+          setSelectedSegId(match.id);
+          selectedSegIdRef.current = match.id;
+          setSelectedSegIds([match.id]);
+          selectedSegIdsRef.current = [match.id];
+        } else {
+          setSelectedSegId(0);
+          selectedSegIdRef.current = 0;
+          setSelectedSegIds([]);
+          selectedSegIdsRef.current = [];
+        }
       }
       syncVoicePlayback(curT, v.paused);
     };
@@ -1826,7 +2160,8 @@ export default function SublixStudioView({
     }
   };
 
-  const handleSeek = (timeSec: number) => {
+  // keepSelection = true: chỉ dời playhead, KHÔNG đụng selection (dùng khi chính thao tác chọn khối đã set selection).
+  const handleSeek = (timeSec: number, keepSelection: boolean = false) => {
     const dur = Math.max(1, mediaDurationRef.current || mediaDuration);
     const clamped = Math.max(0, Math.min(dur, timeSec));
     
@@ -1853,17 +2188,20 @@ export default function SublixStudioView({
     }
 
     // Đồng bộ đồng thời selection theo điểm seek để không bao giờ bị sáng lệch khối cũ ở chỗ khác
-    const match = segmentsRef.current.find((s) => s.start <= clamped && clamped <= s.end);
-    if (match) {
-      setSelectedSegId(match.id);
-      selectedSegIdRef.current = match.id;
-      setSelectedSegIds([match.id]);
-      selectedSegIdsRef.current = [match.id];
-    } else {
-      setSelectedSegId(0);
-      selectedSegIdRef.current = 0;
-      setSelectedSegIds([]);
-      selectedSegIdsRef.current = [];
+    if (!keepSelection) {
+      multiSelectLockRef.current = false;
+      const match = segmentsRef.current.find((s) => s.start <= clamped && clamped <= s.end);
+      if (match) {
+        setSelectedSegId(match.id);
+        selectedSegIdRef.current = match.id;
+        setSelectedSegIds([match.id]);
+        selectedSegIdsRef.current = [match.id];
+      } else {
+        setSelectedSegId(0);
+        selectedSegIdRef.current = 0;
+        setSelectedSegIds([]);
+        selectedSegIdsRef.current = [];
+      }
     }
 
     if (isPlayingRef.current) {
@@ -1982,6 +2320,23 @@ export default function SublixStudioView({
         if (playheadElementRef.current && mediaDurationRef.current > 0) {
           const leftPx = (vTime / mediaDurationRef.current) * timelineWidthRef.current;
           playheadElementRef.current.style.left = `${leftPx}px`;
+
+          // [TSK-TIMELINE-INTEGRATE-MODULES] Auto-follow (Premiere "page scroll"):
+          // kim vượt 90% bề rộng viewport → lật trang. Ghi DOM trực tiếp, KHÔNG setState.
+          // Tạm ngưng 1.5s sau khi người dùng cuộn tay (userScrollAtRef).
+          const scroller = timelineTracksBodyRef.current;
+          if (scroller && Date.now() - userScrollAtRef.current > 1500) {
+            const follow = computeFollowScroll({
+              playheadPx: leftPx,
+              scrollLeft: scroller.scrollLeft,
+              viewportWidth: scroller.clientWidth,
+              mode: "page",
+            });
+            if (follow !== null) {
+              autoScrollAtRef.current = Date.now();
+              scroller.scrollLeft = follow;
+            }
+          }
         }
         if (timecodeElementRef.current) {
           timecodeElementRef.current.textContent = formatTimecode(vTime);
@@ -2009,15 +2364,26 @@ export default function SublixStudioView({
   }, [isPlaying, mediaDuration, videoPlayError, filePath]);
 
   // R3-02: Ensure playbackRate is always synchronized on video element
+  // BUG-B: ... và cả audio tiếng lồng đang phát (đổi tốc độ giữa chừng không được làm lệch pha).
+  // [TSK-TIMELINE-INTEGRATE-MODULES] rate hiệu lực: shuttle J/K/L được tính cả vào
+  // (đổi tốc độ bằng nút sẽ TẮT shuttle trước → không có 2 nguồn tốc độ đánh nhau).
   useEffect(() => {
+    const effRate = getEffectiveRate();
     if (videoRef.current) {
-      videoRef.current.playbackRate = playbackSpeed;
+      videoRef.current.playbackRate = effRate;
+    }
+    const va = voicePlayRef.current;
+    if (va) {
+      va.defaultPlaybackRate = effRate;
+      va.playbackRate = effRate;
     }
   }, [playbackSpeed]);
 
-  // Synchronize active subtitle selection as playhead moves
+  // Auto-follow selection theo playhead — CHỈ khi đang phát và không có multi-select chủ động (BUG-A).
+  // Khi dừng/sửa chữ/nhích/đổi vai (segments đổi) selection KHÔNG bị reset về 1 câu.
   useEffect(() => {
-    const match = segments.find((s) => s.start <= currentTime && currentTime <= s.end);
+    if (!isPlaying || multiSelectLockRef.current) return;
+    const match = segmentsRef.current.find((s) => s.start <= currentTime && currentTime <= s.end);
     if (match) {
       if (match.id !== selectedSegIdRef.current) {
         setSelectedSegId(match.id);
@@ -2028,7 +2394,7 @@ export default function SublixStudioView({
         setSelectedSegIds([match.id]);
         selectedSegIdsRef.current = [match.id];
       }
-    } else if (isPlaying) {
+    } else {
       if (selectedSegIdRef.current !== 0) {
         setSelectedSegId(0);
         selectedSegIdRef.current = 0;
@@ -2038,12 +2404,17 @@ export default function SublixStudioView({
         selectedSegIdsRef.current = [];
       }
     }
-  }, [currentTime, isPlaying, segments]);
+  }, [currentTime, isPlaying]);
 
   // ROUND-10: Timeline Action Handlers & Shortcuts
   const handleSplitSegment = (segIdToSplit?: number) => {
     const id = segIdToSplit ?? selectedSegIdRef.current;
     if (!id) return;
+    // [TSK-TIMELINE-INTEGRATE-MODULES] Track phụ đề bị khoá → chặn cắt đôi.
+    if (isEditBlocked(trackLocksRef.current, "subtitles", "split")) {
+      showToast(editBlockedReason("subtitles", "split"));
+      return;
+    }
     const curTime = currentTimeRef.current;
     const target = segmentsRef.current.find((s) => s.id === id);
     if (!target) return;
@@ -2111,6 +2482,19 @@ export default function SublixStudioView({
         ? [selectedSegIdRef.current]
         : [];
       if (ids.length === 0) return;
+      // [TSK-TIMELINE-INTEGRATE-MODULES] Track lồng tiếng của vai bị khoá → chặn xoá tiếng.
+      const voiceKeys = Array.from(
+        new Set(
+          ids
+            .map((id) => segmentsRef.current.find((s) => s.id === id)?.speakerId)
+            .filter((x): x is string => !!x),
+        ),
+      ).map((id) => speakerTrackKey(id));
+      const blockedVoice = blockedTracks(trackLocksRef.current, voiceKeys, "delete");
+      if (blockedVoice.length > 0) {
+        showToast(editBlockedReason(blockedVoice[0], "delete"));
+        return;
+      }
       saveUndoHistory();
       setSegments((prev) =>
         prev.map((s) =>
@@ -2135,12 +2519,14 @@ export default function SublixStudioView({
       : [];
 
     if (ids.length === 0 || segmentsRef.current.length === 0) return;
+    // [TSK-TIMELINE-INTEGRATE-MODULES] Track phụ đề bị khoá → chặn xoá câu.
+    if (isEditBlocked(trackLocksRef.current, "subtitles", "delete")) {
+      showToast(editBlockedReason("subtitles", "delete"));
+      return;
+    }
     saveUndoHistory();
     setSegments((prev) => prev.filter((s) => !ids.includes(s.id)));
-    setSelectedSegIds([]);
-    selectedSegIdsRef.current = [];
-    setSelectedSegId(0);
-    selectedSegIdRef.current = 0;
+    clearSegmentSelection();
     if (ids.some((id) => activeVoiceSegRef.current === id)) {
       stopVoicePlayback();
     }
@@ -2196,27 +2582,44 @@ export default function SublixStudioView({
   };
 
   // ROUND-11: Chọn câu thoại có hỗ trợ Multi-select (Shift / Ctrl / Cmd)
+  // BUG-A: Ctrl/Cmd = bật/tắt từng khối; Shift = chọn dải từ khối đang chọn tới khối vừa bấm (theo thứ tự thời gian).
+  // Click có modifier KHÔNG seek (trước đây handleSeek → ép selection về 1 câu); click thường mới đưa playhead về đầu câu.
   const handleSelectSegmentWithModifier = (seg: SubtitleItem, e?: React.MouseEvent) => {
-    if (e && (e.shiftKey || e.ctrlKey || e.metaKey)) {
-      setSelectedSegIds((prev) => {
-        const next = prev.includes(seg.id) ? prev.filter((id) => id !== seg.id) : [...prev, seg.id];
-        selectedSegIdsRef.current = next;
-        if (next.length > 0) {
-          setSelectedSegId(next[next.length - 1]);
-          selectedSegIdRef.current = next[next.length - 1];
-        } else {
-          setSelectedSegId(0);
-          selectedSegIdRef.current = 0;
-        }
-        return next;
-      });
-    } else {
-      setSelectedSegIds([seg.id]);
-      selectedSegIdsRef.current = [seg.id];
-      setSelectedSegId(seg.id);
-      selectedSegIdRef.current = seg.id;
+    const applySelection = (ids: number[], active: number) => {
+      setSelectedSegIds(ids);
+      selectedSegIdsRef.current = ids;
+      setSelectedSegId(active);
+      selectedSegIdRef.current = active;
+      multiSelectLockRef.current = ids.length > 1;
+    };
+
+    if (e && e.shiftKey && selectedSegIdRef.current > 0 && selectedSegIdRef.current !== seg.id) {
+      const sorted = [...segmentsRef.current].sort((a, b) => a.start - b.start);
+      const iA = sorted.findIndex((s) => s.id === selectedSegIdRef.current);
+      const iB = sorted.findIndex((s) => s.id === seg.id);
+      if (iA >= 0 && iB >= 0) {
+        const [lo, hi] = iA < iB ? [iA, iB] : [iB, iA];
+        applySelection(sorted.slice(lo, hi + 1).map((s) => s.id), seg.id);
+        return;
+      }
     }
-    handleSeek(seg.start);
+    if (e && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      const prev = selectedSegIdsRef.current;
+      const next = prev.includes(seg.id) ? prev.filter((id) => id !== seg.id) : [...prev, seg.id];
+      applySelection(next, next.length > 0 ? next[next.length - 1] : 0);
+      return;
+    }
+    applySelection([seg.id], seg.id);
+    handleSeek(seg.start, true);
+  };
+
+  // Xóa/đổi selection về rỗng một cách chủ động (click vùng trống, xóa câu…)
+  const clearSegmentSelection = () => {
+    multiSelectLockRef.current = false;
+    setSelectedSegIds([]);
+    selectedSegIdsRef.current = [];
+    setSelectedSegId(0);
+    selectedSegIdRef.current = 0;
   };
 
   // ROUND-11 & ROUND-12: Marquee Box Selection kéo chuột trái trên Timeline (Tách riêng biệt hoàn toàn với Tua Timeline)
@@ -2308,6 +2711,7 @@ export default function SublixStudioView({
 
       setSelectedSegIds(matchedIds);
       selectedSegIdsRef.current = matchedIds;
+      multiSelectLockRef.current = matchedIds.length > 1;
       if (matchedIds.length > 0) {
         setSelectedSegId(matchedIds[0]);
         selectedSegIdRef.current = matchedIds[0];
@@ -2329,10 +2733,7 @@ export default function SublixStudioView({
         }
       } else {
         // Chỉ click đơn trên khoảng trống track -> Bỏ chọn tất cả blocks
-        setSelectedSegIds([]);
-        selectedSegIdsRef.current = [];
-        setSelectedSegId(0);
-        selectedSegIdRef.current = 0;
+        clearSegmentSelection();
       }
 
       isMarqueeSelectingRef.current = false;
@@ -2341,6 +2742,376 @@ export default function SublixStudioView({
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
+  };
+
+  // =========================================================================
+  // TSK-TIMELINE-FIX-DND-RANGE — KÉO THẢ KHỐI TRÊN TIMELINE (kiểu Premiere)
+  //  • Kéo giữa khối = DỜI (start/end cùng dịch, giữ độ dài; nhiều khối nếu đang multi-select)
+  //  • Kéo mép trái/phải khối phụ đề = TRIM start/end (khối tiếng lồng giữ độ dài clip TTS → chỉ dời)
+  //  • Hít (snap) ~8px tới playhead / mép khối lân cận / In-Out / 0 / hết video; giữ Alt = tắt hít (hoặc tắt nút nam châm)
+  //  • Không chồng lên khối kề bên (chặn ở mép); 1 lần kéo = 1 bước Hoàn tác (Ctrl+Z)
+  //  • Note 1-2 (Antigravity): chuyển động bằng transform/DOM ref, KHÔNG setState khi đang kéo — chỉ setSegments khi THẢ chuột.
+  // Phân biệt với marquee (kéo vùng trống: handleTimelineMouseDown bỏ qua mọi mousedown trên .studio-timeline-block)
+  // và scrub playhead (thước / kim / dải video & sóng âm).
+  // =========================================================================
+  const handleBlockMouseDown = (
+    seg: SubtitleItem,
+    e: React.MouseEvent<HTMLDivElement>,
+    lane: "subtitles" | "voice"
+  ) => {
+    if (e.button !== 0 || timelineToolModeRef.current === "scrub") return;
+    // Ctrl/Shift/Cmd + bấm = chọn nhiều → để onClick xử lý, không bắt đầu kéo
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
+    const container = timelineTracksBodyRef.current;
+    if (!container) return;
+
+    const dur = Math.max(1, mediaDurationRef.current);
+    const tw = timelineWidthRef.current || 1200;
+    const pxPerSec = tw / dur;
+    const MIN_SEG_SEC = 0.2;
+    const THRESHOLD_PX = 4;
+    const SNAP_PX = 8;
+    const EDGE_PX = 7;
+
+    const blockRect = e.currentTarget.getBoundingClientRect();
+    const relX = e.clientX - blockRect.left;
+    let mode: "move" | "trim-start" | "trim-end" = "move";
+    if (lane === "subtitles" && blockRect.width >= 30) {
+      if (relX <= EDGE_PX) mode = "trim-start";
+      else if (blockRect.width - relX <= EDGE_PX) mode = "trim-end";
+    }
+
+    // [TSK-TIMELINE-INTEGRATE-MODULES] Track bị khoá → chặn kéo/trim.
+    // - lane "subtitles" → track phụ đề ("subtitles")
+    // - lane "voice"     → track lồng tiếng của vai đó ("speaker:<id>")
+    const blockTrackKey: TrackKey =
+      lane === "subtitles" ? "subtitles" : speakerTrackKey(seg.speakerId);
+    const blockOp = mode === "move" ? ("move" as const) : ("trim" as const);
+    if (isEditBlocked(trackLocksRef.current, blockTrackKey, blockOp)) {
+      showToast(editBlockedReason(blockTrackKey, blockOp));
+      return;
+    }
+
+    // Bấm vào khối CHƯA được chọn → chọn riêng khối đó (như Premiere); khối đã nằm trong multi-select → kéo cả nhóm.
+    selectedTrackTypeRef.current = lane;
+    if (!selectedSegIdsRef.current.includes(seg.id)) {
+      setSelectedSegIds([seg.id]);
+      selectedSegIdsRef.current = [seg.id];
+      setSelectedSegId(seg.id);
+      selectedSegIdRef.current = seg.id;
+      multiSelectLockRef.current = false;
+    }
+    e.preventDefault(); // không bôi đen chữ khi kéo; click vẫn được bắn bình thường
+
+    const segs = segmentsRef.current;
+    const groupIds = new Set<number>(
+      mode === "move" && selectedSegIdsRef.current.includes(seg.id) ? selectedSegIdsRef.current : [seg.id]
+    );
+    const members = segs.filter((s) => groupIds.has(s.id));
+    if (members.length === 0) return;
+    const others = segs.filter((s) => !groupIds.has(s.id));
+    const midOf = (s: { start: number; end: number }) => (s.start + s.end) / 2;
+
+    // Giới hạn dịch chuyển để KHÔNG chồng lên khối kề bên (khối láng giềng gần nhất theo điểm giữa).
+    let dMin = -Infinity;
+    let dMax = Infinity;
+    for (const m of members) {
+      let prevEnd = 0;
+      let nextStart = dur;
+      for (const o of others) {
+        if (midOf(o) < midOf(m)) prevEnd = Math.max(prevEnd, o.end);
+        else nextStart = Math.min(nextStart, o.start);
+      }
+      prevEnd = Math.min(prevEnd, m.start); // dữ liệu cũ đã chồng sẵn → không bị kẹt cứng
+      nextStart = Math.max(nextStart, m.end);
+      dMin = Math.max(dMin, prevEnd - m.start);
+      dMax = Math.min(dMax, nextStart - m.end);
+    }
+    const gStart = Math.min(...members.map((m) => m.start));
+    const gEnd = Math.max(...members.map((m) => m.end));
+
+    // Ứng viên "hít": 0, hết video, playhead, In/Out, mép mọi khối không bị kéo
+    const cands: number[] = [0, dur, videoRef.current ? videoRef.current.currentTime : currentTimeRef.current];
+    if (inPointRef.current !== null) cands.push(inPointRef.current);
+    if (outPointRef.current !== null) cands.push(outPointRef.current);
+    for (const o of others) cands.push(o.start, o.end);
+    cands.sort((a, b) => a - b);
+    const snapTo = (t: number, thr: number): number | null => {
+      let lo = 0;
+      let hi = cands.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (cands[mid] < t) lo = mid + 1;
+        else hi = mid;
+      }
+      let best: number | null = null;
+      let bestD = thr;
+      for (const i of [lo - 1, lo]) {
+        if (i < 0 || i >= cands.length) continue;
+        const d = Math.abs(cands[i] - t);
+        if (d <= bestD) {
+          bestD = d;
+          best = cands[i];
+        }
+      }
+      return best;
+    };
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScroll = container.scrollLeft || 0;
+    const prevLock = multiSelectLockRef.current;
+    let started = false;
+    let finished = false;
+    let lastClientX = e.clientX;
+    let lastClientY = e.clientY;
+    let lastAlt = e.altKey;
+    let result: { value: number; snapAt: number | null } = { value: mode === "move" ? 0 : mode === "trim-start" ? seg.start : seg.end, snapAt: null };
+    let raf: number | null = null;
+    const els: Array<{ el: HTMLElement; id: number; sub: boolean; left0: number; width0: number }> = [];
+
+    // value: move = độ dịch (giây); trim-start = start mới; trim-end = end mới
+    const compute = () => {
+      const dxPx = lastClientX - startX + ((container.scrollLeft || 0) - startScroll);
+      const rawSec = dxPx / pxPerSec;
+      const thr = SNAP_PX / pxPerSec;
+      const snapOn = magnetSnapRef.current && !lastAlt;
+      let snapAt: number | null = null;
+      if (mode === "move") {
+        let d = Math.min(dMax, Math.max(dMin, rawSec));
+        if (snapOn) {
+          const a = snapTo(gStart + d, thr);
+          const b = snapTo(gEnd + d, thr);
+          const da = a === null ? Infinity : Math.abs(a - (gStart + d));
+          const db = b === null ? Infinity : Math.abs(b - (gEnd + d));
+          let cand = d;
+          let at: number | null = null;
+          if (a !== null && da <= db) {
+            cand = d + (a - (gStart + d));
+            at = a;
+          } else if (b !== null) {
+            cand = d + (b - (gEnd + d));
+            at = b;
+          }
+          if (at !== null && cand >= dMin - 1e-6 && cand <= dMax + 1e-6) {
+            d = cand;
+            snapAt = at;
+          }
+        }
+        return { value: d, snapAt };
+      }
+      if (mode === "trim-start") {
+        const lower = seg.start + dMin;
+        const upper = seg.end - MIN_SEG_SEC;
+        let ns = Math.min(upper, Math.max(lower, seg.start + rawSec));
+        if (snapOn) {
+          const c = snapTo(ns, thr);
+          if (c !== null && c >= lower && c <= upper) {
+            ns = c;
+            snapAt = c;
+          }
+        }
+        return { value: ns, snapAt };
+      }
+      const lowerE = seg.start + MIN_SEG_SEC;
+      const upperE = seg.end + dMax;
+      let ne = Math.min(upperE, Math.max(lowerE, seg.end + rawSec));
+      if (snapOn) {
+        const c = snapTo(ne, thr);
+        if (c !== null && c >= lowerE && c <= upperE) {
+          ne = c;
+          snapAt = c;
+        }
+      }
+      return { value: ne, snapAt };
+    };
+
+    const apply = () => {
+      result = compute();
+      const { value, snapAt } = result;
+      if (mode === "move") {
+        const px = value * pxPerSec;
+        for (const it of els) it.el.style.transform = `translateX(${px}px)`;
+      } else {
+        const it = els.find((x) => x.sub);
+        if (it) {
+          if (mode === "trim-start") {
+            const dpx = (value - seg.start) * pxPerSec;
+            it.el.style.left = `${it.left0 + dpx}px`;
+            it.el.style.width = `${Math.max(3, it.width0 - dpx)}px`;
+          } else {
+            it.el.style.width = `${Math.max(3, it.width0 + (value - seg.end) * pxPerSec)}px`;
+          }
+        }
+      }
+      const line = snapLineRef.current;
+      if (line) {
+        if (snapAt !== null) {
+          line.style.display = "block";
+          line.style.left = `${snapAt * pxPerSec}px`;
+        } else {
+          line.style.display = "none";
+        }
+      }
+      const tip = dragTipRef.current;
+      if (tip) {
+        tip.style.display = "block";
+        tip.style.left = `${lastClientX + 14}px`;
+        tip.style.top = `${lastClientY - 34}px`;
+        if (mode === "move") {
+          tip.textContent = `${formatTimecode(gStart + value)} → ${formatTimecode(gEnd + value)}  (${value >= 0 ? "+" : ""}${value.toFixed(2)}s${members.length > 1 ? ` • ${members.length} câu` : ""})${snapAt !== null ? " 🧲" : ""}`;
+        } else if (mode === "trim-start") {
+          tip.textContent = `Đầu câu: ${formatTimecode(value)}  (dài ${(seg.end - value).toFixed(2)}s)${snapAt !== null ? " 🧲" : ""}`;
+        } else {
+          tip.textContent = `Cuối câu: ${formatTimecode(value)}  (dài ${(value - seg.start).toFixed(2)}s)${snapAt !== null ? " 🧲" : ""}`;
+        }
+      }
+    };
+
+    const begin = () => {
+      started = true;
+      multiSelectLockRef.current = true; // đang kéo: auto-follow khi phát không được cướp selection
+      container.querySelectorAll<HTMLElement>(".studio-timeline-block[data-seg-id]").forEach((el) => {
+        const id = Number(el.dataset.segId);
+        if (!groupIds.has(id)) return;
+        const sub = el.classList.contains("studio-timeline-subtitle-block");
+        if (mode !== "move" && !sub) return;
+        el.classList.add("is-dragging");
+        els.push({ el, id, sub, left0: parseFloat(el.style.left) || 0, width0: parseFloat(el.style.width) || 0 });
+      });
+      // Tự cuộn ngang khi kéo sát mép vùng nhìn thấy (video dài + zoom lớn)
+      const autoScroll = () => {
+        if (finished) return;
+        const r = container.getBoundingClientRect();
+        let sp = 0;
+        if (lastClientX > r.right - 36) sp = Math.min(26, (lastClientX - (r.right - 36)) / 2 + 2);
+        else if (lastClientX < r.left + 36) sp = -Math.min(26, (r.left + 36 - lastClientX) / 2 + 2);
+        if (sp !== 0) {
+          const before = container.scrollLeft;
+          container.scrollLeft += sp;
+          if (container.scrollLeft !== before) apply();
+        }
+        raf = requestAnimationFrame(autoScroll);
+      };
+      raf = requestAnimationFrame(autoScroll);
+    };
+
+    const detach = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey, true);
+      if (raf !== null) cancelAnimationFrame(raf);
+      raf = null;
+      if (snapLineRef.current) snapLineRef.current.style.display = "none";
+      if (dragTipRef.current) dragTipRef.current.style.display = "none";
+      dragAbortRef.current = null;
+      multiSelectLockRef.current = started ? prevLock : multiSelectLockRef.current;
+    };
+
+    const restoreOriginal = () => {
+      for (const it of els) {
+        it.el.classList.remove("is-dragging");
+        it.el.style.transform = "";
+        if (mode !== "move" && it.sub) {
+          it.el.style.left = `${it.left0}px`;
+          it.el.style.width = `${it.width0}px`;
+        }
+      }
+    };
+
+    const finish = (commit: boolean) => {
+      if (finished) return;
+      finished = true;
+      detach();
+      if (!started) return; // chỉ là click → onClick xử lý như cũ
+      // Nuốt cú click sinh ra khi thả chuột (không chọn lại / seek / bỏ chọn)
+      didJustMarqueeRef.current = true;
+      window.setTimeout(() => {
+        didJustMarqueeRef.current = false;
+      }, 180);
+
+      const { value } = result;
+      const moved = mode === "move" ? Math.abs(value) >= 0.005 : Math.abs(value - (mode === "trim-start" ? seg.start : seg.end)) >= 0.005;
+      if (!commit || !moved) {
+        restoreOriginal();
+        return;
+      }
+
+      saveUndoHistory();
+      if (mode === "move") {
+        setSegments((prev) =>
+          prev.map((s) => {
+            if (!groupIds.has(s.id)) return s;
+            const len = s.end - s.start;
+            const ns = round2(Math.min(Math.max(0, s.start + value), Math.max(0, dur - len)));
+            return { ...s, start: ns, end: round2(ns + len) };
+          })
+        );
+        showToast(`↔ Đã dời ${members.length} câu thoại ${value >= 0 ? "+" : ""}${value.toFixed(2)}s (Ctrl+Z để hoàn tác)`);
+      } else if (mode === "trim-start") {
+        setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, start: round2(value) } : s)));
+        showToast(`✂ Đã cắt đầu câu #${seg.id} → ${formatTimecode(value)} (Ctrl+Z để hoàn tác)`);
+      } else {
+        setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, end: round2(value) } : s)));
+        showToast(`✂ Đã cắt cuối câu #${seg.id} → ${formatTimecode(value)} (Ctrl+Z để hoàn tác)`);
+      }
+      // Dọn transform/style tạm NGAY SAU khi React commit vị trí mới (useLayoutEffect bên dưới) → không nháy hình
+      const cleanup = () => {
+        for (const it of els) {
+          it.el.classList.remove("is-dragging");
+          it.el.style.transform = "";
+          if (mode !== "move" && it.sub) {
+            const s = segmentsRef.current.find((x) => x.id === it.id);
+            if (s) {
+              it.el.style.left = `${(s.start / dur) * tw}px`;
+              it.el.style.width = `${Math.max(3, ((s.end - s.start) / dur) * tw)}px`;
+            }
+          }
+        }
+      };
+      dragCleanupRef.current = cleanup;
+      window.setTimeout(() => {
+        const f = dragCleanupRef.current;
+        if (f) {
+          dragCleanupRef.current = null;
+          f();
+        }
+      }, 400);
+    };
+
+    function onMove(ev: MouseEvent) {
+      if (finished) return;
+      if (ev.buttons === 0) {
+        finish(true); // nhả chuột ngoài cửa sổ
+        return;
+      }
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      lastAlt = ev.altKey;
+      if (!started) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESHOLD_PX) return;
+        begin();
+      }
+      apply();
+    }
+    function onUp(ev: MouseEvent) {
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      lastAlt = ev.altKey;
+      if (started) apply();
+      finish(true);
+    }
+    function onKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape") {
+        ev.stopPropagation();
+        finish(false);
+      }
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey, true);
+    dragAbortRef.current = () => finish(false);
   };
 
   // Premiere-style Timeline Vertical Resizer (Kéo mở rộng chiều cao)
@@ -2436,7 +3207,8 @@ export default function SublixStudioView({
 
     const curIn = inPointRef.current;
     const curOut = outPointRef.current;
-    const hasRange = curIn !== null && curOut !== null;
+    const bounds = getRangeBounds();
+    const hasRange = bounds !== null;
 
     setTimelineContextMenu({
       visible: true,
@@ -2446,7 +3218,43 @@ export default function SublixStudioView({
       hasRange,
       inPoint: curIn,
       outPoint: curOut,
+      segCount: bounds ? segmentsRef.current.filter((s) => isSegInRange(s, bounds.start, bounds.end)).length : 0,
     });
+  };
+
+  // Vùng In/Out hợp lệ (đã sắp xếp) — null nếu chưa khoanh hoặc vùng ngắn hơn 0.2s (In ≈ Out).
+  const getRangeBounds = (): { start: number; end: number } | null => {
+    const a = inPointRef.current;
+    const b = outPointRef.current;
+    if (a === null || b === null) return null;
+    const start = Math.min(a, b);
+    const end = Math.max(a, b);
+    return end - start >= 0.2 ? { start, end } : null;
+  };
+
+  // 4 lệnh AI của menu chuột phải trên vùng In/Out. Mọi lệnh chỉ chạm các câu thuộc vùng
+  // (câu ngoài vùng giữ nguyên id, bản dịch, tiếng lồng). Có chặn chạy chồng + báo trước số câu bị ảnh hưởng.
+  const runRangeAction = (kind: "stt" | "translate" | "voice" | "full") => {
+    setTimelineContextMenu(null);
+    if (isAnalyzing) {
+      showToast("⏳ Đang có tác vụ AI chạy — hãy chờ xong (hoặc bấm Dừng) rồi khoanh vùng chạy tiếp");
+      return;
+    }
+    const bounds = getRangeBounds();
+    if (!bounds) {
+      showToast("⚠ Vùng In/Out quá ngắn — hãy khoanh lại vùng (phím I / O hoặc giữ Shift + kéo trên thước)");
+      return;
+    }
+    const inRange = segmentsRef.current.filter((s) => isSegInRange(s, bounds.start, bounds.end)).length;
+    if ((kind === "translate" || kind === "voice") && inRange === 0) {
+      showToast("ℹ️ Chưa có câu thoại nào trong vùng chọn — hãy chạy 'Bóc tách phụ đề vùng' trước");
+      return;
+    }
+    setUseRangeOnly(true);
+    if (kind === "stt") void handleRunSttOnly(true);
+    else if (kind === "translate") void handleRunTranslateOnly(undefined, true);
+    else if (kind === "voice") void handleRunVoiceOnly(true);
+    else void handleRunAnalysis(true, true, true);
   };
 
   // Dragging Range Handles on Ruler
@@ -2484,6 +3292,259 @@ export default function SublixStudioView({
     window.addEventListener("mouseup", handleWindowUp);
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // [TSK-TIMELINE-INTEGRATE-MODULES] Handler timeline: timecode, copy/paste,
+  // marker, J/K/L, khoá track, auto-follow.
+  // Tất cả được gom vào `timelineShortcutsRef` để `handleKeyDown` (useEffect deps
+  // = [isActive]) KHÔNG bị stale closure mà không phải đăng ký lại listener.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** FPS dùng cho nhích 1 frame (chưa biết fps của video → 25 như mặc định). */
+  const TIMELINE_FPS = 25;
+
+  /** Đọc mốc thời gian hiện tại — hàm ỔN ĐỊNH (đọc ref) cho TimecodeInput. */
+  const getCurrentSeconds = useCallback(() => currentTimeRef.current, []);
+
+  /** Seek từ ô nhập timecode — clamp về [0, duration] rồi nhảy. */
+  const timecodeSeekRef = useRef<(sec: number) => void>(() => {});
+  timecodeSeekRef.current = (sec: number) => {
+    handleSeek(clampSeconds(sec, mediaDurationRef.current || mediaDuration));
+  };
+  const handleTimecodeSeek = useCallback((sec: number) => {
+    timecodeSeekRef.current(sec);
+  }, []);
+
+  // ── Copy / Paste (Premiere: Ctrl+C / Ctrl+V) ─────────────────────────────
+  const handleCopySelected = () => {
+    const ids = new Set(selectedSegIdsRef.current);
+    const sel = segmentsRef.current.filter((s) => ids.has(s.id));
+    if (sel.length === 0) {
+      showToast("⚠️ Chưa chọn câu nào để copy");
+      return;
+    }
+    clipboardRef.current = copyToClipboard(sel);
+    showToast(`📋 Đã copy ${sel.length} câu thoại`);
+  };
+
+  const handlePasteSegments = () => {
+    const payload = clipboardRef.current;
+    if (payload.segments.length === 0) {
+      showToast("⚠️ Clipboard trống — hãy copy câu thoại trước (Ctrl+C)");
+      return;
+    }
+    // Track đang khoá → chặn dán (không tự xoá câu nào).
+    const speakerKeys = Array.from(new Set(payload.segments.map((s) => s.speakerId))).map((id) =>
+      speakerTrackKey(id),
+    );
+    const affected: TrackKey[] = ["subtitles", ...speakerKeys];
+    const blocked = blockedTracks(trackLocksRef.current, affected, "paste");
+    if (blocked.length > 0) {
+      showToast(editBlockedReason(blocked[0], "paste"));
+      return;
+    }
+    const res = pasteFromClipboard(payload, segmentsRef.current, currentTimeRef.current);
+    if (res.segments.length === 0) {
+      showToast("⚠️ Không có câu nào hợp lệ để dán");
+      return;
+    }
+    saveUndoHistory();
+    setSegments((prev) => [...prev, ...res.segments]);
+    const conflictNote =
+      res.conflicts.length > 0
+        ? ` — ⚠️ ${res.conflicts.length} câu trùng với câu đã có (KHÔNG tự xoá)`
+        : "";
+    showToast(
+      `📥 Đã dán ${res.segments.length} câu tại ${formatTimecode(currentTimeRef.current)}${conflictNote}`,
+    );
+  };
+
+  // ── Marker (M = bật/tắt, Shift+M = kế tiếp, Ctrl+Shift+M = trước) ───────
+  const handleToggleMarker = () => {
+    const t = currentTimeRef.current;
+    const prev = markersRef.current;
+    const next = toggleMarker(prev, t);
+    setMarkers(next);
+    showToast(
+      next.length > prev.length
+        ? `🔖 Đã ghim marker tại ${formatTimecode(t)}`
+        : `🔖 Đã bỏ marker tại ${formatTimecode(t)}`,
+    );
+  };
+
+  const handleNextMarker = () => {
+    const m = findNextMarker(markersRef.current, currentTimeRef.current);
+    if (m === null) {
+      showToast("⚠️ Không có marker nào phía sau");
+      return;
+    }
+    handleSeek(m.time);
+    showToast(`🔖 Nhảy tới marker ${formatTimecode(m.time)}`);
+  };
+
+  const handlePrevMarker = () => {
+    const m = findPrevMarker(markersRef.current, currentTimeRef.current);
+    if (m === null) {
+      showToast("⚠️ Không có marker nào phía trước");
+      return;
+    }
+    handleSeek(m.time);
+    showToast(`🔖 Nhảy về marker ${formatTimecode(m.time)}`);
+  };
+
+  /** Callback ỔN ĐỊNH cho vạch marker (component memo) — logic thật nằm trong ref. */
+  const markerClickRef = useRef<(time: number) => void>(() => {});
+  markerClickRef.current = (time: number) => {
+    handleSeek(time);
+    showToast(`🔖 Nhảy tới marker ${formatTimecode(time)}`);
+  };
+  const stableMarkerClick = useCallback((time: number) => markerClickRef.current(time), []);
+
+  // ── Shuttle J/K/L (Premiere) ─────────────────────────────────────────────
+  const stopShuttleLoop = () => {
+    if (shuttleRafRef.current !== null) {
+      cancelAnimationFrame(shuttleRafRef.current);
+      shuttleRafRef.current = null;
+    }
+  };
+
+  /** Gán tốc độ cho video + audio lồng (1 nguồn: getEffectiveRate). */
+  const applyShuttleRate = (rate: number) => {
+    const v = videoRef.current;
+    if (v) v.playbackRate = rate;
+    const va = voicePlayRef.current;
+    if (va) {
+      va.defaultPlaybackRate = rate;
+      va.playbackRate = rate;
+    }
+  };
+
+  /**
+   * Vòng lặp tua LÙI: thẻ <video> không phát ngược được nên ta tự seek theo nhịp.
+   * - Kim playhead + timecode: ghi DOM trực tiếp (KHÔNG setState ở 60fps).
+   * - Seek video: tối đa ~15 lần/giây (tránh nghẽn decoder).
+   * - React state: throttle 120ms (đúng chuẩn file này).
+   */
+  const startShuttleReverseLoop = () => {
+    if (shuttleRafRef.current !== null) return;
+    let last = performance.now();
+    const loop = () => {
+      const st = shuttleRef.current;
+      if (st.direction !== "reverse") {
+        shuttleRafRef.current = null;
+        return;
+      }
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      const target = computeShuttleSeek(st, shuttlePosRef.current, dt);
+      if (target !== null) {
+        shuttlePosRef.current = target;
+        const dur = Math.max(1, mediaDurationRef.current);
+        if (playheadElementRef.current) {
+          playheadElementRef.current.style.left = `${(target / dur) * (timelineWidthRef.current || 1200)}px`;
+        }
+        if (timecodeElementRef.current) {
+          timecodeElementRef.current.textContent = formatTimecode(target);
+        }
+        if (now - lastShuttleSeekRef.current > 66) {
+          lastShuttleSeekRef.current = now;
+          if (videoRef.current) {
+            try {
+              videoRef.current.currentTime = target;
+            } catch (e) {
+              console.warn("Shuttle seek error:", e);
+            }
+          }
+        }
+        if (now - lastTimeStateUpdateRef.current > 120) {
+          lastTimeStateUpdateRef.current = now;
+          setCurrentTime(target);
+        }
+      }
+      shuttleRafRef.current = requestAnimationFrame(loop);
+    };
+    shuttleRafRef.current = requestAnimationFrame(loop);
+  };
+
+  const handleShuttleKey = (key: ShuttleKey) => {
+    const next = applyShuttleKey(shuttleRef.current, key, { kHeld: kHeldRef.current });
+    shuttleRef.current = next;
+
+    if (next.action === "stop") {
+      stopShuttleLoop();
+      applyShuttleRate(playbackSpeedRef.current);
+      shuttlePosRef.current = currentTimeRef.current;
+      showToast("⏹ Đã dừng tua (K)");
+      return;
+    }
+
+    if (next.action === "step-forward" || next.action === "step-back") {
+      const step = frameStepSeconds(TIMELINE_FPS);
+      const delta = next.action === "step-forward" ? step : -step;
+      handleSeek(currentTimeRef.current + delta, true);
+      showToast(`⏭ Nhích 1 frame ${next.action === "step-forward" ? "tiến" : "lùi"}`);
+      return;
+    }
+
+    if (next.direction === "forward") {
+      stopShuttleLoop();
+      applyShuttleRate(shuttlePlaybackRate(next));
+      if (videoRef.current && videoRef.current.paused) {
+        handleTogglePlay();
+        applyShuttleRate(shuttlePlaybackRate(next));
+      }
+      showToast(`⏩ Tua tiến ${next.rate}x`);
+      return;
+    }
+
+    // Hướng "reverse": dừng video, tự seek ngược theo nhịp.
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch (e) {
+        console.warn("Shuttle pause error:", e);
+      }
+    }
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    stopVoicePlayback();
+    shuttlePosRef.current = currentTimeRef.current;
+    startShuttleReverseLoop();
+    showToast(`⏪ Tua lùi ${next.rate}x`);
+  };
+
+  // ── Auto-follow: người dùng cuộn tay → tạm ngưng 1.5s ──────────────────
+  useEffect(() => {
+    const el = timelineTracksBodyRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const now = Date.now();
+      // Bỏ qua lần cuộn do chính auto-follow tạo ra.
+      if (now - autoScrollAtRef.current < 150) return;
+      userScrollAtRef.current = now;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Gom handler cho phím tắt (tránh stale closure trong useEffect deps=[isActive]).
+  const timelineShortcutsRef = useRef<{
+    copy: () => void;
+    paste: () => void;
+    toggleMarker: () => void;
+    nextMarker: () => void;
+    prevMarker: () => void;
+    shuttle: (key: ShuttleKey) => void;
+  } | null>(null);
+  timelineShortcutsRef.current = {
+    copy: handleCopySelected,
+    paste: handlePasteSegments,
+    toggleMarker: handleToggleMarker,
+    nextMarker: handleNextMarker,
+    prevMarker: handlePrevMarker,
+    shuttle: handleShuttleKey,
+  };
+
   // Keyboard Shortcuts: Spacebar (Play/Pause), Left/Right (-1s/+1s), Home/End, I/O/X (In/Out/Clear Range)
   useEffect(() => {
     if (isActive === false) return;
@@ -2501,6 +3562,46 @@ export default function SublixStudioView({
         return;
       }
 
+      // [TSK-TIMELINE-INTEGRATE-MODULES] Copy/Paste (Premiere Ctrl+C / Ctrl+V).
+      // Ctrl+C chỉ bắt khi đang có khối timeline được chọn (không cướp copy text của trang).
+      if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+        if (selectedSegIdsRef.current.length > 0) {
+          e.preventDefault();
+          timelineShortcutsRef.current?.copy();
+          return;
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) {
+        e.preventDefault();
+        timelineShortcutsRef.current?.paste();
+        return;
+      }
+
+      // [TSK-TIMELINE-INTEGRATE-MODULES] Shuttle J/K/L (Premiere).
+      // K+J / K+L = nhích 1 frame (K đang được giữ → kHeldRef).
+      if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key === "j" || e.key === "J" || e.key === "k" || e.key === "K" || e.key === "l" || e.key === "L")
+      ) {
+        e.preventDefault();
+        const shuttleKey = e.key.toLowerCase() as ShuttleKey;
+        timelineShortcutsRef.current?.shuttle(shuttleKey);
+        if (shuttleKey === "k") kHeldRef.current = true;
+        return;
+      }
+
+      // [TSK-TIMELINE-INTEGRATE-MODULES] Marker: M = bật/tắt tại playhead,
+      // Shift+M = marker kế tiếp, Ctrl+Shift+M = marker trước (chuẩn Premiere).
+      if (!e.altKey && (e.key === "m" || e.key === "M")) {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) timelineShortcutsRef.current?.prevMarker();
+        else if (e.shiftKey) timelineShortcutsRef.current?.nextMarker();
+        else timelineShortcutsRef.current?.toggleMarker();
+        return;
+      }
+
       // Spacebar: Phát / Dừng video (Premiere standard)
       if (e.code === "Space") {
         e.preventDefault();
@@ -2511,8 +3612,13 @@ export default function SublixStudioView({
         return;
       }
 
-      // Delete / Backspace: Xóa phân đoạn / item câu thoại đang chọn
+      // Delete / Backspace: Xóa phân đoạn / item câu thoại đang chọn (multi-select → xóa TẤT CẢ khối đã chọn)
       if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedSegIdsRef.current.length > 1) {
+          e.preventDefault();
+          handleDeleteSegment();
+          return;
+        }
         if (selectedSegIdRef.current > 0) {
           e.preventDefault();
           handleDeleteSegment(selectedSegIdRef.current);
@@ -2595,7 +3701,23 @@ export default function SublixStudioView({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    // [TSK-TIMELINE-INTEGRATE-MODULES] Nhả cờ "đang giữ K" khi thả phím
+    // (K+J / K+L = nhích 1 frame kiểu Premiere).
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "k" || e.key === "K") kHeldRef.current = false;
+    };
+    window.addEventListener("keyup", handleKeyUp);
+    // Mất focus giữa chừng (Alt+Tab) có thể nuốt keyup → nhả cờ "đang giữ K"
+    // để trạng thái không bị kẹt (K+J/K+L = nhích 1 frame).
+    const handleWindowBlur = () => {
+      kHeldRef.current = false;
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
   }, [isActive]);
 
   // v0.11.3: Zoom = % viewport. 100% = full video fit viewport ~1200px.
@@ -2733,10 +3855,12 @@ export default function SublixStudioView({
       setInPoint(startTime);
       setOutPoint(startTime);
       setUseRangeOnly(true);
+      let lastOutTime = startTime;
 
       const handleMove = (ev: MouseEvent | PointerEvent) => {
         const curRel = ev.clientX - rect.left + container.scrollLeft;
         const curTime = Number(Math.max(0, Math.min(dur, (curRel / tw) * dur)).toFixed(2));
+        lastOutTime = curTime;
         setOutPoint(curTime);
       };
 
@@ -2745,6 +3869,12 @@ export default function SublixStudioView({
         window.removeEventListener("pointerup", handleUp);
         window.removeEventListener("mousemove", handleMove);
         window.removeEventListener("mouseup", handleUp);
+        // Chỉ click (không kéo) → vùng độ dài 0 vô nghĩa: bỏ luôn để không kẹt trạng thái "đã có vùng" nhưng 0 câu
+        if (Math.abs(lastOutTime - startTime) < 0.2) {
+          setInPoint(null);
+          setOutPoint(null);
+          setUseRangeOnly(false);
+        }
       };
 
       window.addEventListener("pointermove", handleMove);
@@ -2864,11 +3994,20 @@ export default function SublixStudioView({
           ],
     });
 
-    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
-    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
-    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+    // Vùng In/Out được mở rộng ra mép câu bị cắt ngang → bóc tách lại KHÔNG làm mất nửa câu (xem expandRangeToSegmentEdges)
+    const rawRange =
+      (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null
+        ? { start: Math.min(inPoint, outPoint), end: Math.max(inPoint, outPoint) }
+        : null;
+    const range = rawRange ? expandRangeToSegmentEdges(segmentsRef.current, rawRange.start, rawRange.end) : null;
+    const isRange = range !== null;
+    const startSec = range ? range.start : 0;
+    const endSec = range ? Math.min(range.end, mediaDuration > 0 ? mediaDuration : range.end) : mediaDuration;
     const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
     const startOffset = isRange && startSec > 0 ? startSec : undefined;
+    if (rawRange && range && (range.start < rawRange.start - 0.01 || range.end > rawRange.end + 0.01)) {
+      showToast(`ℹ️ Vùng được nới ra ${formatTimecode(range.start)} ➔ ${formatTimecode(range.end)} để không cắt ngang câu ở mép`);
+    }
 
     let unlisten: (() => void) | null = null;
     try {
@@ -2952,7 +4091,9 @@ export default function SublixStudioView({
           );
         }
 
-        // Tạo vai thuyết minh chuẩn "Thuyết minh AI" cho toàn bộ timeline lồng tiếng
+        // Tạo vai thuyết minh chuẩn "Thuyết minh AI" cho toàn bộ timeline lồng tiếng.
+        // Bóc tách theo VÙNG khi đã có roster → giữ roster cũ (không ghi đè giọng người dùng đã chọn), câu mới theo vai đầu tiên.
+        const keepRoster = isRange && speakersRef.current.length > 0;
         const subSpeaker: SpeakerItem = {
           id: "speaker_0",
           name: "Thuyết minh AI",
@@ -2962,13 +4103,14 @@ export default function SublixStudioView({
           count: project.segments.length,
           sampleAudio: null,
         };
-        setSpeakers([subSpeaker]);
+        if (!keepRoster) setSpeakers([subSpeaker]);
+        const subSpkId = keepRoster ? speakersRef.current[0].id : "speaker_0";
 
         const newMappedSegs: SubtitleItem[] = project.segments.map((seg) => ({
           id: seg.id,
           start: seg.start_sec,
           end: seg.end_sec,
-          speakerId: "speaker_0", // Thống nhất 1 speaker khi chỉ làm phụ đề
+          speakerId: subSpkId, // Thống nhất 1 speaker khi chỉ làm phụ đề
           original: seg.original_text,
           translated: seg.original_text, // Giữ nguyên câu gốc để duyệt
           hasAudio: false, // ROUND-25 FIX: Khi chỉ làm phụ đề thì chưa có audio giọng đọc!
@@ -2976,14 +4118,16 @@ export default function SublixStudioView({
         }));
 
         saveUndoHistory();
-        let finalSegs = newMappedSegs;
+        let finalSegs: SubtitleItem[] = newMappedSegs;
+        let rangeToast = "";
+        let newCount = newMappedSegs.length;
         if (isRange) {
-          setSegments((prev) => {
-            const preserved = prev.filter((s) => s.end < startSec || s.start > endSec);
-            const combined = [...preserved, ...newMappedSegs].sort((a, b) => a.start - b.start);
-            finalSegs = combined.map((s, idx) => ({ ...s, id: idx + 1 }));
-            return finalSegs;
-          });
+          // Chỉ thay các câu thuộc vùng; câu ngoài vùng giữ NGUYÊN (id, bản dịch, tiếng lồng)
+          const merged = mergeRangeSegments(segmentsRef.current, newMappedSegs, startSec, endSec);
+          finalSegs = merged.segments;
+          newCount = merged.newIds.size;
+          setSegments(merged.segments);
+          rangeToast = ` trong vùng ${formatTimecode(startSec)} ➔ ${formatTimecode(endSec)} (thay ${merged.replaced} câu cũ, giữ nguyên ${merged.segments.length - merged.newIds.size} câu ngoài vùng${merged.dropped > 0 ? `, bỏ ${merged.dropped} câu lẹm quá ngắn` : ""})`;
         } else {
           setSegments(newMappedSegs);
         }
@@ -2992,7 +4136,7 @@ export default function SublixStudioView({
         setTimelineProgress(100);
         setAnalyzeMessage("Hoàn tất trích xuất phụ đề!");
         setTimelineProcessMessage("Hoàn tất trích xuất phụ đề!");
-        showToast(`✅ Đã trích xuất ${newMappedSegs.length} câu phụ đề!`);
+        showToast(`✅ Đã trích xuất ${newCount} câu phụ đề${rangeToast}!`);
 
         if (!isTranslating) {
           notifyTaskUpdate({
@@ -3048,13 +4192,15 @@ export default function SublixStudioView({
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
-    const targetSegs = isRange
-      ? activeSegs.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
-      : activeSegs;
+    // Câu CHỒNG LẤN vùng đều được dịch (kể cả câu bị In/Out cắt ngang mép) — cùng quy tắc với TTS / Xóa trong vùng
+    const targetSegs = isRange ? activeSegs.filter((s) => isSegInRange(s, startSec, endSec)) : activeSegs;
 
     if (targetSegs.length === 0) {
       showToast("⚠ Không có câu thoại nào trong vùng chọn để dịch!");
       return;
+    }
+    if (isRange) {
+      showToast(`🌐 Dịch lại ${targetSegs.length} câu trong vùng ${formatTimecode(startSec)} ➔ ${formatTimecode(endSec)} (ghi đè bản dịch cũ của các câu này; ${activeSegs.length - targetSegs.length} câu ngoài vùng giữ nguyên)`);
     }
 
     setIsAnalyzing(true);
@@ -3087,6 +4233,7 @@ export default function SublixStudioView({
       const BATCH_SIZE = 8;
       const total = targetSegs.length;
       let completedCount = 0;
+      let failedCount = 0;
 
       for (let i = 0; i < total; i += BATCH_SIZE) {
         const chunk = targetSegs.slice(i, i + BATCH_SIZE);
@@ -3103,16 +4250,22 @@ export default function SublixStudioView({
             sttLang === "auto" ? "auto" : sttLang,
             targetLang
           );
-        } catch {
+        } catch (batchErr) {
+          console.warn("Batch translate failed, thử từng câu:", batchErr);
           for (const s of chunk) {
             try {
               const res = await sublix.translateTest(s.original, sttLang, targetLang);
               translatedTexts.push(res);
-            } catch {
-              translatedTexts.push(s.original);
+            } catch (lineErr) {
+              // KHÔNG ghi nguyên văn tiếng gốc vào ô dịch (BUG-029) — để rỗng và đếm lỗi
+              console.warn(`Dịch câu #${s.id} thất bại:`, lineErr);
+              translatedTexts.push("");
             }
           }
         }
+
+        // Đếm câu lỗi để báo trung thực ở toast cuối
+        failedCount += chunk.filter((_, i) => !translatedTexts[i] || translatedTexts[i].trimStart().startsWith("[Dịch lỗi:")).length;
 
         setSegments((prev) =>
           prev.map((s) => {
@@ -3126,6 +4279,8 @@ export default function SublixStudioView({
               }
               return { ...s, translated: value, translateFailed: false };
             }
+            // Không dịch được: đánh dấu lỗi, giữ nguyên bản dịch cũ (không bịa)
+            if (chunkIdx !== -1) return { ...s, translateFailed: true };
             return s;
           })
         );
@@ -3152,7 +4307,11 @@ export default function SublixStudioView({
       setAnalyzeProgress(100);
       setTimelineProcessMessage("Dịch thuật hoàn tất!");
       setAnalyzeMessage("Dịch thuật phụ đề hoàn tất!");
-      showToast(`✅ Đã dịch xong ${total} câu thoại sang ${targetLang.toUpperCase()}!`);
+      showToast(
+        failedCount > 0
+          ? `⚠ Đã dịch ${total - failedCount}/${total} câu sang ${targetLang.toUpperCase()} — ${failedCount} câu dịch lỗi (đã đánh dấu, KHÔNG lồng tiếng câu lỗi)`
+          : `✅ Đã dịch xong ${total} câu thoại sang ${targetLang.toUpperCase()}${isRange ? " trong vùng chọn" : ""}!`
+      );
 
       notifyTaskUpdate({
         status: "completed",
@@ -3189,10 +4348,17 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
   // =========================================================================
-  const handleRunVoiceOnly = async (forceRange?: boolean, overrideSegs?: SubtitleItem[]) => {
+  // onlyIds: chỉ tạo tiếng cho đúng các id này (dùng sau khi bóc tách vùng → chỉ câu MỚI, không đụng câu ngoài vùng)
+  const handleRunVoiceOnly = async (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>) => {
     const allSegs = overrideSegs || segmentsRef.current || segments;
+    // Pipeline chạy tiếp từ handleRunAnalysis(dubImmediately) đang giữ isAnalyzing → mọi lối thoát sớm phải nhả cờ
+    const bailOut = (msg: string) => {
+      showToast(msg);
+      setIsAnalyzing(false);
+      setTimelineProcessType(null);
+    };
     if (allSegs.length === 0) {
-      showToast("⚠ Chưa có câu thoại nào để tạo giọng đọc!");
+      bailOut("⚠ Chưa có câu thoại nào để tạo giọng đọc!");
       return;
     }
 
@@ -3202,12 +4368,15 @@ export default function SublixStudioView({
     const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
     const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
 
-    const targetSegs = isRange
-      ? allSegs.filter((s) => s.start >= startSec - 0.2 && s.end <= endSec + 0.2)
+    // Câu CHỒNG LẤN vùng đều được đọc lại (kể cả câu bị In/Out cắt ngang mép) — cùng quy tắc với Dịch / Xóa trong vùng
+    const targetSegs = onlyIds
+      ? allSegs.filter((s) => onlyIds.has(s.id))
+      : isRange
+      ? allSegs.filter((s) => isSegInRange(s, startSec, endSec))
       : allSegs;
 
     if (targetSegs.length === 0) {
-      showToast("⚠ Không có câu thoại nào trong vùng chọn!");
+      bailOut(isRange ? "⚠ Không có câu thoại nào trong vùng chọn để tạo giọng đọc!" : "⚠ Không có câu thoại nào để tạo giọng đọc!");
       return;
     }
 
@@ -3236,6 +4405,9 @@ export default function SublixStudioView({
     try {
       saveAudioUndo();
       const total = targetSegs.length;
+      let okCount = 0;
+      let skippedCount = 0;
+      let ttsFailedCount = 0;
 
       for (let i = 0; i < total; i++) {
         const seg = targetSegs[i];
@@ -3243,6 +4415,7 @@ export default function SublixStudioView({
         // text gốc cho một câu chưa có bản dịch).
         if (seg.translateFailed) {
           console.warn(`Bỏ qua TTS cho câu ${seg.id} (dịch lỗi)`);
+          skippedCount++;
           continue;
         }
         const pct = Math.round(((i + 1) / total) * 95);
@@ -3259,15 +4432,23 @@ export default function SublixStudioView({
           percent: pct,
         });
 
-        const spk = speakers.find((s) => s.id === seg.speakerId);
+        // speakersRef (không phải `speakers`): khi chạy nối tiếp sau bóc tách, closure cũ còn giữ roster TRƯỚC khi phân vai
+        const spk = speakersRef.current.find((s) => s.id === seg.speakerId);
         const voice = mapVoiceForEngine(spk?.voice || "vietneu:vi_bac_nam");
         // R32: LƯU clip tiếng lồng thật + đo độ dài thật (trước đây vứt kết quả, chỉ giơ cờ hasAudio)
         let clipDataUri: string | undefined;
         try {
           clipDataUri = await sublix.dubbingPreviewTts(seg.translated, voice);
-        } catch {
-          // ignore individual tts error
+        } catch (ttsErr) {
+          // Không nuốt im lặng: ghi log + đếm để báo ở toast cuối
+          console.warn(`TTS câu #${seg.id} thất bại:`, ttsErr);
         }
+        if (!clipDataUri) {
+          // Lỗi TTS: GIỮ NGUYÊN tiếng cũ của câu (không xóa mất khi "tạo lại" vùng)
+          ttsFailedCount++;
+          continue;
+        }
+        okCount++;
         let clipDur: number | undefined;
         if (clipDataUri) {
           clipDur = await new Promise<number | undefined>((resolve) => {
@@ -3295,7 +4476,14 @@ export default function SublixStudioView({
       setAnalyzeProgress(100);
       setTimelineProcessMessage("Hoàn tất tạo giọng đọc!");
       setAnalyzeMessage("Hoàn tất tạo giọng đọc!");
-      showToast(`✅ Đã tổng hợp giọng đọc cho ${total} câu thoại!`);
+      const problemNote =
+        skippedCount + ttsFailedCount > 0
+          ? ` — bỏ qua ${skippedCount} câu dịch lỗi, ${ttsFailedCount} câu TTS lỗi (giữ nguyên tiếng cũ)`
+          : "";
+      const scopeNote = isRange && !onlyIds ? ` trong vùng ${formatTimecode(startSec)} ➔ ${formatTimecode(endSec)} (${allSegs.length - total} câu ngoài vùng giữ nguyên)` : "";
+      showToast(
+        `${okCount === total ? "✅" : "⚠"} Đã tổng hợp giọng đọc cho ${okCount}/${total} câu thoại${scopeNote}${problemNote}!`
+      );
 
       notifyTaskUpdate({
         status: "completed",
@@ -3304,7 +4492,7 @@ export default function SublixStudioView({
         workflowLabel: "Lồng Tiếng TTS",
         title: `Lồng Tiếng TTS · ${fileName || "Video"}`,
         stage: "Hoàn tất tạo giọng đọc TTS",
-        detail: `Đã lồng tiếng ${total} câu thoại`,
+        detail: `Đã lồng tiếng ${okCount}/${total} câu thoại`,
         percent: 100,
         outputPath: filePath,
         steps: [
@@ -3331,7 +4519,8 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8: 1-CLICK TOÀN BỘ PIPELINE (STT + DIARIZATION + TRANSLATION + VOICE)
   // =========================================================================
-  const handleRunAnalysis = async (forceRange?: boolean, dubImmediately: boolean = false) => {
+  // forceTranslate: lệnh menu "Bóc tách + dịch + lồng tiếng vùng" luôn dịch, không phụ thuộc switch "Dịch phụ đề".
+  const handleRunAnalysis = async (forceRange?: boolean, dubImmediately: boolean = false, forceTranslate: boolean = false) => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return;
@@ -3359,11 +4548,21 @@ export default function SublixStudioView({
       ],
     });
 
-    const isRange = (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null;
-    const startSec = isRange ? Math.min(inPoint, outPoint) : 0;
-    const endSec = isRange ? Math.max(inPoint, outPoint) : mediaDuration;
+    // Vùng In/Out được nới ra mép câu bị cắt ngang → không mất nửa câu khi bóc tách lại (expandRangeToSegmentEdges)
+    const rawRange =
+      (forceRange || useRangeOnly) && inPoint !== null && outPoint !== null
+        ? { start: Math.min(inPoint, outPoint), end: Math.max(inPoint, outPoint) }
+        : null;
+    const range = rawRange ? expandRangeToSegmentEdges(segmentsRef.current, rawRange.start, rawRange.end) : null;
+    const isRange = range !== null;
+    const startSec = range ? range.start : 0;
+    const endSec = range ? Math.min(range.end, mediaDuration > 0 ? mediaDuration : range.end) : mediaDuration;
     const durLimit = isRange ? Math.abs(endSec - startSec) : undefined;
     const startOffset = isRange && startSec > 0 ? startSec : undefined;
+    if (rawRange && range && (range.start < rawRange.start - 0.01 || range.end > rawRange.end + 0.01)) {
+      showToast(`ℹ️ Vùng được nới ra ${formatTimecode(range.start)} ➔ ${formatTimecode(range.end)} để không cắt ngang câu ở mép`);
+    }
+    let analysisFailed = false;
 
     let unlisten: (() => void) | null = null;
     try {
@@ -3393,7 +4592,7 @@ export default function SublixStudioView({
         filePath,
         sttLang === "auto" ? undefined : sttLang,
         // Switch "Dịch phụ đề" tắt → không dịch (đồng bộ với pill "Chỉ làm Phụ đề").
-        workflowOptTranslate ? targetLang : undefined,
+        workflowOptTranslate || forceTranslate ? targetLang : undefined,
         durLimit,
         startOffset,
         expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined,
@@ -3498,6 +4697,16 @@ export default function SublixStudioView({
           setSpeakers(mappedSpeakers);
         }
 
+        // Phân tích theo VÙNG khi đã có roster: GIỮ roster cũ (câu ngoài vùng vẫn trỏ đúng vai + giọng người dùng đã chọn),
+        // chỉ THÊM vai mới (nếu có). Trước đây setSpeakers(roster mới) làm câu ngoài vùng mất vai.
+        if (isRange && speakersRef.current.length > 0) {
+          const existing = speakersRef.current;
+          const known = new Set(existing.map((s) => s.id));
+          const extra = expectedSpeakerCount === 1 ? [] : mappedSpeakers.filter((s) => !known.has(s.id));
+          mappedSpeakers = [...existing, ...extra];
+          setSpeakers(mappedSpeakers);
+        }
+
         const singleSpkId = expectedSpeakerCount === 1 ? mappedSpeakers[0].id : null;
         const validSpkIds = new Set(mappedSpeakers.map((s) => s.id));
         const fallbackSpkId = mappedSpeakers[0]?.id || "spk_1";
@@ -3523,17 +4732,22 @@ export default function SublixStudioView({
         });
 
         saveUndoHistory();
+        // Theo vùng: chỉ thay câu thuộc vùng, câu ngoài vùng giữ NGUYÊN id/bản dịch/tiếng lồng (không đánh số lại).
+        let allAfter: SubtitleItem[] = newMappedSegments;
+        let newIdSet: Set<number> | undefined;
+        let rangeNote = "";
         if (isRange) {
-          setSegments((prev) => {
-            const preserved = prev.filter((s) => s.end < startSec || s.start > endSec);
-            const combined = [...preserved, ...newMappedSegments].sort((a, b) => a.start - b.start);
-            return combined.map((s, idx) => ({ ...s, id: idx + 1 }));
-          });
+          const merged = mergeRangeSegments(segmentsRef.current, newMappedSegments, startSec, endSec);
+          allAfter = merged.segments;
+          newIdSet = merged.newIds;
+          setSegments(merged.segments);
+          rangeNote = ` trong vùng ${formatTimecode(startSec)} ➔ ${formatTimecode(endSec)} (thay ${merged.replaced} câu cũ, giữ nguyên ${merged.segments.length - merged.newIds.size} câu ngoài vùng)`;
         } else {
           setSegments(newMappedSegments);
         }
+        const newCount = newIdSet ? newIdSet.size : newMappedSegments.length;
 
-        if (newMappedSegments.length > 0) {
+        if (!isRange && newMappedSegments.length > 0) {
           setSelectedSegId(newMappedSegments[0].id);
         }
         setAnalyzeProgress(100);
@@ -3560,16 +4774,18 @@ export default function SublixStudioView({
         });
 
         if (dubImmediately) {
-          showToast(`⚡ Đã phân tích xong ${newMappedSegments.length} câu thoại. Bắt đầu tổng hợp giọng đọc...`);
+          showToast(`⚡ Đã phân tích xong ${newCount} câu thoại${rangeNote}. Bắt đầu tổng hợp giọng đọc...`);
           setTimeout(() => {
-            void handleRunVoiceOnly(forceRange, newMappedSegments);
+            // Theo vùng: chỉ đọc ĐÚNG các câu mới (id sau khi ghép) — không đụng câu ngoài vùng
+            void handleRunVoiceOnly(forceRange, allAfter, newIdSet);
           }, 350);
         } else {
-          showToast(`✅ Đã phân tích xong ${newMappedSegments.length} câu & ${mappedSpeakers.length} vai! Vui lòng xem lại vai diễn, chọn giọng rồi bấm "Bắt Đầu Lồng Tiếng".`);
+          showToast(`✅ Đã phân tích xong ${newCount} câu & ${mappedSpeakers.length} vai${rangeNote}! Vui lòng xem lại vai diễn, chọn giọng rồi bấm "Bắt Đầu Lồng Tiếng".`);
         }
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
+      analysisFailed = true;
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes("hủy") || errMsg.includes("cancel") || errMsg.includes("dừng")) {
         setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
@@ -3595,7 +4811,8 @@ export default function SublixStudioView({
       if (unlisten) {
         unlisten();
       }
-      if (!dubImmediately) {
+      // dubImmediately: bước TTS nối tiếp sẽ tự nhả cờ — nhưng nếu phân tích LỖI thì không có bước nối tiếp → phải nhả ở đây
+      if (!dubImmediately || analysisFailed) {
         setTimeout(() => {
           setIsAnalyzing(false);
           setTimelineProcessType(null);
@@ -4048,6 +5265,11 @@ export default function SublixStudioView({
   };
 
   const handleUpdateTranslated = useCallback((segId: number, text: string) => {
+    // [TSK-TIMELINE-INTEGRATE-MODULES] Track phụ đề bị khoá → chặn sửa chữ.
+    if (isEditBlocked(trackLocksRef.current, "subtitles", "edit-text")) {
+      showToast(editBlockedReason("subtitles", "edit-text"));
+      return;
+    }
     setSegments((prev) =>
       prev.map((s) => (s.id === segId ? { ...s, translated: text } : s))
     );
@@ -4138,8 +5360,9 @@ export default function SublixStudioView({
     }
     e.stopPropagation();
     selectedTrackTypeRef.current = "voice";
+    // handleSelectSegmentWithModifier đã tự dời playhead (click thường); Ctrl/Shift+click chỉ chọn nhiều, không seek/phát
     handleSelectSegmentWithModifier(seg, e);
-    handleSeek(seg.start);
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
 
     if (isVoiceMutedRef.current) {
       showToast("⚠️ Track tiếng lồng đang tắt tiếng (Mute) — Bấm nút 'M' trên header để nghe lại");
@@ -4256,6 +5479,81 @@ export default function SublixStudioView({
     const newTime = Math.max(0, Math.min(dur, (clickX / tw) * dur));
     handleSeek(newTime);
   };
+
+  // Callback ỔN ĐỊNH cho các khối memo (Note 1, AGENT_CHAT 2026-10-12: không truyền inline callback mới vào props khối).
+  // Logic thật nằm trong blockApiRef.current (gán lại mỗi render) → khối không re-render chỉ vì parent render.
+  interface TimelineBlockApi {
+    subClick: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+    voiceClick: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+    subDown: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+    voiceDown: (seg: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => void;
+    nudge: (segId: number, field: "start" | "end", delta: number) => void;
+  }
+  const blockApiRef = useRef<TimelineBlockApi | null>(null);
+  blockApiRef.current = {
+    subClick: (s, e) => {
+      if (didJustMarqueeRef.current) {
+        e.stopPropagation();
+        return;
+      }
+      if (timelineToolMode === "scrub") {
+        handleTimelineClick(e);
+        return;
+      }
+      e.stopPropagation();
+      selectedTrackTypeRef.current = "subtitles";
+      handleSelectSegmentWithModifier(s, e);
+    },
+    voiceClick: (s, e) => {
+      if (didJustMarqueeRef.current) {
+        e.stopPropagation();
+        return;
+      }
+      void handleVoiceBlockClick(s, e);
+    },
+    subDown: (s, e) => handleBlockMouseDown(s, e, "subtitles"),
+    voiceDown: (s, e) => handleBlockMouseDown(s, e, "voice"),
+    nudge: (segId, field, delta) => {
+      if (didJustMarqueeRef.current) return; // click sinh ra sau khi kéo mép → không nhích thêm
+      handleNudgeSegment(segId, field, delta);
+    },
+  };
+  const stableSubClick = useCallback(
+    (s: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => blockApiRef.current?.subClick(s, e),
+    []
+  );
+  const stableVoiceClick = useCallback(
+    (s: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => blockApiRef.current?.voiceClick(s, e),
+    []
+  );
+  const stableSubDown = useCallback(
+    (s: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => blockApiRef.current?.subDown(s, e),
+    []
+  );
+  const stableVoiceDown = useCallback(
+    (s: SubtitleItem, e: React.MouseEvent<HTMLDivElement>) => blockApiRef.current?.voiceDown(s, e),
+    []
+  );
+  const stableNudge = useCallback(
+    (segId: number, field: "start" | "end", delta: number) => blockApiRef.current?.nudge(segId, field, delta),
+    []
+  );
+
+  // Dọn transform/style tạm của lần kéo thả ngay sau khi React commit vị trí mới (trước khi trình duyệt vẽ → không nháy)
+  useLayoutEffect(() => {
+    const f = dragCleanupRef.current;
+    if (f) {
+      dragCleanupRef.current = null;
+      f();
+    }
+  }, [segments]);
+
+  // Unmount giữa lúc đang kéo → gỡ listener window
+  useEffect(() => {
+    return () => {
+      dragAbortRef.current?.();
+    };
+  }, []);
 
   // Dynamic WPM & Timing stats for Review Panel
   const totalSpeechSeconds = segments.reduce((sum, seg) => sum + Math.max(0, seg.end - seg.start), 0);
@@ -5944,17 +7242,20 @@ export default function SublixStudioView({
                       finishedVoiceSegRef.current = null;
                       const curT = v.currentTime;
                       setCurrentTime(curT);
-                      const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
-                      if (match) {
-                        setSelectedSegId(match.id);
-                        selectedSegIdRef.current = match.id;
-                        setSelectedSegIds([match.id]);
-                        selectedSegIdsRef.current = [match.id];
-                      } else {
-                        setSelectedSegId(0);
-                        selectedSegIdRef.current = 0;
-                        setSelectedSegIds([]);
-                        selectedSegIdsRef.current = [];
+                      // BUG-A: chỉ auto-follow khi đang phát & không có multi-select chủ động (seek thủ công đã tự lo selection)
+                      if (isPlayingRef.current && !multiSelectLockRef.current) {
+                        const match = segmentsRef.current.find((s) => s.start <= curT && curT <= s.end);
+                        if (match) {
+                          setSelectedSegId(match.id);
+                          selectedSegIdRef.current = match.id;
+                          setSelectedSegIds([match.id]);
+                          selectedSegIdsRef.current = [match.id];
+                        } else {
+                          setSelectedSegId(0);
+                          selectedSegIdRef.current = 0;
+                          setSelectedSegIds([]);
+                          selectedSegIdsRef.current = [];
+                        }
                       }
                       syncVoicePlayback(curT, v.paused);
                     }
@@ -6536,10 +7837,18 @@ export default function SublixStudioView({
             <button
               type="button"
               className="studio-timeline-tool-btn"
-              title="Đánh dấu mốc thời gian (Bookmark)"
+              title="Đánh dấu mốc thời gian (Marker — phím M; Shift+M = kế tiếp, Ctrl+Shift+M = trước)"
               onClick={() => {
-                setBookmarks((prev) => [...prev, currentTime]);
-                showToast(`🔖 Đã ghim Bookmark tại mốc ${formatTimecode(currentTime)}`);
+                // [TSK-TIMELINE-INTEGRATE-MODULES] Marker dùng module markers.ts
+                // (gộp trùng <0.05s, có id/tên/màu, lưu theo project).
+                const prev = markersRef.current;
+                const next = toggleMarker(prev, currentTimeRef.current);
+                setMarkers(next);
+                showToast(
+                  next.length > prev.length
+                    ? `🔖 Đã ghim marker tại mốc ${formatTimecode(currentTimeRef.current)}`
+                    : `🔖 Đã bỏ marker tại mốc ${formatTimecode(currentTimeRef.current)}`,
+                );
               }}
             >
               <IconBookmark size={13} />
@@ -6635,7 +7944,18 @@ export default function SublixStudioView({
             </button>
 
             <div className="studio-timeline-timecode">
-              <span ref={timecodeElementRef}>{formatTimecode(currentTime)}</span>
+              {/* [TSK-TIMELINE-INTEGRATE-MODULES] Ô nhập timecode (Premiere):
+                  - Node hiển thị do TimecodeInput giữ ref → file này ghi textContent
+                    trực tiếp (đường 60fps sẵn có, không setState).
+                  - Giá trị hiện tại được đọc qua getSeconds() (hàm ổn định) khi bấm mở ô nhập,
+                    KHÔNG truyền prop `seconds` đổi liên tục.
+                  - Enter → nhảy tới (clamp theo độ dài media); Esc → huỷ. */}
+              <TimecodeInput
+                displayRef={timecodeElementRef}
+                getSeconds={getCurrentSeconds}
+                onSeek={handleTimecodeSeek}
+                fps={25}
+              />
               <span className="studio-timeline-timecode-total">/ {formatTimecode(mediaDuration)}</span>
             </div>
           </div>
@@ -6657,6 +7977,10 @@ export default function SublixStudioView({
                 const speeds = [1.0, 1.25, 1.5, 2.0, 0.5];
                 const nextIdx = (speeds.indexOf(playbackSpeed) + 1) % speeds.length;
                 const nextSpeed = speeds[nextIdx];
+                // [TSK-TIMELINE-INTEGRATE-MODULES] Tắt shuttle J/K/L trước khi đổi tốc độ
+                // → không có 2 nguồn tốc độ cùng lúc (shuttle là nguồn tạm thời).
+                stopShuttleLoop();
+                shuttleRef.current = createShuttleState();
                 setPlaybackSpeed(nextSpeed);
                 if (videoRef.current) {
                   videoRef.current.playbackRate = nextSpeed;
@@ -6803,16 +8127,35 @@ export default function SublixStudioView({
                           </span>
                         ))}
                     </div>
-                    <button
-                      className="studio-track-clear-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleClearTrack("subtitles");
-                      }}
-                      title="Xóa toàn bộ câu trong track phụ đề"
-                    >
-                      🗑️
-                    </button>
+                    <div className="studio-track-header-actions">
+                      {/* [TSK-TIMELINE-INTEGRATE-MODULES] Khoá track phụ đề (Premiere):
+                          khoá → chặn kéo/trim/cắt đôi/xoá/sửa chữ/dán trên track này. */}
+                      <button
+                        type="button"
+                        className={`studio-track-lock-btn ${isTrackLocked(trackLocks, "subtitles") ? "locked" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTrackLocks((prev) => toggleTrackLock(prev, "subtitles"));
+                        }}
+                        title={
+                          isTrackLocked(trackLocks, "subtitles")
+                            ? "Track phụ đề đang KHOÁ — bấm để mở khoá"
+                            : "Khoá track phụ đề (chặn kéo/trim/cắt/xoá/sửa chữ/dán)"
+                        }
+                      >
+                        {isTrackLocked(trackLocks, "subtitles") ? "🔒" : "🔓"}
+                      </button>
+                      <button
+                        className="studio-track-clear-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClearTrack("subtitles");
+                        }}
+                        title="Xóa toàn bộ câu trong track phụ đề"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -6896,6 +8239,25 @@ export default function SublixStudioView({
                           >
                             M
                           </button>
+                          {/* [TSK-TIMELINE-INTEGRATE-MODULES] Khoá track lồng tiếng của vai này
+                              (Premiere): khoá → chặn kéo/trim/xoá tiếng lồng + dán trên track này. */}
+                          <button
+                            type="button"
+                            className={`studio-track-lock-btn ${isTrackLocked(trackLocks, speakerTrackKey(spk.id)) ? "locked" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTrackLocks((prev) =>
+                                toggleTrackLock(prev, speakerTrackKey(spk.id)),
+                              );
+                            }}
+                            title={
+                              isTrackLocked(trackLocks, speakerTrackKey(spk.id))
+                                ? `Track lồng tiếng của vai ${spkName} đang KHOÁ — bấm để mở khoá`
+                                : `Khoá track lồng tiếng của vai ${spkName}`
+                            }
+                          >
+                            {isTrackLocked(trackLocks, speakerTrackKey(spk.id)) ? "🔒" : "🔓"}
+                          </button>
                           <button
                             className="studio-track-clear-btn"
                             onClick={(e) => {
@@ -6958,6 +8320,9 @@ export default function SublixStudioView({
                 }}
               />
             )}
+
+            {/* Vạch hít (snap) khi kéo thả khối — chỉ đổi qua DOM ref, không setState */}
+            <div ref={snapLineRef} className="studio-timeline-snap-line" />
 
             {/* Playhead Vertical Needle */}
             <div
@@ -7072,25 +8437,33 @@ export default function SublixStudioView({
                 );
               })}
 
-              {/* Bookmark Flags */}
-              {bookmarks.map((bmTime, idx) => (
+              {/* [TSK-TIMELINE-INTEGRATE-MODULES] Vạch marker (memo — không re-render theo playhead) */}
+              <StudioTimelineMarkerLines
+                markers={markers}
+                timelineWidth={timelineWidth}
+                totalDur={mediaDuration}
+                onMarkerClick={stableMarkerClick}
+              />
+
+              {/* Marker Flags (🔖) trên thước thời gian */}
+              {markers.map((marker, idx) => (
                 <div
-                  key={idx}
+                  key={marker.id}
                   style={{
                     position: "absolute",
-                    left: `${(bmTime / Math.max(1, mediaDuration)) * timelineWidth}px`,
+                    left: `${(marker.time / Math.max(1, mediaDuration)) * timelineWidth}px`,
                     top: 2,
                     fontSize: 10,
-                    color: "#38bdf8",
+                    color: marker.color ?? "#38bdf8",
                     cursor: "pointer",
                     zIndex: 10,
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleSeek(bmTime);
-                    showToast(`Nhảy tới Bookmark: ${formatTimecode(bmTime)}`);
+                    handleSeek(marker.time);
+                    showToast(`Nhảy tới marker: ${formatTimecode(marker.time)}`);
                   }}
-                  title={`Bookmark ${idx + 1}: ${formatTimecode(bmTime)}`}
+                  title={`Marker ${idx + 1}: ${formatTimecode(marker.time)}`}
                 >
                   🔖
                 </div>
@@ -7222,10 +8595,7 @@ export default function SublixStudioView({
                   if (timelineToolMode === "scrub") {
                     handleTimelineClick(e);
                   } else if (!didJustMarqueeRef.current) {
-                    setSelectedSegIds([]);
-                    selectedSegIdsRef.current = [];
-                    setSelectedSegId(0);
-                    selectedSegIdRef.current = 0;
+                    clearSegmentSelection();
                   }
                 }}
               >
@@ -7271,16 +8641,9 @@ export default function SublixStudioView({
                       timelineWidth={timelineWidth}
                       isSelected={isSelected}
                       isMultiSelected={isMultiSelected}
-                      onBlockClick={(s, e) => {
-                        if (timelineToolMode === "scrub") {
-                          handleTimelineClick(e);
-                          return;
-                        }
-                        e.stopPropagation();
-                        selectedTrackTypeRef.current = "subtitles";
-                        handleSelectSegmentWithModifier(s, e);
-                      }}
-                      onNudge={handleNudgeSegment}
+                      onBlockClick={stableSubClick}
+                      onBlockMouseDown={stableSubDown}
+                      onNudge={stableNudge}
                     />
                   );
                 })}
@@ -7296,10 +8659,7 @@ export default function SublixStudioView({
                   if (timelineToolMode === "scrub") {
                     handleTimelineClick(e);
                   } else if (!didJustMarqueeRef.current) {
-                    setSelectedSegIds([]);
-                    selectedSegIdsRef.current = [];
-                    setSelectedSegId(0);
-                    selectedSegIdRef.current = 0;
+                    clearSegmentSelection();
                   }
                 }}
               >
@@ -7351,72 +8711,26 @@ export default function SublixStudioView({
                     const spk = speakers.find((s) => s.id === seg.speakerId) || speakers[0];
                     const spkName = getSpeakerDisplayName(spk);
                     const totalDur = Math.max(1, mediaDuration);
-                    const left = (seg.start / totalDur) * timelineWidth;
                     // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
                     // + không được chồng lên câu kế tiếp.
                     const voiceDur = computeVoiceBlockDur(seg, totalDur, voiceSegments[segIdx + 1]?.start);
-                    const rawWidth = (voiceDur / totalDur) * timelineWidth;
-                    const width = Math.max(3, rawWidth);
-                    const isCompact = width < 30;
-                    const isSelected = seg.id === selectedSegId;
-                    const isMultiSelected = selectedSegIds.includes(seg.id);
-                    const isSpeaking = currentPlayingVoiceSegId === seg.id;
-                    const spkColor = spk?.color || "#38bdf8";
-                    const hasAudio = !!seg.hasAudio;
 
                     return (
-                      <div
+                      <StudioTimelineVoiceBlock
                         key={seg.id}
-                        data-seg-id={seg.id}
-                        className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${isSpeaking ? "is-speaking" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
-                        style={{
-                          left: `${left}px`,
-                          width: `${width}px`,
-                          background: hasAudio ? `linear-gradient(180deg, ${spkColor}30, ${spkColor}65)` : `rgba(255, 255, 255, 0.04)`,
-                          borderColor: hasAudio ? spkColor : `rgba(255, 255, 255, 0.25)`,
-                          borderStyle: hasAudio ? "solid" : "dashed",
-                        }}
-                        onClick={(e) => handleVoiceBlockClick(seg, e)}
-                        title={hasAudio
-                          ? `[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.start + voiceDur)}] Bấm để nghe lại`
-                          : `[Chưa lồng tiếng: ${spkName}] Bấm để tạo & nghe thử câu này`
-                        }
-                      >
-                        {hasAudio && <div className="studio-voice-wave-texture" />}
-                        {!isCompact && hasAudio && (
-                          <div
-                            className="studio-timeline-block-handle left"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNudgeSegment(seg.id, "start", -0.2);
-                            }}
-                            title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                          />
-                        )}
-                        {!isCompact && (
-                          <div className="studio-voice-block-inner">
-                            <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                              🎙️
-                            </span>
-                            <strong className="studio-voice-block-tag" style={{ color: spkColor }}>
-                              [{spkName}]:
-                            </strong>
-                            <span className="studio-voice-block-text" style={{ opacity: hasAudio ? 1 : 0.7 }}>
-                              {seg.translated || seg.original}
-                            </span>
-                          </div>
-                        )}
-                        {!isCompact && hasAudio && (
-                          <div
-                            className="studio-timeline-block-handle right"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNudgeSegment(seg.id, "end", 0.2);
-                            }}
-                            title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                          />
-                        )}
-                      </div>
+                        seg={seg}
+                        voiceDur={voiceDur}
+                        totalDur={totalDur}
+                        timelineWidth={timelineWidth}
+                        spkName={spkName}
+                        spkColor={spk?.color || "#38bdf8"}
+                        isSelected={seg.id === selectedSegId}
+                        isMultiSelected={selectedSegIds.includes(seg.id)}
+                        isSpeaking={currentPlayingVoiceSegId === seg.id}
+                        onBlockClick={stableVoiceClick}
+                        onBlockMouseDown={stableVoiceDown}
+                        onNudge={stableNudge}
+                      />
                     );
                   });
                 })()}
@@ -7439,10 +8753,7 @@ export default function SublixStudioView({
                       if (timelineToolMode === "scrub") {
                         handleTimelineClick(e);
                       } else if (!didJustMarqueeRef.current) {
-                        setSelectedSegIds([]);
-                        selectedSegIdsRef.current = [];
-                        setSelectedSegId(0);
-                        selectedSegIdRef.current = 0;
+                        clearSegmentSelection();
                       }
                     }}
                   >
@@ -7492,68 +8803,27 @@ export default function SublixStudioView({
 
                       return voiceSegments.map((seg, segIdx) => {
                         const totalDur = Math.max(1, mediaDuration);
-                        const left = (seg.start / totalDur) * timelineWidth;
                         // R32: khối lồng bám theo ĐỘ DÀI TIẾNG THẬT (TTS thật hoặc ước tính theo từ, không bao giờ dài hơn video gốc)
                         // + không được chồng lên câu kế tiếp của cùng vai.
                         const voiceDur = computeVoiceBlockDur(seg, totalDur, voiceSegments[segIdx + 1]?.start);
-                        const rawWidth = (voiceDur / totalDur) * timelineWidth;
-                        const width = Math.max(3, rawWidth);
-                        const isCompact = width < 30;
-                        const isSelected = seg.id === selectedSegId;
-                        const isMultiSelected = selectedSegIds.includes(seg.id);
-                        const isSpeaking = currentPlayingVoiceSegId === seg.id;
-                        const hasAudio = !!seg.hasAudio;
 
                         return (
-                          <div
+                          <StudioTimelineVoiceBlock
                             key={seg.id}
-                            data-seg-id={seg.id}
-                            className={`studio-timeline-block studio-timeline-voice-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${isSpeaking ? "is-speaking" : ""} ${hasAudio ? "has-audio" : "is-placeholder"}`}
-                            style={{
-                              left: `${left}px`,
-                              width: `${width}px`,
-                              background: hasAudio ? `linear-gradient(180deg, ${spk.color}30, ${spk.color}65)` : `rgba(255, 255, 255, 0.04)`,
-                              borderColor: hasAudio ? spk.color : `rgba(255, 255, 255, 0.25)`,
-                              borderStyle: hasAudio ? "solid" : "dashed",
-                            }}
-                            onClick={(e) => handleVoiceBlockClick(seg, e)}
-                            title={hasAudio
-                              ? `[Audio Lồng Tiếng: ${spkName} • ${formatTimecode(seg.start)} → ${formatTimecode(seg.start + voiceDur)}] Bấm để nghe lại`
-                              : `[Chưa lồng tiếng: ${spkName}] Bấm để tạo & nghe thử câu này`
-                            }
-                          >
-                            {hasAudio && <div className="studio-voice-wave-texture" />}
-                            {!isCompact && hasAudio && (
-                              <div
-                                className="studio-timeline-block-handle left"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleNudgeSegment(seg.id, "start", -0.2);
-                                }}
-                                title="Thu nhỏ/Kéo dài đầu câu (-0.2s)"
-                              />
-                            )}
-                            {!isCompact && (
-                              <div className="studio-voice-block-inner">
-                                <span className="studio-voice-block-icon" title="Đoạn âm thanh lồng tiếng">
-                                  🎙️
-                                </span>
-                                <span className="studio-voice-block-text" style={{ opacity: hasAudio ? 1 : 0.7 }}>
-                                  {seg.translated || seg.original}
-                                </span>
-                              </div>
-                            )}
-                            {!isCompact && hasAudio && (
-                              <div
-                                className="studio-timeline-block-handle right"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleNudgeSegment(seg.id, "end", 0.2);
-                                }}
-                                title="Thu nhỏ/Kéo dài cuối câu (+0.2s)"
-                              />
-                            )}
-                          </div>
+                            seg={seg}
+                            voiceDur={voiceDur}
+                            totalDur={totalDur}
+                            timelineWidth={timelineWidth}
+                            spkName={spkName}
+                            spkColor={spk.color}
+                            showSpeakerTag={false}
+                            isSelected={seg.id === selectedSegId}
+                            isMultiSelected={selectedSegIds.includes(seg.id)}
+                            isSpeaking={currentPlayingVoiceSegId === seg.id}
+                            onBlockClick={stableVoiceClick}
+                            onBlockMouseDown={stableVoiceDown}
+                            onNudge={stableNudge}
+                          />
                         );
                       });
                     })()}
@@ -7942,6 +9212,9 @@ export default function SublixStudioView({
         </div>
       )}
 
+      {/* Nhãn thời gian nổi theo chuột khi kéo thả khối (cập nhật qua DOM ref) */}
+      <div ref={dragTipRef} className="studio-drag-tip" />
+
       {/* ROUND-25: TIMELINE CONTEXT MENU (PREMIERE / NLE CINEMA STYLE) */}
       {timelineContextMenu && timelineContextMenu.visible && (
         <div
@@ -7961,78 +9234,70 @@ export default function SublixStudioView({
                   <span>Vùng Chọn: {formatTimecode(Math.min(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!))} ➔ {formatTimecode(Math.max(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!))}</span>
                 </div>
                 <div className="timeline-ctx-sub">
-                  Thời lượng: {(Math.abs(timelineContextMenu.outPoint! - timelineContextMenu.inPoint!)).toFixed(2)}s • Xử lý riêng đoạn này
+                  {(Math.abs(timelineContextMenu.outPoint! - timelineContextMenu.inPoint!)).toFixed(2)}s • {timelineContextMenu.segCount} câu trong vùng • chỉ xử lý các câu này
                 </div>
               </div>
 
-              {/* Tùy chọn 1: Tạo Phụ Đề Cho Đoạn Này */}
+              {/* Tùy chọn 1: Bóc tách phụ đề vùng (Whisper chỉ nghe đoạn In→Out) */}
               <button
                 type="button"
                 className="timeline-ctx-item primary"
-                onClick={() => {
-                  setTimelineContextMenu(null);
-                  setUseRangeOnly(true);
-                  void handleRunSttOnly(true);
-                }}
+                onClick={() => runRangeAction("stt")}
               >
                 <span className="timeline-ctx-icon">💬</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Tạo Phụ Đề Cho Đoạn Này</span>
-                  <span className="timeline-ctx-desc-text">Whisper STT chỉ bóc tách trong vùng chọn</span>
+                  <span className="timeline-ctx-main-text">Bóc tách phụ đề vùng</span>
+                  <span className="timeline-ctx-desc-text">Whisper chỉ nghe đoạn In ➔ Out, thay các câu trong vùng</span>
                 </div>
                 <span className="timeline-ctx-shortcut">Sub</span>
               </button>
 
-              {/* Tùy chọn 2: Dịch Phụ Đề Cho Đoạn Này */}
+              {/* Tùy chọn 2: Dịch lại vùng */}
               <button
                 type="button"
-                className="timeline-ctx-item"
-                onClick={() => {
-                  setTimelineContextMenu(null);
-                  setUseRangeOnly(true);
-                  void handleRunTranslateOnly(undefined, true);
-                }}
+                className={`timeline-ctx-item ${timelineContextMenu.segCount === 0 ? "disabled" : ""}`}
+                onClick={() => runRangeAction("translate")}
               >
                 <span className="timeline-ctx-icon">🌐</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Dịch Phụ Đề Đoạn Này</span>
-                  <span className="timeline-ctx-desc-text">Dịch câu thoại sang {targetLang.toUpperCase()}</span>
+                  <span className="timeline-ctx-main-text">Dịch lại vùng</span>
+                  <span className="timeline-ctx-desc-text">
+                    {timelineContextMenu.segCount > 0
+                      ? `Dịch lại ${timelineContextMenu.segCount} câu sang ${targetLang.toUpperCase()} (ghi đè bản dịch cũ)`
+                      : "Chưa có câu nào trong vùng — bóc tách phụ đề vùng trước"}
+                  </span>
                 </div>
                 <span className="timeline-ctx-shortcut">Dịch</span>
               </button>
 
-              {/* Tùy chọn 3: Tạo Tiếng Lồng Cho Đoạn Này */}
+              {/* Tùy chọn 3: Tạo lại tiếng lồng vùng */}
               <button
                 type="button"
-                className="timeline-ctx-item primary"
-                onClick={() => {
-                  setTimelineContextMenu(null);
-                  setUseRangeOnly(true);
-                  void handleRunVoiceOnly(true);
-                }}
+                className={`timeline-ctx-item primary ${timelineContextMenu.segCount === 0 ? "disabled" : ""}`}
+                onClick={() => runRangeAction("voice")}
               >
                 <span className="timeline-ctx-icon">🎙️</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Tạo Tiếng Lồng Cho Đoạn Này</span>
-                  <span className="timeline-ctx-desc-text">Tổng hợp giọng đọc AI cho các câu trong vùng</span>
+                  <span className="timeline-ctx-main-text">Tạo lại tiếng lồng vùng</span>
+                  <span className="timeline-ctx-desc-text">
+                    {timelineContextMenu.segCount > 0
+                      ? `Đọc lại ${timelineContextMenu.segCount} câu trong vùng bằng giọng AI`
+                      : "Chưa có câu nào trong vùng để lồng tiếng"}
+                  </span>
                 </div>
                 <span className="timeline-ctx-shortcut">Voice</span>
               </button>
 
-              {/* Tùy chọn 4: Chạy Toàn Bộ Cho Đoạn Này (Full Pipeline) */}
+              {/* Tùy chọn 4: Bóc tách + dịch + lồng tiếng vùng (pipeline đầy đủ) */}
               <button
                 type="button"
                 className="timeline-ctx-item"
-                onClick={() => {
-                  setTimelineContextMenu(null);
-                  setUseRangeOnly(true);
-                  void handleRunAnalysis(true);
-                }}
+                onClick={() => runRangeAction("full")}
               >
                 <span className="timeline-ctx-icon">⚡</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Chạy Cả Sub & Lồng Tiếng</span>
-                  <span className="timeline-ctx-desc-text">Pipeline hoàn chỉnh cho vùng chọn này</span>
+                  <span className="timeline-ctx-main-text">Bóc tách + dịch + lồng tiếng vùng</span>
+                  <span className="timeline-ctx-desc-text">Chạy trọn pipeline cho vùng này, câu ngoài vùng giữ nguyên</span>
                 </div>
                 <span className="timeline-ctx-shortcut">Full</span>
               </button>
@@ -8068,14 +9333,15 @@ export default function SublixStudioView({
                   setTimelineContextMenu(null);
                   const minT = Math.min(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!);
                   const maxT = Math.max(timelineContextMenu.inPoint!, timelineContextMenu.outPoint!);
-                  const toDelete = segments.filter((s) => s.end >= minT && s.start <= maxT);
+                  const toDelete = segmentsRef.current.filter((s) => isSegInRange(s, minT, maxT));
                   if (toDelete.length === 0) {
                     showToast("ℹ️ Không có câu thoại nào trong vùng chọn");
                     return;
                   }
                   saveUndoHistory();
-                  setSegments((prev) => prev.filter((s) => s.end < minT || s.start > maxT));
-                  showToast(`🗑️ Đã xóa ${toDelete.length} câu thoại trong vùng chọn`);
+                  setSegments((prev) => prev.filter((s) => !isSegInRange(s, minT, maxT)));
+                  clearSegmentSelection();
+                  showToast(`🗑️ Đã xóa ${toDelete.length} câu thoại trong vùng chọn (Ctrl+Z để hoàn tác)`);
                 }}
               >
                 <span className="timeline-ctx-icon">🗑️</span>

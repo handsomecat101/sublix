@@ -3145,6 +3145,53 @@
   margin-left: auto;
 }
 
+/* [TSK-TIMELINE-INTEGRATE-MODULES] Nút khoá track (Premiere) — cạnh nút M (mute). */
+.studio-track-lock-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--t3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.studio-track-lock-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--t1);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.studio-track-lock-btn.locked {
+  background: rgba(234, 163, 61, 0.22) !important;
+  color: var(--ac) !important;
+  border-color: var(--ac) !important;
+  box-shadow: 0 0 6px rgba(234, 163, 61, 0.45);
+}
+
+/* [TSK-TIMELINE-INTEGRATE-MODULES] Vạch marker trên thước thời gian. */
+.studio-timeline-marker-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.studio-timeline-marker-line:hover {
+  opacity: 1;
+  width: 2px;
+  pointer-events: auto;
+}
+
 /* Empty Audio Track Lane Placeholder */
 .studio-track-empty-placeholder {
   position: absolute;
@@ -3318,6 +3365,63 @@
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
   margin: 3px 0;
+}
+
+/* Menu: lệnh không khả dụng (vd. vùng chọn chưa có câu nào để dịch / đọc) */
+.timeline-ctx-item.disabled {
+  opacity: 0.45;
+}
+
+.timeline-ctx-item.disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* ==========================================================================
+   TSK-TIMELINE-FIX-DND-RANGE: Kéo thả khối trên timeline (kiểu Premiere)
+   ========================================================================== */
+.studio-timeline-subtitle-block,
+.studio-timeline-voice-block {
+  cursor: grab;
+}
+
+.studio-timeline-block.is-dragging {
+  cursor: grabbing;
+  transition: none !important;
+  animation: none !important;
+  z-index: 50 !important;
+  opacity: 0.92;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 0 2px #38bdf8 !important;
+  will-change: transform, left, width;
+}
+
+.studio-timeline-snap-line {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px dashed #facc15;
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.8);
+  z-index: 45;
+  pointer-events: none;
+}
+
+.studio-drag-tip {
+  display: none;
+  position: fixed;
+  z-index: 999998;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono, ui-monospace, Consolas, monospace);
+  color: #e0f2fe;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* Empty Timeline Hint Banner (Khi chưa tạo Sub và Voice) */
