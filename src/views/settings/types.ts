@@ -82,6 +82,10 @@ export interface SettingsCtx {
   reloadTts: () => void;
   installTtsDeps: (engine: "vieneu" | "zerotts") => void;
   diagnoseTts: (engine: "vieneu" | "zerotts") => void;
+  /** Engine đang cài deps (null = không có) — UI hiện "Đang cài…", KHÔNG bịa %. */
+  ttsBusyEngine: "vieneu" | "zerotts" | null;
+  /** Dòng log cuối từ `tts:deps_progress` (pip install…). */
+  ttsDepsLine: string | null;
   ttsCloudKey: Record<"google" | "fptai", string>;
   setTtsCloudKey: (provider: "google" | "fptai", value: string) => void;
   saveTtsCloudKey: (provider: "google" | "fptai") => void;

@@ -14,7 +14,7 @@ const GROUPS: ReadonlyArray<{
   {
     title: "XỬ LÝ AI",
     items: [
-      { id: "stt", icon: "🎤", label: "Nhận dạng giọng nói", desc: "Whisper · CPU/GPU" },
+      { id: "stt", icon: "🎤", label: "Nhận giọng nói (STT)", desc: "Whisper · SenseVoice · Paraformer" },
       { id: "ai", icon: "🌐", label: "Dịch thuật", desc: "5 nhà cung cấp · 1 nơi" },
       { id: "tts", icon: "🗣", label: "Giọng đọc (TTS)", desc: "VietNeu · Kokoro · Cloud" },
       { id: "models_hub", icon: "📦", label: "Mô hình đã tải", desc: "Tải / cập nhật / xoá" },

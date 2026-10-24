@@ -55,16 +55,18 @@ export function TtsSection({ ctx }: { ctx: SettingsCtx }) {
                     <button
                       type="button"
                       className="settings-btn-secondary st-btn-sm"
+                      disabled={ctx.ttsBusyEngine === e.id}
                       onClick={() => ctx.installTtsDeps(e.id as "vieneu" | "zerotts")}
                       title="Cài Python deps (onnxruntime; GPU nếu có NVIDIA)"
                     >
-                      ⬇ Cài deps
+                      {ctx.ttsBusyEngine === e.id ? "⏳ Đang cài…" : "⬇ Cài deps"}
                     </button>
                   )}
                   {canDeps && (
                     <button
                       type="button"
                       className="settings-btn-secondary st-btn-sm"
+                      disabled={ctx.ttsBusyEngine === e.id}
                       onClick={() => ctx.diagnoseTts(e.id as "vieneu" | "zerotts")}
                       title="Kiểm tra có chạy được CUDA không"
                     >
@@ -76,6 +78,11 @@ export function TtsSection({ ctx }: { ctx: SettingsCtx }) {
                     {e.deps === false ? " · thiếu deps" : e.deps ? " · deps OK" : ""}
                   </span>
                 </div>
+                {ctx.ttsBusyEngine === e.id && (
+                  <div className="st-hint st-mono" title="Log pip install (không có % chính xác)">
+                    {ctx.ttsDepsLine ?? "Đang chạy pip install…"}
+                  </div>
+                )}
 
                 {canCloudKey &&
                   (() => {

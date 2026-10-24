@@ -43,6 +43,7 @@ import { TranslationSection } from "./settings/TranslationSection";
 import { TtsSection } from "./settings/TtsSection";
 import { ThemeSection } from "./settings/ThemeSection";
 import { SettingsNav, type SettingsSubtab } from "./settings/SettingsNav";
+import { SttSection } from "./settings/SttSection";
 import { SystemStatusPanel } from "./settings/SystemStatusPanel";
 import type { SettingsCtx, TransProvider, TranslateOptions } from "./settings/types";
 import { mergeConfig, supportsReasoning, REASONING_EFFORTS } from "./settings/configMerge";
@@ -233,6 +234,19 @@ export default function SettingsView() {
     google: null,
     fptai: null,
   });
+  const [ttsBusyEngine, setTtsBusyEngine] = useState<"vieneu" | "zerotts" | null>(null);
+  const [ttsDepsLine, setTtsDepsLine] = useState<string | null>(null);
+
+  // TSK-SETTINGS-MODELS: backend chỉ phát `tts:deps_progress` (log pip), KHÔNG có %
+  // ⇒ hiện log + trạng thái "Đang cài…", không bịa phần trăm.
+  useEffect(() => {
+    const p = listen<{ engine: string; line: string }>("tts:deps_progress", (e) => {
+      setTtsDepsLine(e.payload?.line ?? null);
+    });
+    return () => {
+      p.then((u) => u()).catch(() => undefined);
+    };
+  }, []);
 
   // R2-5: model hiệu lực + model có hỗ trợ "mức độ suy luận" hay không.
   const effectiveTranslationModel =
@@ -1051,6 +1065,8 @@ export default function SettingsView() {
   }
 
   async function installTtsDeps(engine: "vieneu" | "zerotts") {
+    setTtsBusyEngine(engine);
+    setTtsDepsLine(null);
     setTtsNotice(`⏳ Đang cài deps cho ${engine}…`);
     try {
       await sublix.ttsEngineInstallDeps(engine);
@@ -1058,6 +1074,9 @@ export default function SettingsView() {
       await loadTtsStatus();
     } catch (e) {
       setTtsNotice(`❌ Cài deps thất bại: ${e}`);
+    } finally {
+      setTtsBusyEngine(null);
+      setTtsDepsLine(null);
     }
   }
 
@@ -1478,7 +1497,6 @@ export default function SettingsView() {
     }
   }
 
-  const selectedSttInfo = (sttModels ?? []).find((m) => m.name === model);
 
   const runningDownloads = Object.values(globalTasks).filter((t) => t.type === "downloader" && t.status === "running");
   const runningModels = Object.values(globalTasks).filter((t) => t.type === "model" && t.status === "running");
@@ -1576,6 +1594,8 @@ export default function SettingsView() {
     reloadTts: () => void loadTtsStatus(),
     installTtsDeps: (e) => void installTtsDeps(e),
     diagnoseTts: (e) => void diagnoseTts(e),
+    ttsBusyEngine,
+    ttsDepsLine,
     ttsCloudKey,
     setTtsCloudKey,
     saveTtsCloudKey: (p) => void saveTtsCloudKey(p),
@@ -2302,183 +2322,20 @@ export default function SettingsView() {
                 </section>
               )}
 
-              {/* SUBTAB: STT WHISPER */}
+              {/* SUBTAB: NHẬN GIỌNG NÓI — STT (TSK-SETTINGS-MODELS) */}
               {settingsSubtab === "stt" && (
-                <>
-                  <section className="settings-section">
-                    <h2>🎤 Speech Recognition (2026 Whisper Large-v3-Turbo)</h2>
-                    <p className="settings-help">
-                      Long-running <code>whisper-server</code> keeps the model in GPU VRAM (~0.1s per chunk on RTX 3090).
-                      Hot-swaps automatically when you change model or CPU/GPU mode.
-                    </p>
-
-                    <div className="settings-row">
-                      <label>Whisper Model:</label>
-                      <select
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        className="settings-select"
-                      >
-                        {sttModels.length > 0 ? (
-                          sttModels.map((m) => (
-                            <option key={m.name} value={m.name}>
-                              {m.downloaded ? "✓ " : "⬇ "} {m.label}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="large-v3-turbo-q8_0">✓ large-v3-turbo Q8 (874MB) — ⭐ 2026 GPU Best</option>
-                            <option value="base">✓ base (140MB) — Fast lightweight</option>
-                            <option value="tiny">✓ tiny (75MB) — Ultra-light</option>
-                          </>
-                        )}
-                      </select>
-
-                      {selectedSttInfo && !selectedSttInfo.downloaded && (
-                        <button
-                          onClick={async () => {
-                            setDownloadingModel(model);
-                            setStatus({ kind: "working", message: `Downloading Whisper ${model} (~${selectedSttInfo.size_mb}MB)...` });
-                            try {
-                              await sublix.downloadSttModel(model);
-                              await refreshSetup();
-                              setStatus({ kind: "success", message: `✅ Downloaded Whisper ${model}!` });
-                            } catch (e) {
-                              setStatus({ kind: "error", message: `Download failed: ${e}` });
-                            } finally {
-                              setDownloadingModel(null);
-                            }
-                          }}
-                          className="settings-btn-primary"
-                          disabled={downloadingModel !== null}
-                        >
-                          {downloadingModel === model ? "⏳ Downloading..." : `⬇ Download (${selectedSttInfo.size_mb}MB)`}
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="settings-row">
-                      <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
-                      <div className="settings-engine-toggle">
-                        <button
-                          className={`settings-engine-btn ${sttEnginePref === "auto" ? "active" : ""}`}
-                          onClick={() => handleSttEngineChange("auto")}
-                          disabled={!configLoaded}
-                        >
-                          ⚙ AUTO
-                        </button>
-                        <button
-                          className={`settings-engine-btn ${sttEnginePref === "cpu" ? "active" : ""}`}
-                          onClick={() => handleSttEngineChange("cpu")}
-                          disabled={!configLoaded}
-                        >
-                          💻 CPU
-                        </button>
-                        <button
-                          className={`settings-engine-btn ${sttEnginePref === "cuda" ? "active" : ""}`}
-                          onClick={() => handleSttEngineChange("cuda")}
-                          disabled={!configLoaded}
-                        >
-                          🎮 GPU (CUDA)
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={async () => {
-                          setSttServerStarting(true);
-                          setStatus({ kind: "working", message: `Loading Whisper (${model}) into memory...` });
-                          try {
-                            const eng = await sublix.preloadSttServer(model);
-                            setSttServerEngine(eng);
-                            setStatus({
-                              kind: "success",
-                              message: `✅ STT server ready on ${eng.toUpperCase()} (${model})`,
-                            });
-                          } catch (e) {
-                            setStatus({ kind: "error", message: `STT server error: ${e}` });
-                            setSttServerEngine(null);
-                          } finally {
-                            setSttServerStarting(false);
-                          }
-                        }}
-                        className="settings-btn-secondary"
-                        disabled={sttServerStarting}
-                      >
-                        {sttServerStarting ? "⏳ Loading..." : sttServerEngine ? "🔄 Reload STT Server" : "▶ Pre-warm STT Server"}
-                      </button>
-                    </div>
-
-                    <div className="settings-row">
-                      <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
-                      {sttServerStarting ? (
-                        <span className="settings-engine-indicator">
-                          <span className="engine-dot engine-dot-starting" />
-                          <span style={{ color: "#fbbf24" }}>Loading Whisper model into VRAM...</span>
-                        </span>
-                      ) : sttServerEngine === "cuda" ? (
-                        <span className="settings-engine-indicator">
-                          <span className="engine-dot engine-dot-cuda" />
-                          <span style={{ color: "#34d399", fontWeight: 600 }}>
-                            Running on NVIDIA GPU (CUDA) — ~0.08–0.15s per chunk
-                          </span>
-                        </span>
-                      ) : sttServerEngine === "cpu" ? (
-                        <span className="settings-engine-indicator">
-                          <span className="engine-dot engine-dot-cpu" />
-                          <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                            Running on CPU — ~1–2s per chunk
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="settings-engine-indicator">
-                          <span className="engine-dot engine-dot-idle" />
-                          <span style={{ color: "#94a3b8" }}>
-                            Standby (CUDA binary ready: {sttEngine === "cuda" ? "✓ Yes" : "CPU only"})
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                  </section>
-
-                  {/* Diagnostic Test */}
-                  <section className="settings-section">
-                    <h2>🧪 Manual 5s Capture + STT + Translation Test</h2>
-                    <div className="settings-row">
-                      <button
-                        onClick={handleTestCapture}
-                        className="settings-btn-secondary"
-                        disabled={status.kind === "working" || isLive}
-                      >
-                        1. Record 5s Audio
-                      </button>
-                      {lastCapture && (
-                        <button
-                          onClick={handleTranscribe}
-                          className="settings-btn-primary"
-                          disabled={status.kind === "working"}
-                        >
-                          2. Run STT + Translate
-                        </button>
-                      )}
-                      <button
-                        onClick={() => sublix.openModelsFolder()}
-                        className="settings-btn-secondary"
-                      >
-                        📁 Open Models Folder
-                      </button>
-                    </div>
-                    {lastTranscript && (
-                      <div className="settings-transcript">
-                        <div><strong>Original STT:</strong> {lastTranscript}</div>
-                        {lastTranslatedTest && (
-                          <div style={{ marginTop: 4, color: "#34d399" }}>
-                            <strong>Translated ({targetLang.toUpperCase()}):</strong> {lastTranslatedTest}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                </>
+                <SttSection
+                  sttEnginePref={sttEnginePref}
+                  onSttEngineChange={(v) => void handleSttEngineChange(v)}
+                  runtimeEngine={sttEngine}
+                  serverStarting={sttServerStarting}
+                  configReady={configLoaded}
+                  lastCapture={lastCapture}
+                  lastTranscript={lastTranscript}
+                  lastTranslated={lastTranslatedTest}
+                  onTestCapture={() => void handleTestCapture()}
+                  onTranscribe={() => void handleTranscribe()}
+                />
               )}
 
               {/* SUBTAB: OVERLAY */}
