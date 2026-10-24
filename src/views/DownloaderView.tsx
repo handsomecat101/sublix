@@ -1,6 +1,11 @@
 //! Sublix Multi-Platform Video Downloader View
 //! Reuses proven extractor flags, platform recognition & queue mechanics from hermes-downloader.
 //! Features 1-click pipeline bridges into File Subtitle Studio and AI Dubbing Studio.
+//!
+//! TSK-UI-REDESIGN-R2-6: bố cục 1 cột (PLAN §4.4) — ô nhập lớn + nút Tải ngay cạnh,
+//! tuỳ chọn gom thành chip (Chất lượng / Phụ đề / ⚙ Nâng cao), danh sách dạng HÀNG
+//! (1 nút chính theo trạng thái + menu ⋯/chuột phải dùng `ContextMenu` dùng chung).
+//! **Toàn bộ logic (handler, hàng đợi 3 song song, BUG-053, sub-pass, reup) giữ nguyên.**
 
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -16,17 +21,15 @@ import {
 } from "../lib/tauri";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import { DownloaderBatchPicker, type BatchState } from "./DownloaderBatchPicker";
+import { ContextMenu, type ContextMenuItem } from "../components/ui/ContextMenu";
 import {
   IconDownload,
   IconFolder,
   IconClapper,
   IconPause,
   IconPlay,
-  IconTrash,
   IconRotateCw,
-  IconGlobe,
 } from "../icons";
-import { StudioShell, ShellCard } from "./StudioShell";
 import "./DownloaderView.css";
 
 interface DownloaderViewProps {
@@ -84,7 +87,21 @@ const FORMAT_OPTIONS: SelectOption[] = [
   { value: "audio-m4a", label: "🎵 Chỉ tải âm thanh — M4A (AAC)" },
 ];
 
+// Nhãn ngắn hiện trên chip "Chất lượng".
+const FORMAT_SHORT: Record<string, string> = {
+  max: "Cao nhất",
+  "4k": "4K",
+  "1440p": "2K",
+  "1080p": "1080p",
+  "720p": "720p",
+  "480p": "480p",
+  "360p": "360p",
+  "audio-mp3": "MP3",
+  "audio-m4a": "M4A",
+};
+
 const isAudioFormat = (format: string) => format.startsWith("audio-");
+const formatLabel = (format: string) => FORMAT_SHORT[format] ?? format;
 
 // TSK-FEAT-DL-BATCH-AUDIO: tải hàng loạt — số tiến trình yt-dlp chạy song song
 // (các mục còn lại nằm ở trạng thái "queued") và trần số mục 1 lần xếp hàng.
@@ -248,6 +265,8 @@ function formatError(e: unknown, fallback: string): string {
   return fallback;
 }
 
+type DlFilter = "all" | "downloading" | "queued" | "completed" | "error";
+
 export default function DownloaderView({
   onNavigateToFileSub,
   onNavigateToDubbing,
@@ -269,7 +288,7 @@ export default function DownloaderView({
   const [subsBusyId, setSubsBusyId] = useState<string | null>(null);
   // v0.9.11: one-line feedback for the subtitle fetch (success/warning).
   const [subsNotice, setSubsNotice] = useState<string | null>(null);
-  // v0.9.4: where downloads are stored on disk (shown in the header).
+  // v0.9.4: where downloads are stored on disk (shown in the footer).
   const [dlDir, setDlDir] = useState<string>("");
 
   // Inspection state
@@ -313,7 +332,7 @@ export default function DownloaderView({
     return [];
   });
 
-  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "completed">("all");
+  const [activeFilter, setActiveFilter] = useState<DlFilter>("all");
   // BUG-053: lock the Start button while a click is in flight so a frantic
   // double-click doesn't spawn two parallel yt-dlp processes.
   const [starting, setStarting] = useState<boolean>(false);
@@ -334,6 +353,12 @@ export default function DownloaderView({
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
   // Mục "queued" đã được gọi start — chặn effect gọi trùng 2 lần.
   const launchedRef = useRef<Set<string>>(new Set());
+
+  // ---- TSK-UI-REDESIGN-R2-6: state chỉ dùng cho giao diện ----
+  const [advOpen, setAdvOpen] = useState<boolean>(false); // popover ⚙ Nâng cao
+  const [nameFilter, setNameFilter] = useState<string>(""); // lọc theo tên
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Save history on change
   useEffect(() => {
@@ -689,19 +714,6 @@ export default function DownloaderView({
     }
   };
 
-  // Paste from clipboard
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && (text.startsWith("http://") || text.startsWith("https://"))) {
-        setUrl(text);
-        handleInspect(text);
-      }
-    } catch (e) {
-      console.warn("Clipboard access denied or empty", e);
-    }
-  };
-
   // Start download
   const handleStartDownload = async () => {
     // BUG-053: lock immediately on entry — synchronous setState — so the
@@ -1008,8 +1020,6 @@ export default function DownloaderView({
     }
   };
 
-  // v0.9.6: brief "copied" feedback per item for the source-link button.
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const handleCopyLink = async (item: DownloadItem) => {
     const text = item.url || "";
     if (!text) return;
@@ -1034,580 +1044,689 @@ export default function DownloaderView({
     window.setTimeout(() => setCopiedId((cur) => (cur === item.id ? null : cur)), 2000);
   };
 
-  const filteredItems = items.filter((item) => {
-    if (activeFilter === "active") {
-      return item.status === "downloading" || item.status === "paused" || item.status === "queued";
+  // ================= TSK-UI-REDESIGN-R2-6: tương tác giao diện =================
+
+  // Chuẩn hoá đường dẫn file (BUG-058 (4): path sạch trước khi chuyển module).
+  const safePath = (item: DownloadItem): string =>
+    item.filePath ? item.filePath.replace(/\//g, "\\").trim() : "";
+
+  // Hành động chính theo trạng thái (nút to bên phải mỗi hàng).
+  const runPrimary = (item: DownloadItem) => {
+    switch (item.status) {
+      case "downloading":
+        void handlePause(item.id);
+        break;
+      case "paused":
+      case "error":
+      case "cancelled":
+        void handleResume(item);
+        break;
+      case "completed":
+        handlePlayInStudio(safePath(item));
+        break;
+      default:
+        break;
     }
-    if (activeFilter === "completed") {
-      return item.status === "completed";
+  };
+
+  // Mở menu ⋯ / chuột phải (component ContextMenu dùng chung).
+  const openMenuAt = (x: number, y: number, menuItems: ContextMenuItem[]) =>
+    setMenu({ x, y, items: menuItems });
+
+  const openMenuFromEl = (el: HTMLElement, menuItems: ContextMenuItem[]) => {
+    const r = el.getBoundingClientRect();
+    openMenuAt(r.right, r.bottom + 4, menuItems);
+  };
+
+  // Danh sách mục menu của một hàng tải.
+  const rowMenuItems = (item: DownloadItem): ContextMenuItem[] => {
+    const safe = safePath(item);
+    const ready = safe.length > 0 && fileExistsMap[item.id] === true;
+    const out: ContextMenuItem[] = [
+      {
+        id: "studio",
+        label: "🎬 Mở trong Studio",
+        hint: "Enter",
+        disabled: !ready,
+        onSelect: () => handlePlayInStudio(safe),
+      },
+      {
+        id: "player",
+        label: "▶ Phát bằng trình phát ngoài",
+        disabled: !ready,
+        onSelect: () => void handlePlayExternal(safe),
+      },
+      {
+        id: "reveal",
+        label: "📁 Hiện trong thư mục",
+        disabled: !safe,
+        onSelect: () => void handleReveal(item.filePath),
+      },
+      {
+        id: "subs",
+        label: item.subsLangs && item.subsLangs.length > 0 ? "📝 Tải lại phụ đề" : "📝 Tải phụ đề",
+        disabled: item.status !== "completed" || subsBusyId === item.id,
+        onSelect: () => void handleFetchSubs(item),
+      },
+      {
+        id: "copy",
+        label: copiedId === item.id ? "✅ Đã sao chép link" : "🔗 Sao chép link gốc",
+        hint: "Ctrl+C",
+        onSelect: () => void handleCopyLink(item),
+      },
+    ];
+    if (item.status === "downloading" || item.status === "paused" || item.status === "queued") {
+      out.push({
+        id: "cancel",
+        label: "⏹ Hủy bỏ",
+        separatorBefore: true,
+        onSelect: () => void handleCancel(item.id),
+      });
     }
-    return true;
+    out.push({
+      id: "remove",
+      label: "🗑 Xoá khỏi danh sách",
+      hint: "Del",
+      danger: true,
+      separatorBefore: true,
+      onSelect: () => void handleRemove(item.id),
+    });
+    return out;
+  };
+
+  // Chip "Chất lượng" — tái dùng ContextMenu (đã có sẵn đóng khi bấm ngoài/Esc).
+  const qualityMenuItems = (): ContextMenuItem[] =>
+    FORMAT_OPTIONS.map((o) => ({
+      id: o.value,
+      label: o.label,
+      hint: o.value === format ? "✓" : undefined,
+      onSelect: () => setFormat(o.value),
+    }));
+
+  const subsMenuItems = (): ContextMenuItem[] => [
+    {
+      id: "off",
+      label: "Tắt",
+      hint: !extractSubtitles ? "✓" : undefined,
+      onSelect: () => setExtractSubtitles(false),
+    },
+    {
+      id: "on",
+      label: "Tự tải nếu có (vi, en, ja, zh)",
+      hint: extractSubtitles ? "✓" : undefined,
+      onSelect: () => setExtractSubtitles(true),
+    },
+  ];
+
+  // Số tuỳ chọn nâng cao đang bật (hiện trên chip).
+  const advCount =
+    (browserCookie !== "none" ? 1 : 0) +
+    (reupInfo ? 1 : 0) +
+    (reupArchive ? 1 : 0) +
+    (reupThumbnail ? 1 : 0) +
+    (sectionStart.trim() || sectionEnd.trim() ? 1 : 0);
+
+  // Nền tảng tự nhận cho các dòng link (chip) — giữ thứ tự, bỏ trùng.
+  const urlLines = url
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const detectedPlatforms: string[] = [];
+  urlLines.forEach((line) => {
+    const p = detectPlatform(line);
+    if (!detectedPlatforms.includes(p)) detectedPlatforms.push(p);
   });
 
-  const activeCount = items.filter(
-    (i) => i.status === "downloading" || i.status === "paused" || i.status === "queued"
-  ).length;
+  // Tự đọc link khi dán/gõ (debounce 600ms) — TÁI SỬ DỤNG `handleInspect`.
+  // Dùng ref để effect chỉ phụ thuộc `url` (không phụ thuộc state khác).
+  const inspectRef = useRef<(overrideUrl?: string) => void>(() => {});
+  inspectRef.current = handleInspect;
+  const batchRef = useRef<BatchState | null>(batch);
+  batchRef.current = batch;
+  const expandingRef = useRef<boolean>(expanding);
+  expandingRef.current = expanding;
+  useEffect(() => {
+    const text = url.trim();
+    if (!text) return;
+    // Chỉ tự đọc khi có ít nhất 1 dòng là URL http(s) hợp lệ (tránh báo lỗi khi đang gõ).
+    if (!text.split("\n").some((l) => isValidHttpUrl(l.trim()))) return;
+    const timer = window.setTimeout(() => {
+      if (batchRef.current || expandingRef.current) return;
+      inspectRef.current();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [url]);
+
+  // ---- Lọc danh sách ----
+  const countOf = (pred: (i: DownloadItem) => boolean) => items.filter(pred).length;
+  const counts = {
+    all: items.length,
+    downloading: countOf((i) => i.status === "downloading" || i.status === "paused"),
+    queued: countOf((i) => i.status === "queued"),
+    completed: countOf((i) => i.status === "completed"),
+    error: countOf((i) => i.status === "error" || i.status === "cancelled"),
+  };
+
+  const filteredItems = items.filter((item) => {
+    const q = nameFilter.trim().toLowerCase();
+    if (q) {
+      const hay = `${item.title} ${item.filename} ${item.url}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    switch (activeFilter) {
+      case "downloading":
+        return item.status === "downloading" || item.status === "paused";
+      case "queued":
+        return item.status === "queued";
+      case "completed":
+        return item.status === "completed";
+      case "error":
+        return item.status === "error" || item.status === "cancelled";
+      default:
+        return true;
+    }
+  });
+
+  const startLabel = batch
+    ? `Tải ${batch.entries.length - batch.unchecked.size} mục`
+    : linkCount > 1
+    ? `Tải ${linkCount} link`
+    : isAudioFormat(format)
+    ? "Tải âm thanh"
+    : "Tải video";
 
   return (
-    <StudioShell
-      left={<>
-      {/* INPUT CARD */}
-      <div className="downloader-card input-card">
-        <div className="downloader-url-group">
-          <div className="downloader-input-wrapper">
-            <span className="platform-tag" style={{ color: currentPlatformMeta.color }}>
-              <span>{currentPlatformMeta.icon}</span>
-              <span>{currentPlatformMeta.label}</span>
-            </span>
-            {/* TSK-FEAT-DL-BATCH-AUDIO: textarea để dán nhiều link (mỗi dòng 1 link);
-                Enter = Kiểm tra link, Shift+Enter = xuống dòng. */}
-            <textarea
-              className="downloader-url-input"
-              rows={url ? Math.min(5, url.split("\n").length) : 2}
-              placeholder="Dán link video hoặc playlist (YouTube, TikTok, Douyin, Bilibili...) — nhiều link thì mỗi dòng 1 link"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setVideoInfo(null);
-                setInspectError(null);
-                setThumbFailed(false);
-                setBatch(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleInspect();
-                }
-              }}
-            />
-            {url.trim().length > 0 ? (
-              <button
-                type="button"
-                className="downloader-clear-btn"
-                onClick={() => {
-                  setUrl("");
+    <div className="dl-view">
+      <div className="dl-body">
+        {/* ===== 1. Ô NHẬP + NÚT TẢI ===== */}
+        <section className="dl-card dl-cmd">
+          <div className="dl-cmd-row">
+            <div className="dl-url-wrap">
+              <textarea
+                className="dl-url-input"
+                rows={Math.min(6, Math.max(2, url.split("\n").length))}
+                placeholder="Dán link video hoặc playlist — nhiều link thì mỗi dòng 1 link (Ctrl+V)"
+                value={url}
+                onChange={(e) => {
+                  setUrl(e.target.value);
                   setVideoInfo(null);
                   setInspectError(null);
                   setThumbFailed(false);
                   setBatch(null);
                 }}
-                title="Xóa URL"
-              >
-                ✕
-              </button>
-            ) : (
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleStartDownload();
+                  }
+                }}
+              />
+              {url.trim().length > 0 && (
+                <button
+                  type="button"
+                  className="dl-url-clear"
+                  title="Xóa tất cả link"
+                  onClick={() => {
+                    setUrl("");
+                    setVideoInfo(null);
+                    setInspectError(null);
+                    setThumbFailed(false);
+                    setBatch(null);
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+              {urlLines.length > 0 && (
+                <span className="dl-url-count">
+                  {linkCount || urlLines.length} link · tự nhận nền tảng
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="dl-go"
+              onClick={() => void handleStartDownload()}
+              disabled={
+                starting ||
+                expanding ||
+                (batch ? batch.entries.length === batch.unchecked.size : !url.trim())
+              }
+            >
+              {starting || expanding ? (
+                <>
+                  <span className="downloader-spinner" />
+                  <span>{expanding ? "Đang đọc playlist…" : "Đang khởi động…"}</span>
+                </>
+              ) : (
+                <>
+                  <IconDownload size={18} /> {startLabel}
+                </>
+              )}
+              <small>Enter</small>
+            </button>
+          </div>
+
+          {/* chip nền tảng tự nhận */}
+          {detectedPlatforms.length > 0 && (
+            <div className="dl-plat-row">
+              {detectedPlatforms.map((p) => {
+                const meta = PLATFORM_META[p] || PLATFORM_META.generic_video;
+                return (
+                  <span
+                    key={p}
+                    className="dl-plat-chip"
+                    style={{ color: meta.color, borderColor: meta.color }}
+                  >
+                    {meta.icon} {meta.label}
+                  </span>
+                );
+              })}
+              {inspecting && <span className="dl-plat-reading">⏳ Đang đọc thông tin…</span>}
+            </div>
+          )}
+
+          {/* hàng chip tuỳ chọn */}
+          <div className="dl-opts">
+            <span className="dl-opt-wrap">
               <button
                 type="button"
-                className="downloader-paste-btn"
-                onClick={handlePaste}
-                title="Dán từ Clipboard"
+                className="dl-opt"
+                aria-haspopup="menu"
+                onClick={(e) => openMenuFromEl(e.currentTarget, qualityMenuItems())}
               >
-                📋 Dán Link
+                <span className="dl-opt-k">Chất lượng</span>
+                <b>{formatLabel(format)}</b>
+                <span className="dl-opt-caret">▾</span>
               </button>
-            )}
+            </span>
+
+            <span className="dl-opt-wrap">
+              <button
+                type="button"
+                className="dl-opt"
+                aria-haspopup="menu"
+                onClick={(e) => openMenuFromEl(e.currentTarget, subsMenuItems())}
+              >
+                <span className="dl-opt-k">Phụ đề</span>
+                <b>{extractSubtitles ? "Tự tải nếu có" : "Tắt"}</b>
+                <span className="dl-opt-caret">▾</span>
+              </button>
+            </span>
+
+            <span className="dl-opt-wrap">
+              <button
+                type="button"
+                className={`dl-opt${advOpen ? " on" : ""}`}
+                aria-expanded={advOpen}
+                onClick={() => setAdvOpen((v) => !v)}
+              >
+                ⚙ Nâng cao
+                {advCount > 0 && <span className="dl-opt-badge">{advCount} đang bật</span>}
+              </button>
+              {advOpen && (
+                <>
+                  <div className="dl-pop-catch" onClick={() => setAdvOpen(false)} />
+                  <div className="dl-adv" role="dialog" aria-label="Tuỳ chọn nâng cao">
+                    <div className="dl-adv-head">⚙ Tuỳ chọn nâng cao</div>
+
+                    <div className="dl-adv-row">
+                      <label className="option-label">Trình duyệt lấy Cookies</label>
+                      <CustomSelect
+                        value={browserCookie}
+                        options={BROWSER_COOKIE_OPTIONS}
+                        onChange={setBrowserCookie}
+                      />
+                      <span className="option-hint">
+                        Giúp vượt giới hạn độ tuổi / Douyin HD (thử nghiệm)
+                      </span>
+                    </div>
+
+                    <div className="dl-adv-sep" />
+
+                    <div className="reup-checkbox-row">
+                      <label className="checkbox-label reup-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={reupInfo}
+                          onChange={(e) => setReupInfo(e.target.checked)}
+                        />
+                        <span>🧾 Xuất metadata (.info.txt) để viết lại caption</span>
+                      </label>
+                      <label className="checkbox-label reup-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={reupArchive}
+                          onChange={(e) => setReupArchive(e.target.checked)}
+                        />
+                        <span>♻️ Chống tải trùng (sổ đã tải)</span>
+                      </label>
+                      <label className="checkbox-label reup-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={reupThumbnail}
+                          onChange={(e) => setReupThumbnail(e.target.checked)}
+                        />
+                        <span>🖼️ Tải thumbnail gốc (.jpg)</span>
+                      </label>
+                    </div>
+
+                    <div className="reup-section-row">
+                      <span className="reup-section-label">✂️ Chỉ tải đoạn (hh:mm:ss):</span>
+                      <input
+                        type="text"
+                        className="reup-time-input"
+                        placeholder="từ 00:00:00"
+                        value={sectionStart}
+                        onChange={(e) => setSectionStart(e.target.value)}
+                      />
+                      <span className="reup-section-dash">→</span>
+                      <input
+                        type="text"
+                        className="reup-time-input"
+                        placeholder="đến 00:00:00"
+                        value={sectionEnd}
+                        onChange={(e) => setSectionEnd(e.target.value)}
+                      />
+                      <span className="option-hint">(để trống = tải cả video)</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </span>
+
+            <span className="dl-opts-hint">
+              Dán link là tự đọc thông tin · Shift+Enter xuống dòng · Enter tải
+            </span>
           </div>
 
-          <button
-            type="button"
-            className="downloader-btn-inspect"
-            onClick={() => handleInspect()}
-            disabled={inspecting || expanding || !url.trim()}
-          >
-            {inspecting || expanding
-              ? "⏳ Đang đọc..."
-              : linkCount > 1
-              ? `🔍 Kiểm Tra ${linkCount} Link`
-              : "🔍 Kiểm Tra Link"}
-          </button>
-        </div>
+          {inspectError && <div className="dl-alert-error">⚠️ {inspectError}</div>}
 
-        {inspectError && (
-          <div className="downloader-alert-error">
-            ⚠️ {inspectError}
-          </div>
-        )}
+          {expanding && (
+            <div className="downloader-sub-note">⏳ Đang đọc danh sách playlist bằng yt-dlp…</div>
+          )}
 
-        {expanding && (
-          <div className="downloader-sub-note">⏳ Đang đọc danh sách playlist bằng yt-dlp...</div>
-        )}
+          {batch && (
+            <DownloaderBatchPicker batch={batch} onChange={setBatch} formatDuration={formatDuration} />
+          )}
 
-        {batch && (
-          <DownloaderBatchPicker batch={batch} onChange={setBatch} formatDuration={formatDuration} />
-        )}
+          {queueNotice && <div className="downloader-sub-note">{queueNotice}</div>}
 
-        {queueNotice && <div className="downloader-sub-note">{queueNotice}</div>}
-
-        {/* METADATA INSPECTED CARD */}
-        {videoInfo && (
-          <div className="video-info-preview">
-            {videoInfo.thumbnail && !thumbFailed ? (
-              <div className="video-thumb-container" key={videoInfo.thumbnail}>
+          {/* xem trước metadata (1 dòng gọn) */}
+          {videoInfo && (
+            <div className="dl-preview" key={videoInfo.thumbnail ?? videoInfo.title}>
+              {videoInfo.thumbnail && !thumbFailed ? (
                 <img
+                  className="dl-preview-thumb"
                   src={videoInfo.thumbnail}
-                  alt={videoInfo.title}
-                  className="video-thumb-img"
-                  onError={() => {
-                    // R3-04 (1): React state to hide container instead of DOM manipulation
-                    setThumbFailed(true);
-                  }}
+                  alt=""
+                  onError={() => setThumbFailed(true)}
                 />
-                {videoInfo.duration && (
-                  <span className="video-duration-badge">
-                    {formatDuration(videoInfo.duration)}
-                  </span>
-                )}
-              </div>
-            ) : null}
-            <div className="video-info-meta">
-              <h4 className="video-info-title">{videoInfo.title}</h4>
-              <div className="video-info-sub">
-                {videoInfo.uploader && (
-                  <span className="video-info-author">👤 {videoInfo.uploader}</span>
-                )}
-                <span
-                  className="platform-pill"
-                  style={{ borderColor: currentPlatformMeta.color, color: currentPlatformMeta.color }}
-                >
-                  {currentPlatformMeta.icon} {currentPlatformMeta.label}
+              ) : (
+                <span className="dl-preview-thumb dl-preview-ph">{currentPlatformMeta.icon}</span>
+              )}
+              <div className="dl-preview-main">
+                <span className="dl-preview-title" title={videoInfo.title}>
+                  {videoInfo.title}
                 </span>
-                {videoInfo.duration && (
-                  <span className="video-duration-text">
-                    ⏱️ Thời lượng: {formatDuration(videoInfo.duration)}
+                <span className="dl-preview-sub">
+                  {videoInfo.uploader && <span>👤 {videoInfo.uploader}</span>}
+                  <span
+                    className="dl-pill"
+                    style={{ color: currentPlatformMeta.color, borderColor: currentPlatformMeta.color }}
+                  >
+                    {currentPlatformMeta.icon} {currentPlatformMeta.label}
                   </span>
-                )}
+                  {videoInfo.duration ? <span>⏱ {formatDuration(videoInfo.duration)}</span> : null}
+                </span>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* OPTIONS GRID */}
-        <div className="downloader-options-grid">
-          <div className="downloader-option-item">
-            <label className="option-label">Chất lượng / định dạng tải về:</label>
-            <CustomSelect
-              value={format}
-              options={FORMAT_OPTIONS}
-              onChange={setFormat}
-            />
-          </div>
-
-          <div className="downloader-option-item">
-            <label className="option-label">
-              Trình duyệt lấy Cookies:
-              <span className="option-hint">(Giúp vượt giới hạn tuổi, Douyin HD)</span>
-            </label>
-            <CustomSelect
-              value={browserCookie}
-              options={BROWSER_COOKIE_OPTIONS}
-              onChange={setBrowserCookie}
-            />
-          </div>
-
-          <div className="downloader-option-item checkbox-item">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={extractSubtitles}
-                onChange={(e) => setExtractSubtitles(e.target.checked)}
-              />
-              <span>💬 Tự động trích xuất phụ đề (.srt) nếu có (vi, en, ja, zh)</span>
-            </label>
-          </div>
-
-          {/* TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup (mặc định tắt). */}
-          <div className="downloader-option-item reup-options">
-            <label className="option-label">
-              🎬 Tùy chọn reup <span className="option-hint">(tuỳ chọn — mặc định tắt)</span>
-            </label>
-            <div className="reup-checkbox-row">
-              <label className="checkbox-label reup-checkbox">
-                <input
-                  type="checkbox"
-                  checked={reupInfo}
-                  onChange={(e) => setReupInfo(e.target.checked)}
-                />
-                <span>🧾 Xuất metadata (.info.txt) để viết lại caption</span>
-              </label>
-              <label className="checkbox-label reup-checkbox">
-                <input
-                  type="checkbox"
-                  checked={reupArchive}
-                  onChange={(e) => setReupArchive(e.target.checked)}
-                />
-                <span>♻️ Chống tải trùng (sổ đã tải)</span>
-              </label>
-              <label className="checkbox-label reup-checkbox">
-                <input
-                  type="checkbox"
-                  checked={reupThumbnail}
-                  onChange={(e) => setReupThumbnail(e.target.checked)}
-                />
-                <span>🖼️ Tải thumbnail gốc (.jpg)</span>
-              </label>
-            </div>
-            <div className="reup-section-row">
-              <span className="reup-section-label">✂️ Chỉ tải đoạn (hh:mm:ss):</span>
-              <input
-                type="text"
-                className="reup-time-input"
-                placeholder="từ 00:00:00"
-                value={sectionStart}
-                onChange={(e) => setSectionStart(e.target.value)}
-              />
-              <span className="reup-section-dash">→</span>
-              <input
-                type="text"
-                className="reup-time-input"
-                placeholder="đến 00:00:00"
-                value={sectionEnd}
-                onChange={(e) => setSectionEnd(e.target.value)}
-              />
-              <span className="option-hint">(để trống = tải cả video)</span>
-            </div>
-          </div>
+          )}
 
           {subsNotice && <div className="downloader-sub-note">{subsNotice}</div>}
-        </div>
+        </section>
 
-        {/* ACTION ROW */}
-        <div className="downloader-submit-row">
+        {/* ===== 2. DANH SÁCH TẢI ===== */}
+        <div className="dl-listhead">
+          <div className="dl-ftabs">
+            {(
+              [
+                ["all", "Tất cả", counts.all],
+                ["downloading", "Đang tải", counts.downloading],
+                ["queued", "Đang đợi", counts.queued],
+                ["completed", "Xong", counts.completed],
+                ["error", "Lỗi", counts.error],
+              ] as [DlFilter, string, number][]
+            ).map(([key, label, n]) => (
+              <button
+                key={key}
+                type="button"
+                className={`dl-ftab${activeFilter === key ? " on" : ""}`}
+                onClick={() => setActiveFilter(key)}
+              >
+                {label} <i>{n}</i>
+              </button>
+            ))}
+          </div>
+          <span className="dl-grow" />
+          <input
+            className="dl-search"
+            type="search"
+            placeholder="🔍 Lọc theo tên…"
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+          />
           <button
             type="button"
-            className="downloader-btn-start"
-            onClick={handleStartDownload}
-            disabled={
-              starting ||
-              expanding ||
-              (batch ? batch.entries.length === batch.unchecked.size : !url.trim())
+            className="dl-more"
+            title="Thao tác danh sách"
+            aria-haspopup="menu"
+            onClick={(e) =>
+              openMenuFromEl(e.currentTarget, [
+                {
+                  id: "open-folder",
+                  label: "📁 Mở thư mục tải về",
+                  onSelect: () => void sublix.downloaderOpenFolder(),
+                },
+                {
+                  id: "clean",
+                  label: "🧹 Dọn lịch sử (mục đã xong)",
+                  separatorBefore: true,
+                  disabled: counts.completed === 0,
+                  onSelect: handleClearHistory,
+                },
+              ])
             }
           >
-            {starting || expanding ? (
-              <>
-                <span className="downloader-spinner" />{" "}
-                {expanding ? "Đang đọc playlist..." : "Đang khởi động..."}
-              </>
-            ) : (
-              <>
-                <IconDownload size={16} />{" "}
-                {batch
-                  ? `Tải ${batch.entries.length - batch.unchecked.size} Mục Đã Chọn`
-                  : linkCount > 1
-                  ? `Tải ${linkCount} Link Cùng Lúc`
-                  : isAudioFormat(format)
-                  ? "Bắt Đầu Tải Âm Thanh Ngay"
-                  : "Bắt Đầu Tải Video Ngay"}
-              </>
-            )}
+            ⋯
           </button>
-        </div>
-      </div>
-
-      {/* DOWNLOADS LIST SECTION */}
-      </>
-      }
-      center={<>
-      <div className="downloader-list-section">
-        <div className="downloader-list-header">
-          <div className="downloader-tabs">
-            <button
-              type="button"
-              className={`downloader-tab ${activeFilter === "all" ? "active" : ""}`}
-              onClick={() => setActiveFilter("all")}
-            >
-              Tất Cả ({items.length})
-            </button>
-            <button
-              type="button"
-              className={`downloader-tab ${activeFilter === "active" ? "active" : ""}`}
-              onClick={() => setActiveFilter("active")}
-            >
-              Đang Tải ({activeCount})
-            </button>
-            <button
-              type="button"
-              className={`downloader-tab ${activeFilter === "completed" ? "active" : ""}`}
-              onClick={() => setActiveFilter("completed")}
-            >
-              Hoàn Thành ({items.filter((i) => i.status === "completed").length})
-            </button>
-          </div>
-
-          {items.some((i) => i.status === "completed") && (
-            <button
-              type="button"
-              className="downloader-btn-clean"
-              onClick={handleClearHistory}
-              title="Xóa các mục đã tải xong khỏi danh sách"
-            >
-              <IconTrash size={13} /> Dọn Lịch Sử
-            </button>
-          )}
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="downloader-empty">
+          <div className="dl-empty">
             <div className="empty-icon">📥</div>
             <h3>Chưa có video nào trong danh sách</h3>
             <p>
-              Dán URL từ YouTube, TikTok, Facebook, Douyin hoặc Bilibili vào ô phía trên rồi bấm{" "}
-              <strong>Bắt Đầu Tải Video Ngay</strong>.
+              Dán link từ YouTube, TikTok, Facebook, Instagram, Douyin, Bilibili… vào ô phía trên
+              rồi bấm <strong>Tải video</strong> (hoặc nhấn Enter).
             </p>
           </div>
         ) : (
-          <div className="downloader-items-grid">
+          <div className="dl-list">
             {filteredItems.map((item) => {
               const meta = PLATFORM_META[item.platform] || PLATFORM_META.generic_video;
+              const safe = safePath(item);
+              const ready = safe.length > 0 && fileExistsMap[item.id] === true;
+              const running = item.status === "downloading" || item.status === "paused";
               return (
-                <div key={item.id} className={`downloader-card item-card status-${item.status}`}>
-                  <div className="item-header">
-                    <span className="item-platform-badge" style={{ color: meta.color }}>
-                      {meta.icon} {meta.label}
-                    </span>
-                    <span className={`item-status-pill status-${item.status}`}>
-                      {item.status === "downloading" && "⚡ Đang tải..."}
-                      {item.status === "paused" && "⏸️ Tạm dừng"}
-                      {item.status === "completed" && "✅ Hoàn thành"}
-                      {item.status === "error" && "❌ Lỗi"}
-                      {item.status === "cancelled" && "⏹️ Đã hủy"}
-                      {item.status === "queued" && "⏳ Đang đợi"}
-                      {!["downloading", "paused", "completed", "error", "cancelled", "queued"].includes(item.status) && "ℹ️ Không xác định"}
-                    </span>
-                  </div>
-
-                  <div className="item-body">
-                    {item.thumbnail && (
+                <div
+                  key={item.id}
+                  className={`dl-item st-${item.status}`}
+                  tabIndex={0}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openMenuAt(e.clientX, e.clientY, rowMenuItems(item));
+                  }}
+                  onKeyDown={(e) => {
+                    // Chỉ xử lý khi chính hàng đang được focus (tránh trùng với nút con).
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      runPrimary(item);
+                    } else if (e.key === "Delete") {
+                      e.preventDefault();
+                      void handleRemove(item.id);
+                    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+                      void handleCopyLink(item);
+                    }
+                  }}
+                >
+                  <div className="dl-th">
+                    {item.thumbnail ? (
                       <img
                         src={item.thumbnail}
                         alt=""
-                        className="item-thumb"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = "none";
                         }}
                       />
+                    ) : (
+                      <span className="dl-th-ph">{meta.icon}</span>
                     )}
-                    <div className="item-details">
-                      <h4 className="item-title" title={item.filename || item.title}>
-                        {item.filename || item.title}
-                      </h4>
-
-                      {/* v0.9.6: source link — copyable so a failed or dead
-                          download can be pasted back and retried */}
-                      {item.url && (
-                        <div className="item-source-row">
-                          <span className="item-source-url" title={item.url}>
-                            🔗 {item.url}
-                          </span>
-                          <button
-                            type="button"
-                            className="item-btn tiny"
-                            onClick={() => handleCopyLink(item)}
-                            title="Copy link video gốc vào clipboard"
-                          >
-                            {copiedId === item.id ? "✅ Đã copy" : "📋 Copy link"}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* v0.9.6: completed file info — quality, size, path */}
-                      {item.status === "completed" && (item.resolution || item.sizeText || item.filePath) && (
-                        <div className="item-file-meta">
-                          {isAudioFormat(item.format) ? (
-                            <span className="meta-chip">
-                              🎵 Âm thanh {item.format.replace("audio-", "").toUpperCase()}
-                            </span>
-                          ) : item.resolution ? (
-                            <span className="meta-chip">🎞 {resolutionLabel(item.resolution)}</span>
-                          ) : null}
-                          {item.sizeText && <span className="meta-chip">💾 {item.sizeText}</span>}
-                          {item.subsLangs && item.subsLangs.length > 0 ? (
-                            <span className="meta-chip">
-                              📝 Phụ đề YouTube: {item.subsLangs.join(", ")}
-                            </span>
-                          ) : item.extractSubtitles && item.status === "completed" ? (
-                            <span
-                              className="meta-chip meta-chip-warn"
-                              title="YouTube có thể đang chặn tạm thời các track phụ đề dịch (429) — bấm 'Tải phụ đề' để thử lại."
-                            >
-                              📝 Chưa có phụ đề
-                            </span>
-                          ) : null}
-                          {item.filePath && (
-                            <span className="meta-chip item-file-path" title={item.filePath}>
-                              📁 {item.filePath}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* PROGRESS BAR */}
-                      {(item.status === "downloading" || item.status === "paused") && (
-                        <div className="item-progress-wrapper">
-                          <div className="item-progress-bar">
-                            <div
-                              className="item-progress-fill"
-                              style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
-                            />
-                          </div>
-                          <div className="item-progress-meta">
-                            <span className="percent-text">{item.percent.toFixed(1)}%</span>
-                            {item.speed && <span className="speed-text">🚀 {item.speed}</span>}
-                            {/* R2-09.3: hide ETA when yt-dlp hasn't given one yet
-                                (sentinel "--:--" or empty). Otherwise the bar
-                                shows "⏱️ Còn --:--" which is meaningless UI. */}
-                            {item.eta && item.eta !== "--:--" && (
-                              <span className="eta-text">⏱️ Còn {item.eta}</span>
-                            )}
-                            {item.sizeText && <span className="size-text">📥 {item.sizeText}</span>}
-                          </div>
-                        </div>
-                      )}
-
-                      {item.error && (
-                        <div className="item-error-msg">
-                          ⚠️ {item.error}
-                        </div>
-                      )}
-                    </div>
                   </div>
 
-                  {/* ITEM ACTIONS & PIPELINE BRIDGES */}
-                  <div className="item-actions-row">
-                    {/* Active controls */}
+                  <div className="dl-main">
+                    <div className="dl-title" title={item.filename || item.title}>
+                      {item.filename || item.title}
+                    </div>
+                    <div className="dl-meta">
+                      <span
+                        className="dl-pill"
+                        style={{ color: meta.color, borderColor: meta.color }}
+                      >
+                        {meta.icon} {meta.label}
+                      </span>
+                      <span className="dl-pill">{formatLabel(item.format)}</span>
+                      {item.status === "completed" &&
+                        !isAudioFormat(item.format) &&
+                        item.resolution && (
+                          <span className="dl-pill">🎞 {resolutionLabel(item.resolution)}</span>
+                        )}
+                      {item.status === "completed" && isAudioFormat(item.format) && (
+                        <span className="dl-pill">
+                          🎵 Âm thanh {item.format.replace("audio-", "").toUpperCase()}
+                        </span>
+                      )}
+                      {item.subsLangs && item.subsLangs.length > 0 ? (
+                        <span className="dl-pill ok">📝 Phụ đề: {item.subsLangs.join(", ")}</span>
+                      ) : item.extractSubtitles && item.status === "completed" ? (
+                        <span
+                          className="dl-pill warn"
+                          title="Bấm ⋯ → Tải phụ đề để thử lại (YouTube có thể đang chặn tạm thời 429)."
+                        >
+                          📝 Chưa có phụ đề
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="dl-src" title={item.url}>
+                      {item.status === "completed" && safe ? safe : item.url}
+                    </div>
+                    {item.error && <div className="dl-err">⚠️ {item.error}</div>}
+                  </div>
+
+                  <div className="dl-prog">
+                    {running ? (
+                      <>
+                        <div className="dl-bar">
+                          <i style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }} />
+                        </div>
+                        <div className="dl-bar-meta">
+                          <span className="dl-pct">{item.percent.toFixed(1)}%</span>
+                          {item.speed && <span>{item.speed}</span>}
+                          {item.eta && item.eta !== "--:--" && <span>còn {item.eta}</span>}
+                          {item.sizeText && <span>{item.sizeText}</span>}
+                        </div>
+                      </>
+                    ) : item.status === "completed" ? (
+                      <div className="dl-done">✓ Xong{item.sizeText ? ` · ${item.sizeText}` : ""}</div>
+                    ) : item.status === "queued" ? (
+                      <div className="dl-wait">
+                        Đang đợi lượt (tối đa {MAX_PARALLEL_DOWNLOADS} song song)
+                      </div>
+                    ) : item.status === "cancelled" ? (
+                      <div className="dl-wait">Đã hủy</div>
+                    ) : null}
+                  </div>
+
+                  <div className="dl-act">
                     {item.status === "downloading" && (
                       <button
                         type="button"
-                        className="item-btn secondary"
-                        onClick={() => handlePause(item.id)}
+                        className="dl-btn"
+                        onClick={() => void handlePause(item.id)}
                         title="Tạm dừng tiến trình tải"
                       >
                         <IconPause size={13} /> Tạm dừng
                       </button>
                     )}
-
                     {item.status === "paused" && (
                       <button
                         type="button"
-                        className="item-btn primary"
-                        onClick={() => handleResume(item)}
+                        className="dl-btn primary"
+                        onClick={() => void handleResume(item)}
                         title="Tiếp tục tải về"
                       >
                         <IconPlay size={13} /> Tiếp tục
                       </button>
                     )}
-
-                    {(item.status === "downloading" || item.status === "paused" || item.status === "queued") && (
-                      <button
-                        type="button"
-                        className="item-btn danger"
-                        onClick={() => handleCancel(item.id)}
-                        title="Hủy tải file này"
-                      >
-                        ⏹️ Hủy bỏ
-                      </button>
+                    {item.status === "queued" && (
+                      <span className="dl-btn ghost" title="Chờ tới lượt tải">
+                        ⏳ Đang đợi
+                      </span>
                     )}
-
                     {(item.status === "error" || item.status === "cancelled") && (
                       <button
                         type="button"
-                        className="item-btn primary"
-                        onClick={() => handleResume(item)}
+                        className="dl-btn primary"
+                        onClick={() => void handleResume(item)}
                         title="Thử tải lại"
                       >
                         <IconRotateCw size={13} /> Thử lại
                       </button>
                     )}
-
-                    {/* COMPLETED ACTIONS: 1-CLICK PIPELINE BRIDGES */}
                     {item.status === "completed" && (
-                      <div className="pipeline-bridges">
-                        {(() => {
-                          // BUG-058 (4) + R2-09.7: normalise the path AND
-                          // verify the file is still on disk before letting
-                          // the user route it to another module. Forwarding
-                          // an empty / non-existent path silently breaks the
-                          // next stage's "no input file" error.
-                          const safe = item.filePath
-                            ? item.filePath.replace(/\//g, "\\").trim()
-                            : "";
-                          const fileExists = fileExistsMap[item.id];
-                          // Three states:
-                          //   - safe empty    → path not yet known
-                          //   - fileExists === undefined → still probing
-                          //   - fileExists === false → file is gone
-                          //   - fileExists === true  → ready
-                          const pathReady = safe.length > 0 && fileExists === true;
-                          const tip = !safe
-                            ? "Đường dẫn file chưa sẵn sàng (hãy thử Mở Thư Mục Download)"
-                            : fileExists === undefined
+                      <button
+                        type="button"
+                        className="dl-btn primary"
+                        disabled={!ready}
+                        onClick={() => handlePlayInStudio(safe)}
+                        title={
+                          !safe
+                            ? "Đường dẫn file chưa sẵn sàng"
+                            : fileExistsMap[item.id] === undefined
                             ? "Đang kiểm tra file trên ổ đĩa…"
-                            : fileExists === false
+                            : fileExistsMap[item.id] === false
                             ? `File không còn trên đĩa: ${safe}`
-                            : "";
-                          return (
-                            <>
-                              <button
-                                type="button"
-                                className="item-btn bridge-studio"
-                                disabled={!pathReady}
-                                onClick={() => handlePlayInStudio(safe)}
-                                title={
-                                  !pathReady
-                                    ? tip
-                                    : isAudioFormat(item.format)
-                                    ? "Mở file âm thanh trong Sublix Studio (tạo phụ đề & dịch thuật từ âm thanh)"
-                                    : "Xem và biên tập video ngay trong Sublix Studio (Phụ đề, dịch thuật & lồng tiếng AI)"
-                                }
-                              >
-                                <IconClapper size={14} /> 🚀 Xem Trong Studio
-                              </button>
-
-                              <button
-                                type="button"
-                                className="item-btn secondary"
-                                disabled={!pathReady}
-                                onClick={() => handlePlayExternal(safe)}
-                                title={pathReady ? "Mở video bằng trình phát ngoài của hệ thống Windows (Windows Media Player / Movies & TV / VLC)" : tip}
-                              >
-                                🖥️ Player Ngoài
-                              </button>
-                            </>
-                          );
-                        })()}
-
-                        <button
-                          type="button"
-                          className="item-btn secondary"
-                          onClick={() => handleReveal(item.filePath)}
-                          title="Mở file trong Windows Explorer"
-                        >
-                          <IconFolder size={14} /> Mở Thư Mục
-                        </button>
-
-                        <button
-                          type="button"
-                          className="item-btn secondary"
-                          disabled={subsBusyId === item.id}
-                          onClick={() => handleFetchSubs(item)}
-                          title="Tải/cập nhật file phụ đề (.srt) từ YouTube — chạy riêng, không đụng video. Track gốc tải được; track dịch có thể bị YouTube chặn tạm thời."
-                        >
-                          {subsBusyId === item.id
-                            ? "⏳ Đang tải sub..."
-                            : item.subsLangs && item.subsLangs.length > 0
-                            ? "📝 Tải lại phụ đề"
-                            : "📝 Tải phụ đề"}
-                        </button>
-                      </div>
+                            : isAudioFormat(item.format)
+                            ? "Mở file âm thanh trong Sublix Studio"
+                            : "Xem và biên tập video trong Sublix Studio"
+                        }
+                      >
+                        <IconClapper size={14} /> Mở trong Studio
+                      </button>
                     )}
-
-                    <button
-                      type="button"
-                      className="item-btn-icon"
-                      onClick={() => handleRemove(item.id)}
-                      title="Xóa mục này"
-                    >
-                      <IconTrash size={13} />
-                    </button>
                   </div>
+
+                  <button
+                    type="button"
+                    className="dl-more"
+                    title="Thao tác khác (hoặc bấm chuột phải)"
+                    aria-haspopup="menu"
+                    onClick={(e) => openMenuFromEl(e.currentTarget, rowMenuItems(item))}
+                  >
+                    ⋯
+                  </button>
                 </div>
               );
             })}
@@ -1615,54 +1734,30 @@ export default function DownloaderView({
         )}
       </div>
 
-      </>
-      }
-      right={<>
-        <ShellCard
-          icon={<IconFolder size={14} />}
-          title="Thư Mục Lưu Trữ"
-          actions={
-            <button
-              type="button"
-              className="downloader-btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.8rem" }}
-              onClick={() => sublix.downloaderOpenFolder()}
-              title="Mở thư mục lưu trữ file tải về trên máy tính"
-            >
-              <IconFolder size={12} /> Mở Thư Mục
-            </button>
-          }
+      {/* ===== 3. CHÂN TRANG ===== */}
+      <footer className="dl-foot">
+        <IconFolder size={13} />
+        <span className="dl-foot-dir" title={dlDir}>
+          Lưu vào <code>{dlDir || "…"}</code>
+        </span>
+        <button
+          type="button"
+          className="dl-foot-open"
+          onClick={() => void sublix.downloaderOpenFolder()}
+          title="Mở thư mục lưu file tải về"
         >
-          {dlDir && (
-            <p style={{ margin: 0, fontSize: "0.78rem", opacity: 0.85, wordBreak: "break-all" }}>
-              <code style={{ fontFamily: "var(--font-mono)", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: 4 }}>{dlDir}</code>
-            </p>
-          )}
-        </ShellCard>
+          Mở thư mục
+        </button>
+        <span className="dl-grow" />
+        <span className="dl-foot-note">
+          Hỗ trợ YouTube, TikTok, Douyin, Bilibili, Facebook, Instagram Reels, X, Twitch, Kick,
+          Dailymotion, VK, Pinterest, Snapchat… · Chỉ tải nội dung bạn có quyền sử dụng.
+        </span>
+      </footer>
 
-        <ShellCard
-          icon={<IconGlobe size={14} />}
-          title="Nền Tảng Hỗ Trợ"
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: "0.78rem" }}>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(239, 68, 68, 0.15)", color: "#f87171" }}>YouTube</span>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(0, 242, 234, 0.15)", color: "#2dd4bf" }}>TikTok</span>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(254, 44, 85, 0.15)", color: "#fb7185" }}>Douyin 抖音</span>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(0, 161, 214, 0.15)", color: "#38bdf8" }}>Bilibili 哔哩哔哩</span>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>Facebook</span>
-            <span style={{ padding: "3px 8px", borderRadius: 4, background: "rgba(244, 236, 222, 0.1)", color: "#e2e8f0" }}>X / Twitter</span>
-          </div>
-        </ShellCard>
-
-        <ShellCard
-          icon={<span style={{ fontSize: 13 }}>⚖️</span>}
-          title="Lưu Ý Bản Quyền"
-        >
-          <p style={{ margin: 0, fontSize: "0.76rem", lineHeight: 1.5, color: "var(--t3)" }}>
-            Tính năng tải video phục vụ học thuật, dịch thuật và sao lưu nội dung cá nhân hợp pháp. Vui lòng tôn trọng quyền sở hữu trí tuệ của tác giả gốc.
-          </p>
-        </ShellCard>
-      </>}
-    />
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+      )}
+    </div>
   );
 }
