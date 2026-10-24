@@ -8,86 +8,19 @@
 //!
 //! Logic nằm ở đây để không lặp code.
 
-use std::fs;
-use std::path::PathBuf;
 use std::time::Instant;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
 use crate::config::AppConfig;
-use crate::stt::EnginePreference;
 use crate::translate::contextual::ScriptLine;
 use crate::translate::{self, server, TranslationModelVariant};
 
-/// 1 dòng trong dataset JSON nhiều vai.
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct DatasetLine {
-    pub id: String,
-    pub text: String,
-    #[serde(default)]
-    pub start: f64,
-    #[serde(default)]
-    pub end: f64,
-    #[serde(default)]
-    pub speaker_id: String,
-    #[serde(default)]
-    pub speaker_name: Option<String>,
-}
+pub mod dataset;
+pub mod score;
 
-/// Tham số 1 lần chạy benchmark.
-#[derive(Debug, Clone)]
-pub struct BenchOptions {
-    pub provider: String,
-    pub model: Option<String>,
-    pub mode: String,
-    pub dataset: Option<PathBuf>,
-    pub srt: PathBuf,
-    pub out: PathBuf,
-    pub label: String,
-    pub runs: usize,
-    pub chunk: usize,
-    pub source: String,
-    pub target: String,
-    pub engine: EnginePreference,
-}
-
-pub fn read_dataset(path: &PathBuf) -> Result<Vec<DatasetLine>> {
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("doc khong doc duoc dataset: {}", path.display()))?;
-    let raw = raw.trim_start_matches('\u{feff}');
-    serde_json::from_str(raw).with_context(|| format!("dataset khong phai JSON hop le: {}", path.display()))
-}
-
-/// Đọc file .srt (bỏ chỉ số + timestamp, gộp text nhiều dòng của 1 cue).
-pub fn read_srt(path: &PathBuf) -> Result<Vec<String>> {
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("doc khong doc duoc: {}", path.display()))?;
-    let raw = raw.trim_start_matches('\u{feff}');
-    let mut out: Vec<String> = Vec::new();
-    let mut cur: Vec<String> = Vec::new();
-    for line in raw.lines() {
-        let t = line.trim();
-        if t.is_empty() {
-            if !cur.is_empty() {
-                out.push(cur.join(" "));
-                cur.clear();
-            }
-            continue;
-        }
-        if !t.is_empty() && t.chars().all(|c| c.is_ascii_digit()) {
-            continue;
-        }
-        if t.contains("-->") {
-            continue;
-        }
-        cur.push(t.to_string());
-    }
-    if !cur.is_empty() {
-        out.push(cur.join(" "));
-    }
-    Ok(out)
-}
+pub use self::dataset::{read_dataset, read_srt, BenchOptions, DatasetLine};
 
 /// Ghi đè key trong cfg từ biến môi trường (không bao giờ in giá trị).
 fn apply_env_key(cfg: &mut AppConfig) {
@@ -253,6 +186,7 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
 
         let total_s = t_all.elapsed().as_secs_f64();
         let n = translations.len().max(1) as f64;
+
         let chars_out: usize = translations.iter().map(|s| s.chars().count()).sum();
         let err_total = translations.iter().filter(|t| translate::is_translate_error(t)).count();
         let empty_total = translations.iter().filter(|t| t.trim().is_empty()).count();
@@ -262,30 +196,22 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
             "[bench] run {}/{}: total={:.2}s first_chunk={:.2}s per_item={:.3}s err={} empty={} think={}",
             run, opts.runs, total_s, first_chunk_s, total_s / n, err_total, empty_total, think_total
         );
-        runs_detail.push(json!({
-            "run": run,
-            "total_s": (total_s * 1000.0).round() / 1000.0,
-            "first_chunk_s": (first_chunk_s * 1000.0).round() / 1000.0,
-            "per_item_s": ((total_s / n) * 1000.0).round() / 1000.0,
-            "items_returned": translations.len(),
-            "errors": err_total, "empty": empty_total, "think_leak": think_total,
-            "chars_in": chars_in, "chars_out": chars_out,
-            "chunks": chunk_times,
+        runs_detail.push(score::run_detail(&score::RunMetrics {
+            run,
+            total_s,
+            first_chunk_s,
+            items_returned: translations.len(),
+            chars_in,
+            chars_out,
+            errors: err_total,
+            empty: empty_total,
+            think_leak: think_total,
+            chunks: chunk_times,
         }));
         last_translations = translations;
     }
 
-    let avg = |k: &str| -> f64 {
-        let vals: Vec<f64> = runs_detail.iter().filter_map(|r| r.get(k).and_then(|v| v.as_f64())).collect();
-        if vals.is_empty() { return 0.0; }
-        (vals.iter().sum::<f64>() / vals.len() as f64 * 1000.0).round() / 1000.0
-    };
-
-    let src_map: serde_json::Map<String, Value> = items
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (i.to_string(), json!(s)))
-        .collect();
+    let src_map = score::source_map(&items);
 
     // Audit xưng hô tất định (không gọi mạng) -> đo được 100% số dòng, khác LLM-giám khảo.
     let speaker_refs: Vec<&str> = dataset_lines
@@ -310,9 +236,9 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
             "openrouter": !cfg.openrouter_api_key.trim().is_empty(),
         },
         "provider_probe": probe,
-        "avg_total_s": avg("total_s"),
-        "avg_first_chunk_s": avg("first_chunk_s"),
-        "avg_per_item_s": avg("per_item_s"),
+        "avg_total_s": score::avg(&runs_detail, "total_s"),
+        "avg_first_chunk_s": score::avg(&runs_detail, "first_chunk_s"),
+        "avg_per_item_s": score::avg(&runs_detail, "per_item_s"),
         "runs_detail": runs_detail,
         "translations": last_translations,
         "pronoun_audit": audit,
@@ -320,11 +246,7 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
         "note": "Key API KHONG duoc ghi vao file nay. key_state chi ghi co/ khong co.",
     });
 
-    if let Some(parent) = opts.out.parent() {
-        fs::create_dir_all(parent).ok();
-    }
-    fs::write(&opts.out, serde_json::to_string_pretty(&out_json)?)
-        .with_context(|| format!("khong ghi duoc {}", opts.out.display()))?;
+    score::write_report(&opts.out, &out_json)?;
     eprintln!(
         "[bench] DONE label={} avg_total={:.2}s avg_first_chunk={:.2}s -> {}",
         opts.label, out_json["avg_total_s"].as_f64().unwrap_or(0.0),
