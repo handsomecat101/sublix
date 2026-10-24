@@ -553,49 +553,28 @@ export function ProcessCenterView({
         </>
       }
       right={
-        <>
-          <ShellCard
-            icon={<IconSettings size={14} />}
-            title="Động Cơ & Phần Cứng AI"
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
-                <span style={{ color: "var(--t3)" }}>Nhận diện STT:</span>
-                <span style={{ fontWeight: 600, color: "#38bdf8" }}>Whisper Large-v3 Turbo</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
-                <span style={{ color: "var(--t3)" }}>Tăng tốc STT Server:</span>
-                <span style={{ fontWeight: 600, color: "#2dd4bf" }}>{sttServerEngine || "GPU CUDA"}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
-                <span style={{ color: "var(--t3)" }}>Phân vai nhân vật:</span>
-                <span style={{ fontWeight: 600, color: "#a78bfa" }}>Sherpa-ONNX Diarization</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
-                <span style={{ color: "var(--t3)" }}>Dịch thuật LLM:</span>
-                <span style={{ fontWeight: 600, color: "#f59e0b" }}>Qwen / Gemma 3 ({transEnginePref.toUpperCase()})</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
-                <span style={{ color: "var(--t3)" }}>Tổng hợp giọng nói:</span>
-                <span style={{ fontWeight: 600, color: "#ec4899" }}>Edge-TTS & Kokoro VI</span>
-              </div>
+        <ShellCard icon={<IconSettings size={14} />} title="Trạng thái thật">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
+              <span style={{ color: "var(--t3)" }}>STT server:</span>
+              <span style={{ fontWeight: 600, color: sttServerEngine ? "#38bdf8" : "var(--t3)" }}>
+                {sttServerEngine ? sttServerEngine.toUpperCase() : "Chưa nạp"}
+              </span>
             </div>
-          </ShellCard>
-
-          <ShellCard
-            icon={<IconFilm size={14} />}
-            title="Hướng Dẫn & Lưu Ý"
-          >
-            <div style={{ fontSize: 11.5, color: "var(--t2)", lineHeight: 1.6, display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ margin: 0 }}>
-                💡 <strong>Đa nhiệm mượt mà:</strong> Bạn có thể bắt đầu xử lý một video dài trong Studio hoặc tải nhiều video cùng lúc, sau đó chuyển sang các tab khác mà tiến trình vẫn chạy bình thường.
-              </p>
-              <p style={{ margin: 0 }}>
-                ⚡ <strong>Huy hiệu tiến trình:</strong> Khi có tác vụ đang chạy nền, nút tab <em>Tiến trình</em> trên thanh công cụ sẽ hiển thị số lượng tác vụ kèm hiệu ứng phát sáng.
-              </p>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
+              <span style={{ color: "var(--t3)" }}>Engine dịch:</span>
+              <span style={{ fontWeight: 600, color: "#2dd4bf" }}>{transEnginePref.toUpperCase()}</span>
             </div>
-          </ShellCard>
-        </>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+              <span style={{ color: "var(--t3)" }}>Đang chạy:</span>
+              <span style={{ fontWeight: 700, color: activeTasks.length ? "var(--ac)" : "var(--t3)" }}>{activeTasks.length}</span>
+            </div>
+            <div style={{ fontSize: 10.5, color: "var(--t4)", lineHeight: 1.5 }}>
+              Model, GPU và giọng đọc thật xem ở <b>Cài đặt › Trạng thái hệ thống</b> (không hiển thị giá trị
+              ghi cứng ở đây).
+            </div>
+          </div>
+        </ShellCard>
       }
     />
   );

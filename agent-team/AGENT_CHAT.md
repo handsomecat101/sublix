@@ -9,6 +9,28 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-24 23:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-STUDIO-MODEL-PICKER` — chọn model dịch + mức suy luận ngay trong Studio; **chưa commit**).
+- **Đã làm:** `src/views/studio/StudioTranslateOptions.tsx` (React.memo) + `src/views/studio/translateOptions.ts` — gọi `invoke("translate_options_get"/"translate_options_set")` **trực tiếp** bằng type khai báo cục bộ vì `src/lib/tauri.ts` đang do mcode #2 sửa (không đụng file đó).
+- **UI bước Dịch:** dropdown **Model dịch** nhóm *Local (chạy trên máy)* / *Cloud (cần mạng)*; model cloud chưa có API key → **mục xám** + nút "Cần API key — Cài đặt"; segmented **Suy luận** (Tự động/Thấp/Vừa/Cao/Tối đa) chỉ hiện khi `supports_reasoning`, kèm tooltip "Mức cao = dịch kỹ hơn, chậm + tốn token hơn"; vẫn giữ link **Cài đặt nâng cao**.
+- **Hành vi:** đổi lựa chọn → ghi **ngay** qua `translate_options_set` (không nút Lưu); nghe `config:updated` để đồng bộ với Cài đặt; backend chưa có lệnh → hiện **trạng thái dự phòng chỉ đọc**, không crash.
+- **Verify:** `tsc` 0 lỗi · `build` OK · `node --test` 79/79 PASS · GUI instance riêng (CDP 9225) **5/5 PASS**: fallback chỉ đọc, dropdown 2 nhóm + 4 mục cloud xám, segmented 5 mức, **config file còn nguyên field API key** (đọc file, không in key), kéo khối timeline không hồi quy.
+- **⚠️ Ghi chú PO:** lúc bàn giao, **app của PO (9223) + Vite 1420 đã không còn chạy** — phiên dev của PO tự dừng (tôi chỉ tắt PID verify của mình: 52152 + webview2 con với profile riêng `sublix-verify-picker`). PO cần chạy lại `npm run tauri dev`.
+- **Còn lại:** backend `translate_options_get/set` do mcode #2 làm — khi có lệnh, UI tự hiện dropdown (hiện đang ở trạng thái fallback vì lệnh chưa tồn tại trong `src-tauri`).
+
+---
+
+### 2026-10-25 02:05 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-5-7`, **chưa commit**). Fix `BUG-085` (chi tiết: `ISSUE_LOG.md`).
+- **R2-5 Cài đặt:** tách ra `src/views/settings/` (`SettingsNav` nhóm BẮT ĐẦU/XỬ LÝ AI/GIAO DIỆN/KHÁC · `TranslationSection` **5 provider** Ollama/GGUF/MiniMax/DeepSeek/OpenRouter · `TtsSection` đọc `tts_engines_status` + cài deps + chẩn đoán CUDA + key Google/FPT (chỉ hiện ••••4 cuối) · `ThemeSection` · `SystemStatusPanel` đọc config thật); bỏ 4 chấm theme khỏi topbar (PLAN §4.2) + bỏ danh sách preset lặp ở cột trái.
+- **`BUG-085` (quan trọng):** `src/views/settings/configMerge.ts` là **hàm thuần** — luôn gộp trên config **đọc lại từ đĩa ngay trước khi lưu**; chỉ ghi field vừa sửa + key **vừa gõ** (ô rỗng = giữ nguyên), xoá key phải bấm "Xoá key"; field lạ (kể cả field backend mới thêm) không mất. `node --test scripts/settings-tests` → **12/12 PASS**.
+- **Mức độ suy luận (theo yêu cầu PO):** Segmented 5 mức (Tự động/Thấp/Vừa/Cao/Tối đa), **chỉ hiện khi provider cloud + `supports_reasoning`**; lưu qua `translate_options_set` nếu backend có, fallback `llm_reasoning_effort` trong config. Hiện backend/wrapper **chưa có** → đã dựng type hợp đồng + cast có kiểm tra + TODO (không tự viết backend).
+- **R2-7:** `ProcessCenterView` bỏ thẻ "Động Cơ & Phần Cứng AI" ghi cứng "GPU CUDA/Whisper Large-v3" → thẻ **"Trạng thái thật"** (STT server/engine dịch/đang chạy + trỏ sang Cài đặt); Live/Lịch sử **chưa gọn** theo §4.5/4.6 (để sau).
+- **Verify:** `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (working tree đang đỏ do mcode #2 sửa `studioPipelineTypes.ts`/`SublixStudioView.tsx`); ảnh frontend-only (Edge headless, backend giả) `%TEMP%\sublix-verify-settings\settings-{translation,tts,theme}.jpg` + `tab-{live,history,process}.jpg`. **GUI thật để R2-8**: SAC chặn exe copy bị patch (`BUG-H09`) nên không tạo được instance riêng.
+- **Việc cho người sau:** implement `translate_options_get/set` đúng hợp đồng + trả `supports_reasoning`; khi `src/lib/tauri.ts` có wrapper chính thức thì bỏ cast `translateApi`; R2-8 kiểm tra Luu/key trên app thật.
+
+---
+
 ### 2026-10-24 22:40 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
 - **Loại:** `@handoff` của người điều phối — Orca run `run_80e8fbd4887e`; thợ báo qua `orca orchestration` (KHÔNG heartbeat nữa để tiết kiệm token; chỉ status/question/escalation/worker_done).
 - **Đã commit (local, chưa push sau `62e4da8`):** `c9ccaad` TTS VieNeu/ZeroTTS/cloud + vi_normalize · `14ad5e4` MiniMax M3.1 Flash + fix timeout M3 rơi xuống dịch từng câu · `ae680ca`/`7081964`/`577bb44` giao diện mới (component chung, Tải video, Studio 5 bước).
@@ -64,22 +86,4 @@
 
 ---
 
-### 2026-10-24 21:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-INTEGRATE-MODULES` — đã **GẮN** 6 module timeline vào `SublixStudioView.tsx`; chưa commit).
-- **Đã gắn:** timecode (ô nhập Enter nhảy tới, clamp, sai định dạng → viền đỏ) · copy/paste `Ctrl+C`/`Ctrl+V` (dán tại playhead, id mới, báo xung đột **KHÔNG** tự xoá) · auto-follow page-scroll khi phát (tạm ngưng 1.5s sau khi cuộn tay) · J/K/L (L 1→2→4→8x, J tự seek lùi ≤15 lần/s, K+L nhích 1 frame) · marker M/Shift+M/Ctrl+Shift+M (vạch memo, lưu project cache) · khoá track (🔒 cạnh nút M, chặn move/trim/split/delete/sửa chữ/dán).
-- **Sửa thiết kế sau review coordinator:** `TimecodeInput` **không** nhận prop `seconds` đổi liên tục — file cha giữ `timecodeElementRef` ghi DOM trực tiếp, giá trị hiện tại đọc qua `getSeconds()` ổn định; đã bỏ hằng số thừa `MAX_FRAME_INDEX`.
-- **An toàn hiệu năng:** 1 nguồn tốc độ duy nhất `getEffectiveRate()` (shuttle tính vào, đổi tốc độ → tắt shuttle); auto-follow + shuttle lùi **không** setState 60fps (DOM ref + throttle 120ms); vạch marker là component `React.memo`.
-- **Verify:** `node --test scripts/timeline-tests/` **79/79 PASS** · `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** · **GUI instance riêng (CDP 9224, Vite 1422, exe copy patch) 22/22 PASS**: timecode→20.00s · Ctrl+C/V 4→6 câu tại 30s (id 5,6) · auto-follow scrollLeft 0→2352 · L L→rate 2 · J 20→18.22s · K+L +0.040s · M→1 vạch · Shift+M→8s→20s · khoá track kéo không đổi (mở khoá kéo được 198→396px) · Ctrl+click 2 khối (hồi quy Sonnet OK). **App PO 9223 không bị đụng**, instance riêng đã tắt.
-- **Tài liệu:** `docs/TIMELINE_INTEGRATION_PLAN.md` cập nhật bản đồ 27 vị trí gắn + bảng bằng chứng; script + ảnh verify ở `%TEMP%\sublix-verify\` (chưa đưa vào repo).
-- **Cần biết:** đã bỏ `bookmarks: number[]` cũ → dùng `markers` (có id/tên/màu, gộp trùng); marker cũ lưu trong cache không hiện (đổi định dạng).
-
 ---
-
-### 2026-10-24 20:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-FEAT-DL-PLATFORMS-REUP`, **chưa commit / chưa bump version** — chờ PO duyệt). Đã fix `BUG-082` (chi tiết: `ISSUE_LOG.md`).
-- **8 nền tảng mới:** `get_platform` + `platform_source_label` + `platform_error_hint` + `PLATFORM_META`/`detectPlatform` + `SUBTITLE_SOURCE_LABELS` cho **Instagram Reels, Facebook, Twitch, Kick, Dailymotion, VK (vk.com/vk.ru/vkvideo.ru), Pinterest (pinterest.com/pin.it), Snapchat Spotlight** (khớp host exact, có test chống giả mạo `evil-instagram.com.scam.io`).
-- **Khu "Tùy chọn reup" (mặc định TẮT — Zero-Button):** 🧾 metadata `.info.txt` (UTF-8 BOM) · ♻️ `--download-archive` (chống tải trùng bền vững, lần 2 báo **"Đã tải trước đó"**, không báo lỗi) · 🖼️ thumbnail `.jpg` · ✂️ cắt đoạn `--download-sections` (2 ô nhập `hh:mm:ss`).
-- **Code:** `downloader/reup.rs` mới (<300 dòng) + `reup_tests.rs` (10 test); `mod.rs` chỉ thêm cờ reup + chặn sớm; `batch.rs` chặn sớm; `DownloaderView.tsx/.css`, `lib/types.ts`, `lib/tauri.ts`. Không đụng Job Object/cancel (TSK-018).
-- **Verify:** `cargo test --lib` **77/77 PASS** (+10); `tsc` 0 lỗi; `npm run build` OK. Chạy THẬT bằng đúng `build_download_command`: **IG Reel** → ra `.mp4` + `.jpg` + `.info.txt` (BOM, 5 dòng đầu đúng tiếng Việt); **Pinterest** cắt `00:00:05-00:00:15` → ffprobe **10.000000s**; tải lại lần 2 → archive bỏ qua (không tải lại).
-- **Lưu ý môi trường:** build/test phải dùng `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` — Smart App Control chặn binary vừa relink trong `src-tauri/target` (`BUG-H09`); 2 tiến trình `sublix.exe` (dev app của PO) đang chạy nên **không** `cargo clean` được target repo (đã né, không kill).
-

@@ -27,6 +27,7 @@
 | `BUG-063` | Studio không đổi được video khác do effect dính `filePath` & Thiếu xuất Softsub / Multi-track Audio | `SublixStudioView.tsx`, `dubbing/mod.rs` | Bỏ state nội bộ khỏi deps của prop sync effect, tập trung reset state qua `handleLoadNewVideoFile` và gọi `onClearPendingFile` | ✅ Fixed |
 | `BUG-082` | `kuaishou` & `migu` vẫn được `get_platform` nhận diện nhưng **yt-dlp (2026.10.21) KHÔNG có extractor** → dán link sẽ ăn `Unsupported URL`; hint cũ còn khuyên "cập nhật yt-dlp" (vô ích vì upstream chưa hỗ trợ) | `downloader/mod.rs`, `downloader/reup.rs`, `downloader/batch.rs` | Chặn **SỚM** ở `fetch_video_info`/`start_download`/`expand_playlist` + báo tiếng Việt rõ ràng, KHÔNG gợi ý cập nhật yt-dlp | ✅ Fixed |
 | `BUG-H13` | Edge-TTS vi-VN **trả 0 byte** cho một số câu tiếng Việt; `synthesize_speech()` không retry ⇒ câu đó **mất tiếng** trong bản dịch | `dubbing/mod.rs` (`synthesize_speech`) | Retry 3–5 lần (giãn 1–1,5 s) + kiểm tra file đầu ra > 0 byte; coi Edge-TTS là fallback, không phải mặc định | 🔴 Open |
+| `BUG-085` | **Cài đặt ghi đè API key bằng chuỗi rỗng**: `fullConfig` nạp lúc mở app, key được nạp thẳng vào file sau đó → bấm "Lưu" ghi bản cũ (key = "") và **xoá key thật** (đã xảy ra với minimax/openrouter) | `src/views/settings/configMerge.ts` (mới), `SettingsView.tsx` | **Luôn đọc lại config từ đĩa ngay trước khi lưu**, gộp bằng hàm thuần; chỉ ghi field vừa sửa + key VỪA GÕ (rỗng = giữ nguyên); xoá key phải là hành động chủ động | ✅ Fixed |
 
 ---
 
@@ -548,5 +549,18 @@
   1. `get_platform` chỉ là *nhận diện để hiển thị*, **không** đồng nghĩa yt-dlp tải được — phải đối chiếu `yt-dlp --list-extractors` trước khi cho người dùng dán link.
   2. "Cập nhật yt-dlp" chỉ đúng khi extractor tồn tại nhưng bản cũ; với nền tảng upstream chưa hỗ trợ thì phải nói thẳng là không tải được.
   3. Danh sách nền tảng không hỗ trợ nên **gom vào 1 hằng số** (`UNSUPPORTED_PLATFORMS`) để dễ cập nhật khi yt-dlp thêm extractor mới.
+
+---
+
+### [BUG-085] Cài đặt ghi đè API key bằng chuỗi rỗng (mất key MiniMax/OpenRouter)
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** coordinator (key bị xoá khi bấm Lưu) | **Sửa bởi:** CommandCode (Orca worker, `TSK-UI-REDESIGN-R2-5-7`) | **Status:** ✅ Fixed
+- **File:** `src/views/settings/configMerge.ts` (mới — hàm thuần), `src/views/SettingsView.tsx` (`saveConfigPatch`, `clearProviderKey`), test `scripts/settings-tests/configMerge.test.ts`
+- **Triệu chứng:** Key MiniMax/OpenRouter có trong `sublix-config.json` nhưng **biến mất** sau khi mở Cài đặt rồi bấm "Lưu cấu hình" (ô key để trống).
+- **Root cause:** Settings giữ `fullConfig` nạp **một lần lúc mở app**. Nếu key được nạp thẳng vào file config sau đó (script/coordinator), `fullConfig` vẫn là bản cũ (key rỗng) → `saveConfig({...fullConfig, minimax_api_key: minimaxKey})` **ghi đè file bằng bản cũ**, xoá key thật. Không có khái niệm "field người dùng vừa sửa".
+- **Fix:** `mergeConfig(latest, patch, keyForm, clearKeys)` — luôn gộp trên config **đọc lại từ đĩa ngay trước khi lưu**; key chỉ ghi khi người dùng **vừa gõ** (chuỗi rỗng bị bỏ qua); xoá key chỉ khi bấm "Xoá key"; mọi field khác (kể cả field backend mới thêm) giữ nguyên. 12 test `node --test` phủ: form rỗng không xoá minimax/openrouter/deepseek/gcloud/fpt, xoá chủ động thì xoá, đổi provider/model/reasoning chỉ đổi field đó, field lạ không mất, không mutate input.
+- **Bài học:**
+  1. **Form ghi đè toàn bộ config là mẫu lỗi kinh điển** khi dữ liệu có thể bị thay đổi từ nguồn khác (script, agent, instance khác). Luôn `read-modify-write` trên bản mới nhất.
+  2. **Ô nhập bí mật phải phân biệt "chưa nhập" với "xoá"** — dùng cờ dirty, không dùng chuỗi rỗng làm tín hiệu.
+  3. Tách logic gộp thành **hàm thuần** để test được mà không cần app/Tauri.
 
 ---

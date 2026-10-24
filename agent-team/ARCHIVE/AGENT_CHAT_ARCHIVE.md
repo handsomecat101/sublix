@@ -3,6 +3,25 @@
 > Được tách ra từ `AGENT_CHAT.md` ngày 2026-10-07 (chỉ đạo của PO: gọn bảng bàn giao để agent không tốn token mỗi phiên).
 > **QUY TẮC:** KHÔNG đọc file này ở Bước 0. Chỉ mở khi cần truy vết việc cũ. Tin mới ghi vào `AGENT_CHAT.md`.
 
+## ARCHIVED 2026-10-25 (CommandCode — R2-5-7, giữ bảng trượt ≤ 8 tin)
+
+### 2026-10-24 21:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-INTEGRATE-MODULES` — đã **GẮN** 6 module timeline vào `SublixStudioView.tsx`; chưa commit).
+- **Đã gắn:** timecode (ô nhập Enter nhảy tới, clamp, sai định dạng → viền đỏ) · copy/paste `Ctrl+C`/`Ctrl+V` (dán tại playhead, id mới, báo xung đột **KHÔNG** tự xoá) · auto-follow page-scroll khi phát (tạm ngưng 1.5s sau khi cuộn tay) · J/K/L (L 1→2→4→8x, J tự seek lùi ≤15 lần/s, K+L nhích 1 frame) · marker M/Shift+M/Ctrl+Shift+M (vạch memo, lưu project cache) · khoá track (🔒 cạnh nút M, chặn move/trim/split/delete/sửa chữ/dán).
+- **Sửa thiết kế sau review coordinator:** `TimecodeInput` **không** nhận prop `seconds` đổi liên tục — file cha giữ `timecodeElementRef` ghi DOM trực tiếp, giá trị hiện tại đọc qua `getSeconds()` ổn định; đã bỏ hằng số thừa `MAX_FRAME_INDEX`.
+- **An toàn hiệu năng:** 1 nguồn tốc độ duy nhất `getEffectiveRate()` (shuttle tính vào, đổi tốc độ → tắt shuttle); auto-follow + shuttle lùi **không** setState 60fps (DOM ref + throttle 120ms); vạch marker là component `React.memo`.
+- **Verify:** `node --test scripts/timeline-tests/` **79/79 PASS** · `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** · **GUI instance riêng (CDP 9224, Vite 1422, exe copy patch) 22/22 PASS**; **App PO 9223 không bị đụng**, instance riêng đã tắt.
+- **Tài liệu:** `docs/TIMELINE_INTEGRATION_PLAN.md` cập nhật bản đồ 27 vị trí gắn + bảng bằng chứng; script + ảnh verify ở `%TEMP%\sublix-verify\` (chưa đưa vào repo).
+- **Cần biết:** đã bỏ `bookmarks: number[]` cũ → dùng `markers` (có id/tên/màu, gộp trùng); marker cũ lưu trong cache không hiện (đổi định dạng).
+
+### 2026-10-24 20:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-DL-PLATFORMS-REUP`, **chưa commit / chưa bump version** — chờ PO duyệt). Đã fix `BUG-082` (chi tiết: `ISSUE_LOG.md`).
+- **8 nền tảng mới:** `get_platform` + `platform_source_label` + `platform_error_hint` + `PLATFORM_META`/`detectPlatform` + `SUBTITLE_SOURCE_LABELS` cho **Instagram Reels, Facebook, Twitch, Kick, Dailymotion, VK (vk.com/vk.ru/vkvideo.ru), Pinterest (pinterest.com/pin.it), Snapchat Spotlight** (khớp host exact, có test chống giả mạo `evil-instagram.com.scam.io`).
+- **Khu "Tùy chọn reup" (mặc định TẮT — Zero-Button):** 🧾 metadata `.info.txt` (UTF-8 BOM) · ♻️ `--download-archive` (chống tải trùng bền vững, lần 2 báo **"Đã tải trước đó"**, không báo lỗi) · 🖼️ thumbnail `.jpg` · ✂️ cắt đoạn `--download-sections` (2 ô nhập `hh:mm:ss`).
+- **Code:** `downloader/reup.rs` mới (<300 dòng) + `reup_tests.rs` (10 test); `mod.rs` chỉ thêm cờ reup + chặn sớm; `batch.rs` chặn sớm; `DownloaderView.tsx/.css`, `lib/types.ts`, `lib/tauri.ts`. Không đụng Job Object/cancel (TSK-018).
+- **Verify:** `cargo test --lib` **77/77 PASS** (+10); `tsc` 0 lỗi; `npm run build` OK. Chạy THẬT bằng đúng `build_download_command`: **IG Reel** → ra `.mp4` + `.jpg` + `.info.txt` (BOM, 5 dòng đầu đúng tiếng Việt); **Pinterest** cắt `00:00:05-00:00:15` → ffprobe **10.000000s**; tải lại lần 2 → archive bỏ qua (không tải lại).
+- **Lưu ý môi trường:** build/test phải dùng `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` — Smart App Control chặn binary vừa relink trong `src-tauri/target` (`BUG-H09`); 2 tiến trình `sublix.exe` (dev app của PO) đang chạy nên **không** `cargo clean` được target repo (đã né, không kill).
+
 ## ARCHIVED 2026-10-25 (CommandCode — R2-6, giữ bảng trượt ≤ 8 tin)
 
 ### 2026-10-24 18:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu

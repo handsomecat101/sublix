@@ -36,6 +36,7 @@
 - Mở thợ mới cạnh thợ cũ (PO muốn gom 1 cửa sổ): `orca terminal split --terminal <handle> --command "mcode"`; đặt tên tab: `orca terminal rename`.
 - **PowerShell 5.1**: dấu `"` trong `--spec` làm vỡ tham số → thay bằng `'`. `git commit -F -` với here-string hỏng → ghi message ra file rồi `-F file`. `git archive | tar` qua pipe hỏng nhị phân → `git archive -o x.tar HEAD`.
 - **Heartbeat tốn token người điều phối** (mỗi tin = 1 lượt đọc lại toàn bộ hội thoại) → dặn thợ **không gửi heartbeat**, chỉ `status` / `question` / `escalation` / `worker_done`. Chờ bằng `orca orchestration check --run <id> --wait --types "worker_done,escalation,question,status"`.
+- Tin đã đọc mà chưa **ack** sẽ bị trả lại (`replayed: true`) cho lần chờ sau, kể cả khi `--types` không có loại đó → đọc xong thì `orca orchestration check --run <id> --ack <deliveryId>` rồi mới chờ tiếp.
 - Lệnh chờ chạy nền có thể **mồ côi** khi tool timeout → lần chờ sau lỗi `waiter_exists`: tìm tiến trình `orca.exe ... orchestration check --wait` (Get-CimInstance Win32_Process) và kill chính nó.
 - Thợ báo xong → **tự kiểm chứng** → `worker-retain` (giữ terminal cho việc sau) hoặc `worker-release`. Thợ dừng giữa chừng không có dispatch (bị ai đó gõ thẳng vào terminal) → tạo dispatch mới để còn nhận `worker_done`.
 - Tạm dừng toàn đội (PO đi vắng): gửi interrupt (Claude/CommandCode: Ctrl+C **một lần**; mcode: phím **Esc** — Ctrl+C lần 2 sẽ thoát mất ngữ cảnh). Làm tiếp: gõ "TIẾP TỤC task đang làm" vào terminal.

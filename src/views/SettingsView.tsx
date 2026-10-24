@@ -32,13 +32,42 @@ import { ProcessCenterModal, type AppTaskItem } from "./ProcessCenterModal";
 import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconClapper, IconMic, IconClock,
-  IconFileText, IconFolder, IconEye, IconEyeOff, IconCpu, IconZap,
+  IconFileText, IconEye, IconEyeOff,
   IconPlay, IconStop, IconGlobe, IconSettings, IconTrash, IconRotateCw,
 } from "../icons";
 import spotHistoryUrl from "../assets/spot-history.jpg";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import MasterTopbar from "./MasterTopbar";
+// TSK-UI-REDESIGN-R2-5: các mục Cài đặt tách riêng (mỗi file < 300 dòng).
+import { TranslationSection } from "./settings/TranslationSection";
+import { TtsSection } from "./settings/TtsSection";
+import { ThemeSection } from "./settings/ThemeSection";
+import { SettingsNav, type SettingsSubtab } from "./settings/SettingsNav";
+import { SystemStatusPanel } from "./settings/SystemStatusPanel";
+import type { SettingsCtx, TransProvider, TranslateOptions } from "./settings/types";
+import { mergeConfig, supportsReasoning, REASONING_EFFORTS } from "./settings/configMerge";
 import "./SettingsView.css";
+
+/**
+ * Hợp đồng backend `translate_options_get/set` (mcode #2 đang làm). Wrapper có
+ * thể chưa tồn tại trên `sublix` — truy cập có kiểm tra, fallback về saveConfig.
+ * TODO(R2-5): khi `src/lib/tauri.ts` có wrapper chính thức thì thay cast này.
+ */
+const translateApi = sublix as unknown as {
+  translateOptionsGet?: () => Promise<TranslateOptions>;
+  translateOptionsSet?: (args: {
+    provider?: string;
+    model?: string;
+    reasoning_effort?: string;
+  }) => Promise<TranslateOptions>;
+};
+
+/** TSK-UI-REDESIGN-R2-5: chỉ giữ 4 ký tự cuối của key để hiện gợi ý. */
+function tail4(key?: string | null): string | null {
+  const k = (key ?? "").trim();
+  if (!k) return null;
+  return k.length >= 4 ? k.slice(-4) : "•••";
+}
 
 type Status =
   | { kind: "idle" }
@@ -155,7 +184,7 @@ export default function SettingsView() {
     handleRouteToStudio(path);
   };
   const [historySearch, setHistorySearch] = useState<string>("");
-  const [settingsSubtab, setSettingsSubtab] = useState<"presets" | "ai" | "stt" | "overlay" | "models_hub">("presets");
+  const [settingsSubtab, setSettingsSubtab] = useState<SettingsSubtab>("presets");
 
   useEffect(() => {
     if (activeTab === "overlay") {
@@ -170,16 +199,55 @@ export default function SettingsView() {
   const [showChangelog, setShowChangelog] = useState<boolean>(false);
 
   // Translation provider settings (MiniMax Cloud / Ollama Local / Embedded GGUF)
-  const [transProvider, setTransProvider] = useState<"local" | "ollama" | "minimax">("local");
+  const [transProvider, setTransProvider] = useState<TransProvider>("local");
+  // TSK-UI-REDESIGN-R2-5: ô nhập key LUÔN bắt đầu rỗng — key đã lưu chỉ hiện 4
+  // ký tự cuối qua `keyHint`; ô rỗng KHÔNG bao giờ ghi đè key đã lưu.
   const [minimaxKey, setMinimaxKey] = useState<string>("");
+  const [deepseekKey, setDeepseekKey] = useState<string>("");
+  const [openrouterKey, setOpenrouterKey] = useState<string>("");
+  const [keyHint, setKeyHint] = useState<{ minimax: string | null; deepseek: string | null; openrouter: string | null }>({
+    minimax: null,
+    deepseek: null,
+    openrouter: null,
+  });
   const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-M3");
+  const [deepseekModel, setDeepseekModel] = useState<string>("deepseek-chat");
+  const [openrouterModel, setOpenrouterModel] = useState<string>("deepseek/deepseek-v4.1-flash");
+  // R2-5: "Mức độ suy luận" (hợp đồng llm_reasoning_effort) + dữ liệu từ
+  // `translate_options_get` (nếu backend đã có; chưa có thì dùng heuristic).
+  const [reasoningEffort, setReasoningEffortState] = useState<string>("auto");
+  const [translateOptions, setTranslateOptions] = useState<TranslateOptions | null>(null);
   const [ollamaUrl, setOllamaUrl] = useState<string>("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState<string>("smtek/qwen3.8-27b:q4_k_m");
-  /** Model Ollama đã cài trên máy (rỗng nếu Ollama chưa chạy). */
+
   const [ollamaModelList, setOllamaModelList] = useState<OllamaModelInfo[]>([]);
-  const [showMinimaxKey, setShowMinimaxKey] = useState<boolean>(false);
   const [providerTesting, setProviderTesting] = useState<boolean>(false);
   const [providerTestResult, setProviderTestResult] = useState<string | null>(null);
+
+  // ---- TSK-UI-REDESIGN-R2-5: engine giọng đọc (trạng thái THẬT từ backend) ----
+  const [ttsStatus, setTtsStatus] = useState<import("../lib/tauri").TtsEnginesStatus | null>(null);
+  const [ttsLoading, setTtsLoading] = useState<boolean>(false);
+  const [ttsNotice, setTtsNotice] = useState<string | null>(null);
+  const [ttsCloudKey, setTtsCloudKeyState] = useState<{ google: string; fptai: string }>({ google: "", fptai: "" });
+  const [ttsCloudKeyHint, setTtsCloudKeyHint] = useState<{ google: string | null; fptai: string | null }>({
+    google: null,
+    fptai: null,
+  });
+
+  // R2-5: model hiệu lực + model có hỗ trợ "mức độ suy luận" hay không.
+  const effectiveTranslationModel =
+    transProvider === "minimax"
+      ? minimaxModel
+      : transProvider === "deepseek"
+      ? deepseekModel
+      : transProvider === "openrouter"
+      ? openrouterModel
+      : transProvider === "ollama"
+      ? ollamaModel
+      : translationModel;
+  const apiSupportsReasoning =
+    translateOptions && translateOptions.provider === transProvider ? translateOptions.supports_reasoning : null;
+  const reasoningSupported = supportsReasoning(transProvider, effectiveTranslationModel, apiSupportsReasoning);
 
   // Global Process & Activity Tracker (tracks background GPU/AI jobs)
   const [showProcessCenter, setShowProcessCenter] = useState<boolean>(false);
@@ -359,14 +427,34 @@ export default function SettingsView() {
       }
       setBgOpacity(cfg.overlay_bg_opacity ?? 85);
       setTextColor(cfg.overlay_text_color ?? "white");
-      if (cfg.translation_provider === "local" || cfg.translation_provider === "ollama" || cfg.translation_provider === "minimax") {
-        setTransProvider(cfg.translation_provider);
+      if (
+        cfg.translation_provider === "local" ||
+        cfg.translation_provider === "ollama" ||
+        cfg.translation_provider === "minimax" ||
+        cfg.translation_provider === "deepseek" ||
+        cfg.translation_provider === "openrouter"
+      ) {
+        setTransProvider(cfg.translation_provider as TransProvider);
       }
-      if (cfg.minimax_api_key) setMinimaxKey(cfg.minimax_api_key);
+      // TSK-UI-REDESIGN-R2-5: KHÔNG nạp key vào ô nhập (tránh lộ key & tránh ghi
+      // đè khi form còn cũ) — chỉ lưu 4 ký tự cuối để hiện gợi ý.
+      setKeyHint({
+        minimax: tail4(cfg.minimax_api_key),
+        deepseek: tail4(cfg.deepseek_api_key),
+        openrouter: tail4(cfg.openrouter_api_key),
+      });
       if (cfg.minimax_model) setMinimaxModel(cfg.minimax_model);
+      if (cfg.deepseek_model) setDeepseekModel(cfg.deepseek_model);
+      if (cfg.openrouter_model) setOpenrouterModel(cfg.openrouter_model);
       if (cfg.ollama_url) setOllamaUrl(cfg.ollama_url);
       if (cfg.ollama_model) setOllamaModel(cfg.ollama_model);
+      const reason = (cfg as unknown as Record<string, unknown>).llm_reasoning_effort;
+      if (typeof reason === "string" && (REASONING_EFFORTS as readonly string[]).includes(reason)) {
+        setReasoningEffortState(reason);
+      }
       setConfigLoaded(true);
+      void loadTtsStatus();
+      void refreshTranslateOptions();
     }).catch(() => {
       setConfigLoaded(true);
     });
@@ -800,10 +888,137 @@ export default function SettingsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, overlayVisible]);
 
+  /**
+   * TSK-UI-REDESIGN-R2-5 (BUG đã biết): LUÔN đọc config MỚI NHẤT từ đĩa rồi mới
+   * gộp patch. Trước đây hàm lưu dựa vào `fullConfig` cũ (nạp lúc mở app) nên
+   * bấm Lưu sau khi key được nạp thẳng vào file sẽ ghi đè key bằng chuỗi rỗng.
+   * `keys` chỉ được ghi khi người dùng VỪA GÕ (chuỗi rỗng = giữ nguyên key cũ).
+   */
+  async function saveConfigPatch(
+    patch: Partial<AppConfig>,
+    keys?: Partial<Record<"minimax_api_key" | "deepseek_api_key" | "openrouter_api_key", string>>,
+    clearKeys?: Array<"minimax" | "deepseek" | "openrouter">,
+  ): Promise<AppConfig | null> {
+    const latest = await sublix.getConfig().catch(() => null);
+    const base = (latest ?? fullConfig) as unknown as Record<string, unknown> | null;
+    if (!base) return null;
+    const merged = mergeConfig({
+      latest: base,
+      patch: patch as Record<string, unknown>,
+      keyForm: keys
+        ? {
+            minimax: keys.minimax_api_key,
+            deepseek: keys.deepseek_api_key,
+            openrouter: keys.openrouter_api_key,
+          }
+        : null,
+      clearKeys,
+    });
+    try {
+      const saved = await sublix.saveConfig(merged as unknown as AppConfig);
+      setFullConfig(saved);
+      setKeyHint({
+        minimax: tail4(saved.minimax_api_key),
+        deepseek: tail4(saved.deepseek_api_key),
+        openrouter: tail4(saved.openrouter_api_key),
+      });
+      return saved;
+    } catch (e) {
+      console.error("saveConfig failed:", e);
+      return null;
+    }
+  }
+
+  /** Key người dùng vừa gõ (rỗng = không đụng tới key đã lưu). */
+  function dirtyKeys() {
+    return {
+      minimax_api_key: minimaxKey,
+      deepseek_api_key: deepseekKey,
+      openrouter_api_key: openrouterKey,
+    };
+  }
+
+  function setKeyInput(which: "minimax" | "deepseek" | "openrouter", value: string) {
+    if (which === "minimax") setMinimaxKey(value);
+    else if (which === "deepseek") setDeepseekKey(value);
+    else setOpenrouterKey(value);
+  }
+
+  /** Xoá key có chủ đích (chỉ khi người dùng bấm "Xoá key"). */
+  async function clearProviderKey(which: "minimax" | "deepseek" | "openrouter") {
+    setKeyInput(which, "");
+    await saveConfigPatch({}, undefined, [which]);
+    setStatus({ kind: "success", message: `Đã xoá key ${which}.` });
+  }
+
+  /* --------- R2-5: cầu nối `translate_options_get/set` (mcode #2) --------- */
+
+  function applyTranslateOptions(o: TranslateOptions) {
+    if (o.reasoning_effort) setReasoningEffortState(o.reasoning_effort);
+    setTranslateOptions(o);
+  }
+
+  async function refreshTranslateOptions() {
+    if (!translateApi.translateOptionsGet) return; // backend chưa có — dùng heuristic
+    try {
+      applyTranslateOptions(await translateApi.translateOptionsGet());
+    } catch {
+      // backend chưa sẵn sàng — bỏ qua, UI vẫn chạy bằng config + heuristic
+    }
+  }
+
+  /**
+   * Lưu lựa chọn dịch: ưu tiên `translate_options_set` (ghi TỪNG field, không
+   * đụng API key). Nếu wrapper chưa có thì fallback sang `saveConfigPatch`
+   * (đã an toàn vì gộp trên config mới nhất + không ghi key rỗng).
+   */
+  async function persistTranslationSelection(sel: {
+    provider?: TransProvider;
+    model?: string;
+    reasoning_effort?: string;
+  }): Promise<boolean> {
+    if (translateApi.translateOptionsSet) {
+      try {
+        applyTranslateOptions(await translateApi.translateOptionsSet(sel));
+        return true;
+      } catch {
+        // rơi xuống fallback
+      }
+    }
+    const patch: Partial<AppConfig> = {};
+    if (sel.provider) patch.translation_provider = sel.provider;
+    if (sel.model) {
+      const p = sel.provider ?? transProvider;
+      if (p === "minimax") patch.minimax_model = sel.model;
+      else if (p === "deepseek") patch.deepseek_model = sel.model;
+      else if (p === "openrouter") patch.openrouter_model = sel.model;
+      else if (p === "local") patch.translation_model = sel.model;
+      else if (p === "ollama") patch.ollama_model = sel.model;
+    }
+    if (sel.reasoning_effort) {
+      (patch as unknown as Record<string, unknown>).llm_reasoning_effort = sel.reasoning_effort;
+    }
+    const saved = await saveConfigPatch(patch);
+    return !!saved;
+  }
+
+  /** Chọn model từ nút nhanh (lưu ngay qua translate_options_set). */
+  function chooseModel(provider: TransProvider, model: string) {
+    if (provider === "minimax") setMinimaxModel(model);
+    else if (provider === "deepseek") setDeepseekModel(model);
+    else if (provider === "openrouter") setOpenrouterModel(model);
+    else if (provider === "local") setTranslationModel(model);
+    else if (provider === "ollama") setOllamaModel(model);
+    void persistTranslationSelection({ provider, model });
+  }
+
+  function changeReasoningEffort(value: string) {
+    setReasoningEffortState(value);
+    void persistTranslationSelection({ reasoning_effort: value });
+  }
+
   async function persistOverlayConfig(patch: Partial<AppConfig>) {
-    if (!fullConfig) return;
-    const updated: AppConfig = {
-      ...fullConfig,
+    await saveConfigPatch({
       stt_model: model,
       translation_model: translationModel,
       source_lang: language,
@@ -812,25 +1027,78 @@ export default function SettingsView() {
       chunk_seconds: chunkSeconds,
       vad_enabled: vadEnabled,
       ...patch,
-    };
-    setFullConfig(updated);
-    try {
-      await sublix.saveConfig(updated);
-    } catch (e) {
-      console.error("saveConfig failed:", e);
-    }
+    });
   }
 
   async function handleThemeChange(next: string) {
     setTheme(next);
     document.documentElement.dataset.theme = next;
-    if (!fullConfig) return;
-    const updated: AppConfig = { ...fullConfig, theme: next };
-    setFullConfig(updated);
+    await saveConfigPatch({ theme: next });
+  }
+
+  /* ---------------- TSK-UI-REDESIGN-R2-5: Giọng đọc TTS ---------------- */
+
+  async function loadTtsStatus() {
+    setTtsLoading(true);
     try {
-      await sublix.saveConfig(updated);
+      const st = await sublix.ttsEnginesStatus();
+      setTtsStatus(st);
     } catch (e) {
-      console.error("saveConfig failed:", e);
+      setTtsNotice(`⚠️ Không đọc được trạng thái engine TTS: ${e}`);
+    } finally {
+      setTtsLoading(false);
+    }
+  }
+
+  async function installTtsDeps(engine: "vieneu" | "zerotts") {
+    setTtsNotice(`⏳ Đang cài deps cho ${engine}…`);
+    try {
+      await sublix.ttsEngineInstallDeps(engine);
+      setTtsNotice(`✅ Đã cài deps cho ${engine}.`);
+      await loadTtsStatus();
+    } catch (e) {
+      setTtsNotice(`❌ Cài deps thất bại: ${e}`);
+    }
+  }
+
+  async function diagnoseTts(engine: "vieneu" | "zerotts") {
+    setTtsNotice(`🩺 Đang chẩn đoán ${engine}…`);
+    try {
+      const r = await sublix.ttsEngineDiagnose(engine);
+      setTtsNotice(`🩺 ${engine}: ${JSON.stringify(r)}`);
+    } catch (e) {
+      setTtsNotice(`❌ Chẩn đoán thất bại: ${e}`);
+    }
+  }
+
+  function setTtsCloudKey(provider: "google" | "fptai", value: string) {
+    setTtsCloudKeyState((prev) => ({ ...prev, [provider]: value }));
+  }
+
+  async function saveTtsCloudKey(provider: "google" | "fptai") {
+    const key = ttsCloudKey[provider].trim();
+    if (!key) {
+      setTtsNotice("⚠️ Chưa nhập API key.");
+      return;
+    }
+    try {
+      await sublix.ttsCloudSetKey(provider, key);
+      setTtsCloudKeyHint((prev) => ({ ...prev, [provider]: tail4(key) }));
+      setTtsCloudKeyState((prev) => ({ ...prev, [provider]: "" }));
+      setTtsNotice(`✅ Đã lưu key ${provider} (••••${tail4(key)}).`);
+      await loadTtsStatus();
+    } catch (e) {
+      setTtsNotice(`❌ Lưu key thất bại: ${e}`);
+    }
+  }
+
+  async function testTtsCloud(provider: "google" | "fptai") {
+    setTtsNotice(`🧪 Đang kiểm tra ${provider}…`);
+    try {
+      const msg = await sublix.ttsCloudTest(provider);
+      setTtsNotice(`🧪 ${provider}: ${msg}`);
+    } catch (e) {
+      setTtsNotice(`❌ Kiểm tra thất bại: ${e}`);
     }
   }
 
@@ -884,53 +1152,43 @@ export default function SettingsView() {
     }
   }
 
-  async function handleProviderChange(provider: "local" | "ollama" | "minimax") {
+  const PROVIDER_LABEL: Record<TransProvider, string> = {
+    local: "💻 Local GGUF (llama-server)",
+    ollama: "🦙 Ollama Local",
+    minimax: "🌐 MiniMax Cloud API",
+    deepseek: "🐋 DeepSeek",
+    openrouter: "🔀 OpenRouter",
+  };
+
+  /** Đổi nhà cung cấp → tự lưu (translate_options_set; fallback gộp config an toàn). */
+  async function handleProviderChange(provider: TransProvider) {
     setTransProvider(provider);
-    if (fullConfig) {
-      const updated: AppConfig = {
-        ...fullConfig,
-        translation_provider: provider,
-        minimax_api_key: minimaxKey,
-        minimax_model: minimaxModel,
-        ollama_url: ollamaUrl,
-        ollama_model: ollamaModel,
-      };
-      try {
-        const saved = await sublix.saveConfig(updated);
-        setFullConfig(saved);
-        setStatus({
-          kind: "success",
-          message: `✅ Đã chuyển bộ dịch sang: ${
-            provider === "minimax"
-              ? "🌐 MiniMax Cloud API (Unlimited)"
-              : provider === "ollama"
-              ? "🦙 Ollama Local (Qwen 27B)"
-              : "💻 Local GGUF (llama-server)"
-          }`,
-        });
-      } catch (err) {
-        setStatus({ kind: "error", message: `Lưu cấu hình thất bại: ${err}` });
-      }
+    const ok = await persistTranslationSelection({ provider });
+    if (ok) {
+      setStatus({ kind: "success", message: `✅ Đã chuyển bộ dịch sang: ${PROVIDER_LABEL[provider]}` });
+    } else {
+      setStatus({ kind: "error", message: "Lưu cấu hình thất bại." });
     }
   }
 
   async function saveProviderSettings() {
-    if (fullConfig) {
-      const updated: AppConfig = {
-        ...fullConfig,
-        translation_provider: transProvider,
-        minimax_api_key: minimaxKey,
-        minimax_model: minimaxModel,
-        ollama_url: ollamaUrl,
-        ollama_model: ollamaModel,
-      };
-      try {
-        const saved = await sublix.saveConfig(updated);
-        setFullConfig(saved);
-        setStatus({ kind: "success", message: "✅ Đã lưu cấu hình bộ dịch thành công!" });
-      } catch (err) {
-        setStatus({ kind: "error", message: `Lưu cấu hình thất bại: ${err}` });
-      }
+    const patch: Record<string, unknown> = {
+      translation_provider: transProvider,
+      minimax_model: minimaxModel,
+      deepseek_model: deepseekModel,
+      openrouter_model: openrouterModel,
+      ollama_url: ollamaUrl,
+      ollama_model: ollamaModel,
+    };
+    if (reasoningSupported) patch.llm_reasoning_effort = reasoningEffort;
+    const saved = await saveConfigPatch(patch as Partial<AppConfig>, dirtyKeys());
+    if (saved) {
+      setMinimaxKey("");
+      setDeepseekKey("");
+      setOpenrouterKey("");
+      setStatus({ kind: "success", message: "✅ Đã lưu cấu hình bộ dịch thành công!" });
+    } else {
+      setStatus({ kind: "error", message: "Lưu cấu hình thất bại." });
     }
   }
 
@@ -938,16 +1196,10 @@ export default function SettingsView() {
     setProviderTesting(true);
     setProviderTestResult(null);
     try {
-      if (fullConfig) {
-        await sublix.saveConfig({
-          ...fullConfig,
-          translation_provider: transProvider,
-          minimax_api_key: minimaxKey,
-          minimax_model: minimaxModel,
-          ollama_url: ollamaUrl,
-          ollama_model: ollamaModel,
-        });
-      }
+      await saveConfigPatch(
+        { translation_provider: transProvider, minimax_model: minimaxModel, deepseek_model: deepseekModel, openrouter_model: openrouterModel, ollama_url: ollamaUrl, ollama_model: ollamaModel },
+        dirtyKeys(),
+      );
       const testInput = "I can't believe you actually pulled this off. You're insane, you know that?";
       const res = await sublix.translateTest(testInput, "en", "vi", translationModel);
       setProviderTestResult(res);
@@ -989,17 +1241,12 @@ export default function SettingsView() {
       setTranslationModel(trans);
       setSttEnginePref("cpu");
       setTransEnginePref("cpu");
-      if (fullConfig) {
-        const updated = {
-          ...fullConfig,
-          stt_model: stt,
-          translation_model: trans,
-          stt_engine_preference: "cpu",
-          translation_engine_preference: "cpu",
-        };
-        setFullConfig(updated);
-        sublix.saveConfig(updated).catch(console.error);
-      }
+      void saveConfigPatch({
+        stt_model: stt,
+        translation_model: trans,
+        stt_engine_preference: "cpu",
+        translation_engine_preference: "cpu",
+      });
       setStatus({
         kind: "success",
         message: "💻 Đã chọn cấu hình Laptop / PC Văn Phòng (Thuần CPU). Model nhẹ, không cần card rời NVIDIA!",
@@ -1011,17 +1258,12 @@ export default function SettingsView() {
       setTranslationModel(trans);
       setSttEnginePref("cuda");
       setTransEnginePref("cuda");
-      if (fullConfig) {
-        const updated = {
-          ...fullConfig,
-          stt_model: stt,
-          translation_model: trans,
-          stt_engine_preference: "cuda",
-          translation_engine_preference: "cuda",
-        };
-        setFullConfig(updated);
-        sublix.saveConfig(updated).catch(console.error);
-      }
+      void saveConfigPatch({
+        stt_model: stt,
+        translation_model: trans,
+        stt_engine_preference: "cuda",
+        translation_engine_preference: "cuda",
+      });
       setStatus({
         kind: "success",
         message: "⚡ Đã chọn cấu hình GPU Gaming Phổ Thông (4GB - 8GB VRAM). Tối ưu cho GTX 1650, RTX 2060/3050/3060/4060!",
@@ -1033,17 +1275,12 @@ export default function SettingsView() {
       setTranslationModel(trans);
       setSttEnginePref("cuda");
       setTransEnginePref("cuda");
-      if (fullConfig) {
-        const updated = {
-          ...fullConfig,
-          stt_model: stt,
-          translation_model: trans,
-          stt_engine_preference: "cuda",
-          translation_engine_preference: "cuda",
-        };
-        setFullConfig(updated);
-        sublix.saveConfig(updated).catch(console.error);
-      }
+      void saveConfigPatch({
+        stt_model: stt,
+        translation_model: trans,
+        stt_engine_preference: "cuda",
+        translation_engine_preference: "cuda",
+      });
       setStatus({
         kind: "success",
         message: "🚀 Đã chọn cấu hình GPU Khủng (12GB - 24GB VRAM). Tối ưu RTX 3080/3090, 4080/4090 cho chất lượng tối đa!",
@@ -1063,18 +1300,13 @@ export default function SettingsView() {
       const picked = pickOllamaModel(installed);
       if (picked) setOllamaModel(picked);
 
-      if (fullConfig) {
-        const updated = {
-          ...fullConfig,
-          stt_model: stt,
-          stt_engine_preference: "cpu",
-          translation_engine_preference: "cpu",
-          translation_provider: "ollama",
-          ...(picked ? { ollama_model: picked } : {}),
-        };
-        setFullConfig(updated);
-        sublix.saveConfig(updated).catch(console.error);
-      }
+      void saveConfigPatch({
+        stt_model: stt,
+        stt_engine_preference: "cpu",
+        translation_engine_preference: "cpu",
+        translation_provider: "ollama",
+        ...(picked ? { ollama_model: picked } : {}),
+      });
       setStatus({
         kind: "success",
         message: picked
@@ -1247,11 +1479,124 @@ export default function SettingsView() {
   }
 
   const selectedSttInfo = (sttModels ?? []).find((m) => m.name === model);
-  const selectedTransInfo = (transModels ?? []).find((m) => m.name === translationModel);
 
   const runningDownloads = Object.values(globalTasks).filter((t) => t.type === "downloader" && t.status === "running");
   const runningModels = Object.values(globalTasks).filter((t) => t.type === "model" && t.status === "running");
   const totalActiveTasksCount = Object.values(globalTasks).filter((t) => t.status === "running").length;
+
+  /* ================= TSK-UI-REDESIGN-R2-5: gói ctx cho các mục Cài đặt ================= */
+
+  async function downloadTransModel(name: string) {
+    setDownloadingModel(name);
+    setStatus({ kind: "working", message: `Đang tải model ${name}…` });
+    try {
+      await sublix.downloadTranslationModel(name);
+      await refreshSetup();
+      setStatus({ kind: "success", message: `✅ Đã tải model ${name}.` });
+    } catch (e) {
+      setStatus({ kind: "error", message: `Tải model thất bại: ${e}` });
+    } finally {
+      setDownloadingModel(null);
+    }
+  }
+
+  async function preloadTranslation() {
+    setServerStarting(true);
+    try {
+      const eng = await sublix.preloadTranslationServer(translationModel);
+      setEngine(eng);
+      setStatus({ kind: "success", message: `✅ LLM sẵn sàng trên ${eng.toUpperCase()}` });
+    } catch (e) {
+      setEngine(null);
+      setStatus({ kind: "error", message: `Nạp LLM thất bại: ${e}` });
+    } finally {
+      setServerStarting(false);
+    }
+  }
+
+  const PRESETS = [
+    { id: "cpu", icon: "💻", title: "Chỉ CPU", sub: "Laptop / văn phòng", spec: "base + Qwen2.5-1.5B" },
+    { id: "gpu_mid", icon: "⚡", title: "GPU 4–8 GB", sub: "GTX / RTX phổ thông", spec: "base + Qwen2.5-3B · CUDA" },
+    { id: "gpu_high", icon: "🚀", title: "GPU 12–24 GB", sub: "RTX 3080/3090/4090", spec: "Turbo Q8 + Qwen3-4B" },
+    { id: "amd_igpu", icon: "🔺", title: "GPU tích hợp AMD", sub: "Radeon / Ryzen AI", spec: "base + Ollama trên iGPU" },
+  ] as const;
+
+  const THEMES = [
+    { id: "cinema", label: "Cinema", hint: "Tối ấm · mặc định" },
+    { id: "studio", label: "Studio", hint: "Xanh teal" },
+    { id: "light", label: "Sáng", hint: "Nền sáng" },
+    { id: "vibrant", label: "Rực", hint: "Đỏ-hồng" },
+  ] as const;
+
+  const settingsCtx: SettingsCtx = {
+    provider: transProvider,
+    setProvider: (p) => void handleProviderChange(p),
+    providerTesting,
+    providerTestResult,
+    testProvider: () => void testProviderTranslation(),
+    saveProvider: () => void saveProviderSettings(),
+
+    minimaxModel,
+    setMinimaxModel,
+    deepseekModel,
+    setDeepseekModel,
+    openrouterModel,
+    setOpenrouterModel,
+    chooseModel,
+    reasoningEffort,
+    setReasoningEffort: changeReasoningEffort,
+    reasoningSupported,
+
+    keyInput: { minimax: minimaxKey, deepseek: deepseekKey, openrouter: openrouterKey },
+    setKeyInput,
+    keyHint,
+    clearKey: (which) => void clearProviderKey(which),
+
+    ollamaUrl,
+    setOllamaUrl,
+    ollamaModel,
+    setOllamaModel,
+    ollamaModelList,
+    reloadOllama: () => void loadOllamaModels(),
+
+    translationModel,
+    setTranslationModel,
+    transModels,
+    transEnginePref,
+    changeTransEngine: (v) => void handleTransEngineChange(v),
+    llmEngine: engine,
+    serverStarting,
+    preloadTranslation: () => void preloadTranslation(),
+    downloadTransModel: (n) => void downloadTransModel(n),
+    downloadingModel,
+
+    ttsStatus,
+    ttsLoading,
+    ttsNotice,
+    reloadTts: () => void loadTtsStatus(),
+    installTtsDeps: (e) => void installTtsDeps(e),
+    diagnoseTts: (e) => void diagnoseTts(e),
+    ttsCloudKey,
+    setTtsCloudKey,
+    saveTtsCloudKey: (p) => void saveTtsCloudKey(p),
+    testTtsCloud: (p) => void testTtsCloud(p),
+    ttsCloudKeyHint,
+
+    currentPreset,
+    applyPreset: (p) => void applyHardwarePreset(p),
+    presets: PRESETS,
+
+    theme,
+    setTheme: (t) => void handleThemeChange(t),
+    themes: THEMES,
+
+    appInfo,
+    isLive,
+    sttServerEngine,
+    model,
+    config: fullConfig,
+    openModelsFolder: () => void sublix.openModelsFolder(),
+  };
 
   return (
     <div className="app-shell">
@@ -1337,24 +1682,7 @@ export default function SettingsView() {
             title: "Bật/tắt Overlay (Ctrl+Shift+O)",
           }}
         >
-          {/* 4 chấm đổi theme: tạm giữ ở vùng ngữ cảnh cho tới khi R2-5 thêm mục
-              "Chủ đề" vào Cài đặt (theo plan §4.2 là chuyển hẳn sang Cài đặt). */}
-          <div className="studio-theme-dots" title="Đổi theme giao diện">
-            {[
-              { id: "cinema", bg: "#e8a33d" },
-              { id: "studio", bg: "#2dd4bf" },
-              { id: "light", bg: "#b45309" },
-              { id: "vibrant", bg: "#e11d48" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`studio-theme-dot ${theme === t.id ? "active" : ""}`}
-                style={{ background: t.bg }}
-                onClick={() => handleThemeChange(t.id)}
-              />
-            ))}
-          </div>
+          {/* R2-5: 4 chấm đổi theme đã chuyển hẳn vào Cài đặt › Chủ đề (PLAN §4.2). */}
         </MasterTopbar>
 
         {/* Scrollable Body */}
@@ -1821,89 +2149,7 @@ export default function SettingsView() {
       {(activeTab === "models" || activeTab === "overlay") && (
         <StudioShell
           left={
-            <>
-              <ShellCard
-                icon={<IconSettings size={14} />}
-                title="Danh Mục Cài Đặt"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {[
-                    { id: "presets", label: "⚡ 1-Click Cấu Hình Đề Xuất", desc: "Tự động theo cấu hình PC" },
-                    { id: "ai", label: "🌐 AI Dịch Thuật & Phân Vai", desc: "MiniMax / Ollama / GGUF" },
-                    { id: "stt", label: "🎤 Nhận Dạng Giọng Nói", desc: "Whisper Large-v3-Turbo" },
-                    { id: "overlay", label: "🎨 Kiểu Dáng Cửa Sổ Overlay", desc: "Cỡ chữ, vị trí, độ mờ" },
-                    { id: "models_hub", label: "📦 Quản Lý Mô Hình (Hub)", desc: "Tải và cập nhật models" },
-                  ].map((sub) => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => setSettingsSubtab(sub.id as any)}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        border: "1px solid",
-                        borderColor: settingsSubtab === sub.id ? "var(--ac)" : "rgba(255, 255, 255, 0.05)",
-                        background: settingsSubtab === sub.id ? "rgba(232, 163, 61, 0.12)" : "rgba(255, 255, 255, 0.02)",
-                        color: settingsSubtab === sub.id ? "var(--ac)" : "var(--t1)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>{sub.label}</span>
-                      <span style={{ fontSize: 10.5, opacity: 0.65, marginTop: 2 }}>{sub.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </ShellCard>
-
-              <ShellCard
-                icon={<IconZap size={14} />}
-                title="1-Click Presets Nhanh"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => applyHardwarePreset("cpu")}
-                    className={`preset-card ${currentPreset === "cpu" ? "active" : ""}`}
-                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>💻 Thuần CPU (Laptop)</div>
-                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Qwen2.5-1.5B</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyHardwarePreset("gpu_mid")}
-                    className={`preset-card ${currentPreset === "gpu_mid" ? "active" : ""}`}
-                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>⚡ GPU Tầm Trung (4-8GB)</div>
-                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Qwen2.5-3B + CUDA</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyHardwarePreset("gpu_high")}
-                    className={`preset-card ${currentPreset === "gpu_high" ? "active" : ""}`}
-                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>🚀 GPU Khủng (12-24GB)</div>
-                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>Large-v3-Turbo Q8 + Qwen3-4B</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyHardwarePreset("amd_igpu")}
-                    className={`preset-card ${currentPreset === "amd_igpu" ? "active" : ""}`}
-                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>🔺 GPU Tích Hợp AMD (Radeon)</div>
-                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Ollama trên iGPU</div>
-                  </button>
-                </div>
-              </ShellCard>
-            </>
+            <SettingsNav active={settingsSubtab} onChange={setSettingsSubtab} />
           }
           center={
             <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", height: "100%", paddingRight: 4 }}>
@@ -2034,407 +2280,25 @@ export default function SettingsView() {
               )}
 
               {/* SUBTAB: AI DỊCH & PHÂN VAI */}
-              {settingsSubtab === "ai" && (
-                <section className="settings-section">
-                  <h2>🌐 Bộ Não Dịch Thuật & Biên Kịch Lồng Tiếng (AI Translation & Scripting)</h2>
-                  <p className="settings-help">
-                    Lựa chọn nguồn AI dịch kịch bản: <strong>MiniMax Cloud API (Unlimited)</strong> cho văn phong điện ảnh mượt mà và 0% VRAM, <strong>Ollama Local (Qwen 27B / 32B)</strong> chạy trên máy, hoặc <strong>GGUF Embedded</strong> cục bộ.
-                  </p>
+              {/* SUBTAB: DỊCH THUẬT (R2-5 — hợp nhất 5 nhà cung cấp về 1 nơi) */}
+              {settingsSubtab === "ai" && <TranslationSection ctx={settingsCtx} />}
 
-                  {/* Provider Switcher Tabs */}
-                  <div className="settings-row" style={{ alignItems: "flex-start", marginBottom: 14 }}>
-                    <label style={{ paddingTop: 6, minWidth: 100 }}>Nguồn Dịch:</label>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
-                      <button
-                        className={`settings-engine-btn ${transProvider === "minimax" ? "active" : ""}`}
-                        onClick={() => handleProviderChange("minimax")}
-                        style={{ padding: "8px 14px", fontWeight: transProvider === "minimax" ? 700 : 500 }}
-                      >
-                        🌐 MiniMax Cloud API (Unlimited) ⭐ Khuyên Dùng
-                      </button>
-                      <button
-                        className={`settings-engine-btn ${transProvider === "ollama" ? "active" : ""}`}
-                        onClick={() => handleProviderChange("ollama")}
-                        style={{ padding: "8px 14px", fontWeight: transProvider === "ollama" ? 700 : 500 }}
-                      >
-                        🦙 Ollama Local (Qwen 27B / 32B)
-                      </button>
-                      <button
-                        className={`settings-engine-btn ${transProvider === "local" ? "active" : ""}`}
-                        onClick={() => handleProviderChange("local")}
-                        style={{ padding: "8px 14px", fontWeight: transProvider === "local" ? 700 : 500 }}
-                      >
-                        💻 Local GGUF (llama-server)
-                      </button>
-                    </div>
+              {/* SUBTAB: GIỌNG ĐỌC TTS (R2-5) */}
+              {settingsSubtab === "tts" && <TtsSection ctx={settingsCtx} />}
+
+              {/* SUBTAB: CHỦ ĐỀ (R2-5) */}
+              {settingsSubtab === "theme" && <ThemeSection ctx={settingsCtx} />}
+
+              {/* SUBTAB: NHẬT KÝ CẬP NHẬT */}
+              {settingsSubtab === "changelog" && (
+                <section className="settings-section st-card">
+                  <div className="st-sec-head">
+                    <h2>📝 Nhật ký cập nhật</h2>
+                    <span className="st-hint">Phiên bản hiện tại: {appInfo?.version ?? "—"}</span>
                   </div>
-
-                  {/* PROVIDER 1: MINIMAX CLOUD API */}
-                  {transProvider === "minimax" && (
-                    <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(59, 130, 246, 0.2)", marginBottom: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#60a5fa" }}>
-                          🔑 Cấu hình MiniMax Unlimited API
-                        </span>
-                        <span style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: 4 }}>
-                          0% VRAM GPU • Dịch Điện Ảnh
-                        </span>
-                      </div>
-                      <div className="settings-row" style={{ marginBottom: 10 }}>
-                        <label style={{ minWidth: 100 }}>API Key:</label>
-                        <div style={{ display: "flex", gap: 6, flex: 1 }}>
-                          <input
-                            type={showMinimaxKey ? "text" : "password"}
-                            value={minimaxKey}
-                            onChange={(e) => setMinimaxKey(e.target.value)}
-                            placeholder="Dán API Key MiniMax của bạn vào đây..."
-                            className="settings-input"
-                            style={{ flex: 1, fontFamily: "monospace" }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowMinimaxKey(!showMinimaxKey)}
-                            className="settings-btn-secondary"
-                            style={{ padding: "4px 10px", fontSize: 11 }}
-                          >
-                            {showMinimaxKey ? "Ẩn" : "Hiện"}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="settings-row" style={{ marginBottom: 12 }}>
-                        <label style={{ minWidth: 100 }}>Model Name:</label>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
-                          <input
-                            type="text"
-                            value={minimaxModel}
-                            onChange={(e) => setMinimaxModel(e.target.value)}
-                            placeholder="MiniMax-M3 (Token Plan) hoặc MiniMax-Text-01"
-                            className="settings-input"
-                            style={{ width: "100%" }}
-                          />
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              onClick={() => setMinimaxModel("MiniMax-M3")}
-                              className="settings-btn-secondary"
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 8px",
-                                background: minimaxModel === "MiniMax-M3" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                                borderColor: minimaxModel === "MiniMax-M3" ? "#3b82f6" : undefined,
-                              }}
-                            >
-                              ⭐ MiniMax-M3 (Token Plan)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setMinimaxModel("MiniMax-M3.1-Flash")}
-                              className="settings-btn-secondary"
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 8px",
-                                background:
-                                  minimaxModel === "MiniMax-M3.1-Flash"
-                                    ? "rgba(59, 130, 246, 0.3)"
-                                    : undefined,
-                                borderColor:
-                                  minimaxModel === "MiniMax-M3.1-Flash" ? "#3b82f6" : undefined,
-                              }}
-                            >
-                              ⚡ MiniMax M3.1 Flash
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setMinimaxModel("MiniMax-M2.7-highspeed")}
-                              className="settings-btn-secondary"
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 8px",
-                                background: minimaxModel === "MiniMax-M2.7-highspeed" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                                borderColor: minimaxModel === "MiniMax-M2.7-highspeed" ? "#3b82f6" : undefined,
-                              }}
-                            >
-                              ⚡ MiniMax-M2.7-highspeed
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setMinimaxModel("MiniMax-M2.7")}
-                              className="settings-btn-secondary"
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 8px",
-                                background: minimaxModel === "MiniMax-M2.7" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                                borderColor: minimaxModel === "MiniMax-M2.7" ? "#3b82f6" : undefined,
-                              }}
-                            >
-                              MiniMax-M2.7
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setMinimaxModel("MiniMax-Text-01")}
-                              className="settings-btn-secondary"
-                              style={{
-                                fontSize: 11,
-                                padding: "2px 8px",
-                                background: minimaxModel === "MiniMax-Text-01" ? "rgba(59, 130, 246, 0.3)" : undefined,
-                                borderColor: minimaxModel === "MiniMax-Text-01" ? "#3b82f6" : undefined,
-                              }}
-                            >
-                              MiniMax-Text-01
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                        <button
-                          onClick={saveProviderSettings}
-                          className="settings-btn-primary"
-                          style={{ padding: "6px 14px", fontSize: 12 }}
-                        >
-                          💾 Lưu Cấu Hình
-                        </button>
-                        <button
-                          onClick={testProviderTranslation}
-                          className="settings-btn-secondary"
-                          disabled={providerTesting}
-                          style={{ padding: "6px 14px", fontSize: 12 }}
-                        >
-                          {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PROVIDER 2: OLLAMA LOCAL */}
-                  {transProvider === "ollama" && (
-                    <div style={{ background: "rgba(30, 41, 59, 0.4)", padding: "14px 16px", borderRadius: 8, border: "1px solid rgba(168, 85, 247, 0.2)", marginBottom: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#c084fc" }}>
-                          🦙 Kết Nối Ollama Local (Máy Cá Nhân)
-                        </span>
-                        <span style={{ fontSize: 11, background: "rgba(168, 85, 247, 0.2)", color: "#d8b4fe", padding: "2px 8px", borderRadius: 4 }}>
-                          Offline 100% • Model 27B / 32B
-                        </span>
-                      </div>
-                      <div className="settings-row" style={{ marginBottom: 10 }}>
-                        <label style={{ minWidth: 100 }}>Ollama URL:</label>
-                        <input
-                          type="text"
-                          value={ollamaUrl}
-                          onChange={(e) => setOllamaUrl(e.target.value)}
-                          placeholder="http://localhost:11434"
-                          className="settings-input"
-                          style={{ flex: 1, fontFamily: "monospace" }}
-                        />
-                      </div>
-                      <div className="settings-row" style={{ marginBottom: 12 }}>
-                        <label style={{ minWidth: 100 }}>Model Name:</label>
-                        <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
-                          <select
-                            className="settings-input"
-                            value={ollamaModelList.some((m) => m.name === ollamaModel) ? ollamaModel : ""}
-                            onChange={(e) => { if (e.target.value) setOllamaModel(e.target.value); }}
-                            style={{ flex: 1, fontFamily: "monospace" }}
-                          >
-                            <option value="">
-                              {ollamaModelList.length > 0
-                                ? "— Chọn model đã cài —"
-                                : "Ollama chưa chạy hoặc chưa có model"}
-                            </option>
-                            {ollamaModelList.map((m) => (
-                              <option key={m.name} value={m.name}>
-                                {m.name}
-                                {m.params ? ` (${m.params}` : ""}
-                                {m.quant ? ` ${m.quant}` : ""}
-                                {m.size_gb > 0 ? ` • ${m.size_gb.toFixed(1)}GB` : ""}
-                                {m.params || m.quant ? ")" : ""}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            type="text"
-                            value={ollamaModel}
-                            onChange={(e) => setOllamaModel(e.target.value)}
-                            placeholder="Hoặc gõ tag model tay"
-                            className="settings-input"
-                            style={{ flex: 1, fontFamily: "monospace" }}
-                          />
-                        </div>
-                      </div>
-                      {ollamaModelList.length > 0 && (
-                        <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: -6, marginBottom: 10 }}>
-                          {ollamaModelList.length} model Ollama đã cài • Ollama tự dùng ROCm/Vulkan trên GPU tích hợp AMD
-                          (nhanh hơn CPU khoảng 2×)
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                        <button
-                          onClick={saveProviderSettings}
-                          className="settings-btn-primary"
-                          style={{ padding: "6px 14px", fontSize: 12 }}
-                        >
-                          💾 Lưu Cấu Hình
-                        </button>
-                        <button
-                          onClick={testProviderTranslation}
-                          className="settings-btn-secondary"
-                          disabled={providerTesting}
-                          style={{ padding: "6px 14px", fontSize: 12 }}
-                        >
-                          {providerTesting ? "⏳ Đang dịch thử..." : "🧪 Dịch Thử Nghiệm Ngay"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PROVIDER TEST RESULT BOX */}
-                  {providerTestResult && (
-                    <div style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(52, 211, 153, 0.4)", borderRadius: 6, padding: "10px 14px", marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
-                        💬 Kết quả dịch thử nghiệm: <em>"I can't believe you actually pulled this off. You're insane, you know that?"</em>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#34d399", lineHeight: 1.4 }}>
-                        {providerTestResult}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PROVIDER 3: LOCAL GGUF */}
-                  {transProvider === "local" && (
-                    <>
-                      <div className="settings-row">
-                        <label>LLM Model:</label>
-                        <select
-                          value={translationModel}
-                          onChange={(e) => setTranslationModel(e.target.value)}
-                          className="settings-select"
-                        >
-                          {transModels.length > 0 ? (
-                            transModels.map((m) => (
-                              <option key={m.name} value={m.name}>
-                                {m.downloaded ? "✓ " : "⬇ "} {m.label}
-                              </option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="qwen3-4b">✓ Qwen3-4B-Instruct-2507 (2.5GB) — ⭐ 2026 Best</option>
-                              <option value="qwen2.5-3b">✓ Qwen2.5-3B-Instruct (2.0GB) — Legacy</option>
-                            </>
-                          )}
-                        </select>
-
-                        {selectedTransInfo && !selectedTransInfo.downloaded && (
-                          <button
-                            onClick={async () => {
-                              setDownloadingModel(translationModel);
-                              setStatus({
-                                kind: "working",
-                                message: `Downloading ${translationModel} (~${selectedTransInfo.size_mb}MB)...`,
-                              });
-                              try {
-                                await sublix.downloadTranslationModel(translationModel);
-                                await refreshSetup();
-                                setStatus({ kind: "success", message: `✅ Downloaded ${translationModel}!` });
-                              } catch (e) {
-                                setStatus({ kind: "error", message: `Download failed: ${e}` });
-                              } finally {
-                                setDownloadingModel(null);
-                              }
-                            }}
-                            className="settings-btn-primary"
-                            disabled={downloadingModel !== null}
-                          >
-                            {downloadingModel === translationModel
-                              ? "⏳ Downloading..."
-                              : `⬇ Download (${selectedTransInfo.size_mb}MB)`}
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="settings-row">
-                        <span className="settings-help" style={{ marginRight: 8 }}>Engine:&nbsp;</span>
-                        <div className="settings-engine-toggle">
-                          <button
-                            className={`settings-engine-btn ${transEnginePref === "auto" ? "active" : ""}`}
-                            onClick={() => handleTransEngineChange("auto")}
-                            disabled={!configLoaded}
-                          >
-                            ⚙ AUTO
-                          </button>
-                          <button
-                            className={`settings-engine-btn ${transEnginePref === "cpu" ? "active" : ""}`}
-                            onClick={() => handleTransEngineChange("cpu")}
-                            disabled={!configLoaded}
-                          >
-                            💻 CPU
-                          </button>
-                          <button
-                            className={`settings-engine-btn ${transEnginePref === "cuda" ? "active" : ""}`}
-                            onClick={() => handleTransEngineChange("cuda")}
-                            disabled={!configLoaded}
-                          >
-                            🎮 GPU (CUDA)
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={async () => {
-                            setServerStarting(true);
-                            setStatus({
-                              kind: "working",
-                              message: `Loading LLM (${translationModel}) into GPU VRAM...`,
-                            });
-                            try {
-                              const eng = await sublix.preloadTranslationServer(translationModel);
-                              setEngine(eng);
-                              setStatus({
-                                kind: "success",
-                                message: `✅ Translation LLM ready on ${eng.toUpperCase()} (${translationModel})`,
-                              });
-                            } catch (e) {
-                              setStatus({ kind: "error", message: `LLM server failed: ${e}` });
-                              setEngine(null);
-                            } finally {
-                              setServerStarting(false);
-                            }
-                          }}
-                          className="settings-btn-secondary"
-                          disabled={serverStarting}
-                        >
-                          {serverStarting ? "⏳ Loading..." : engine ? "🔄 Reload LLM Server" : "▶ Pre-warm LLM Server"}
-                        </button>
-                      </div>
-
-                      <div className="settings-row">
-                        <span className="settings-help" style={{ marginRight: 8 }}>Status:&nbsp;</span>
-                        {serverStarting ? (
-                          <span className="settings-engine-indicator">
-                            <span className="engine-dot engine-dot-starting" />
-                            <span style={{ color: "#fbbf24" }}>Loading GGUF model into VRAM...</span>
-                          </span>
-                        ) : engine === "cuda" ? (
-                          <span className="settings-engine-indicator">
-                            <span className="engine-dot engine-dot-cuda" />
-                            <span style={{ color: "#34d399", fontWeight: 600 }}>
-                              Running on NVIDIA GPU (CUDA) — ~0.1–0.2s per subtitle
-                            </span>
-                          </span>
-                        ) : engine === "cpu" ? (
-                          <span className="settings-engine-indicator">
-                            <span className="engine-dot engine-dot-cpu" />
-                            <span style={{ color: "#60a5fa", fontWeight: 600 }}>
-                              Running on CPU — ~1–2s per subtitle
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="settings-engine-indicator">
-                            <span className="engine-dot engine-dot-idle" />
-                            <span style={{ color: "#94a3b8" }}>Standby (auto-starts on first subtitle)</span>
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  )}
+                  <button type="button" className="settings-btn-primary" onClick={() => setShowChangelog(true)}>
+                    Mở nhật ký cập nhật
+                  </button>
                 </section>
               )}
 
@@ -3003,81 +2867,7 @@ export default function SettingsView() {
               )}
             </div>
           }
-          right={
-            <>
-              <ShellCard
-                icon={<IconZap size={14} />}
-                title="Trạng Thái Hệ Thống"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Engine Nhận Dạng:</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: sttServerEngine === "cuda" ? "#34d399" : "#60a5fa" }}>
-                      {sttServerEngine ? sttServerEngine.toUpperCase() : "Chưa tải"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Engine Dịch Thuật:</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: engine === "cuda" ? "#34d399" : "#60a5fa" }}>
-                      {engine ? engine.toUpperCase() : "Chưa tải"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11.5, opacity: 0.8 }}>Chế độ tăng tốc:</span>
-                    <span style={{ fontSize: 11, color: "var(--ac)", display: "flex", alignItems: "center", gap: 4 }}>
-                      {sttServerEngine === "cuda" || engine === "cuda" ? <IconZap size={13} /> : <IconCpu size={13} />}
-                      {sttServerEngine === "cuda" || engine === "cuda"
-                      ? "NVIDIA CUDA GPU"
-                      : transProvider === "ollama"
-                      ? "Ollama (GPU nếu hỗ trợ)"
-                      : "CPU Đa Luồng"}
-                    </span>
-                  </div>
-                </div>
-              </ShellCard>
-
-              <ShellCard
-                icon={<IconFolder size={14} />}
-                title="Thao Tác Nhanh"
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <button
-                    type="button"
-                    className="downloader-btn-secondary"
-                    onClick={() => sublix.openModelsFolder()}
-                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
-                  >
-                    <IconFolder size={12} /> Mở Thư Mục Models
-                  </button>
-                  <button
-                    type="button"
-                    className="downloader-btn-secondary"
-                    onClick={() => setShowChangelog(true)}
-                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
-                  >
-                    <IconFileText size={12} /> Nhật Ký Cập Nhật (v{appInfo?.version ?? APP_VERSION_PKG})
-                  </button>
-                  <button
-                    type="button"
-                    className="downloader-btn-secondary"
-                    onClick={async () => {
-                      if (overlayVisible) {
-                        await sublix.hideOverlay();
-                        setOverlayVisible(false);
-                      } else {
-                        await sublix.showOverlay();
-                        setOverlayVisible(true);
-                      }
-                    }}
-                    style={{ fontSize: 11.5, padding: "6px 10px", justifyContent: "flex-start" }}
-                  >
-                    {overlayVisible ? <IconEyeOff size={12} /> : <IconEye size={12} />}
-                    {overlayVisible ? "Ẩn Cửa Sổ Overlay" : "Hiện Cửa Sổ Overlay"}
-                  </button>
-                </div>
-              </ShellCard>
-            </>
-          }
+          right={<SystemStatusPanel ctx={settingsCtx} />}
         />
       )}
 
