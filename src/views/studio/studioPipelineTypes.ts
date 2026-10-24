@@ -4,6 +4,7 @@
  * Tách riêng để `StudioPipelinePanel.tsx` và `StudioVoiceStep.tsx` cùng dùng mà
  * không phải import chéo (tránh vòng phụ thuộc component).
  */
+import type { ReasoningEffort, TranslateOptions } from "./translateOptions";
 
 /** 5 bước của quy trình (theo thứ tự người dùng làm). */
 export type PipelineStepId = "source" | "sub" | "translate" | "voice" | "export";
@@ -51,6 +52,28 @@ export interface PanelVoiceOption {
   id: string;
   label: string;
   gender: "male" | "female";
+}
+
+/** Ước tính thời gian 1 bước (hiển thị gọn 1 dòng trong panel). */
+export interface PanelEstimate {
+  /** Id bước. */
+  id: "stt" | "translate" | "tts";
+  /** Tên bước (vd "Nhận dạng"). */
+  label: string;
+  /** Chi tiết (model/engine + thiết bị). */
+  detail: string;
+  /** Thời gian ước tính (giây). */
+  seconds: number;
+  /** Số câu liên quan (nếu có). */
+  segmentCount?: number;
+}
+
+/** Tiến độ THẬT của bước đang chạy. */
+export interface PanelLiveProgress {
+  /** Id bước đang chạy. */
+  stepId: "stt" | "translate" | "tts";
+  /** Dòng mô tả gọn (vd "12/60 câu · 0,4 s/câu · còn ~19 s"). */
+  text: string;
 }
 
 /** Trạng thái hiển thị của panel (chỉ đọc — panel KHÔNG tự giữ state nghiệp vụ). */
@@ -107,6 +130,16 @@ export interface StudioPipelineState {
   auditioningRoleId: string | null;
   /** Engine đang nghe thử (null = không có). */
   auditioningEngineId: string | null;
+  /** Tuỳ chọn model dịch từ backend (`translate_options_get`). */
+  translateOptions: TranslateOptions | null;
+  /** Đang tải danh sách model dịch. */
+  translateOptionsLoading: boolean;
+  /** Backend chưa có lệnh `translate_options_get` → hiện trạng thái dự phòng. */
+  translateOptionsUnavailable: boolean;
+  /** Ước tính thời gian từng bước (trước khi chạy). */
+  stepEstimates: PanelEstimate[];
+  /** Tiến độ thật của bước đang chạy (null = không chạy). */
+  liveProgress: PanelLiveProgress | null;
 }
 
 /** Các hành động của panel — truyền từ file cha (state KHÔNG chuyển sang con). */
@@ -146,6 +179,12 @@ export interface StudioPipelineApi {
   removeGlossary: (term: string) => void;
   openExport: () => void;
   openSettings: () => void;
+  /** Chọn model dịch (ghi ngay, không có nút Lưu). */
+  selectTranslateModel: (modelId: string, provider: string) => void;
+  /** Chọn mức suy luận (ghi ngay). */
+  selectReasoningEffort: (effort: ReasoningEffort) => void;
+  /** Provider này đã có API key chưa (chỉ trả true/false, không trả key). */
+  hasProviderKey: (provider: string) => boolean;
 }
 
 /** Nhãn hiển thị của 5 bước trên rail. */

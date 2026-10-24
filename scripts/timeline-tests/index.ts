@@ -21,3 +21,4 @@ import "./markers.test.ts";
 import "./trackLock.test.ts";
 import "./clipboard.test.ts";
 import "./autoFollow.test.ts";
+import "./estimate.test.ts";

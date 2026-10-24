@@ -3,6 +3,8 @@ import { ContextMenu } from "../../components/ui/ContextMenu";
 import { Segmented } from "../../components/ui/Segmented";
 import { SplitButton } from "../../components/ui/SplitButton";
 import StudioVoiceStep from "./StudioVoiceStep";
+import StudioTranslateOptions from "./StudioTranslateOptions";
+import { formatDuration } from "../../lib/timeline/estimate";
 import {
   PIPELINE_STEPS,
   STT_LANG_OPTIONS,
@@ -60,6 +62,24 @@ function StudioPipelinePanelInner({
   const toggleStep = (step: PipelineOpenStep) => {
     api.setOpenStep(state.openStep === step ? null : step);
   };
+
+  /** Dòng ước tính / tiến độ thật của 1 bước (gọn 1 dòng, chữ nhỏ). */
+  const stepHint = (stepId: "stt" | "translate" | "tts") => {
+    if (state.liveProgress && state.liveProgress.stepId === stepId) {
+      return <div className="spp-estimate live">{state.liveProgress.text}</div>;
+    }
+    const estimate = state.stepEstimates.find((item) => item.id === stepId);
+    if (!estimate) return null;
+    const count = estimate.segmentCount ? ` (~${estimate.segmentCount} câu)` : "";
+    return (
+      <div className="spp-estimate">
+        ⏱ {estimate.label} ({estimate.detail}): ~{formatDuration(estimate.seconds)}
+        {count}
+      </div>
+    );
+  };
+
+  const totalEstimate = state.stepEstimates.reduce((sum, item) => sum + item.seconds, 0);
 
   return (
     <div className="spp-root">
@@ -136,6 +156,7 @@ function StudioPipelinePanelInner({
             </button>
             <span className="spp-caret">{state.openStep === "sub" ? "⌄" : "›"}</span>
           </header>
+          {stepHint("stt")}
           {state.openStep === "sub" ? (
             <div className="spp-card-body">
               <div className="spp-field">
@@ -207,6 +228,7 @@ function StudioPipelinePanelInner({
             </button>
             <span className="spp-caret">{state.openStep === "translate" ? "⌄" : "›"}</span>
           </header>
+          {stepHint("translate")}
           {state.openStep === "translate" ? (
             <div className="spp-card-body">
               <div className="spp-field">
@@ -232,16 +254,27 @@ function StudioPipelinePanelInner({
                   ariaLabel="Phong cách dịch"
                 />
               </div>
-              {/* R2-4: nhà cung cấp dịch = CHỈ ĐỌC, cấu hình ở Cài đặt. */}
-              <div className="spp-field">
-                <span className="spp-label">Nhà cung cấp</span>
+              {/* TSK-STUDIO-MODEL-PICKER: chọn model dịch + mức suy luận NGAY tại Studio
+                  (PO: không đẩy người dùng sang tab Cài đặt). */}
+              <StudioTranslateOptions
+                options={state.translateOptions}
+                loading={state.translateOptionsLoading}
+                unavailable={state.translateOptionsUnavailable}
+                hasProviderKey={api.hasProviderKey}
+                onSelectModel={api.selectTranslateModel}
+                onSelectEffort={api.selectReasoningEffort}
+                onOpenSettings={api.openSettings}
+              />
+              {state.providerLabel ? (
                 <div className="spp-provider-row">
-                  <span className="spp-provider-text">{state.providerLabel}</span>
+                  <span className="spp-provider-text">
+                    Đang dùng: {state.providerLabel}
+                  </span>
                   <button type="button" className="spp-link-btn" onClick={() => api.openSettings()}>
-                    Đổi
+                    Cài đặt nâng cao
                   </button>
                 </div>
-              </div>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -283,6 +316,7 @@ function StudioPipelinePanelInner({
             </button>
             <span className="spp-caret">{state.openStep === "voice" ? "⌄" : "›"}</span>
           </header>
+          {stepHint("tts")}
           {state.openStep === "voice" ? <StudioVoiceStep state={state} api={api} /> : null}
         </section>
 
@@ -364,7 +398,8 @@ function StudioPipelinePanelInner({
           onToggleMenu={() => setRunMenuOpen((open) => !open)}
         />
         <div className="spp-hint-center">
-          ▾ chạy riêng: phụ đề · dịch · lồng tiếng · vùng In–Out
+          {totalEstimate > 0 ? `Tổng ~${formatDuration(totalEstimate)} · ` : ""}▾ chạy riêng: phụ đề
+          · dịch · lồng tiếng · vùng In–Out
         </div>
         {runMenuOpen ? (
           <ContextMenu

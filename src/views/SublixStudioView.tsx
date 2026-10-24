@@ -19,6 +19,24 @@ import { version as APP_VERSION_PKG } from "../../package.json";
 // R2-3: panel quy trình 5 bước (tách riêng để file này không phình thêm).
 import StudioPipelinePanel from "./studio/StudioPipelinePanel";
 import MasterTopbar from "./MasterTopbar";
+// TSK-STUDIO-MODEL-PICKER: gọi 2 lệnh backend `translate_options_get/set`.
+// Dùng wrapper CỤC BỘ trong src/views/studio/ (không sửa src/lib/tauri.ts — file đó
+// đang do worker khác sửa).
+import {
+  fetchTranslateOptions,
+  saveTranslateOptions,
+  type ReasoningEffort,
+  type TranslateOptions,
+} from "./studio/translateOptions";
+// TSK-STUDIO-MODEL-PICKER: ước tính thời gian từng bước (logic thuần, test được).
+import {
+  buildEstimates,
+  computeLiveProgress,
+  formatLiveProgress,
+  loadRateOverrides,
+  rateKey,
+  saveRateOverride,
+} from "../lib/timeline/estimate";
 import type {
   PanelEngine,
   PanelRole,
@@ -759,6 +777,11 @@ export default function SublixStudioView({
   const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
   const [ttsEngineDownloading, setTtsEngineDownloading] = useState<string | null>(null);
   const [ttsEngineDownloadPct, setTtsEngineDownloadPct] = useState<number | null>(null);
+
+  // TSK-STUDIO-MODEL-PICKER: model dịch + mức suy luận (chọn ngay trong Studio).
+  const [translateOptions, setTranslateOptions] = useState<TranslateOptions | null>(null);
+  const [translateOptionsLoading, setTranslateOptionsLoading] = useState<boolean>(false);
+  const [translateOptionsUnavailable, setTranslateOptionsUnavailable] = useState<boolean>(false);
 
   /** Danh sách giọng của 1 engine (lọc theo prefix do backend khai báo). */
   const voicesForEngine = useCallback(
@@ -5509,6 +5532,193 @@ export default function SublixStudioView({
   /** Bước đang mở trong accordion của panel (chỉ 1 bước mở tại 1 thời điểm). */
   const [pipelineOpenStep, setPipelineOpenStep] = useState<PipelineOpenStep>("voice");
 
+  /**
+   * TSK-STUDIO-MODEL-PICKER — nạp model dịch + mức suy luận từ backend.
+   * - Lệnh chưa tồn tại (backend cũ) → `translateOptionsUnavailable = true`
+   *   → panel hiện trạng thái dự phòng (chỉ đọc), KHÔNG crash.
+   * - Nghe `config:updated` để đồng bộ với Cài đặt (đổi model ở 2 nơi vẫn khớp).
+   */
+  const loadTranslateOptions = useCallback(async () => {
+    try {
+      const options = await fetchTranslateOptions();
+      setTranslateOptions(options);
+      setTranslateOptionsUnavailable(false);
+    } catch (err) {
+      const message = String(err);
+      if (/not found|unknown command|not allowed/i.test(message)) {
+        setTranslateOptionsUnavailable(true);
+      } else {
+        console.warn("Không lấy được tuỳ chọn model dịch:", err);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    setTranslateOptionsLoading(true);
+    void loadTranslateOptions().finally(() => setTranslateOptionsLoading(false));
+
+    let unlisten: (() => void) | null = null;
+    let alive = true;
+    void listen("config:updated", () => {
+      if (alive) void loadTranslateOptions();
+    })
+      .then((fn) => {
+        if (alive) unlisten = fn;
+        else fn();
+      })
+      .catch((err) => console.warn("Nghe config:updated thất bại:", err));
+
+    return () => {
+      alive = false;
+      if (unlisten) unlisten();
+    };
+  }, [isActive, loadTranslateOptions]);
+
+  /** Đổi model dịch → ghi NGAY vào config (không có nút Lưu). */
+  const handleSelectTranslateModel = useCallback(
+    async (modelId: string, provider: string) => {
+      try {
+        await saveTranslateOptions({ provider, model: modelId });
+        setTranslateOptions((prev) =>
+          prev ? { ...prev, provider, model: modelId } : prev,
+        );
+        showToast(`🧠 Đã đổi model dịch: ${modelId}`);
+      } catch (err) {
+        showToast(`⚠️ Không đổi được model: ${String(err)}`);
+      }
+    },
+    [],
+  );
+
+  /** Đổi mức suy luận → ghi NGAY vào config. */
+  const handleSelectReasoningEffort = useCallback(async (effort: ReasoningEffort) => {
+    try {
+      await saveTranslateOptions({ reasoningEffort: effort });
+      setTranslateOptions((prev) => (prev ? { ...prev, reasoning_effort: effort } : prev));
+      showToast(`🧠 Mức suy luận: ${effort}`);
+    } catch (err) {
+      showToast(`⚠️ Không đổi được mức suy luận: ${String(err)}`);
+    }
+  }, []);
+
+  /** Provider đã có API key chưa (chỉ trả true/false — KHÔNG trả key ra UI). */
+  const handleHasProviderKey = useCallback(
+    (provider: string): boolean => {
+      switch (provider) {
+        case "minimax":
+          return minimaxKey.trim().length > 0;
+        case "deepseek":
+          return deepseekKey.trim().length > 0;
+        case "openrouter":
+          return openrouterKey.trim().length > 0;
+        default:
+          return true; // local / provider không cần key
+      }
+    },
+    [minimaxKey, deepseekKey, openrouterKey],
+  );
+
+  // ── ƯỚC TÍNH THỜI GIAN TỪNG BƯỚC (tự học từ tốc độ thật của máy người dùng)
+  /** Tốc độ đo được (đọc từ localStorage). */
+  const [rateOverrides, setRateOverrides] = useState<Record<string, number>>({});
+  /** Mốc bắt đầu lần chạy hiện tại (ms). */
+  const runStartedAtRef = useRef<number>(0);
+  /** Tiến độ thật gần nhất (để lưu tốc độ khi chạy xong). */
+  const lastLiveRef = useRef<{ stepId: "stt" | "translate" | "tts"; done: number; total: number } | null>(null);
+  /** Ref để effect lưu tốc độ không bị stale closure. */
+  const translateOptionsRef = useRef<TranslateOptions | null>(null);
+  translateOptionsRef.current = translateOptions;
+  const selectedTtsEngineRef = useRef<TtsEngineKey>(selectedTtsEngine);
+  selectedTtsEngineRef.current = selectedTtsEngine;
+
+  useEffect(() => {
+    try {
+      setRateOverrides(loadRateOverrides(window.localStorage));
+    } catch {
+      /* localStorage bị chặn → dùng số mặc định */
+    }
+  }, []);
+
+  /** Ước tính thời gian từng bước (chỉ tính bước đang BẬT). */
+  const pipelineEstimates = useMemo(() => {
+    const audioDurationSec = segments.reduce((sum, seg) => sum + Math.max(0, seg.end - seg.start), 0);
+    const { steps } = buildEstimates({
+      mediaDurationSec: mediaDuration,
+      audioDurationSec,
+      segmentCount: segments.length,
+      sttModel: sttModel === "base" ? "Whisper base" : "Whisper Large-v3-Turbo",
+      translateModel: translateOptions?.model || "Ollama qwen2.5:3b",
+      reasoningEffort: translateOptions?.reasoning_effort || "auto",
+      ttsEngine: selectedTtsEngine,
+      overrides: rateOverrides,
+    });
+    return steps.filter((step) => {
+      if (step.id === "stt") return workflowOptStt;
+      if (step.id === "translate") return workflowOptTranslate;
+      return workflowOptVoice;
+    });
+  }, [
+    segments,
+    mediaDuration,
+    sttModel,
+    translateOptions,
+    selectedTtsEngine,
+    rateOverrides,
+    workflowOptStt,
+    workflowOptTranslate,
+    workflowOptVoice,
+  ]);
+
+  /** Tiến độ THẬT của bước đang chạy (đọc từ thông điệp tiến trình). */
+  const pipelineLiveProgress = useMemo(() => {
+    if (!isAnalyzing) return null;
+    const msg = analyzeMessage || "";
+    const ratio = /(\d+)\s*\/\s*(\d+)/.exec(msg);
+    const done = ratio ? Number(ratio[1]) : 0;
+    const total = ratio ? Number(ratio[2]) : 0;
+    let stepId: "stt" | "translate" | "tts" = "translate";
+    if (/whisper|nhận dạng|stt/i.test(msg)) stepId = "stt";
+    else if (/giọng|tts|lồng tiếng/i.test(msg)) stepId = "tts";
+    const elapsedSec = runStartedAtRef.current > 0 ? (Date.now() - runStartedAtRef.current) / 1000 : 0;
+    lastLiveRef.current = { stepId, done, total };
+    const estimate = pipelineEstimates.find((item) => item.id === stepId);
+    const progress = computeLiveProgress(done, total, elapsedSec, estimate?.seconds ?? 0);
+    return { stepId, text: formatLiveProgress(progress) };
+  }, [isAnalyzing, analyzeMessage, pipelineEstimates]);
+
+  /** Khi 1 lần chạy kết thúc → lưu tốc độ THẬT vào localStorage (tự học). */
+  useEffect(() => {
+    if (isAnalyzing) {
+      if (runStartedAtRef.current === 0) runStartedAtRef.current = Date.now();
+      return;
+    }
+    if (runStartedAtRef.current === 0) return;
+    const elapsed = (Date.now() - runStartedAtRef.current) / 1000;
+    const live = lastLiveRef.current;
+    runStartedAtRef.current = 0;
+    lastLiveRef.current = null;
+    if (!live || live.done <= 0 || elapsed <= 0) return;
+    const secPerUnit = elapsed / live.done;
+    const key =
+      live.stepId === "translate"
+        ? rateKey(
+            "translate",
+            `${translateOptionsRef.current?.model ?? ""}:${translateOptionsRef.current?.reasoning_effort ?? "auto"}`,
+          )
+        : live.stepId === "tts"
+        ? rateKey("tts", selectedTtsEngineRef.current)
+        : null;
+    if (!key) return;
+    try {
+      if (saveRateOverride(window.localStorage, key, secPerUnit)) {
+        setRateOverrides(loadRateOverrides(window.localStorage));
+      }
+    } catch {
+      /* bỏ qua */
+    }
+  }, [isAnalyzing]);
+
   /** Nạp trạng thái engine TTS + danh mục giọng đọc TỪ BACKEND. */
   useEffect(() => {
     if (!isActive) return;
@@ -5713,6 +5923,11 @@ export default function SublixStudioView({
       downloadProgress: ttsEngineDownloadPct,
       auditioningRoleId: auditioningSpkId,
       auditioningEngineId: playingEngineSample,
+      translateOptions,
+      translateOptionsLoading,
+      translateOptionsUnavailable,
+      stepEstimates: pipelineEstimates,
+      liveProgress: pipelineLiveProgress,
     }),
     [
       segments.length,
@@ -5741,6 +5956,11 @@ export default function SublixStudioView({
       ttsEngineDownloadPct,
       auditioningSpkId,
       playingEngineSample,
+      translateOptions,
+      translateOptionsLoading,
+      translateOptionsUnavailable,
+      pipelineEstimates,
+      pipelineLiveProgress,
     ],
   );
 
@@ -5792,6 +6012,9 @@ export default function SublixStudioView({
       removeGlossary: () => {},
       openExport: () => {},
       openSettings: () => {},
+      selectTranslateModel: () => {},
+      selectReasoningEffort: () => {},
+      hasProviderKey: () => true,
     };
   }
   Object.assign(pipelineApiRef.current, {
@@ -5868,6 +6091,13 @@ export default function SublixStudioView({
     },
     openExport: () => handleOpenExportModal(),
     openSettings: () => onNavigateTab?.("models"),
+    selectTranslateModel: (modelId: string, provider: string) => {
+      void handleSelectTranslateModel(modelId, provider);
+    },
+    selectReasoningEffort: (effort: ReasoningEffort) => {
+      void handleSelectReasoningEffort(effort);
+    },
+    hasProviderKey: handleHasProviderKey,
   });
   const pipelineApi = pipelineApiRef.current;
 

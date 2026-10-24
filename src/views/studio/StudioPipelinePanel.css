@@ -443,3 +443,16 @@
   text-align: center;
   white-space: nowrap;
 }
+
+/* ---------- Ước tính thời gian / tiến độ thật (1 dòng, chữ nhỏ) ---------- */
+.spp-estimate {
+  font-size: 10.5px;
+  color: var(--t4);
+  padding: 0 10px 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spp-estimate.live {
+  color: var(--ac-txt);
+}
