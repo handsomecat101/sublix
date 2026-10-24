@@ -43,6 +43,11 @@ fn bench_translate_ignored() {
         source: env_or("BENCH_SOURCE", "en"),
         target: env_or("BENCH_TARGET", "vi"),
         engine: EnginePreference::Cpu,
+        // Bảng thuật ngữ + xưng hô đã duyệt (JSON) — ràng buộc cứng (tuỳ chọn).
+        glossary: std::env::var("BENCH_GLOSSARY")
+            .ok()
+            .filter(|p| !p.trim().is_empty())
+            .map(PathBuf::from),
     };
     if let Err(e) = run_bench(&opts) {
         eprintln!("[bench] ERROR: {e:#}");

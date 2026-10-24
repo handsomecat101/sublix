@@ -16,6 +16,8 @@ use super::contextual::{
     build_reference_prompt, build_translate_prompt, parse_reference, parse_tagged_lines,
     sliding_window, ContextualLine, ScriptLine, ScriptReference, CHUNK_SIZE,
 };
+use super::glossary::Glossary;
+use super::glossary_check::check_line;
 use super::server;
 use super::TranslationModelVariant;
 
@@ -117,17 +119,29 @@ fn translate_chunk(
     chunk: &[ScriptLine],
     context: &[(String, String)],
     reference: &ScriptReference,
+    approved: Option<&Glossary>,
     source: &str,
     target: &str,
 ) -> Vec<Option<String>> {
     let ids: Vec<String> = chunk.iter().map(|l| l.id.clone()).collect();
-    let user = build_translate_prompt(chunk, context, reference, &cfg.glossary, source, target);
+    let user = build_translate_prompt(
+        chunk,
+        context,
+        reference,
+        &cfg.glossary,
+        approved,
+        source,
+        target,
+    );
 
     if provider == "gguf" || provider.is_empty() {
         // llama-server cục bộ: chỉ nhận glossary -> nhét bản tham chiếu vào đó.
         let items: Vec<String> = chunk.iter().map(|l| l.text.clone()).collect();
         let mut gl = cfg.glossary.clone();
         gl.extend(reference_as_glossary(reference));
+        if let Some(g) = approved {
+            gl.extend(g.to_rules());
+        }
         let variant = TranslationModelVariant::resolve_or_best(Some(cfg.translation_model.as_str()));
         let pref = crate::stt::EnginePreference::from_str(&cfg.translation_engine_preference);
         return match server::translate_batch_via_server(&items, source, target, variant, pref, &gl) {
@@ -156,6 +170,49 @@ fn translate_chunk(
     }
 }
 
+/// Người nghe của dòng `idx` = speaker khác nhau đầu tiên xuất hiện **sau** dòng đó.
+///
+/// Xấp xỉ giống cách dùng trong `pronoun_audit` — chỉ để kiểm tra xưng hô.
+fn listener_of(lines: &[ScriptLine], idx: usize) -> Option<String> {
+    let me = lines.get(idx)?.speaker_id.as_str();
+    lines
+        .iter()
+        .skip(idx + 1)
+        .find(|l| l.speaker_id != me)
+        .map(|l| l.speaker_id.clone())
+}
+
+/// Dịch lại **riêng 1 câu** (dùng khi câu vi phạm bảng glossary đã duyệt).
+///
+/// Trả `None` nếu dịch lại thất bại — khi đó giữ bản cũ.
+fn retranslate_line(
+    cfg: &AppConfig,
+    provider: &str,
+    line: &ScriptLine,
+    reference: &ScriptReference,
+    approved: Option<&Glossary>,
+    source: &str,
+    target: &str,
+) -> Option<String> {
+    if provider == "gguf" || provider.is_empty() {
+        return None; // llama-server: không có prompt tùy chỉnh cho 1 câu
+    }
+    let chunk = std::slice::from_ref(line);
+    let user = build_translate_prompt(chunk, &[], reference, &cfg.glossary, approved, source, target);
+    let system = system_prompt_for(target);
+    let raw = server::chat_completion_custom(
+        cfg,
+        provider,
+        model_for(cfg, provider),
+        &system,
+        &user,
+        timeout_for(provider),
+    )
+    .ok()?;
+    let ids = vec![line.id.clone()];
+    parse_tagged_lines(&raw, &ids).into_iter().flatten().next()
+}
+
 /// Dịch toàn bộ kịch bản theo ngữ cảnh.
 ///
 /// `progress(done, total, phase)` được gọi để app hiển thị tiến trình.
@@ -175,15 +232,30 @@ pub fn translate_script_contextual(
     // Muc do suy luan (config-driven) — xem `translate::reasoning`.
     server::set_reasoning_effort(&cfg.llm_reasoning_effort);
 
-    // ---- Lượt 1: đọc hiểu (lỗi -> vẫn dịch, chỉ mất bản tham chiếu) ----
+    // Bảng glossary đã duyệt (ràng buộc CỨNG) — lấy từ config (đã resolve
+    // file dự án / bảng toàn cục trước khi gọi hàm này).
+    let approved = cfg
+        .glossary_table
+        .as_ref()
+        .filter(|g| !g.is_empty())
+        .cloned();
+    let approved_ref = approved.as_ref();
+
+    // ---- Lượt 1: đọc hiểu ----
+    // Bảng đã duyệt KHÔNG bỏ qua lượt 1 (vẫn cần tóm tắt + nhân vật + thuật ngữ cho
+    // bản dịch) — chỉ bỏ **bảng xưng hô tự sinh** khi người dùng đã khoá.
     progress(0, total, "reading");
-    let reference = match build_reference(lines, source, target, cfg, &provider) {
+    let mut reference = match build_reference(lines, source, target, cfg, &provider) {
         Ok(r) => r,
         Err(e) => {
             warn!("⚠️ Lượt 1 không thành công ({e:#}) — vẫn dịch, chỉ thiếu bản tham chiếu");
             ScriptReference::default()
         }
     };
+    if approved.as_ref().map(|g| g.locked).unwrap_or(false) {
+        info!("🔒 Bảng glossary đã khoá → bỏ bảng xưng hô tự sinh (dùng bảng đã duyệt)");
+        reference.xung_ho.clear();
+    }
 
     // ---- Lượt 2: dịch theo lô, cửa sổ trượt 5 câu ----
     let mut history: Vec<(String, String)> = Vec::with_capacity(lines.len());
@@ -194,22 +266,66 @@ pub fn translate_script_contextual(
         let start_idx = ci * CHUNK_SIZE;
         let context: Vec<(String, String)> = sliding_window(&history, start_idx).to_vec();
 
-        let translated = translate_chunk(cfg, &provider, chunk, &context, &reference, source, target);
+        let translated =
+            translate_chunk(cfg, &provider, chunk, &context, &reference, approved_ref, source, target);
 
         for (i, line) in chunk.iter().enumerate() {
             let text = translated.get(i).cloned().flatten().unwrap_or_default();
             let failed = text.trim().is_empty();
-            let final_text = if failed {
+            let mut final_text = if failed {
                 // giữ nguyên lời gốc + nhãn lỗi để UI biết (giống cách app đang làm)
                 super::translate_error_marker(&line.text)
             } else {
                 text.clone()
             };
             history.push((line.text.clone(), final_text.clone()));
+
+            // ---- Hậu kiểm tất định: có vi phạm bảng đã duyệt không? ----
+            let mut violation: Option<String> = None;
+            if let Some(g) = approved_ref {
+                let listener = listener_of(lines, start_idx + i);
+                if let Some(v) = check_line(&final_text, &line.speaker_id, listener.as_deref(), g) {
+                    // thử dịch lại riêng câu này 1 lần
+                    if let Some(retry) = retranslate_line(
+                        cfg,
+                        &provider,
+                        line,
+                        &reference,
+                        approved_ref,
+                        source,
+                        target,
+                    ) {
+                        if !retry.trim().is_empty() {
+                            let still = check_line(
+                                &retry,
+                                &line.speaker_id,
+                                listener.as_deref(),
+                                g,
+                            );
+                            match still {
+                                None => {
+                                    final_text = retry;
+                                    history.pop();
+                                    history.push((line.text.clone(), final_text.clone()));
+                                    violation = None;
+                                }
+                                Some(v2) => violation = Some(v2.detail),
+                            }
+                        } else {
+                            violation = Some(v.detail);
+                        }
+                    } else {
+                        violation = Some(v.detail);
+                    }
+                }
+            }
+
             results.push(ContextualLine {
                 id: line.id.clone(),
                 translated: final_text,
                 failed,
+                glossary_violation: violation.is_some(),
+                glossary_violation_reason: violation,
             });
             done += 1;
         }

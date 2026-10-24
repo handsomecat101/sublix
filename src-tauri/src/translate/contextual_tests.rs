@@ -108,7 +108,15 @@ fn build_translate_prompt_co_speaker_bang_xung_ho_va_context() {
         goi_la: "Kaldares".into(),
         xung_la: "tôi".into(),
     });
-    let p = build_translate_prompt(&chunk, &ctx, &reference, &["- Giữ tên Kaldares".to_string()], "en", "vi");
+    let p = build_translate_prompt(
+        &chunk,
+        &ctx,
+        &reference,
+        &["- Giữ tên Kaldares".to_string()],
+        None,
+        "en",
+        "vi",
+    );
     assert!(p.contains("INPUT S7"), "phai co id dong: {p}");
     assert!(p.contains("speaker=kaldares"), "phai co speaker tren tung dong: {p}");
     assert!(p.contains("BẢNG XƯNG HÔ"), "phai co bang xung ho: {p}");
@@ -214,6 +222,39 @@ fn parse_tagged_lines_lop_metadata_khi_model_echo_nguyen_dong_input() {
 fn parse_tagged_lines_lop_dang_INPUT_va_lay_noi_dung() {
     let ids = vec!["S1".to_string()];
     let raw = "[S1] INPUT S1 | speaker=zeratul | noi dung: Xin chào";
-    let out = parse_tagged_lines(raw, &ids);
-    assert_eq!(out[0].as_deref(), Some("Xin chào"), "phai lay phan noi dung: {out:?}");
+    let out = parse_tagged_lines(raw, &ids);    assert_eq!(out[0].as_deref(), Some("Xin chào"), "phai lay phan noi dung: {out:?}");
+}
+
+#[test]
+fn prompt_co_bang_da_duyet_dat_truoc_bang_tham_chieu() {
+    use crate::translate::glossary::{empty, GlossaryTerm, PronounEntry};
+    let mut g = empty();
+    g.terms.push(GlossaryTerm {
+        source: "Dark Templar".into(),
+        target: "Mẫu Tử Tối".into(),
+        note: None,
+    });
+    g.pronouns.push(PronounEntry {
+        speaker: "zeratul".into(),
+        listener: "kaldares".into(),
+        self_term: "ta".into(),
+        address_term: "ngươi".into(),
+    });
+    let chunk = vec![line("S1", "zeratul", "You speak of the Dark Templar.", 0.0, 5.0)];
+    let p = build_translate_prompt(
+        &chunk,
+        &[],
+        &ScriptReference::default(),
+        &[],
+        Some(&g),
+        "en",
+        "vi",
+    );
+    let i_hard = p.find("RÀNG BUỘC CỨNG").expect("phai co block rang buoc cung");
+    let i_ref = p.find("BẢN THAM CHIẾU").expect("phai co bang tham chieu");
+    assert!(i_hard < i_ref, "bang da duyet phai dat TRUOC bang tham chieu");
+    assert!(p.contains("Dark Templar"), "{p}");
+    assert!(p.contains("Mẫu Tử Tối"), "{p}");
+    assert!(p.contains("ngươi"), "{p}");
+    assert!(p.contains("PHẢI theo bảng đã duyệt"), "{p}");
 }

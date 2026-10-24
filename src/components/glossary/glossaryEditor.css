@@ -1,0 +1,177 @@
+/* GlossaryEditor — bảng thuật ngữ + xưng hô (TSK-FEAT-GLOSSARY-PRONOUN).
+   Dùng chung bảng màu với theme tối của app. */
+
+.glossary-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.09));
+  color: var(--text, #f2efe9);
+}
+
+.glossary-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.glossary-editor__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.glossary-editor__sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.glossary-editor__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.glossary-editor__error {
+  margin: 0;
+  font-size: 12px;
+  color: #ff9d9d;
+}
+
+.glossary-editor__hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.glossary-btn {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.glossary-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.glossary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.glossary-btn--primary {
+  background: var(--accent, #e8a33d);
+  border-color: var(--accent, #e8a33d);
+  color: #1b1712;
+  font-weight: 600;
+}
+
+.glossary-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  padding: 4px 8px;
+}
+
+.glossary-btn.is-on {
+  border-color: var(--accent, #e8a33d);
+  color: var(--accent, #e8a33d);
+}
+
+.glossary-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.09));
+}
+
+.glossary-tab {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.glossary-tab.is-active {
+  opacity: 1;
+  font-weight: 600;
+  border-bottom-color: var(--accent, #e8a33d);
+}
+
+.glossary-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.glossary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.glossary-row--head {
+  font-size: 11px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.glossary-input {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 7px;
+  color: inherit;
+  padding: 6px 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.glossary-input:focus {
+  outline: none;
+  border-color: var(--accent, #e8a33d);
+}
+
+.glossary-suggest {
+  border-top: 1px dashed var(--border, rgba(255, 255, 255, 0.16));
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.glossary-suggest__title {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.glossary-suggest__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glossary-suggest__text {
+  flex: 1;
+  font-size: 12px;
+  opacity: 0.9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

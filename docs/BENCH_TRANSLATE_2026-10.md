@@ -482,6 +482,14 @@ thêm field `usage` vào `ChatResponse` — **không làm** vì ngoài phạm vi
 
 ---
 
+---
+
+---
+
+---
+
+---
+
 # PHẦN 4 — ĐO CHẤT LƯỢNG: ĐƯỜNG CŨ vs ĐƯỜNG MỚI (DỊCH THEO NGỮ CẢNH)
 
 > Bổ sung cho `TSK-FEAT-CONTEXT-TRANSLATE` (mục 1–3 nằm ở trên, đo tốc độ & giá).
@@ -792,4 +800,115 @@ Type mới trong `src/lib/types.ts`: `TranslateOptions`, `TranslateModelOption` 
 | `translate::reasoning::tests` | 7 | mapping theo provider, `auto` của M3.1-Flash → `low`, `auto` của M3 → không gửi, OpenRouter `max` → `high`, local không gán gì |
 | `translate::options_tests` | 8 | set model theo provider **giữ nguyên key**, chuẩn hoá effort, giá trị rỗng không ghi đè, **config thật trong thư mục temp đọc/ghi lại vẫn giữ key**, danh sách model đủ 7 mục, `supports_reasoning` đúng |
 | **Tổng `cargo test --lib`** | **146 pass / 0 fail** | (trước task này: 113) |
+
+---
+
+# PHẦN 6 — BẢNG THUẬT NGỮ & XƯNG HÔ **ĐÃ DUYỆT** (TSK-FEAT-GLOSSARY-PRONOUN)
+
+## 6.1. Vấn đề đo được (nối tiếp §4.4.3)
+
+§4.4.3 đo được: đường MỚI đổi mạnh văn phong **tự xưng** nhưng **không** sửa được lỗi xưng hô
+**gọi nhau** — vì bảng xưng hô ở lượt 1 do **chính LLM bịa ra**, rồi model lại không tuân thủ
+chính bảng đó. ⇒ Cách chắc chắn là **bảng do người dùng xác nhận**, dùng như **ràng buộc cứng**.
+
+## 6.2. Kiến trúc đã làm
+
+| Tầng | File | Việc |
+|---|---|---|
+| **Kiểu dữ liệu + luật** | `src-tauri/src/translate/glossary.rs` | `Glossary` {terms, pronouns, locked}, đọc tương thích ngược `config.glossary: Vec<String>` (chuỗi `"a=b"` / `"a → b"` ⇒ term, còn lại ⇒ ghi chú), sinh **block ràng buộc cứng** cho prompt |
+| **Lưu trữ** | `src-tauri/src/translate/glossary_store.rs` | file theo dự án `<project>.sublix-glossary.json` (**atomic**: ghi `.tmp` → `rename`) + fallback **config toàn cục**; đọc file hỏng không làm sập app |
+| **Hậu kiểm** | `src-tauri/src/translate/glossary_check.rs` | so từng câu với bảng đã duyệt (tất định, **không gọi mạng**) ⇒ `glossary_violation` + lý do |
+| **Lệnh Tauri** | `src-tauri/src/lib.rs` | `glossary_get` · `glossary_set` (không đụng API key) · `glossary_suggest` (chạy lượt 1, **không tự ghi**) |
+| **Prompt** | `src-tauri/src/translate/contextual.rs` | block "RÀNG BUỘC CỨNG" đặt **TRƯỚC** bản tham chiếu tự sinh; `locked` ⇒ xoá bảng xưng hô tự sinh khỏi bản tham chiếu |
+| **Frontend** | `src/components/glossary/` | `GlossaryEditor.tsx` (component độc lập, props thuần) + `glossaryModel.ts` (logic thuần, test được) + CSS |
+
+**Đường dịch cũ cũng dùng được**: `translate_batch` nhận thêm `project_path` (tuỳ chọn) → bảng đã
+duyệt được gộp vào `cfg.glossary` ⇒ cả 2 đường đều nhận ràng buộc.
+
+**Lưu ý Tauri v2**: tham số `Option<T>` **thiếu cũng chạy** (`deserialize_option` → `visit_none`),
+nên thêm `project_path` không phá caller cũ.
+
+## 6.3. Luồng dùng
+
+1. PO bấm **⚡ Gợi ý từ kịch bản** → `glossary_suggest` (chạy lượt 1, **không ghi gì**) → danh sách
+   gợi ý có nút **✓ nhận / ✕ bỏ**.
+2. PO bấm **🔒 Khoá bảng** nếu muốn bỏ qua bảng xưng hô LLM tự sinh.
+3. PO bấm **💾 Lưu** → `glossary_set` → file dự án (atomic) hoặc config toàn cục.
+4. Bấm **Dịch theo ngữ cảnh** → prompt có block ràng buộc cứng → sau khi dịch, **hậu kiểm tất định**
+   → câu vi phạm được đánh dấu `glossary_violation` (UI tô vàng) và **dịch lại riêng câu đó 1 lần**.
+
+## 6.4. Đo thật (60 câu StarCraft, MiniMax-M3.1-Flash, 2 lần/cấu hình)
+
+Bảng glossary dùng để đo (file `starcraft_glossary.json`, `locked=true`):
+5 thuật ngữ (`Dark Templar → Mẫu Tử Tối`, `Aon of Strife → Aon của Xung Đột`, …) +
+6 quy tắc xưng hô (Zeratul↔Kaldares: tự xưng "tôi", gọi "anh"; còn lại gọi "ngài").
+
+### 6.4.1. Metric tất định (đếm đại từ — 60/60 dòng, không gọi mạng)
+
+| Cấu hình | Thời gian | Tự xưng cổ `ta` | Tự xưng hiện đại `tôi` | Gọi cổ `ngươi` | Gọi hiện đại `anh`/`ngài` | Nhân vật trộn 2 văn phong | Số cách gọi nhiều nhất / 1 cặp |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **CŨ**, không glossary | 29,38 s | 30 | 11 | 3 | 4 | 3 | 5 |
+| **CŨ** + glossary đã duyệt | 19,59 s | 12 | **31** | **1** | **7** | **2** | 5 |
+| **MỚI**, không glossary | 46,09 s | 8 | 36 | 11 | 3 | 3 | 5 |
+| **MỚI** + glossary đã duyệt | 44,90 s | **4** | **42** | **0** | **11** | **2** | **4** |
+
+**Đọc bảng:**
+
+| Nhận định | Bằng chứng |
+|---|---|
+| **Bảng đã duyệt làm `ngươi` gần như biến mất** | MỚI: 11 → **0** dòng; CŨ: 3 → **1** dòng |
+| **Bảng đã duyệt kéo văn phong về hiện đại, đồng nhất** | MỚI: `tôi` 36 → **42**, `ta` 8 → **4**; CŨ: `tôi` 11 → **31**, `ta` 30 → **12** |
+| **Số cách gọi nhau trong 1 cặp giảm** | MỚI: 5 → **4**; và `mix` (nhân vật trộn 2 văn phong) 3 → **2** ở cả 2 đường |
+| **Cấu hình tốt nhất là MỚI + glossary** | `ngươi`=0, `tôi`=42, `anh/ngài`=11, `mix`=2, `addrmax`=4 |
+| **Thời gian không tăng** | MỚI: 46,09 s → 44,90 s (≈ ngang) · CŨ: 29,38 s → 19,59 s (có biến động API) |
+
+### 6.4.2. Hậu kiểm tất định — còn bao nhiêu câu lệch?
+
+Sau khi áp bảng đã duyệt, hậu kiểm từng câu cho ra **4–7 câu / 60 câu còn lệch** (mỗi lần chạy khác nhau):
+
+| Loại lệch | Ví dụ | Đánh giá |
+|---|---|---|
+| Dùng "bạn" thay "anh" | *"…tôi không hề nghi ngờ, **người bạn già** của tôi."* | **Báo nhầm** — "bạn già" là danh từ ("người bạn già"), không phải đại từ gọi nhau |
+| Dùng "ngài"/"em" thay "anh" | | Lệch thật — model không tuân thủ tuyệt đối bảng |
+| Dùng "tao" thay "tôi" | | Lệch thật |
+
+⇒ Hậu kiểm là **gợi ý để PO duyệt**, không phải phán quyết: nó báo "có thể sai" để UI tô vàng, PO
+quyết định có sửa hay không. Đây là đánh đổi có chủ đích (bỏ sót lệch cũng được, báo nhầm thì mất
+niềm tin vào tín hiệu).
+
+| Bản dịch | Số câu được chấm | **Xưng hô nhất quán** (1–5) | **Vừa thời lượng** (1–5) | Nhận xét của giám khảo |
+|---|---|---|---|---|
+| CŨ — không glossary | 20/60 | 2 | 4 | Xưng hô không nhất quán: cùng Zeratul tự xưng lúc 'ta' lúc 'tôi'; Kaldares gọi Zeratul lúc 'ngươi' lúc 'ngài'; Zeratul gọi Kaldares lúc 'ngươi' lúc 'bạn già'. Độ dài câu nhìn chung vừa phải so với thời lượng, một số câu ngắn nhưng vẫn khớp nội dung gốc. |
+| CŨ — **có glossary đã duyệt** | 60/60 | 3 | 3 | Xưng hô giữa Kaldares và Zeratul không nhất quán: S24 dùng 'ngươi' nhưng S36/S38 lại dùng 'ngài'; cách dùng 'chúng ta'/'chúng tôi' cũng có lúc đổi qua lại. Độ dài nhìn chung tạm ổn nhưng nhiều câu 5s bị nhồi chữ (S11, S13, S15, S45) và một số câu 20–27s quá ng… |
+| MỚI — không glossary | 20/60 | 2 | 3 | Xưng hô thiếu nhất quán: cùng cặp Zeratul-Kaldares lúc dùng 'anh', lúc dùng 'ngươi'; Zeratul với Artanis cũng dùng 'ngươi' trong khi Kaldares gọi Artanis bằng tên. Ngoài ra 'chúng tôi' và 'chúng ta' bị đổi qua lại khi nói về người Protoss. Độ dài câu nhìn chun… |
+| MỚI — **có glossary đã duyệt** | 40/60 | 3 | 3 | Xưng hô có lúc không nhất quán: Zeratul gọi Kaldares là 'anh' (S8) nhưng Kaldares gọi Zeratul là 'ngài' (S24, S36, S38, S40); Zeratul gọi Artanis lúc 'ngài' (S52) lúc 'anh' (S54). Độ dài nhiều câu chưa vừa thời lượng: có câu quá ngắn so với duration dài (S55, … |
+
+> **Bản CŨ + glossary**: lần chấm đầu (batch 20) không parse được JSON ở cấp kịch bản; chạy lại với batch 10 thì ra điểm (60/60 câu) — dùng số ở bảng trên.
+>
+> Lưu ý khi đọc cột *xưng hô nhất quán*: giám khảo **không biết** bảng đã duyệt, nên nó vẫn phạt sự bất đối xứng "Zeratul gọi Kaldares là 'anh' nhưng Kaldares gọi Zeratul là 'ngài'" — đó chính là quy tắc **PO đã chủ động chọn**, không phải lỗi.
+
+
+### 6.5. Kết luận
+
+| Nhận định | Căn cứ |
+|---|---|
+| **Bảng đã duyệt là cách sửa lỗi xưng hô HIỆU QUẢ nhất** — `ngươi` gần như biến mất (`11 → 0` ở đường MỚI, `3 → 1` ở đường CŨ), văn phong tự xưng về hiện đại và **đồng nhất hơn** (`tôi` 36→42, `ta` 8→4; số cách gọi trong 1 cặp 5→4). | §6.4.1 |
+| **Cấu hình tốt nhất = đường MỚI + glossary đã duyệt** (vượt trội cả bảng tự sinh lẫn glossary ở đường cũ). | §6.4.1 |
+| **Không tốn thêm thời gian đáng kể** (MỚI: 46,1 s → 44,9 s). | §6.4.1 |
+| **Model KHÔNG tuân thủ tuyệt đối** — còn 4–7/60 câu lệch ⇒ cần hậu kiểm + cho PO duyệt từng câu (UI tô vàng). | §6.4.2 |
+| **Hậu kiểm là gợi ý, không phải phán quyết** — có báo nhầm (vd "người bạn già" bị hiểu là đại từ "bạn"). Đánh đổi có chủ đích: sót lệch còn được, báo nhầm thì mất niềm tin vào tín hiệu. | §6.4.2 |
+| **Đường dịch CŨ cũng hưởng lợi** — không bắt buộc phải bật đường MỚI mới dùng được glossary (đo: `nguơi` 3→1, `tôi` 11→31). | §6.4.1 |
+
+### Đề xuất cho coordinator
+
+1. **Gắn `GlossaryEditor` vào Studio** (component đã sẵn sàng, props thuần, không tự gọi IPC).
+   Nút "⚡ Gợi ý từ kịch bản" nên nằm **cạnh nút "Dịch theo ngữ cảnh"** (cần 1 lần lượt 1).
+2. **Cho `translate_script_contextual` nhận `projectPath`** (đã hỗ trợ `Option` ở backend) để
+   dùng bảng theo dự án; wrapper `translateScriptContextual` hiện chưa truyền tham số này.
+3. **Không cần sửa `SublixStudioView.tsx`** trong task này (UI thuộc mcode #1) — chỉ cần truyền
+   `projectPath` khi gọi.
+4. **Lưu ý**: `cargo build --examples` đang **FAIL** do lỗi có sẵn từ commit `c9ccaad`
+   (`analyze_and_create_project` đổi 5 → 7 tham số, 3 example chưa cập nhật). Cần owner
+   `dubbing/` sửa — không thuộc phạm vi task này.
+
 

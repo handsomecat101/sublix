@@ -3,12 +3,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ContextualLine,
+  Glossary,
+  GlossarySuggestion,
   ScriptLine,
   TranslateModelOption,
   TranslateOptions,
 } from "./types";
 
-export type { ContextualLine, ScriptLine, TranslateModelOption, TranslateOptions };
+export type {
+  ContextualLine,
+  Glossary,
+  GlossarySuggestion,
+  ScriptLine,
+  TranslateModelOption,
+  TranslateOptions,
+};
 
 export interface AudioDevice {
   id: string;
@@ -434,6 +443,46 @@ export const sublix = {
       provider: opts.provider,
       model: opts.model,
       reasoningEffort: opts.reasoningEffort,
+    });
+  },
+
+  /**
+   * Đọc bảng thuật ngữ + xưng hô đã duyệt.
+   *
+   * Có `projectPath` → đọc file `<project>.sublix-glossary.json` nếu tồn tại;
+   * không (hoặc file chưa có) → đọc bảng toàn cục trong config app.
+   */
+  async glossaryGet(projectPath?: string): Promise<Glossary> {
+    return await invoke<Glossary>("glossary_get", { projectPath: projectPath ?? null });
+  },
+
+  /**
+   * Ghi bảng thuật ngữ + xưng hô đã duyệt (atomic).
+   *
+   * Có `projectPath` → lưu file cạnh project; không → lưu vào config toàn cục.
+   */
+  async glossarySet(projectPath: string | undefined, glossary: Glossary): Promise<Glossary> {
+    return await invoke<Glossary>("glossary_set", {
+      projectPath: projectPath ?? null,
+      glossary,
+    });
+  },
+
+  /**
+   * Gợi ý bảng thuật ngữ + xưng hô từ kịch bản.
+   *
+   * Chạy RIÊNG lượt 1 ("đọc hiểu") — **không tự ghi**; người dùng duyệt rồi lưu qua
+   * `glossarySet`.
+   */
+  async glossarySuggest(
+    lines: ScriptLine[],
+    sourceLang: string,
+    targetLang: string,
+  ): Promise<GlossarySuggestion> {
+    return await invoke<GlossarySuggestion>("glossary_suggest", {
+      lines,
+      sourceLang,
+      targetLang,
     });
   },
 

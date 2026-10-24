@@ -133,6 +133,14 @@ pub struct AppConfig {
     #[serde(default)]
     pub glossary: Vec<String>,
 
+    /// Bảng thuật ngữ + xưng hô **đã duyệt** (TSK-FEAT-GLOSSARY-PRONOUN).
+    ///
+    /// Đây là bản dự án (file `<project>.sublix-glossary.json`) hoặc bản toàn cục
+    /// (fallback khi không có file dự án). Ràng buộc CỨNG trong prompt — ưu tiên hơn
+    /// bảng xưng hô LLM tự sinh.
+    #[serde(default)]
+    pub glossary_table: Option<crate::translate::glossary::Glossary>,
+
     /// Mức độ suy luận cho LLM cloud: "auto" | "low" | "medium" | "high" | "max".
     ///
     /// "auto" = giữ hành vi đã tối ưu: MiniMax-M3.1-Flash → `low`, model khác → mặc định
@@ -263,6 +271,7 @@ impl Default for AppConfig {
             openrouter_api_key: default_empty_string(),
             openrouter_model: default_openrouter_model(),
             glossary: Vec::new(),
+            glossary_table: None,
             llm_reasoning_effort: default_reasoning_effort(),
             theme: default_theme(),
         }

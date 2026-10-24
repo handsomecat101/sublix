@@ -11,6 +11,9 @@
 //! `--mode old` = đường dịch cũ (`translate_batch_with_config`, lô 15 câu độc lập).
 //! `--mode new` = đường dịch **theo ngữ cảnh** (2 lượt: đọc hiểu → dịch có cửa sổ trượt).
 //!
+//! `--glossary <file.json>` = dùng bảng thuật ngữ + xưng hô **đã duyệt** làm
+//! ràng buộc cứng (áp cho cả 2 đường dịch).
+//!
 //! Lưu ý: trên máy bật Smart App Control, binary trong `target/debug/examples/` có thể bị
 //! chặn (os error 4551). Khi đó dùng đường test `#[ignore]`:
 //! `cargo test --lib bench_translate_ignored -- --ignored --nocapture` (xem `translate::bench`).
@@ -33,6 +36,7 @@ fn parse_args() -> Result<BenchOptions> {
     let mut chunk = 15usize;
     let mut source = "en".to_string();
     let mut target = "vi".to_string();
+    let mut glossary: Option<PathBuf> = None;
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0usize;
@@ -54,6 +58,7 @@ fn parse_args() -> Result<BenchOptions> {
             "--chunk" => { chunk = need(i)?.parse()?; i += 2; }
             "--source" => { source = need(i)?; i += 2; }
             "--target" => { target = need(i)?; i += 2; }
+            "--glossary" => { glossary = Some(PathBuf::from(need(i)?)); i += 2; }
             other => bail!("tham so la: {other}"),
         }
     }
@@ -77,6 +82,7 @@ fn parse_args() -> Result<BenchOptions> {
         source,
         target,
         engine: EnginePreference::Cpu,
+        glossary,
     })
 }
 

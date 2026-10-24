@@ -34,6 +34,10 @@ export interface ContextualLine {
   id: string;
   translated: string;
   failed: boolean;
+  /** Câu này vi phạm bảng thuật ngữ / xưng hô đã duyệt (UI tô vàng). */
+  glossaryViolation?: boolean;
+  /** Mô tả vi phạm — ví dụ `gọi "ngươi" thay vì "anh"`. */
+  glossaryViolationReason?: string | null;
 }
 
 /** Sự kiện tiến trình của `translate_script_contextual`. */
@@ -111,4 +115,54 @@ export const SUBTITLE_SOURCE_LABELS: Record<string, string> = {
 export function subtitleSourceLabel(source: string): string {
   if (!source || source === "file") return "";
   return SUBTITLE_SOURCE_LABELS[source] ?? source;
+}
+
+/* ---------------------------------------------------------------------------
+ * Bảng thuật ngụ + xưng hô đã duyệt (TSK-FEAT-GLOSSARY-PRONOUN)
+ * ------------------------------------------------------------------------- */
+
+/** 1 cặp thuật ngụ / tên riêng: "Dark Templar" → "Mẩu Tử Tối". */
+export interface GlossaryTerm {
+  source: string;
+  /** Rổng = dòng này chỉ là ghi chú tự do. */
+  target: string;
+  note?: string | null;
+}
+
+/** 1 quy tắc xưng hô: A tự xưng "ta", gọi B là "ngươi". */
+export interface PronounEntry {
+  /** speakerId (hoặc tên) của ngường nói. */
+  speaker: string;
+  /** speakerId (hoặc tên) của ngường nghe. */
+  listener: string;
+  /** Từ tự xưng — "ta", "tôi". */
+  selfTerm: string;
+  /** Từ gọi ngường nghe — "ngươi", "anh", "ngài". */
+  addressTerm: string;
+}
+
+/** Bảng thuật ngụ + xưng hô đã duyệt. */
+export interface Glossary {
+  terms: GlossaryTerm[];
+  pronouns: PronounEntry[];
+  /** Đã khoá ⇒ backend bỏ qua bước LLM tự sinh bảng xưng hô. */
+  locked: boolean;
+  /** "project" | "global" — nơi đang lưu (read-only). */
+  scope?: string;
+  /** Đường dẫn file (read-only). */
+  path?: string | null;
+}
+
+/** 1 nhân vật do LLM gợi ý (lướt 1) — ngường dùng duyệt mới thành quy tắc. */
+export interface GlossaryCharacter {
+  speakerId: string;
+  name: string;
+  role: string;
+}
+
+/** Kết quả glossary_suggest — gợi ý, chưa gổi gì. */
+export interface GlossarySuggestion {
+  characters: GlossaryCharacter[];
+  terms: GlossaryTerm[];
+  pronouns: PronounEntry[];
 }

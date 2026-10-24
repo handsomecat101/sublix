@@ -99,6 +99,26 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
     let model_variant = TranslationModelVariant::Qwen25_3B;
     let chars_in: usize = items.iter().map(|s| s.chars().count()).sum();
 
+    // Bảng glossary đã duyệt (nếu có) → ràng buộc CỨNG cho cả 2 đường dịch.
+    let glossary = match &opts.glossary {
+        Some(p) => match crate::translate::glossary_store::load_file(p) {
+            Some(g) => Some(g),
+            None => bail!("doc glossary that bai: {}", p.display()),
+        },
+        None => None,
+    };
+    if let Some(g) = &glossary {
+        // đường cũ nhận glossary dạng Vec<String> → gộp quy tắc đã duyệt vào đó
+        cfg.glossary.extend(g.to_rules());
+        cfg.glossary_table = Some(g.clone());
+        eprintln!(
+            "[bench] glossary da duyet: {} thuat ngu, {} quy tac xung ho, locked={}",
+            g.terms.len(),
+            g.pronouns.len(),
+            g.locked
+        );
+    }
+
     eprintln!(
         "[bench] label={} mode={} provider={} model={} items={} chunk={} runs={} key_state={}",
         opts.label, opts.mode, opts.provider, opts.model.clone().unwrap_or_default(),
@@ -146,15 +166,18 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
             let mut err = 0usize;
             let mut empty = 0usize;
             let mut think = 0usize;
+            let mut violations = 0usize;
             for r in &res {
                 if r.failed { err += 1; }
                 if r.translated.trim().is_empty() { empty += 1; }
                 if r.translated.contains("<think>") || r.translated.contains("</think>") { think += 1; }
+                if r.glossary_violation { violations += 1; }
             }
             chunk_times.push(json!({
                 "chunk": 1, "items": res.len(),
                 "seconds": (dt * 1000.0).round() / 1000.0,
                 "errors": err, "empty": empty, "think_leak": think,
+                "glossary_violations": violations,
             }));
             translations = res.into_iter().map(|r| r.translated).collect();
         } else {
@@ -236,6 +259,16 @@ pub fn run_bench(opts: &BenchOptions) -> Result<()> {
             "openrouter": !cfg.openrouter_api_key.trim().is_empty(),
         },
         "provider_probe": probe,
+        "glossary": match &glossary {
+            Some(g) => json!({
+                "used": true,
+                "terms": g.terms.len(),
+                "pronouns": g.pronouns.len(),
+                "locked": g.locked,
+                "path": g.path,
+            }),
+            None => json!({ "used": false }),
+        },
         "avg_total_s": score::avg(&runs_detail, "total_s"),
         "avg_first_chunk_s": score::avg(&runs_detail, "first_chunk_s"),
         "avg_per_item_s": score::avg(&runs_detail, "per_item_s"),

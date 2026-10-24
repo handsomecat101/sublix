@@ -591,3 +591,18 @@
 ---
 
 ---
+
+## ARCHIVED 2026-10-25 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 00:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-STT-ENGINES` — engine STT chính xác hơn Whisper cho **EN + ZH**; **chưa commit, không push**).
+- **Báo cáo:** `docs/STT_MODELS_2026.md` (bảng 11 ứng viên + 2 bảng đo thật + khuyến nghị + 5 lỗi kỹ thuật) · code mới `src-tauri/src/model_download.rs` + `src-tauri/src/stt/{stt_catalog,sherpa_asr,stt_integration_tests}.rs` + `src-tauri/scripts/sherpa_asr.py` · `src-tauri/src/config.rs` (+`stt_asr_engine`) · `src-tauri/src/lib.rs` (+7 command) · `src/lib/tauri.ts` (+wrapper) · `src/components/ui/ModelDownloadRow.tsx/.css` (**mới, CHƯA gắn vào Studio/Cài đặt — chờ coordinator giao gắn**).
+- **Đo thật** (clip 2 phút, phụ đề **thủ công** YouTube: TEDxNorthAdams EN + TEDxTaipei zh-TW, Ryzen AI Max 390 CPU): **SenseVoice Small int8 → WER 7,18 % (EN) · CER 4,72 % (ZH)**, RTF **0,065**, RAM 788 MB, **có timestamp từ** · **Paraformer-zh → CER 5,79 %**, RTF 0,032, **không** timestamp từ · baseline whisper: base 4,31 %/5,58 % (RTF 0,15) · turbo **6,22 %/4,08 % nhưng RTF 1,22/1,62** ⇒ whisper turbo CPU mất **~42 phút** cho video 26 phút của PO, SenseVoice **~2 phút**.
+- **Khuyến nghị:** **Trung → SenseVoice int8 (#1), Paraformer-zh (#2)**; **Anh → whisper turbo nếu có CUDA, SenseVoice int8 nếu CPU-only**; **đa ngôn ngữ → SenseVoice (5 ngôn ngữ, 228 MB)**. Whisper **giữ nguyên làm mặc định**.
+- **Lỗi phát hiện:** `BUG-H14` SenseVoice int8 **2025-09-09 rớt chữ** (WER 40 %) — dùng bản **2024-07-17**; `BUG-H15` mirror HF Parakeet sai layout tensor + thiếu metadata `vocab_size`; `BUG-H16` event tải báo speed 0 ở event đầu (đã fix); `BUG-H17` GitHub release nghẽn 0 byte ⇒ đã thêm **URL dự phòng HF + resume Range**; `BUG-H18` 2 lượt tải song song ghi chung `.part` ⇒ file hỏng (đúng size, sai SHA) → đã thêm **khoá in-process theo `model_id`**.
+- **Verify:** `cargo test --lib` **171 pass / 0 fail** (15 test `#[ignore]` = integration thật) · **integration thật 3/3 PASS** (tải model có `%`/tốc độ/ETA + verify SHA-256 → nhận dạng clip ZH → **SRT UTF-8 đúng chuẩn, 31 cue**) · `npx tsc --noEmit` **0 lỗi** · `npm run build` OK · ảnh component 6 trạng thái: `%TEMP%\sublix-stt-bench\shots\model-download-row-states.png`.
+- **Cần coordinator/PO:** (1) **giao gắn** `ModelDownloadRow` + catalog STT vào Cài đặt/Studio; (2) **Parakeet chưa đo được** (GitHub release nghẽn, HF mirror sai layout) — cần mạng ổn để đo lại; (3) **chưa đo CUDA RTX 3090** — toàn bộ số là CPU; (4) SAC chặn binary Rust mới build ở `%TEMP%` (os error 4551) — chờ reputation rồi chạy lại, **không tắt SAC**.
+
+---
+
+---

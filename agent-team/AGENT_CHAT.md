@@ -8,6 +8,17 @@
 
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
+### 2026-10-25 06:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-GLOSSARY-PRONOUN` — bảng thuật ngữ + xưng hô **đã duyệt**; **chưa commit, không push**).
+- **Backend:** `translate/glossary.rs` (types + block ràng buộc cứng) · `glossary_store.rs` (file `<project>.sublix-glossary.json` **atomic** + fallback config toàn cục) · `glossary_check.rs` (hậu kiểm tất định, không gọi mạng) · 3 lệnh `glossary_get`/`glossary_set`/`glossary_suggest` (`glossary_suggest` **không tự ghi**) · `contextual.rs` (block ràng buộc đặt TRƯỚC bản tham chiếu; `locked` ⇒ bỏ bảng xưng hô tự sinh) · `config.rs` (+`glossary_table`).
+- **Frontend:** `src/components/glossary/GlossaryEditor.tsx` (component độc lập, props thuần) + `glossaryModel.ts` (logic thuần) + CSS + `scripts/glossary-tests/` (12 test).
+- **Đo thật** (60 câu StarCraft, MiniMax-M3.1-Flash, metric tất định): **CŨ** 29,4s → `nguơi` 3 · **CŨ+glossary** 19,6s → `nguơi` 1 · **MỚI** 46,1s → `nguơi` 11 · **MỚI+glossary** 44,9s → **`nguơi` 0**, `tôi` 42, `anh/ngài` 11, số cách gọi/1 cặp 5→4 · điểm DeepSeek điểm xưng hô **2/5 → 3/5** ố CỪ LÀ CẮ. ⇒ **MỚI + glossary là cấu hình tốt nhất**.
+- **Còn lệch 4–7/60 câu** sau khi áp bảng (model không tuân thủ tuyệt đối) → hậu kiểm gắn `glossary_violation`, UI tô vàng + dịch lại riêng câu 1 lần. Hậu kiểm là **gợi ý**, có báo nhầm (vd "người bạn già" ≠ đại từ) — chấp nhận để PO quyết.
+- **Verify:** `cargo test --lib` **206 pass / 0 fail** / 16 ignored · `npx tsc --noEmit` 0 lỗi · `node --test scripts/glossary-tests/` **12/12** · `cargo build --example bench_translate` OK.
+- **⚠️ Lỗi CÓ SẴN từ commit `c9ccaad` (KHÔNG phải của tôi):** `cargo build --examples` FAIL — `examples/test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` gọi `analyze_and_create_project` (đã đổi thành 7 tham số) với 5 tham số. Cần owner `dubbing/` sửa.
+- **Đề xuất coordinator:** gắn `GlossaryEditor` vào Studio (UI) · cho `translate_script_contextual` nhận `projectPath` để dùng bảng theo dự án · mở nút "Gợi ý từ kịch bản" sau khi bấm "Dịch theo ngữ cảnh".
+
+---
 
 ### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
@@ -89,16 +100,5 @@
 - **Việc cho người sau:** implement `translate_options_get/set` đúng hợp đồng + trả `supports_reasoning`; khi `src/lib/tauri.ts` có wrapper chính thức thì bỏ cast `translateApi`; R2-8 kiểm tra Luu/key trên app thật.
 
 ---
-
----
-
-### 2026-10-25 00:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-FEAT-STT-ENGINES` — engine STT chính xác hơn Whisper cho **EN + ZH**; **chưa commit, không push**).
-- **Báo cáo:** `docs/STT_MODELS_2026.md` (bảng 11 ứng viên + 2 bảng đo thật + khuyến nghị + 5 lỗi kỹ thuật) · code mới `src-tauri/src/model_download.rs` + `src-tauri/src/stt/{stt_catalog,sherpa_asr,stt_integration_tests}.rs` + `src-tauri/scripts/sherpa_asr.py` · `src-tauri/src/config.rs` (+`stt_asr_engine`) · `src-tauri/src/lib.rs` (+7 command) · `src/lib/tauri.ts` (+wrapper) · `src/components/ui/ModelDownloadRow.tsx/.css` (**mới, CHƯA gắn vào Studio/Cài đặt — chờ coordinator giao gắn**).
-- **Đo thật** (clip 2 phút, phụ đề **thủ công** YouTube: TEDxNorthAdams EN + TEDxTaipei zh-TW, Ryzen AI Max 390 CPU): **SenseVoice Small int8 → WER 7,18 % (EN) · CER 4,72 % (ZH)**, RTF **0,065**, RAM 788 MB, **có timestamp từ** · **Paraformer-zh → CER 5,79 %**, RTF 0,032, **không** timestamp từ · baseline whisper: base 4,31 %/5,58 % (RTF 0,15) · turbo **6,22 %/4,08 % nhưng RTF 1,22/1,62** ⇒ whisper turbo CPU mất **~42 phút** cho video 26 phút của PO, SenseVoice **~2 phút**.
-- **Khuyến nghị:** **Trung → SenseVoice int8 (#1), Paraformer-zh (#2)**; **Anh → whisper turbo nếu có CUDA, SenseVoice int8 nếu CPU-only**; **đa ngôn ngữ → SenseVoice (5 ngôn ngữ, 228 MB)**. Whisper **giữ nguyên làm mặc định**.
-- **Lỗi phát hiện:** `BUG-H14` SenseVoice int8 **2025-09-09 rớt chữ** (WER 40 %) — dùng bản **2024-07-17**; `BUG-H15` mirror HF Parakeet sai layout tensor + thiếu metadata `vocab_size`; `BUG-H16` event tải báo speed 0 ở event đầu (đã fix); `BUG-H17` GitHub release nghẽn 0 byte ⇒ đã thêm **URL dự phòng HF + resume Range**; `BUG-H18` 2 lượt tải song song ghi chung `.part` ⇒ file hỏng (đúng size, sai SHA) → đã thêm **khoá in-process theo `model_id`**.
-- **Verify:** `cargo test --lib` **171 pass / 0 fail** (15 test `#[ignore]` = integration thật) · **integration thật 3/3 PASS** (tải model có `%`/tốc độ/ETA + verify SHA-256 → nhận dạng clip ZH → **SRT UTF-8 đúng chuẩn, 31 cue**) · `npx tsc --noEmit` **0 lỗi** · `npm run build` OK · ảnh component 6 trạng thái: `%TEMP%\sublix-stt-bench\shots\model-download-row-states.png`.
-- **Cần coordinator/PO:** (1) **giao gắn** `ModelDownloadRow` + catalog STT vào Cài đặt/Studio; (2) **Parakeet chưa đo được** (GitHub release nghẽn, HF mirror sai layout) — cần mạng ổn để đo lại; (3) **chưa đo CUDA RTX 3090** — toàn bộ số là CPU; (4) SAC chặn binary Rust mới build ở `%TEMP%` (os error 4551) — chờ reputation rồi chạy lại, **không tắt SAC**.
 
 ---

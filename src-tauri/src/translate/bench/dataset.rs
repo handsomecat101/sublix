@@ -36,6 +36,8 @@ pub struct BenchOptions {
     pub source: String,
     pub target: String,
     pub engine: EnginePreference,
+    /// File bảng thuật ngữ + xưng hô **đã duyệt** (JSON) — dùng như ràng buộc cứng.
+    pub glossary: Option<PathBuf>,
 }
 
 pub fn read_dataset(path: &PathBuf) -> Result<Vec<DatasetLine>> {

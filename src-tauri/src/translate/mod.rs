@@ -13,8 +13,13 @@ pub mod contextual;
 pub mod reasoning;
 pub mod contextual_run;
 pub mod contextual_types;
+pub mod glossary;
+pub mod glossary_check;
+pub mod glossary_store;
 pub mod pronoun_audit;
 pub mod server;
+
+pub use glossary::{Glossary, GlossarySuggestion, GlossaryTerm, PronounEntry};
 
 use crate::stt::EnginePreference;
 

@@ -105,9 +105,17 @@ async fn translate_batch(
     source_lang: String,
     target_lang: String,
     model_name: Option<String>,
+    project_path: Option<String>,
 ) -> Result<Vec<String>, String> {
     tokio::task::spawn_blocking(move || {
-        let cfg = config::AppConfig::load(&app);
+        let mut cfg = config::AppConfig::load(&app);
+        // Bảng glossary đã duyệt (file dự án → fallback config toàn cục).
+        // Đường dịch cũ nhận glossary dạng `Vec<String>` → gộp quy tắc đã duyệt vào đó.
+        let g = translate::glossary_store::resolve(project_path.as_deref(), &cfg);
+        if !g.is_empty() {
+            cfg.glossary.extend(g.to_rules());
+            cfg.glossary_table = Some(g);
+        }
         let variant = TranslationModelVariant::resolve_or_best(
             model_name
                 .as_deref()
@@ -134,16 +142,25 @@ async fn translate_batch(
 /// `[speaker]` trên từng dòng, 5 câu liền trước và hạn mức độ dài theo thời lượng.
 ///
 /// Phát sự kiện tiến trình: `translate:progress` → `{done, total, phase}`.
+///
+/// `project_path` (tuỳ chọn): dùng để tìm bảng glossary **theo dự án**
+/// (`<project>.sublix-glossary.json`). Có bảng đã duyệt ⇒ dùng làm ràng buộc CỨNG.
 #[tauri::command]
 async fn translate_script_contextual(
     app: tauri::AppHandle,
     lines: Vec<translate::contextual::ScriptLine>,
     source_lang: String,
     target_lang: String,
+    project_path: Option<String>,
 ) -> Result<Vec<translate::contextual::ContextualLine>, String> {
     let emit_app = app.clone();
     tokio::task::spawn_blocking(move || {
-        let cfg = config::AppConfig::load(&app);
+        let mut cfg = config::AppConfig::load(&app);
+        // Bảng glossary đã duyệt (file dự án → fallback config toàn cục).
+        let g = translate::glossary_store::resolve(project_path.as_deref(), &cfg);
+        if !g.is_empty() {
+            cfg.glossary_table = Some(g);
+        }
         let mut progress = |done: u32, total: u32, phase: &str| {
             let _ = emit_app.emit(
                 "translate:progress",
@@ -209,6 +226,88 @@ fn translate_options_set(
     Ok(cfg)
 }
 
+/// Đọc bảng thuật ngữ + xưng hô đã duyệt.
+///
+/// - Có `project_path` → đọc file `<project>.sublix-glossary.json` nếu tồn tại.
+/// - Không (hoặc file chưa có) → đọc bảng toàn cục trong config app.
+#[tauri::command]
+fn glossary_get(
+    app: tauri::AppHandle,
+    project_path: Option<String>,
+) -> Result<translate::Glossary, String> {
+    let cfg = config::AppConfig::load(&app);
+    Ok(translate::glossary_store::resolve(
+        project_path.as_deref(),
+        &cfg,
+    ))
+}
+
+/// Ghi bảng thuật ngữ + xưng hô đã duyệt.
+///
+/// - Có `project_path` → lưu file `<project>.sublix-glossary.json` (**atomic**).
+/// - Không → lưu vào config toàn cục (**atomic**, BUG-013) + emit `config:updated`.
+///
+/// API key trong config **không** bị đụng tới (config được đọc lại từ đĩa rồi mới sửa).
+#[tauri::command]
+fn glossary_set(
+    app: tauri::AppHandle,
+    project_path: Option<String>,
+    glossary: translate::Glossary,
+) -> Result<translate::Glossary, String> {
+    let mut g = glossary;
+    g.normalise();
+    match project_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
+        Some(p) => {
+            let path =
+                translate::glossary_store::save_project(p, &g).map_err(|e| format!("{e:#}"))?;
+            g.scope = "project".to_string();
+            g.path = Some(path.to_string_lossy().to_string());
+        }
+        None => {
+            let mut cfg = config::AppConfig::load(&app);
+            translate::glossary_store::store_global(&mut cfg, &g);
+            cfg.save(&app).map_err(|e| format!("{e:#}"))?;
+            let _ = app.emit("config:updated", &cfg);
+            g.scope = "global".to_string();
+            g.path = None;
+        }
+    }
+    Ok(g)
+}
+
+/// Gợi ý bảng thuật ngữ + xưng hô từ kịch bản.
+///
+/// Chạy **RIÊNG** lượt 1 ("đọc hiểu") rồi trả về bảng gợi ý để người dùng duyệt.
+/// **KHÔNG tự ghi** gì cả — người dùng bấm ✓ mới lưu qua `glossary_set`.
+#[tauri::command]
+async fn glossary_suggest(
+    app: tauri::AppHandle,
+    lines: Vec<translate::contextual::ScriptLine>,
+    source_lang: String,
+    target_lang: String,
+) -> Result<translate::GlossarySuggestion, String> {
+    tokio::task::spawn_blocking(move || {
+        let cfg = config::AppConfig::load(&app);
+        let provider = cfg.translation_provider.to_lowercase();
+        translate::server::set_reasoning_effort(&cfg.llm_reasoning_effort);
+        let reference = translate::contextual_run::build_reference(
+            &lines,
+            &source_lang,
+            &target_lang,
+            &cfg,
+            &provider,
+        )
+        .map_err(|e| format!("{e:#}"))?;
+        Ok(translate::glossary::suggestion_from_reference(&reference))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -230,6 +329,9 @@ pub fn run() {
             translate_script_contextual,
             translate_options_get,
             translate_options_set,
+            glossary_get,
+            glossary_set,
+            glossary_suggest,
             show_overlay,
             hide_overlay,
             set_overlay_click_through,

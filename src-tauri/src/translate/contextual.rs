@@ -148,15 +148,22 @@ pub fn sliding_window<T: Clone>(all: &[T], idx: usize) -> &[T] {
 }
 
 /// Prompt lượt 2 — dịch một lô câu, có bản tham chiếu + ngữ cảnh + hạn mức độ dài.
+///
+/// `approved` = bảng thuật ngữ + xưng hô **đã duyệt** (ràng buộc CỨNG, đặt TRƯỚC bản
+/// tham chiếu tự sinh để model đọc dễ bị "áp" vào).
 pub fn build_translate_prompt(
     chunk: &[ScriptLine],
     context: &[(String, String)],
     reference: &ScriptReference,
     user_glossary: &[String],
+    approved: Option<&super::glossary::Glossary>,
     source: &str,
     target: &str,
 ) -> String {
     let mut s = String::new();
+    if let Some(g) = approved {
+        s.push_str(&g.hard_block());
+    }
     s.push_str("BẢN THAM CHIẾU VỀ KỊCH BẢN:\n");
     s.push_str(&reference_block(reference, user_glossary));
     s.push_str("\nGỢI Ý XƯNG HÔ:\n");
@@ -201,6 +208,12 @@ pub fn build_translate_prompt(
          - Nếu một dòng không dịch được, vẫn phải xuất dòng đó với nguyên id.\n",
         tgt = lang_name(target)
     ));
+    if approved.map(|g| !g.is_empty()).unwrap_or(false) {
+        s.push_str(
+            "- BẢNG ĐÃ DUYỆT ở trên là ràng buộc CỨNG: nếu nó mâu thuẫn với bản tham chiếu tự sinh \
+             hoặc với gợi ý xưng hô, PHẢI theo bảng đã duyệt.\n",
+        );
+    }
     let _ = source;
     s
 }

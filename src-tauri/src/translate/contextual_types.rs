@@ -29,10 +29,19 @@ impl ScriptLine {
 
 /// Kết quả dịch 1 dòng.
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ContextualLine {
     pub id: String,
     pub translated: String,
     pub failed: bool,
+    /// Câu này **vi phạm** bảng thuật ngữ / xưng hô đã duyệt (UI tô vàng).
+    ///
+    /// Kiểm tra tất định bằng `translate::glossary_check` — không gọi mạng.
+    #[serde(default)]
+    pub glossary_violation: bool,
+    /// Mô tả vi phạm (ví dụ: `gọi "ngươi" thay vì "anh"`).
+    #[serde(default)]
+    pub glossary_violation_reason: Option<String>,
 }
 
 /// Nhân vật trong kịch bản (do LLM trích xuất ở lượt 1).

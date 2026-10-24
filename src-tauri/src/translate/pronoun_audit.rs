@@ -246,6 +246,33 @@ pub fn count_self_family(text: &str, family: &str) -> usize {
     n
 }
 
+/// Các dạng gọi nhau tìm thấy trong câu (đã bỏ dấu): `nguoi`, `anh`, `ngai`, …
+pub fn address_terms(text: &str) -> BTreeSet<String> {
+    detect(text).1
+}
+
+/// Các dạng tự xưng tìm thấy trong câu (đã bỏ dấu): `ta`, `toi`, `chung ta`, …
+pub fn self_terms(text: &str) -> BTreeSet<String> {
+    detect(text).0
+}
+
+/// Gộp về cùng họ đại từ: `chung ta` → `ta`, `chung toi` → `toi`.
+///
+/// Dùng để so sánh "tự xưng đúng" mà không báo nhầm chỉ vì khác hình thức.
+pub fn self_family(form: &str) -> String {
+    match form {
+        "chung ta" => "ta".to_string(),
+        "chung toi" => "toi".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// Bỏ dấu + hạ chữ thường 1 từ đơn (dùng để so sánh với từ trong bảng glossary).
+pub fn normalize_term(term: &str) -> String {
+    deaccent(term).trim().to_lowercase()
+}
+
+
 #[cfg(test)]
 #[path = "pronoun_audit_tests.rs"]
 mod tests;
