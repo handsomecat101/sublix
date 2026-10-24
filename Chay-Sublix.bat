@@ -12,7 +12,13 @@ rem  - Cua so console nay la log cua app; dong no = tat app
 rem  - Muon ban dong goi sieu toc: src-tauri\target\release\sublix.exe
 rem ============================================================
 
+rem 0) Thu muc du an.
+rem    - Mac dinh: duong dan cua may dang dung (sua o day khi chuyen may).
+rem    - Neu duong dan mac dinh khong ton tai -> dung thu muc chua file .bat nay
+rem      => file nay chay duoc tren MOI MAY ma khong can sua lai.
 set "PROJECT_DIR=C:\AI Project\Sublix"
+if not exist "%PROJECT_DIR%\package.json" set "PROJECT_DIR=%~dp0"
+if exist "%PROJECT_DIR%\" set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
 
 rem 1) Tat Sublix dang chay (neu co) de tranh khoa file
 taskkill /F /IM sublix.exe /T >nul 2>&1
@@ -30,8 +36,9 @@ rem 3) Dam bao cargo/rustc co trong PATH cua phien nay
 set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
 rem 3b) Build Rust ra thu muc trong workspace (mac dinh cua Cargo)
-rem     Khong dung target cua ban goc o may cu (H:) - may nay chi co o C:.
-set "CARGO_TARGET_DIR=%PROJECT_DIR%\src-tauri\target"
+rem     Neu CARGO_TARGET_DIR da duoc dat s truoc (vd: tach build rieng cho fork
+rem     de khong dung chung target voi ban goc) -> giu nguyen gia tri do.
+if not defined CARGO_TARGET_DIR set "CARGO_TARGET_DIR=%PROJECT_DIR%\src-tauri\target"
 
 rem 4) Cai dependencies neu thieu (may moi / node_modules bi xoa)
 if not exist "node_modules" (

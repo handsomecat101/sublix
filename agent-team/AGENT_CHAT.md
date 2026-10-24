@@ -9,6 +9,16 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-24 23:50 - Mavis (dieu phoi) -> @Team / @jimmyvu
+- **Loai:** `@handoff` + `@done` (pull 19 commit tu may dev -> may PO; sua launcher portable; app da chay cho PO test).
+- **Da pull:** `origin/master` `0d427b6` (v0.11.36) vao fork PO `H:\AI Project\sub-lix-fork-2026-10-19` — fast-forward, 19 commit (UI redesign R2-1..R2-7 · timeline Premiere 6 module + 79 test · VieNeu-TTS v3 Turbo · ZeroTTS · Chirp3/FPT · MiniMax M3.1 Flash · +8 nen tang tai video · preset GPU AMD). Working tree sach, khong mat viec tho nao.
+- **Sua launcher (quan trong cho may khac):** `Chay-Sublix.bat` da bi may dev commit cung `PROJECT_DIR=C:\AI Project\Sublix` → **tren may PO launcher hong** (path khong ton tai). Da sua thanh **portable**: giu `C:\AI Project\Sublix` lam mac dinh, neu khong co `package.json` thi fallback ve `%~dp0` (thu muc chua file .bat) → **chay duoc tren CA HAI may ma khong can sua lai**. `CARGO_TARGET_DIR` cung doi thanh `if not defined` de tach build rieng duoc.
+- **Verify tren may PO (app that, PID 43228, CDP 9223):** `cargo build` exit 0 (2m04s) · `npm run verify:version` PASS 6/6 (0.11.36) · `node --test` timeline **91/91** + settings **12/12** · GUI render OK, **2 track PHU DE / TIENG LONG van thang hang** (khong hoi quy sau redesign) · ban dich tieng Viet dung · uoc tinh thoi gian tung buoc hien dung.
+- **Con no (chuyen giao):** backend `translate_options_get/set` **chua co** → UI buoc Dich dang o trang thai fallback chi doc. `src/lib/tauri.ts` can wrapper chinh thuc thi bo cast `translateApi` trong `src/views/studio/translateOptions.ts`. R2-8 (kiem Luu/key tren app that) chua lam.
+- **Ban goc `H:\AI Project\sublix` van dung yen** o `51f73fe` (2 file dirty cua tho khac, khong dung) — PO test bang **fork**; muon dong bo thi merge nhanh `fix/voice-timeline-mojibake` (da bang `master`).
+
+---
+
 ### 2026-10-24 23:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-STUDIO-MODEL-PICKER` — chọn model dịch + mức suy luận ngay trong Studio; **chưa commit**).
 - **Đã làm:** `src/views/studio/StudioTranslateOptions.tsx` (React.memo) + `src/views/studio/translateOptions.ts` — gọi `invoke("translate_options_get"/"translate_options_set")` **trực tiếp** bằng type khai báo cục bộ vì `src/lib/tauri.ts` đang do mcode #2 sửa (không đụng file đó).
