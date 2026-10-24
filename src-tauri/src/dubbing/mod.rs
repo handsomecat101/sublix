@@ -28,7 +28,16 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // TSK-FEAT-TTS-3ENGINES: engine TTS mới + chuẩn hóa số tiếng Việt (mỗi module < 300 dòng).
+pub mod tts_cloud;
+pub mod tts_common;
+pub mod tts_status;
+pub mod tts_vieneu;
+pub mod tts_zerotts;
 pub mod vi_normalize;
+
+#[cfg(test)]
+#[path = "tts_real_tests.rs"]
+mod tts_real_tests;
 
 static CURRENT_GENERATION: AtomicU64 = AtomicU64::new(0);
 static CANCELLED_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -894,7 +903,7 @@ pub fn synthesize_kokoro(text: &str, voice_id: &str, out_path: &Path) -> Result<
     let mut cmd = Command::new(&python);
     cmd.arg(&script)
         .arg("--text")
-        .arg(text)
+        .arg(vi_normalize::normalize_vi(text))
         .arg("--voice")
         .arg(voice_id)
         .arg("--out")
@@ -988,7 +997,7 @@ pub fn synthesize_kokoro_batch(
                 .unwrap_or(voice_id)
                 .trim();
             serde_json::json!({
-                "text": text,
+                "text": vi_normalize::normalize_vi(text),
                 "voice": voice_id,
                 "out": out.to_string_lossy(),
             })
@@ -1267,15 +1276,77 @@ pub fn get_preset_voices() -> Vec<VoicePreset> {
         },
     ];
     voices.extend(get_kokoro_voices());
+    // Engine mới (cần tải model / API key mới dùng được — UI làm xám theo `tts_engines_status`).
+    voices.extend(tts_vieneu::get_voices());
+    voices.extend(tts_zerotts::get_voices());
+    voices.extend(tts_cloud::get_voices());
     voices
+}
+
+/// Đuôi file đầu ra theo engine: offline (Kokoro/VieNeu/ZeroTTS) và Google ghi WAV; Edge/FPT ghi MP3.
+pub fn voice_file_ext(voice: &str) -> &'static str {
+    if voice.starts_with(KOKORO_VOICE_PREFIX)
+        || voice.starts_with(VIETNEU_VOICE_PREFIX)
+        || voice.starts_with(tts_zerotts::VOICE_PREFIX)
+    {
+        "wav"
+    } else {
+        tts_cloud::file_ext(voice)
+    }
+}
+
+/// Engine offline chạy sidecar batch (nạp model 1 lần cho cả lô): Kokoro / VieNeu / ZeroTTS.
+fn batch_engine_of(voice: &str) -> Option<&'static str> {
+    if voice.starts_with(KOKORO_VOICE_PREFIX) {
+        Some("kokoro")
+    } else if voice.starts_with(VIETNEU_VOICE_PREFIX) {
+        Some("vieneu")
+    } else if voice.starts_with(tts_zerotts::VOICE_PREFIX) && tts_zerotts::available() {
+        Some("zerotts")
+    } else {
+        None
+    }
+}
+
+/// Tổng hợp một lô cùng giọng bằng đúng engine; trả kết quả theo `KokoroBatchItemResult` để dùng lại logic cũ.
+fn synthesize_batch_for(voice: &str, items: &[(String, String, PathBuf)]) -> Result<Vec<KokoroBatchItemResult>> {
+    let to_k = |r: Vec<tts_common::BatchResult>| -> Vec<KokoroBatchItemResult> {
+        r.into_iter().map(|x| KokoroBatchItemResult { ok: x.ok, samples: x.samples, error: x.error }).collect()
+    };
+    match batch_engine_of(voice) {
+        Some("vieneu") => Ok(to_k(tts_vieneu::synthesize_batch(items)?)),
+        Some("zerotts") => Ok(to_k(tts_zerotts::synthesize_batch(items)?)),
+        _ => synthesize_kokoro_batch(items),
+    }
 }
 
 /// Synthesize a speech file via edge-tts with python -m fallback
 pub fn synthesize_speech(text: &str, voice: &str, rate: &str, pitch: &str, out_path: &Path) -> Result<()> {
     // Chuẩn hóa voice id trước (VD `vietneu:vi_bac_nam` -> `kokoro:tuan_ngoc`).
     // Đây là điểm nghẽn duy nhất nên cả preview lẫn export đều đi đúng engine.
-    let normalized = normalize_voice_id(voice);
+    // `vietneu:*`: VieNeu thật nếu model đã tải + deps đã cài, chưa thì Kokoro như cũ (BUG-074, không mất tiếng project cũ).
+    let normalized = tts_vieneu::route_voice(voice);
     let voice = normalized.as_str();
+    // Chuẩn hóa số/ngày/giờ… thành chữ cho MỌI engine tiếng Việt (Kokoro từng bỏ rơi chữ số).
+    let spoken_text;
+    let text = if vi_normalize::is_vietnamese_voice(voice) {
+        spoken_text = vi_normalize::normalize_vi(text);
+        spoken_text.as_str()
+    } else {
+        text
+    };
+    if voice.starts_with(VIETNEU_VOICE_PREFIX) {
+        return tts_vieneu::synthesize_one(text, voice, out_path);
+    }
+    if voice.starts_with(tts_zerotts::VOICE_PREFIX) {
+        if !tts_zerotts::deps_ready() {
+            anyhow::bail!("ZeroTTS chưa cài thư viện Python — tải model trong trung tâm tải model để cài tự động.");
+        }
+        return tts_zerotts::synthesize_one(text, voice, out_path);
+    }
+    if voice.starts_with(tts_cloud::GCLOUD_PREFIX) || voice.starts_with(tts_cloud::FPTAI_PREFIX) {
+        return tts_cloud::synthesize(voice, text, out_path);
+    }
     // Local, offline engine first. Anything not prefixed with `kokoro:` uses the
     // (optional, network) Edge-TTS fallback below.
     if let Some(kokoro_id) = voice.strip_prefix(KOKORO_VOICE_PREFIX) {
@@ -2929,9 +3000,9 @@ pub fn export_dubbed_video(
                     .map(|s| s.voice.clone())
                     .unwrap_or_default(),
             };
-            let voice = normalize_voice_id(&speaker_voice);
-            if !voice.starts_with(KOKORO_VOICE_PREFIX) {
-                continue; // Giọng Edge-TTS giữ nguyên đường dẫn từng câu.
+            let voice = tts_vieneu::route_voice(&speaker_voice);
+            if batch_engine_of(&voice).is_none() {
+                continue; // Edge-TTS / cloud giữ nguyên đường dẫn từng câu.
             }
             let seg_audio = temp_dir.join(format!("seg_{}.wav", i));
             groups
@@ -2946,7 +3017,7 @@ pub fn export_dubbed_video(
                 "synthesizing",
                 5.0,
                 &format!(
-                    "Tổng hợp giọng lồng tiếng hàng loạt ({} câu, Kokoro offline)...",
+                    "Tổng hợp giọng lồng tiếng hàng loạt ({} câu, engine offline)...",
                     batched_count
                 ),
                 0,
@@ -2957,7 +3028,7 @@ pub fn export_dubbed_video(
                     .iter()
                     .map(|(_, text, out)| (text.clone(), voice.clone(), out.clone()))
                     .collect();
-                match synthesize_kokoro_batch(&batch_items) {
+                match synthesize_batch_for(&voice, &batch_items) {
                     Ok(results) => {
                         for (item, res) in group.iter().zip(results.iter()) {
                             let (idx, _, out) = item;
@@ -3024,12 +3095,8 @@ pub fn export_dubbed_video(
         // Kokoro (offline) writes WAV; Edge-TTS writes MP3. FFmpeg reads either.
         // Dùng voice ĐÃ chuẩn hóa: `vietneu:*` map sang Kokoro nên phải xuất .wav
         // (nếu không Kokoro sẽ ghi file WAV ra tên .mp3).
-        let voice = normalize_voice_id(&speaker.voice);
-        let ext = if voice.starts_with(KOKORO_VOICE_PREFIX) {
-            "wav"
-        } else {
-            "mp3"
-        };
+        let voice = tts_vieneu::route_voice(&speaker.voice);
+        let ext = voice_file_ext(&voice);
         let seg_audio = temp_dir.join(format!("seg_{}.{}", i, ext));
 
         // Retry-then-skip: never let an empty/invalid file poison the final mux.

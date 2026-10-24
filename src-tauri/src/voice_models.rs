@@ -18,6 +18,8 @@ pub struct VoiceModelFile {
     pub url: String,
     pub filename: String,
     pub size_mb: u32,
+    /// Số byte CHÍNH XÁC (từ HF API) — >0 thì tải xong phải khớp đúng, 0 = chưa biết (chỉ đối chiếu Content-Length).
+    pub bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,7 +44,65 @@ fn f(url: &str, filename: &str, size_mb: u32) -> VoiceModelFile {
         url: url.to_string(),
         filename: filename.to_string(),
         size_mb,
+        bytes: 0,
     }
+}
+
+/// File có số byte chính xác (verify đủ byte sau khi tải — BUG-012).
+fn fb(repo: &str, file: &str, filename: &str, bytes: u64) -> VoiceModelFile {
+    VoiceModelFile {
+        url: format!("{HF}/{repo}/resolve/main/{file}"),
+        filename: filename.to_string(),
+        size_mb: ((bytes + 1_048_575) / 1_048_576) as u32,
+        bytes,
+    }
+}
+
+const VIENEU_REPO: &str = "pnnbao-ump/VieNeu-TTS-v3-Turbo";
+const MOSS_CODEC_REPO: &str = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX";
+
+/// VieNeu-TTS v3 Turbo (ONNX fp32) + speaker encoder/denoiser (clone) + codec MOSS ONNX — tất cả offline (≈ 607 MiB).
+fn vieneu_files() -> Vec<VoiceModelFile> {
+    let mut v: Vec<VoiceModelFile> = [
+        ("config.json", 2152u64), ("tokenizer.json", 22320), ("vieneu_acoustic_cached.onnx", 7_207_223),
+        ("vieneu_backbone_shared.data", 415_319_040), ("vieneu_decode_step.onnx", 306_134),
+        ("vieneu_prefill.onnx", 324_499), ("vieneu_v3_heads.npz", 52_219_622),
+    ]
+    .iter()
+    .map(|(n, b)| fb(VIENEU_REPO, &format!("onnx_update/{n}"), &format!("onnx_update/{n}"), *b))
+    .collect();
+    v.push(fb(VIENEU_REPO, "speaker_encoder.onnx", "speaker_encoder.onnx", 28_303_423));
+    v.push(fb(VIENEU_REPO, "denoiser.onnx", "denoiser.onnx", 42_661_414));
+    for (n, b) in [
+        ("moss_audio_tokenizer_decode_full.onnx", 681_902u64), ("moss_audio_tokenizer_decode_shared.data", 44_198_912),
+        ("moss_audio_tokenizer_decode_step.onnx", 351_400), ("moss_audio_tokenizer_encode.data", 44_507_136),
+        ("moss_audio_tokenizer_encode.onnx", 815_775), ("codec_browser_onnx_meta.json", 17_036),
+    ] {
+        v.push(fb(MOSS_CODEC_REPO, n, &format!("codec/{n}"), b));
+    }
+    v
+}
+
+/// ZeroTTS (MIT) — bố cục y hệt repo HF để `ZeroTTS.from_pretrained(<thư mục>)` đọc trực tiếp (≈ 866 MiB).
+fn zerotts_files() -> Vec<VoiceModelFile> {
+    const R: &str = "zeroweight-ai/ZeroTTS";
+    let mut v: Vec<VoiceModelFile> = [
+        ("config.json", 378u64), ("null_voice_emb.npy", 30_848), ("silence_frame.npy", 256), ("tokenizer.json", 191_542),
+        ("onnx/codec/codec_browser_onnx_meta.json", 14_056), ("onnx/codec/moss_audio_tokenizer_decode_full.onnx", 681_902),
+        ("onnx/codec/moss_audio_tokenizer_decode_shared.data", 44_198_912), ("onnx/codec/moss_audio_tokenizer_decode_step.onnx", 351_400),
+        ("onnx/local_frame_decode.onnx", 186_743_011), ("onnx/prefix_step.onnx", 348_303_894),
+        ("onnx/text_encoder.onnx", 323_096_725), ("voices/index.json", 3_348),
+    ]
+    .iter()
+    .map(|(n, b)| fb(R, n, n, *b))
+    .collect();
+    for voice in ["baotrang", "giahuy", "hamy", "huuduc", "kimoanh", "maichi", "quangminh", "tiendat"] {
+        for file in ["meta.json", "voice.bin", "voice.npz", "preview.wav"] {
+            let p = format!("voices/{voice}/{file}");
+            v.push(hf(R, &p, &p, 1));
+        }
+    }
+    v
 }
 
 fn hf(repo: &str, file: &str, filename: &str, size_mb: u32) -> VoiceModelFile {
@@ -159,6 +219,62 @@ pub fn catalog() -> Vec<VoiceModelStatus> {
                 hf("minhtanmtst/Kokoro-Vietnamese", "config.json", "config.json", 1),
                 hf("minhtanmtst/Kokoro-Vietnamese", "voices.json", "voices.json", 1),
             ],
+        ),
+        (
+            "vieneu-v3-turbo",
+            "VieNeu-TTS v3 Turbo",
+            "VieNeu v3 Turbo",
+            "25 giọng Việt có sẵn (Bắc/Trung/Nam) + clone giọng từ mẫu 3–8 giây, 48 kHz, offline thật. Chạy CPU (RTF≈0,9) và tự dùng GPU NVIDIA nếu có. Tải xong app tự cài thư viện Python.",
+            "preset",
+            608,
+            "≈637 MB (607 MiB)",
+            "CPU được; GPU NVIDIA (CUDA 12) nhanh hơn",
+            "Apache-2.0 · Miễn phí",
+            "yes",
+            false,
+            vieneu_files(),
+        ),
+        (
+            "zerotts",
+            "ZeroTTS (tiếng Việt, 8 giọng)",
+            "ZeroTTS",
+            "Engine Việt native (MIT): đọc đúng ngày/số, WER thấp, 8 giọng nam/nữ, 48 kHz, offline. Không có clone. Tải xong app tự cài thư viện Python.",
+            "preset",
+            909,
+            "≈909 MB (866 MiB)",
+            "CPU được (RTF≈0,7); GPU NVIDIA nếu có",
+            "MIT · Miễn phí",
+            "yes",
+            false,
+            zerotts_files(),
+        ),
+        (
+            "google-chirp3-hd",
+            "Google Cloud TTS — Chirp 3 HD (đám mây)",
+            "Google Chirp 3 HD",
+            "30 giọng vi-VN chất lượng cao nhất. Cần API key Google Cloud (Cài đặt → Giọng đọc cloud). Miễn phí 1 triệu ký tự/tháng.",
+            "cloud",
+            0,
+            "Không cần tải — Cần API key, vào Cài đặt",
+            "Đám mây — 0 VRAM",
+            "Theo gói Google Cloud",
+            "yes",
+            true,
+            vec![],
+        ),
+        (
+            "fptai-tts",
+            "FPT.AI TTS v5 (đám mây)",
+            "FPT.AI TTS",
+            "7 giọng Việt native (ban mai, lan nhi, lê minh…). Cần API key FPT.AI (Cài đặt → Giọng đọc cloud). Miễn phí 100.000 ký tự/tháng.",
+            "cloud",
+            0,
+            "Không cần tải — Cần API key, vào Cài đặt",
+            "Đám mây — 0 VRAM",
+            "Theo gói FPT.AI",
+            "yes",
+            true,
+            vec![],
         ),
         (
             "viet-tts",
@@ -319,7 +435,9 @@ pub fn catalog() -> Vec<VoiceModelStatus> {
                 && !files.is_empty()
                 && files.iter().all(|file| {
                     let p = model_dir(id).join(&file.filename);
-                    std::fs::metadata(&p).map(|m| m.len() > 1024).unwrap_or(false)
+                    std::fs::metadata(&p)
+                        .map(|m| if file.bytes > 0 { m.len() == file.bytes } else { m.len() > 0 })
+                        .unwrap_or(false)
                 });
             VoiceModelStatus {
                 id: id.to_string(),
@@ -366,17 +484,22 @@ where
     let dir = model_dir(&spec.id);
     std::fs::create_dir_all(&dir).with_context(|| format!("Create {}", dir.display()))?;
 
-    let total_all: u64 = spec.files.iter().map(|file| file.size_mb as u64 * 1_048_576).sum();
+    let hint_of = |file: &VoiceModelFile| if file.bytes > 0 { file.bytes } else { file.size_mb as u64 * 1_048_576 };
+    let total_all: u64 = spec.files.iter().map(hint_of).sum();
     let mut done_all: u64 = 0;
     for file in &spec.files {
         let dest = dir.join(&file.filename);
         if let Ok(meta) = std::fs::metadata(&dest) {
-            if meta.len() > 1024 {
+            let complete = if file.bytes > 0 { meta.len() == file.bytes } else { meta.len() > 1024 };
+            if complete {
                 done_all += meta.len();
                 continue;
             }
         }
-        let file_hint = file.size_mb as u64 * 1_048_576;
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).with_context(|| format!("Create {}", parent.display()))?;
+        }
+        let file_hint = hint_of(file);
         let temp = dir.join(format!("{}.downloading", file.filename));
         let done = done_all;
         download_file_with_progress(&file.url, &temp, |got, total, _pct| {
@@ -390,10 +513,32 @@ where
             };
             on_progress(overall, overall_total, pct.min(99));
         })?;
+        // BUG-012: không đổi tên file thiếu byte thành "đã tải"
+        let got = std::fs::metadata(&temp).map(|m| m.len()).unwrap_or(0);
+        if (file.bytes > 0 && got != file.bytes) || got == 0 {
+            let _ = std::fs::remove_file(&temp);
+            anyhow::bail!(
+                "File {} tải thiếu/sai dung lượng ({} / {} byte) — thử tải lại.",
+                file.filename,
+                got,
+                file.bytes
+            );
+        }
         std::fs::rename(&temp, &dest).with_context(|| {
             format!("Không đổi tên được file tải về {}", dest.display())
         })?;
         done_all += std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(file_hint);
+    }
+    // Engine Python: tải xong model thì cài luôn thư viện (CPU, hoặc CUDA nếu máy có NVIDIA).
+    let engine = match spec.id.as_str() {
+        "vieneu-v3-turbo" => Some("vieneu"),
+        "zerotts" => Some("zerotts"),
+        _ => None,
+    };
+    if let Some(engine) = engine {
+        on_progress(total_all, total_all, 99);
+        crate::dubbing::tts_status::install_deps(engine, &mut |l| tracing::info!("[pip {engine}] {l}"))
+            .with_context(|| format!("Đã tải model nhưng cài thư viện Python cho {engine} lỗi — bấm tải lại để thử cài lại"))?;
     }
     on_progress(total_all, total_all, 100);
     Ok(dir)
@@ -427,5 +572,8 @@ where
         }
     }
     dest_file.flush()?;
+    if total > 0 && downloaded != total {
+        anyhow::bail!("Tải thiếu byte ({downloaded}/{total}) — mạng bị ngắt giữa chừng");
+    }
     Ok(())
 }

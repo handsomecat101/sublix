@@ -78,13 +78,13 @@ fn ngay_thang_viet_chu_nhung_so() {
 fn cau_bench_s3_ty_so_va_ngay() {
     assert_eq!(
         n("Ngày 24 tháng 10 năm 2026, đội tuyển Việt Nam thắng 3-1 trước Thái Lan tại sân Mỹ Đình."),
-        "Ngày hai mươi tư tháng mười năm hai nghìn không trăm hai mươi sáu, đội tuyển Việt Nam thắng ba - một trước Thái Lan tại sân Mỹ Đình."
+        "Ngày hai mươi tư tháng mười năm hai nghìn không trăm hai mươi sáu, đội tuyển Việt Nam thắng ba một trước Thái Lan tại sân Mỹ Đình."
     );
 }
 
 #[test]
 fn ty_so_va_khoang() {
-    assert_eq!(n("thắng 2-0"), "thắng hai - không");
+    assert_eq!(n("thắng 2-0"), "thắng hai không");
     assert_eq!(n("từ 10-20 người"), "từ mười đến hai mươi người");
 }
 

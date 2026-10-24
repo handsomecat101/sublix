@@ -382,8 +382,9 @@ pub fn normalize_vi(text: &str) -> String {
         if int_only && (sc.is(k, '-') || sc.is(k, '–')) && grouped.len() <= 3 {
             if let Some((_, e)) = sc.digits(k + 1, 1, 3) {
                 let rhs: String = chars[k + 1..e].iter().collect();
-                let link = if matches!(prev.as_str(), "từ" | "khoảng" | "tầm" | "chừng") { "đến" } else { "-" };
-                out.push_str(&format!("{} {} {}", value, link, read_integer(&rhs)));
+                // Tỷ số "3-1" → "ba một" (gạch nối khiến engine đọc "ba, một chiếc…" — đo WER thật: 15–20% với dấu "-")
+                let link = if matches!(prev.as_str(), "từ" | "khoảng" | "tầm" | "chừng") { " đến " } else { " " };
+                out.push_str(&format!("{}{}{}", value, link, read_integer(&rhs)));
                 i = e;
                 continue;
             }

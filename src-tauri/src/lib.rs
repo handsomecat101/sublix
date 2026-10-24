@@ -186,6 +186,11 @@ pub fn run() {
             voice_sample_list,
             voice_sample_generate,
             voice_sample_data,
+            tts_engines_status,
+            tts_cloud_set_key,
+            tts_cloud_test,
+            tts_engine_install_deps,
+            tts_engine_diagnose,
             downloader_get_info,
             downloader_start,
             downloader_pause,
@@ -724,6 +729,46 @@ async fn voice_model_download(app: tauri::AppHandle, id: String) -> Result<(), S
             Err(msg)
         }
     }
+}
+
+// ---- TSK-FEAT-TTS-3ENGINES: trạng thái engine TTS, key cloud (lưu file riêng, không trả key), cài deps, chẩn đoán CUDA ----
+#[tauri::command]
+fn tts_engines_status() -> serde_json::Value {
+    dubbing::tts_status::engines_status()
+}
+
+#[tauri::command]
+fn tts_cloud_set_key(provider: String, key: String) -> Result<(), String> {
+    dubbing::tts_cloud::set_key(&provider, &key).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn tts_cloud_test(provider: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || dubbing::tts_status::test_cloud(&provider))
+        .await
+        .map_err(|e| format!("{e}"))?
+        .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn tts_engine_install_deps(app: tauri::AppHandle, engine: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut emit = |line: &str| {
+            let _ = app.emit("tts:deps_progress", serde_json::json!({ "engine": engine, "line": line }));
+        };
+        dubbing::tts_status::install_deps(&engine, &mut emit)
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn tts_engine_diagnose(engine: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || dubbing::tts_status::diagnose(&engine))
+        .await
+        .map_err(|e| format!("{e}"))?
+        .map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]

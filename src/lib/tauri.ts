@@ -58,6 +58,28 @@ export interface VoiceModelFile {
   size_mb: number;
 }
 
+export interface TtsEngineInfo {
+  id: "kokoro" | "vieneu" | "zerotts" | "gcloud" | "fptai";
+  prefix: string;
+  kind: "offline" | "cloud";
+  model_id?: string;
+  installed?: boolean;
+  deps?: boolean;
+  needs_key?: boolean;
+  has_key?: boolean;
+  clone?: boolean;
+  fallback?: string;
+  /** Có thể chọn ngay (model + deps hoặc đã có key) */
+  ready: boolean;
+  /** Dòng chữ xám khi chưa ready, vd "Cần API key — vào Cài đặt" */
+  hint: string;
+}
+
+export interface TtsEnginesStatus {
+  device_preference: "auto" | "cpu" | "cuda";
+  engines: TtsEngineInfo[];
+}
+
 export interface VoiceModelStatus {
   id: string;
   name: string;
@@ -431,6 +453,27 @@ export const sublix = {
 
   async voiceModelDownload(id: string): Promise<void> {
     return await invoke<void>("voice_model_download", { id });
+  },
+
+  // TSK-FEAT-TTS-3ENGINES: trạng thái engine TTS (không bao giờ trả API key), key cloud, cài deps, chẩn đoán CUDA
+  async ttsEnginesStatus(): Promise<TtsEnginesStatus> {
+    return await invoke<TtsEnginesStatus>("tts_engines_status");
+  },
+
+  async ttsCloudSetKey(provider: "google" | "fptai", key: string): Promise<void> {
+    return await invoke<void>("tts_cloud_set_key", { provider, key });
+  },
+
+  async ttsCloudTest(provider: "google" | "fptai"): Promise<string> {
+    return await invoke<string>("tts_cloud_test", { provider });
+  },
+
+  async ttsEngineInstallDeps(engine: "vieneu" | "zerotts"): Promise<void> {
+    return await invoke<void>("tts_engine_install_deps", { engine });
+  },
+
+  async ttsEngineDiagnose(engine: "vieneu" | "zerotts"): Promise<Record<string, unknown>> {
+    return await invoke<Record<string, unknown>>("tts_engine_diagnose", { engine });
   },
 
   async voiceSampleList(modelId: string): Promise<string[]> {
