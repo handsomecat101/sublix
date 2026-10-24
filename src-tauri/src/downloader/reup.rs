@@ -52,6 +52,12 @@ impl ReupOptions {
 /// Chuẩn hóa mốc thời gian người dùng nhập (`h:mm:ss`, `mm:ss` hoặc `ss`) về
 /// đúng `hh:mm:ss`. Trả `None` nếu rỗng hoặc không hợp lệ.
 pub fn normalize_timecode(raw: &str) -> Option<String> {
+    parse_timecode(raw).map(|(h, m, s)| format!("{h:02}:{m:02}:{s:02}"))
+}
+
+/// Tách mốc thời gian thành `(giờ, phút, giây)` theo đúng quy tắc nhập của
+/// người dùng — dùng chung cho [`normalize_timecode`] và [`timecode_to_secs`].
+fn parse_timecode(raw: &str) -> Option<(u64, u32, u32)> {
     let t = raw.trim();
     if t.is_empty() {
         return None;
@@ -86,7 +92,12 @@ pub fn normalize_timecode(raw: &str) -> Option<String> {
         }
         _ => return None,
     };
-    Some(format!("{h:02}:{m:02}:{s:02}"))
+    Some((h as u64, m, s))
+}
+
+/// Quy đổi mốc thời gian người dùng nhập ra **tổng số giây** (`None` nếu sai).
+pub fn timecode_to_secs(raw: &str) -> Option<u64> {
+    parse_timecode(raw).map(|(h, m, s)| h * 3600 + m as u64 * 60 + s as u64)
 }
 
 /// Dựng giá trị cho `--download-sections` từ tùy chọn cắt đoạn.
@@ -94,6 +105,7 @@ pub fn normalize_timecode(raw: &str) -> Option<String> {
 /// - Cả hai rỗng → `Ok(None)` (tải cả video).
 /// - Chỉ có 1 mốc → mốc còn lại để mở (`*start-` / `*-end`).
 /// - Mốc nhập sai → `Err` (thông báo tiếng Việt) để UI báo trước khi spawn.
+/// - Có cả hai mốc mà `start >= end` → `Err` (đoạn cắt rỗng/ngược là vô nghĩa).
 pub fn section_arg(opts: &ReupOptions) -> Result<Option<String>, String> {
     let start_raw = opts.section_start.as_deref().unwrap_or("").trim();
     let end_raw = opts.section_end.as_deref().unwrap_or("").trim();
@@ -114,6 +126,18 @@ pub fn section_arg(opts: &ReupOptions) -> Result<Option<String>, String> {
             format!("Mốc kết thúc \"{end_raw}\" không hợp lệ — dùng định dạng hh:mm:ss (ví dụ 00:00:15).")
         })?
     };
+
+    // Chỉ kiểm tra khi có CẢ HAI mốc — chỉ có start hoặc chỉ có end vẫn hợp lệ.
+    if !start_raw.is_empty() && !end_raw.is_empty() {
+        if let (Some(s), Some(e)) = (timecode_to_secs(start_raw), timecode_to_secs(end_raw)) {
+            if s >= e {
+                return Err(format!(
+                    "Thời điểm bắt đầu phải nhỏ hơn thời điểm kết thúc (đang nhập \"{start_raw}\" → \"{end_raw}\")."
+                ));
+            }
+        }
+    }
+
     Ok(Some(format!("*{start}-{end}")))
 }
 
@@ -267,3 +291,8 @@ pub fn finalize_info_txt(media: &Path) -> anyhow::Result<Option<PathBuf>> {
     let _ = std::fs::remove_file(&json_path);
     Ok(Some(txt_path))
 }
+
+// Test riêng cho phép cắt đoạn (file test mới, không sửa `reup_tests.rs`).
+#[cfg(test)]
+#[path = "reup_section_tests.rs"]
+mod reup_section_tests;
