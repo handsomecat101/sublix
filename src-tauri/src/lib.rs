@@ -202,7 +202,9 @@ pub fn run() {
             cleanup_all_previews,
             extract_media_preview,
             downloader_check_disk,
-            downloader_file_exists
+            downloader_file_exists,
+            downloader_parse_urls,
+            downloader_expand_playlist
         ])
         .setup(|app| {
             let cfg = config::AppConfig::load(app.handle());
@@ -1328,6 +1330,27 @@ fn downloader_check_disk(app: tauri::AppHandle, path: Option<String>) -> Result<
 #[tauri::command]
 fn downloader_file_exists(path: String) -> bool {
     downloader::check_file_exists(&path)
+}
+
+/// TSK-FEAT-DL-BATCH-AUDIO: tách ô nhập nhiều link (lọc + loại trùng).
+#[tauri::command]
+fn downloader_parse_urls(text: String) -> downloader::batch::ParsedUrls {
+    downloader::batch::split_urls(&text)
+}
+
+/// TSK-FEAT-DL-BATCH-AUDIO: đọc danh sách mục playlist (`--flat-playlist -J`).
+#[tauri::command]
+async fn downloader_expand_playlist(
+    app: tauri::AppHandle,
+    url: String,
+    browser_cookies: Option<String>,
+) -> Result<downloader::batch::PlaylistExpansion, String> {
+    tokio::task::spawn_blocking(move || {
+        downloader::batch::expand_playlist(&app, &url, browser_cookies.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"))
 }
 
 /// v0.11.1: ROUND-4 R4-01 — Transcode a video to H.264/AAC baseline profile

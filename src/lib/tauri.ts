@@ -565,6 +565,22 @@ export const sublix = {
       return false;
     }
   },
+
+  // TSK-FEAT-DL-BATCH-AUDIO: tách ô nhập nhiều link (lọc URL hợp lệ + loại trùng).
+  async downloaderParseUrls(text: string): Promise<ParsedUrls> {
+    return await invoke<ParsedUrls>("downloader_parse_urls", { text });
+  },
+
+  // TSK-FEAT-DL-BATCH-AUDIO: đọc danh sách mục playlist (yt-dlp --flat-playlist -J).
+  async downloaderExpandPlaylist(
+    url: string,
+    browserCookies?: string | null,
+  ): Promise<PlaylistExpansion> {
+    return await invoke<PlaylistExpansion>("downloader_expand_playlist", {
+      url,
+      browserCookies: browserCookies ?? null,
+    });
+  },
 };
 
 export interface VoicePreset {
@@ -652,6 +668,20 @@ export interface VideoInfo {
   filesize_approx?: number | null;
 }
 
+/** TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup (mặc định tắt). */
+export interface ReupOptions {
+  /** Xuất metadata `<tên video>.info.txt` cạnh video. */
+  write_info: boolean;
+  /** `--download-archive`: chống tải trùng bền vững giữa các lần. */
+  archive: boolean;
+  /** Tải thumbnail gốc (.jpg). */
+  thumbnail: boolean;
+  /** Cắt đoạn — mốc bắt đầu hh:mm:ss (rỗng = từ đầu). */
+  section_start?: string | null;
+  /** Cắt đoạn — mốc kết thúc hh:mm:ss (rỗng = đến hết). */
+  section_end?: string | null;
+}
+
 export interface DownloadRequest {
   id: string;
   url: string;
@@ -660,6 +690,7 @@ export interface DownloadRequest {
   cookies_file?: string | null;
   extract_subtitles: boolean;
   subtitle_langs?: string[] | null;
+  reup?: ReupOptions | null;
 }
 
 export interface DownloadProgressPayload {
@@ -682,6 +713,28 @@ export interface DownloadMetaPayload {
   resolution?: string | null;
   /** v0.9.11: subtitle langs that actually landed on disk (null = not asked). */
   subs_langs?: string[] | null;
+}
+
+// TSK-FEAT-DL-BATCH-AUDIO: kết quả tách ô nhập nhiều link.
+export interface ParsedUrls {
+  urls: string[];
+  invalid: number;
+  duplicates: number;
+}
+
+export interface PlaylistEntry {
+  url: string;
+  title: string;
+  duration?: number | null;
+}
+
+export interface PlaylistExpansion {
+  is_playlist: boolean;
+  title?: string | null;
+  entries: PlaylistEntry[];
+  /** Tổng số mục playlist báo về (có thể lớn hơn entries khi bị cắt). */
+  total: number;
+  truncated: boolean;
 }
 
 // v0.9.6: on-demand probe result for a finished file.

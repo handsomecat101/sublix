@@ -8,10 +8,14 @@ import {
   sublix,
   type VideoInfo,
   type DownloadRequest,
+  type ReupOptions,
   type DownloadProgressPayload,
   type DownloadMetaPayload,
+  type PlaylistEntry,
+  type ParsedUrls,
 } from "../lib/tauri";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
+import { DownloaderBatchPicker, type BatchState } from "./DownloaderBatchPicker";
 import {
   IconDownload,
   IconFolder,
@@ -63,6 +67,8 @@ interface DownloadItem {
   resolution?: string | null;
   // v0.9.11: subtitle langs actually on disk (meta event / backfill / retry).
   subsLangs?: string[] | null;
+  // TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup đã dùng cho mục này (giữ khi Thử lại).
+  reup?: ReupOptions | null;
   createdAt: number;
 }
 
@@ -74,9 +80,16 @@ const FORMAT_OPTIONS: SelectOption[] = [
   { value: "720p", label: "📹 HD (720p) — Phổ thông" },
   { value: "480p", label: "📱 SD (480p) — Nhẹ & Nhanh" },
   { value: "360p", label: "📱 360p — Tiết kiệm dung lượng" },
-  { value: "audio-mp3", label: "🎵 Audio MP3 (320kbps) — Tách riêng âm thanh" },
-  { value: "audio-m4a", label: "🎵 Audio M4A (AAC Gốc) — Chất lượng gốc" },
+  { value: "audio-mp3", label: "🎵 Chỉ tải âm thanh — MP3 (chất lượng cao nhất)" },
+  { value: "audio-m4a", label: "🎵 Chỉ tải âm thanh — M4A (AAC)" },
 ];
+
+const isAudioFormat = (format: string) => format.startsWith("audio-");
+
+// TSK-FEAT-DL-BATCH-AUDIO: tải hàng loạt — số tiến trình yt-dlp chạy song song
+// (các mục còn lại nằm ở trạng thái "queued") và trần số mục 1 lần xếp hàng.
+const MAX_PARALLEL_DOWNLOADS = 3;
+const MAX_BATCH_ITEMS = 200;
 
 const BROWSER_COOKIE_OPTIONS: SelectOption[] = [
   { value: "none", label: "Không dùng cookies (Mặc định — Khuyến dùng)" },
@@ -112,6 +125,12 @@ const PLATFORM_META: Record<string, { label: string; icon: string; color: string
   soundcloud: { label: "SoundCloud", icon: "☁️", color: "#ff5500" },
   reddit: { label: "Reddit", icon: "🤖", color: "#ff4500" },
   twitch: { label: "Twitch", icon: "🎮", color: "#9146ff" },
+  // TSK-FEAT-DL-PLATFORMS-REUP: 5 nền tảng reup mới.
+  kick: { label: "Kick", icon: "🟢", color: "#53fc18" },
+  dailymotion: { label: "Dailymotion", icon: "🎬", color: "#00aaff" },
+  vk: { label: "VK (VKontakte)", icon: "🅥", color: "#0077ff" },
+  pinterest: { label: "Pinterest", icon: "📌", color: "#e60023" },
+  snapchat: { label: "Snapchat Spotlight", icon: "👻", color: "#fffc00" },
   generic_video: { label: "Web Video", icon: "🌐", color: "#64748b" },
 };
 
@@ -151,6 +170,12 @@ function detectPlatform(url: string): string {
   if (hostMatches("soundcloud.com")) return "soundcloud";
   if (hostMatches("reddit.com")) return "reddit";
   if (hostMatches("twitch.tv")) return "twitch";
+  // TSK-FEAT-DL-PLATFORMS-REUP
+  if (hostMatches("kick.com")) return "kick";
+  if (hostMatches("dailymotion.com") || hostMatches("dai.ly")) return "dailymotion";
+  if (hostMatches("vk.com") || hostMatches("vk.ru") || hostMatches("vkvideo.ru")) return "vk";
+  if (hostMatches("pinterest.com") || hostMatches("pin.it")) return "pinterest";
+  if (hostMatches("snapchat.com")) return "snapchat";
   return "generic_video";
 }
 
@@ -163,6 +188,32 @@ function isValidHttpUrl(urlString: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+// TSK-FEAT-DL-BATCH-AUDIO: link trỏ tới cả danh sách (playlist / series)
+// → cần mở rộng bằng `downloader_expand_playlist` trước khi xếp hàng, vì
+// tải trực tiếp với `--no-playlist` sẽ chỉ lấy 1 video (hoặc cả list).
+function looksLikePlaylist(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  const path = u.pathname.toLowerCase();
+  switch (detectPlatform(raw)) {
+    case "youtube":
+      return u.searchParams.has("list") || path.startsWith("/playlist");
+    case "bilibili":
+      return (
+        u.hostname.toLowerCase().startsWith("space.") ||
+        /\/(medialist|favlist|list|bangumi)\//.test(`${path}/`)
+      );
+    case "soundcloud":
+      return path.includes("/sets/");
+    default:
+      return path.includes("playlist");
   }
 }
 
@@ -208,6 +259,12 @@ export default function DownloaderView({
   // v0.9.4: default OFF — the owner only needs the video; subtitle fetching
   // is optional and YouTube can rate-limit it (429).
   const [extractSubtitles, setExtractSubtitles] = useState<boolean>(false);
+  // TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup (mặc định TẮT — không đổi hành vi cũ).
+  const [reupInfo, setReupInfo] = useState<boolean>(false);
+  const [reupArchive, setReupArchive] = useState<boolean>(false);
+  const [reupThumbnail, setReupThumbnail] = useState<boolean>(false);
+  const [sectionStart, setSectionStart] = useState<string>("");
+  const [sectionEnd, setSectionEnd] = useState<string>("");
   // v0.9.11: item id whose subtitle fetch is running ("📝 Tải phụ đề").
   const [subsBusyId, setSubsBusyId] = useState<string | null>(null);
   // v0.9.11: one-line feedback for the subtitle fetch (success/warning).
@@ -267,6 +324,16 @@ export default function DownloaderView({
   fileExistsMapRef.current = fileExistsMap;
   // v0.9.6: one-shot guard for the lazy size/resolution backfill probe.
   const metaProbedRef = useRef<Record<string, boolean>>({});
+
+  // TSK-FEAT-DL-BATCH-AUDIO: tải hàng loạt.
+  // Danh sách mục chờ xác nhận (playlist đã mở rộng / nhiều link).
+  const [batch, setBatch] = useState<BatchState | null>(null);
+  const [expanding, setExpanding] = useState<boolean>(false);
+  // Số link hợp lệ (đã loại trùng) đang có trong ô nhập.
+  const [linkCount, setLinkCount] = useState<number>(0);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
+  // Mục "queued" đã được gọi start — chặn effect gọi trùng 2 lần.
+  const launchedRef = useRef<Set<string>>(new Set());
 
   // Save history on change
   useEffect(() => {
@@ -336,6 +403,22 @@ export default function DownloaderView({
       .then(setDlDir)
       .catch((err) => console.warn("downloaderDownloadsDir IPC error:", err));
   }, []);
+
+  // TSK-FEAT-DL-BATCH-AUDIO: đếm số link hợp lệ trong ô nhập (để đổi nhãn nút).
+  useEffect(() => {
+    if (!url.trim()) {
+      setLinkCount(0);
+      return;
+    }
+    let alive = true;
+    sublix
+      .downloaderParseUrls(url)
+      .then((parsed) => alive && setLinkCount(parsed.urls.length))
+      .catch(() => alive && setLinkCount(isValidHttpUrl(url) ? 1 : 0));
+    return () => {
+      alive = false;
+    };
+  }, [url]);
 
   // Listen to progress events from backend
   useEffect(() => {
@@ -444,10 +527,145 @@ export default function DownloaderView({
   const currentPlatform = detectPlatform(url);
   const currentPlatformMeta = PLATFORM_META[currentPlatform] || PLATFORM_META.generic_video;
 
+  // TSK-FEAT-DL-BATCH-AUDIO: tách ô nhập thành danh sách link (backend lọc +
+  // loại trùng). Ngoài Tauri (web dev) thì coi cả ô là 1 link.
+  const parseLinks = async (text: string): Promise<ParsedUrls> => {
+    try {
+      return await sublix.downloaderParseUrls(text);
+    } catch {
+      const t = text.trim();
+      return { urls: isValidHttpUrl(t) ? [t] : [], invalid: 0, duplicates: 0 };
+    }
+  };
+
+  const skippedNote = (parsed: ParsedUrls): string | null =>
+    parsed.invalid + parsed.duplicates > 0
+      ? `ℹ️ Đã bỏ ${parsed.duplicates} link trùng và ${parsed.invalid} đoạn chữ không phải link http(s).`
+      : null;
+
+  // Mở rộng các link playlist + gom link lẻ thành danh sách có checkbox.
+  const buildBatch = async (parsed: ParsedUrls) => {
+    setExpanding(true);
+    setInspectError(null);
+    setVideoInfo(null);
+    setQueueNotice(null);
+    const entries: PlaylistEntry[] = [];
+    const seen = new Set<string>();
+    const notes: string[] = [];
+    const push = (e: PlaylistEntry) => {
+      if (seen.has(e.url)) return;
+      seen.add(e.url);
+      entries.push(e);
+    };
+    try {
+      for (const link of parsed.urls) {
+        if (!looksLikePlaylist(link)) {
+          push({ url: link, title: link, duration: null });
+          continue;
+        }
+        try {
+          const exp = await sublix.downloaderExpandPlaylist(
+            link,
+            browserCookie !== "none" ? browserCookie : null,
+          );
+          exp.entries.forEach(push);
+          if (exp.truncated) {
+            notes.push(
+              `⚠️ Playlist "${exp.title || link}" có ${exp.total} mục — chỉ lấy ${exp.entries.length} mục đầu (giới hạn an toàn ${MAX_BATCH_ITEMS} mục).`
+            );
+          }
+        } catch (e) {
+          notes.push(`⚠️ Không đọc được playlist ${link}: ${formatError(e, "lỗi không rõ")}`);
+        }
+      }
+      if (entries.length > MAX_BATCH_ITEMS) {
+        notes.push(
+          `⚠️ Tổng cộng ${entries.length} mục — chỉ giữ ${MAX_BATCH_ITEMS} mục đầu (giới hạn an toàn).`
+        );
+        entries.length = MAX_BATCH_ITEMS;
+      }
+      const skipped = skippedNote(parsed);
+      if (skipped) notes.push(skipped);
+      setBatch({ entries, unchecked: new Set(), notes });
+    } finally {
+      setExpanding(false);
+    }
+  };
+
+  // TSK-FEAT-DL-PLATFORMS-REUP: gom tùy chọn reup hiện tại thành payload.
+  const buildReupOptions = (): ReupOptions => ({
+    write_info: reupInfo,
+    archive: reupArchive,
+    thumbnail: reupThumbnail,
+    section_start: sectionStart.trim() || null,
+    section_end: sectionEnd.trim() || null,
+  });
+
+  // Xếp các mục vào hàng đợi có sẵn (trạng thái "queued"); effect bên dưới
+  // tự khởi động tối đa MAX_PARALLEL_DOWNLOADS mục một lúc.
+  const queueEntries = (entries: PlaylistEntry[], extraNote?: string | null) => {
+    // BUG-053: không xếp 1 URL 2 lần khi nó đang chạy / đang chờ.
+    const busy = new Set(
+      items
+        .filter((i) => i.status === "downloading" || i.status === "paused" || i.status === "queued")
+        .map((i) => i.url)
+    );
+    const now = Date.now();
+    const fresh: DownloadItem[] = [];
+    let skipped = 0;
+    entries.slice(0, MAX_BATCH_ITEMS).forEach((entry, idx) => {
+      if (busy.has(entry.url)) {
+        skipped++;
+        return;
+      }
+      busy.add(entry.url);
+      const title = entry.title || entry.url;
+      fresh.push({
+        id: `dl_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+        url: entry.url,
+        title,
+        platform: detectPlatform(entry.url),
+        format,
+        browserCookies: browserCookie !== "none" ? browserCookie : null,
+        extractSubtitles,
+        status: "queued",
+        percent: 0,
+        speed: "",
+        eta: "--:--",
+        sizeText: "",
+        filename: title,
+        filePath: null,
+        error: null,
+        reup: buildReupOptions(),
+        createdAt: now + idx,
+      });
+    });
+    if (fresh.length > 0) setItems((prev) => [...fresh, ...prev]);
+    setQueueNotice(
+      [
+        fresh.length > 0
+          ? `📥 Đã xếp ${fresh.length} mục vào hàng đợi — tải song song tối đa ${MAX_PARALLEL_DOWNLOADS} mục.`
+          : "⚠️ Không có mục mới để xếp hàng.",
+        skipped > 0 ? `Bỏ ${skipped} link đang tải/đang chờ (chống trùng).` : null,
+        extraNote ?? null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+  };
+
   // Inspect video URL
   const handleInspect = async (overrideUrl?: string) => {
-    const targetUrl = (overrideUrl || url).trim();
-    if (!targetUrl) return;
+    const text = (overrideUrl || url).trim();
+    if (!text) return;
+
+    // TSK-FEAT-DL-BATCH-AUDIO: nhiều link hoặc link playlist → danh sách chọn.
+    const parsed = await parseLinks(text);
+    if (parsed.urls.length > 1 || parsed.urls.some(looksLikePlaylist)) {
+      await buildBatch(parsed);
+      return;
+    }
+    const targetUrl = parsed.urls.length === 1 ? parsed.urls[0] : text;
 
     // R3-04 (5): validate target URL via new URL()
     if (!isValidHttpUrl(targetUrl)) {
@@ -496,7 +714,37 @@ export default function DownloaderView({
     // button. Without this, a disk-full rejection left the button stuck on
     // "Đang khởi động..." forever.
     try {
-      const targetUrl = url.trim();
+      // TSK-FEAT-DL-BATCH-AUDIO: danh sách chọn đang mở → xếp các mục đã tích.
+      if (batch) {
+        const chosen = batch.entries.filter((e) => !batch.unchecked.has(e.url));
+        if (chosen.length === 0) {
+          setInspectError("Chưa chọn mục nào trong danh sách.");
+          return;
+        }
+        queueEntries(chosen);
+        setBatch(null);
+        setUrl("");
+        return;
+      }
+
+      const parsed = await parseLinks(url);
+      // Có link playlist → mở danh sách để xác nhận trước khi tải.
+      if (parsed.urls.some(looksLikePlaylist)) {
+        await buildBatch(parsed);
+        return;
+      }
+      // Nhiều link lẻ → mỗi link 1 mục trong hàng đợi.
+      if (parsed.urls.length > 1) {
+        queueEntries(
+          parsed.urls.map((u) => ({ url: u, title: u, duration: null })),
+          skippedNote(parsed),
+        );
+        setUrl("");
+        setVideoInfo(null);
+        return;
+      }
+
+      const targetUrl = parsed.urls.length === 1 ? parsed.urls[0] : url.trim();
       if (!targetUrl) return;
 
       // R2-09.8 & R3-04 (5): reject obviously-invalid URLs at the UI layer BEFORE
@@ -563,6 +811,7 @@ export default function DownloaderView({
         filename: title,
         filePath: null,
         error: null,
+        reup: buildReupOptions(),
         createdAt: Date.now(),
       };
 
@@ -575,6 +824,7 @@ export default function DownloaderView({
         browser_cookies: browserCookie !== "none" ? browserCookie : undefined,
         extract_subtitles: extractSubtitles,
         subtitle_langs: ["vi", "en", "ja", "zh"],
+        reup: buildReupOptions(),
       };
 
       try {
@@ -620,6 +870,7 @@ export default function DownloaderView({
       browser_cookies: item.browserCookies || undefined,
       extract_subtitles: item.extractSubtitles,
       subtitle_langs: ["vi", "en", "ja", "zh"],
+      reup: item.reup ?? undefined,
     };
 
     setItems((prev) =>
@@ -641,7 +892,31 @@ export default function DownloaderView({
     }
   };
 
+  // TSK-FEAT-DL-BATCH-AUDIO: cổng hàng đợi — mỗi khi có chỗ trống, khởi động
+  // mục "queued" cũ nhất qua đúng đường `handleResume` (downloader_start).
+  useEffect(() => {
+    const running = items.filter((i) => i.status === "downloading").length;
+    const slots = MAX_PARALLEL_DOWNLOADS - running;
+    if (slots <= 0) return;
+    items
+      .filter((i) => i.status === "queued" && !launchedRef.current.has(i.id))
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, slots)
+      .forEach((item) => {
+        launchedRef.current.add(item.id);
+        void handleResume(item);
+      });
+  }, [items]);
+
   const handleCancel = async (id: string) => {
+    // Mục còn chờ trong hàng đợi chưa có tiến trình yt-dlp → hủy tại chỗ.
+    if (items.find((i) => i.id === id)?.status === "queued") {
+      launchedRef.current.add(id);
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: "cancelled" } : item))
+      );
+      return;
+    }
     try {
       await sublix.downloaderCancel(id);
       setItems((prev) =>
@@ -665,7 +940,9 @@ export default function DownloaderView({
     // in the background. Cancel first, swallow the (possibly already-dead)
     // error, then drop the row from the UI.
     const target = items.find((i) => i.id === id);
-    if (target && (target.status === "downloading" || target.status === "paused" || target.status === "queued")) {
+    // Mục đang chờ: chặn cổng hàng đợi khởi động nó trong lúc đang xóa.
+    launchedRef.current.add(id);
+    if (target && (target.status === "downloading" || target.status === "paused")) {
       try {
         await sublix.downloaderCancel(id);
       } catch (e) {
@@ -782,19 +1059,23 @@ export default function DownloaderView({
               <span>{currentPlatformMeta.icon}</span>
               <span>{currentPlatformMeta.label}</span>
             </span>
-            <input
-              type="text"
+            {/* TSK-FEAT-DL-BATCH-AUDIO: textarea để dán nhiều link (mỗi dòng 1 link);
+                Enter = Kiểm tra link, Shift+Enter = xuống dòng. */}
+            <textarea
               className="downloader-url-input"
-              placeholder="Dán đường dẫn video (https://www.youtube.com/watch?v=..., TikTok, Douyin, Facebook...)"
+              rows={url ? Math.min(5, url.split("\n").length) : 2}
+              placeholder="Dán link video hoặc playlist (YouTube, TikTok, Douyin, Bilibili...) — nhiều link thì mỗi dòng 1 link"
               value={url}
               onChange={(e) => {
                 setUrl(e.target.value);
                 setVideoInfo(null);
                 setInspectError(null);
                 setThumbFailed(false);
+                setBatch(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
                   handleInspect();
                 }
               }}
@@ -808,6 +1089,7 @@ export default function DownloaderView({
                   setVideoInfo(null);
                   setInspectError(null);
                   setThumbFailed(false);
+                  setBatch(null);
                 }}
                 title="Xóa URL"
               >
@@ -829,9 +1111,13 @@ export default function DownloaderView({
             type="button"
             className="downloader-btn-inspect"
             onClick={() => handleInspect()}
-            disabled={inspecting || !url.trim()}
+            disabled={inspecting || expanding || !url.trim()}
           >
-            {inspecting ? "⏳ Đang đọc..." : "🔍 Kiểm Tra Link"}
+            {inspecting || expanding
+              ? "⏳ Đang đọc..."
+              : linkCount > 1
+              ? `🔍 Kiểm Tra ${linkCount} Link`
+              : "🔍 Kiểm Tra Link"}
           </button>
         </div>
 
@@ -840,6 +1126,16 @@ export default function DownloaderView({
             ⚠️ {inspectError}
           </div>
         )}
+
+        {expanding && (
+          <div className="downloader-sub-note">⏳ Đang đọc danh sách playlist bằng yt-dlp...</div>
+        )}
+
+        {batch && (
+          <DownloaderBatchPicker batch={batch} onChange={setBatch} formatDuration={formatDuration} />
+        )}
+
+        {queueNotice && <div className="downloader-sub-note">{queueNotice}</div>}
 
         {/* METADATA INSPECTED CARD */}
         {videoInfo && (
@@ -887,7 +1183,7 @@ export default function DownloaderView({
         {/* OPTIONS GRID */}
         <div className="downloader-options-grid">
           <div className="downloader-option-item">
-            <label className="option-label">Chất lượng tải về:</label>
+            <label className="option-label">Chất lượng / định dạng tải về:</label>
             <CustomSelect
               value={format}
               options={FORMAT_OPTIONS}
@@ -918,6 +1214,58 @@ export default function DownloaderView({
             </label>
           </div>
 
+          {/* TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup (mặc định tắt). */}
+          <div className="downloader-option-item reup-options">
+            <label className="option-label">
+              🎬 Tùy chọn reup <span className="option-hint">(tuỳ chọn — mặc định tắt)</span>
+            </label>
+            <div className="reup-checkbox-row">
+              <label className="checkbox-label reup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={reupInfo}
+                  onChange={(e) => setReupInfo(e.target.checked)}
+                />
+                <span>🧾 Xuất metadata (.info.txt) để viết lại caption</span>
+              </label>
+              <label className="checkbox-label reup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={reupArchive}
+                  onChange={(e) => setReupArchive(e.target.checked)}
+                />
+                <span>♻️ Chống tải trùng (sổ đã tải)</span>
+              </label>
+              <label className="checkbox-label reup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={reupThumbnail}
+                  onChange={(e) => setReupThumbnail(e.target.checked)}
+                />
+                <span>🖼️ Tải thumbnail gốc (.jpg)</span>
+              </label>
+            </div>
+            <div className="reup-section-row">
+              <span className="reup-section-label">✂️ Chỉ tải đoạn (hh:mm:ss):</span>
+              <input
+                type="text"
+                className="reup-time-input"
+                placeholder="từ 00:00:00"
+                value={sectionStart}
+                onChange={(e) => setSectionStart(e.target.value)}
+              />
+              <span className="reup-section-dash">→</span>
+              <input
+                type="text"
+                className="reup-time-input"
+                placeholder="đến 00:00:00"
+                value={sectionEnd}
+                onChange={(e) => setSectionEnd(e.target.value)}
+              />
+              <span className="option-hint">(để trống = tải cả video)</span>
+            </div>
+          </div>
+
           {subsNotice && <div className="downloader-sub-note">{subsNotice}</div>}
         </div>
 
@@ -927,15 +1275,27 @@ export default function DownloaderView({
             type="button"
             className="downloader-btn-start"
             onClick={handleStartDownload}
-            disabled={starting || !url.trim()}
+            disabled={
+              starting ||
+              expanding ||
+              (batch ? batch.entries.length === batch.unchecked.size : !url.trim())
+            }
           >
-            {starting ? (
+            {starting || expanding ? (
               <>
-                <span className="downloader-spinner" /> Đang khởi động...
+                <span className="downloader-spinner" />{" "}
+                {expanding ? "Đang đọc playlist..." : "Đang khởi động..."}
               </>
             ) : (
               <>
-                <IconDownload size={16} /> Bắt Đầu Tải Video Ngay
+                <IconDownload size={16} />{" "}
+                {batch
+                  ? `Tải ${batch.entries.length - batch.unchecked.size} Mục Đã Chọn`
+                  : linkCount > 1
+                  ? `Tải ${linkCount} Link Cùng Lúc`
+                  : isAudioFormat(format)
+                  ? "Bắt Đầu Tải Âm Thanh Ngay"
+                  : "Bắt Đầu Tải Video Ngay"}
               </>
             )}
           </button>
@@ -1051,9 +1411,13 @@ export default function DownloaderView({
                       {/* v0.9.6: completed file info — quality, size, path */}
                       {item.status === "completed" && (item.resolution || item.sizeText || item.filePath) && (
                         <div className="item-file-meta">
-                          {item.resolution && (
+                          {isAudioFormat(item.format) ? (
+                            <span className="meta-chip">
+                              🎵 Âm thanh {item.format.replace("audio-", "").toUpperCase()}
+                            </span>
+                          ) : item.resolution ? (
                             <span className="meta-chip">🎞 {resolutionLabel(item.resolution)}</span>
-                          )}
+                          ) : null}
                           {item.sizeText && <span className="meta-chip">💾 {item.sizeText}</span>}
                           {item.subsLangs && item.subsLangs.length > 0 ? (
                             <span className="meta-chip">
@@ -1186,7 +1550,13 @@ export default function DownloaderView({
                                 className="item-btn bridge-studio"
                                 disabled={!pathReady}
                                 onClick={() => handlePlayInStudio(safe)}
-                                title={pathReady ? "Xem và biên tập video ngay trong Sublix Studio (Phụ đề, dịch thuật & lồng tiếng AI)" : tip}
+                                title={
+                                  !pathReady
+                                    ? tip
+                                    : isAudioFormat(item.format)
+                                    ? "Mở file âm thanh trong Sublix Studio (tạo phụ đề & dịch thuật từ âm thanh)"
+                                    : "Xem và biên tập video ngay trong Sublix Studio (Phụ đề, dịch thuật & lồng tiếng AI)"
+                                }
                               >
                                 <IconClapper size={14} /> 🚀 Xem Trong Studio
                               </button>

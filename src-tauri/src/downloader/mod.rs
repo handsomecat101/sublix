@@ -15,6 +15,13 @@ use std::sync::{Arc, LazyLock, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
 
+pub mod batch;
+pub mod reup;
+
+#[cfg(test)]
+#[path = "reup_tests.rs"]
+mod reup_tests;
+
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 #[cfg(windows)]
@@ -64,6 +71,11 @@ pub struct DownloadRequest {
     pub cookies_file: Option<String>,
     pub extract_subtitles: bool,
     pub subtitle_langs: Option<Vec<String>>,
+    /// TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup (metadata .info.txt,
+    /// download-archive, thumbnail, cắt đoạn). `Option` + `default` để payload
+    /// cũ (thiếu field) hoặc gửi `null` đều chạy y như trước.
+    #[serde(default)]
+    pub reup: Option<reup::ReupOptions>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -532,6 +544,22 @@ pub fn get_platform(url: &str) -> &'static str {
     if host_matches("twitch.tv") {
         return "twitch";
     }
+    // --- Nền tảng reup (TSK-FEAT-DL-PLATFORMS-REUP) ---
+    if host_matches("kick.com") {
+        return "kick";
+    }
+    if host_matches("dailymotion.com") || host_matches("dai.ly") {
+        return "dailymotion";
+    }
+    if host_matches("vk.com") || host_matches("vk.ru") || host_matches("vkvideo.ru") {
+        return "vk";
+    }
+    if host_matches("pinterest.com") || host_matches("pin.it") {
+        return "pinterest";
+    }
+    if host_matches("snapchat.com") {
+        return "snapchat";
+    }
     "generic_video"
 }
 
@@ -625,6 +653,19 @@ pub fn platform_source_label(platform: &str) -> Option<&'static str> {
         "migu" => Some("Migu"),
         "niconico" => Some("Niconico"),
         "wppilot" => Some("WeChat Channels"),
+        // --- Nền tảng reup (TSK-FEAT-DL-PLATFORMS-REUP) ---
+        "instagram" => Some("Instagram"),
+        "facebook" => Some("Facebook"),
+        "twitch" => Some("Twitch"),
+        "kick" => Some("Kick"),
+        "dailymotion" => Some("Dailymotion"),
+        "vk" => Some("VK"),
+        "pinterest" => Some("Pinterest"),
+        "snapchat" => Some("Snapchat"),
+        "vimeo" => Some("Vimeo"),
+        "twitter" => Some("X / Twitter"),
+        "reddit" => Some("Reddit"),
+        "soundcloud" => Some("SoundCloud"),
         _ => None,
     }
 }
@@ -667,12 +708,32 @@ pub fn platform_error_hint(platform: &str, stderr: &str) -> Option<String> {
                 .to_string(),
         );
     }
-    // yt-dlp chưa biết nền tảng này (ví dụ Kuaishou, Migu — yt-dlp chưa hỗ trợ)
+    // Vimeo (2025+): "The web client only works when logged-in."
+    if s.contains("only works when logged-in") || s.contains("only works when logged in") {
+        return Some(
+            "Vimeo hiện yêu cầu ĐĂNG NHẬP mới tải được. Hãy xuất file cookies.txt \
+             (đã đăng nhập Vimeo) rồi chọn trong phần cài đặt, sau đó thử lại."
+                .to_string(),
+        );
+    }
+    // Instagram: hồ sơ/kênh cần đăng nhập (Reels/bài đăng công khai vẫn tải được).
+    if platform == "instagram"
+        && (s.contains("instagram:user")
+            || s.contains("unable to extract data")
+            || s.contains("login required"))
+    {
+        return Some(
+            "Instagram dạng HỒ SƠ/KÊNH cần ĐĂNG NHẬP. Reels hoặc bài đăng công khai vẫn \
+             tải được — hãy dán link bài viết/reel cụ thể thay vì link hồ sơ."
+                .to_string(),
+        );
+    }
+    // Nền tảng yt-dlp chưa có extractor (Kuaishou/Migu…) → báo thẳng, KHÔNG gợi
+    // ý "cập nhật yt-dlp" (vô ích vì upstream chưa hỗ trợ).
     if s.contains("unsupported url") {
-        let name = platform_source_label(platform).unwrap_or("nền tảng này");
+        let name = platform_source_label(platform).unwrap_or("Nền tảng này");
         return Some(format!(
-            "yt-dlp hiện chưa hỗ trợ {name}. Hãy cập nhật yt-dlp \
-             (pip install -U yt-dlp) rồi thử lại."
+            "{name} hiện chưa được yt-dlp hỗ trợ nên không tải được. Hãy thử nền tảng khác."
         ));
     }
     if s.contains("sign in to confirm you're not a bot") || s.contains("http error 403") {
@@ -768,9 +829,14 @@ pub fn fetch_video_info(app: &AppHandle, url: &str) -> Result<VideoInfo> {
             "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
         ));
     }
+    // TSK-FEAT-DL-PLATFORMS-REUP: chặn SỚM nền tảng yt-dlp chưa hỗ trợ
+    // (Kuaishou/Migu) — không spawn yt-dlp, báo rõ tiếng Việt.
+    let platform = get_platform(url);
+    if let Some(msg) = reup::unsupported_platform_message(platform) {
+        return Err(anyhow::anyhow!(msg));
+    }
     let cfg = crate::config::AppConfig::load(app);
     let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
-    let platform = get_platform(url);
     let url_owned = url.to_string();
 
     // Find a JS runtime for yt-dlp. YouTube 2024+ requires it for
@@ -1012,6 +1078,27 @@ fn build_download_command(
     }
     for arg in build_format_args(&req.format) {
         cmd.arg(arg);
+    }
+
+    // TSK-FEAT-DL-PLATFORMS-REUP: chỉ thêm cờ khi người dùng BẬT tùy chọn →
+    // hành vi cũ giữ nguyên tuyệt đối. `section_arg` đã được validate sớm ở
+    // `start_download`; ở đây bỏ qua lỗi (không thể xảy ra) để hàm vẫn total.
+    let reup_opts = req.reup.clone().unwrap_or_default();
+    if reup_opts.write_info {
+        cmd.arg("--write-info-json");
+    }
+    if reup_opts.thumbnail {
+        cmd.arg("--write-thumbnail")
+            .arg("--convert-thumbnails")
+            .arg("jpg");
+    }
+    if reup_opts.archive {
+        cmd.arg("--download-archive").arg(reup::archive_path(save_dir));
+    }
+    if let Ok(Some(section)) = reup::section_arg(&reup_opts) {
+        cmd.arg("--download-sections")
+            .arg(section)
+            .arg("--force-keyframes-at-cuts");
     }
 
     cmd.arg("--").arg(&req.url);
@@ -1300,6 +1387,9 @@ struct DrainResult {
     stderr_text: String,
     current_size: String,
     last_percent: f32,
+    /// TSK-FEAT-DL-PLATFORMS-REUP: yt-dlp bỏ qua vì đã có trong
+    /// `--download-archive` (không tải lại) — UI báo "Đã tải trước đó".
+    skipped_archive: bool,
 }
 
 /// Drains stdout/stderr of a child process, updates progress, and tracks destination paths.
@@ -1337,6 +1427,7 @@ fn drain_child_process(
     let mut downloaded_now: u64 = 0;
     let mut detected_filename = String::new();
     let mut detected_filepath: Option<PathBuf> = None;
+    let mut skipped_archive = false;
     let mut last_emit = std::time::Instant::now();
 
     if let Some(stdout_pipe) = stdout {
@@ -1447,6 +1538,18 @@ fn drain_child_process(
                             }
                         }
                     }
+                } else if let Some(pos) = line.find("has already been recorded in the archive") {
+                    // TSK-FEAT-DL-PLATFORMS-REUP: `--download-archive` bỏ qua vì
+                    // video đã tải ở lần trước. Thông báo thật:
+                    // `[download] <file> has already been recorded in the archive`.
+                    let before = line[..pos].trim_start_matches("[download]").trim();
+                    if !before.is_empty() {
+                        let p = PathBuf::from(before);
+                        detected_filename =
+                            p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        detected_filepath = Some(p);
+                    }
+                    skipped_archive = true;
                 }
 
                 if let Some(p) = pct {
@@ -1517,6 +1620,7 @@ fn drain_child_process(
         stderr_text,
         current_size,
         last_percent,
+        skipped_archive,
     }
 }
 
@@ -1528,6 +1632,15 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             "Link không hợp lệ: chỉ chấp nhận URL http(s)://"
         ));
     }
+
+    // TSK-FEAT-DL-PLATFORMS-REUP: chặn SỚM nền tảng yt-dlp chưa hỗ trợ
+    // (Kuaishou/Migu) — fail rõ ràng trước khi spawn yt-dlp.
+    let platform = get_platform(&req.url);
+    if let Some(msg) = reup::unsupported_platform_message(platform) {
+        return Err(anyhow::anyhow!(msg));
+    }
+    // Validate mốc cắt đoạn TRƯỚC khi spawn để UI báo lỗi ngay (không tải dở).
+    reup::section_arg(&req.reup.clone().unwrap_or_default()).map_err(anyhow::Error::msg)?;
 
     let cfg = crate::config::AppConfig::load(&app);
     let ytdlp_bin = find_ytdlp(Some(&cfg.ytdlp_path))?;
@@ -1863,6 +1976,21 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             None
         };
 
+        // TSK-FEAT-DL-PLATFORMS-REUP: chuyển `.info.json` (do --write-info-json
+        // tạo) thành `.info.txt` (UTF-8 BOM) để viết lại caption. Lỗi ở bước
+        // này KHÔNG được làm hỏng kết quả tải video.
+        if final_res.is_success && req_clone.reup.clone().unwrap_or_default().write_info {
+            if let Some(ref out) = effective_output {
+                match reup::finalize_info_txt(out) {
+                    Ok(Some(p)) => info!("🧾 job {}: đã ghi metadata {}", job_id, p.display()),
+                    Ok(None) => {
+                        warn!("🧾 job {}: bật metadata nhưng không thấy file .info.json", job_id)
+                    }
+                    Err(e) => warn!("⚠️ job {}: không ghi được .info.txt: {:#}", job_id, e),
+                }
+            }
+        }
+
         // v0.9.6: ground-truth size + resolution of the finished file, used
         // for the completed row and the `downloader:meta` event.
         let (probed_size, probed_resolution) = effective_output
@@ -1870,7 +1998,37 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) -> Result<()> {
             .map(|p| probe_media_meta(p))
             .unwrap_or((None, None));
 
-        if final_res.is_success && effective_output.is_some() {
+        if final_res.is_success && final_res.skipped_archive {
+            // TSK-FEAT-DL-PLATFORMS-REUP: `--download-archive` đã bỏ qua vì video
+            // có trong sổ đã tải — báo "Đã tải trước đó", KHÔNG phải lỗi.
+            info!("↩️ Downloader job {} bỏ qua: đã có trong sổ đã tải", job_id);
+            let _ = app_clone.emit(
+                "downloader:progress",
+                DownloadProgressPayload {
+                    id: job_id.clone(),
+                    status: "completed".to_string(),
+                    percent: 100.0,
+                    speed: "0 B/s".to_string(),
+                    eta: "00:00".to_string(),
+                    size_text: "Đã tải trước đó".to_string(),
+                    filename: final_res.detected_filename.clone(),
+                    file_path: effective_output
+                        .as_ref()
+                        .map(|p| p.to_string_lossy().to_string()),
+                    error: None,
+                    run_id: Some(my_run_id),
+                },
+            );
+            let _ = app_clone.emit(
+                "downloader:meta",
+                DownloadMetaPayload {
+                    id: job_id.clone(),
+                    size_text: None,
+                    resolution: None,
+                    subs_langs: None,
+                },
+            );
+        } else if final_res.is_success && effective_output.is_some() {
             info!("✅ Downloader job {} finished successfully", job_id);
             let _ = app_clone.emit(
                 "downloader:progress",

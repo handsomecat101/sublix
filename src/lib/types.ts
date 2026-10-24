@@ -44,6 +44,18 @@ export const SUBTITLE_SOURCE_LABELS: Record<string, string> = {
   migu: "Migu",
   niconico: "Niconico",
   wppilot: "WeChat Channels",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  twitch: "Twitch",
+  kick: "Kick",
+  dailymotion: "Dailymotion",
+  vk: "VK",
+  pinterest: "Pinterest",
+  snapchat: "Snapchat",
+  vimeo: "Vimeo",
+  twitter: "X / Twitter",
+  reddit: "Reddit",
+  soundcloud: "SoundCloud",
 };
 
 /** Tên nền tảng để hiển thị; trả về chính id nếu không có trong danh sách. */

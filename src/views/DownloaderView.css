@@ -123,6 +123,45 @@
   padding: 8px 4px;
 }
 
+/* TSK-FEAT-DL-BATCH-AUDIO: ô nhập là textarea (nhiều link, mỗi dòng 1 link).
+   Cột trái hẹp → hàng 1: nhãn nền tảng + nút Dán/Xóa, hàng 2: textarea full. */
+.downloader-input-wrapper:has(textarea.downloader-url-input) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding-top: 8px;
+}
+
+.downloader-input-wrapper:has(textarea.downloader-url-input) .downloader-paste-btn,
+.downloader-input-wrapper:has(textarea.downloader-url-input) .downloader-clear-btn {
+  margin-left: auto;
+}
+
+textarea.downloader-url-input {
+  order: 3;
+  flex: 1 1 100%;
+  min-width: 0;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.45;
+  min-height: 36px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 1 link: cuộn ngang như ô input cũ thay vì xuống dòng */
+textarea.downloader-url-input[rows="1"] {
+  white-space: pre;
+  overflow: hidden;
+}
+
+.downloader-input-wrapper:has(textarea[rows="1"]) {
+  align-items: center;
+}
+
+.downloader-input-wrapper:has(textarea:not([rows="1"])) {
+  align-items: flex-start;
+}
+
 .downloader-url-input::placeholder {
   color: var(--t3, #64748b);
   font-size: 0.85rem;
@@ -799,4 +838,134 @@
   border: 1px solid rgba(251, 191, 36, 0.35);
   border-radius: 8px;
   padding: 6px 10px;
+}
+
+/* TSK-FEAT-DL-BATCH-AUDIO: danh sách chọn mục playlist / nhiều link */
+.dl-batch-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.dl-batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--t1);
+}
+
+.dl-batch-toggle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--t2);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.dl-batch-toggle:hover {
+  border-color: var(--ac);
+  color: var(--t1);
+}
+
+.dl-batch-note {
+  margin-top: 0;
+}
+
+.dl-batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.dl-batch-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  font-size: 0.8rem;
+  color: var(--t1);
+  cursor: pointer;
+}
+
+.dl-batch-row.is-off label {
+  opacity: 0.5;
+}
+
+.dl-batch-idx {
+  color: var(--t3, #94a3b8);
+  min-width: 2.2em;
+  text-align: right;
+}
+
+.dl-batch-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dl-batch-dur {
+  color: var(--t3, #94a3b8);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+/* ---- TSK-FEAT-DL-PLATFORMS-REUP: Tùy chọn reup ---- */
+.downloader-option-item.reup-options {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--bd, #2b3550);
+  padding-top: 10px;
+}
+
+.reup-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.checkbox-label.reup-checkbox {
+  font-size: 0.82rem;
+}
+
+.reup-section-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.reup-section-label {
+  font-size: 0.82rem;
+  color: var(--t1);
+}
+
+.reup-section-dash {
+  color: var(--t3, #94a3b8);
+}
+
+.reup-time-input {
+  width: 96px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--bd, #2b3550);
+  background: var(--bg2, #121a2c);
+  color: var(--t1);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.reup-time-input:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 1px;
 }
