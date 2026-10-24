@@ -23,10 +23,46 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.11.36",
+    date: "24/10/2026",
+    title: "Thêm cấu hình phần cứng cho GPU tích hợp AMD (Radeon / Ryzen AI)",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Preset mới — GPU tích hợp AMD",
+        icon: "\u{1F53A}",
+        items: [
+          "Thêm preset thứ 4: GPU Tích Hợp AMD (Radeon / Ryzen AI) cho máy có iGPU AMD — 3 preset cũ (CPU / GPU 4-8GB / GPU 12-24GB) giữ nguyên.",
+          "Nhận diện giọng nói (Whisper) chạy CPU; phần dịch chuyển sang provider Ollama — Ollama tự dùng ROCm/Vulkan trên iGPU nên nhanh hơn CPU khoảng 2×.",
+          "Đo thật trên Ryzen AI Max 390 (Radeon 8050S): 32,83 tok/s GPU vs 15,53 tok/s CPU.",
+          "Backend thêm command ollama_models (GET /api/tags) + dropdown liệt kê model Ollama đã cài, kèm ô nhập tag tay.",
+          "Preset tự chọn model phù hợp: ưu tiên Qwen3-4B, không có thì lấy model 1,5-6,5GB, cuối cùng lấy model nhỏ nhất."
+        ]
+      },
+      {
+        category: "Vì sao dùng Ollama thay vì GGUF nhúng",
+        icon: "\u2699\uFE0F",
+        items: [
+          "Windows 11 mặc định bật Smart App Control (WDAC) nên binary llama.cpp chưa ký sẽ bị chặn: An Application Control policy has blocked this file.",
+          "whisper.cpp chưa có bản ROCm/Vulkan cho Windows (chỉ CUDA + CPU) nên STT trên máy AMD chạy CPU.",
+          "Ollama đã ký hợp lệ (Ollama Inc.) nên Smart App Control cho phép, và bản Windows tự dùng ROCm cho GPU AMD."
+        ]
+      },
+      {
+        category: "Fix 2 lỗi chặn pipeline A→Z (BUG-H11, BUG-H12)",
+        icon: "\u{1F41B}",
+        items: [
+          "BUG-H11: app ép binary whisper-CUDA dù đã chọn engine CPU → thêm ensure_binary_with_engine_pref() để tôn trọng cấu hình.",
+          "BUG-H12: ffmpeg 9 đã gỡ -filter_complex_script → chuyển sang -filter_complex (xuất video từng fail trên ffmpeg 8+).",
+          "Verify đầy đủ trên máy chỉ có GPU tích hợp AMD: STT → phân vai → dịch iGPU → TTS → xuất MP4 4 stream + SRT.",
+        ]
+      }
+    ]
+  },
+  {
     version: "v0.11.35",
     date: "23/10/2026",
     title: "Sửa Lỗi Xuất Video Không Có Tiếng Việt + TTS Batch Nhanh Gấp 10 Lần",
-    isCurrent: true,
     highlights: [
       {
         category: "Sửa Lỗi Nghiêm Trọng — Xuất Video Mất Tiếng Lồng",

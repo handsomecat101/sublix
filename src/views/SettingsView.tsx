@@ -15,6 +15,7 @@ import {
   type AudioDevice,
   type ModelStatusItem,
   type ModelDownloadProgress,
+  type OllamaModelInfo,
   type FileSubProgress,
   type FileSubResult,
   type DubbingProgress,
@@ -44,7 +45,16 @@ type Status =
   | { kind: "error"; message: string }
   | { kind: "success"; message: string };
 
-type HardwarePreset = "cpu" | "gpu_mid" | "gpu_high";
+/**
+ * Cấu hình phần cứng 1-click.
+ * - `cpu`      : thuần CPU (không có card rời NVIDIA)
+ * - `gpu_mid`  : NVIDIA GPU 4-8GB VRAM
+ * - `gpu_high` : NVIDIA GPU 12-24GB VRAM
+ * - `amd_igpu` : GPU tích hợp AMD (Radeon / Ryzen AI) — dịch qua Ollama (ROCm),
+ *                vì whisper.cpp/llama.cpp trên Windows chưa có bản ROCm/Vulkan
+ *                đáng tin cậy và STT chạy CPU.
+ */
+type HardwarePreset = "cpu" | "gpu_mid" | "gpu_high" | "amd_igpu";
 
 interface LiveSubPreview {
   id: number;
@@ -164,6 +174,8 @@ export default function SettingsView() {
   const [minimaxModel, setMinimaxModel] = useState<string>("MiniMax-M3");
   const [ollamaUrl, setOllamaUrl] = useState<string>("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState<string>("smtek/qwen3.8-27b:q4_k_m");
+  /** Model Ollama đã cài trên máy (rỗng nếu Ollama chưa chạy). */
+  const [ollamaModelList, setOllamaModelList] = useState<OllamaModelInfo[]>([]);
   const [showMinimaxKey, setShowMinimaxKey] = useState<boolean>(false);
   const [providerTesting, setProviderTesting] = useState<boolean>(false);
   const [providerTestResult, setProviderTestResult] = useState<string | null>(null);
@@ -313,6 +325,7 @@ export default function SettingsView() {
   useEffect(() => {
     loadDevices();
     refreshSetup();
+    loadOllamaModels();
     sublix.appInfo().then(setAppInfo).catch(() => {});
     sublix.liveStatus().then(setIsLive).catch(() => {});
     sublix.getTranslationEngine().then(setEngine).catch(() => {});
@@ -677,6 +690,23 @@ export default function SettingsView() {
     };
   }, []);
 
+  /**
+   * Lấy danh sách model Ollama đã cài.
+   * Ollama có thể chưa chạy -> trả về mảng rỗng, không báo lỗi (preset AMD
+   * vẫn dùng được, chỉ không auto-chọn được model).
+   */
+  async function loadOllamaModels(): Promise<OllamaModelInfo[]> {
+    try {
+      const list = await sublix.ollamaModels();
+      setOllamaModelList(list);
+      return list;
+    } catch (e) {
+      console.warn("ollama_models failed:", e);
+      setOllamaModelList([]);
+      return [];
+    }
+  }
+
   async function refreshSetup() {
     try {
       const s = await sublix.checkSetup();
@@ -929,6 +959,27 @@ export default function SettingsView() {
     }
   }
 
+  /**
+   * Chọn model Ollama đã cài phù hợp cho GPU tích hợp AMD.
+   * - Ưu tiên Qwen2.5-3B: KHÔNG có thinking mode nên trả lời nhanh (~6s, đo thật)
+   *   — Qwen3-4B bản "Thinking" sinh hàng trăm token suy luận, mất 50-110s.
+   * - Không có Qwen2.5 -> chọn model 1.5-6.5GB (vừa VRAM, không bị swap).
+   * - Cuối cùng -> model nhỏ nhất.
+   */
+  function pickOllamaModel(list: OllamaModelInfo[]): string | null {
+    const usable = list.filter((m) => !m.name.endsWith("-cpu"));
+    if (usable.length === 0) return null;
+    const qwen25_3b = usable.find((m) => /^qwen2\.5:3b$/i.test(m.name));
+    if (qwen25_3b) return qwen25_3b.name;
+    const qwen4b = usable.find((m) => /^qwen3:4b$/i.test(m.name));
+    if (qwen4b) return qwen4b.name;
+    const qwen = usable.find((m) => /^qwen/i.test(m.name) && m.size_gb <= 8);
+    if (qwen) return qwen.name;
+    const mid = usable.filter((m) => m.size_gb >= 1.5 && m.size_gb <= 6.5);
+    if (mid.length > 0) return [...mid].sort((a, b) => b.size_gb - a.size_gb)[0].name;
+    return [...usable].sort((a, b) => a.size_gb - b.size_gb)[0].name;
+  }
+
   async function applyHardwarePreset(preset: HardwarePreset) {
     if (preset === "cpu") {
       const stt = "base";
@@ -996,11 +1047,46 @@ export default function SettingsView() {
         kind: "success",
         message: "🚀 Đã chọn cấu hình GPU Khủng (12GB - 24GB VRAM). Tối ưu RTX 3080/3090, 4080/4090 cho chất lượng tối đa!",
       });
+    } else if (preset === "amd_igpu") {
+      // GPU tích hợp AMD (Radeon / Ryzen AI Max):
+      // - whisper.cpp trên Windows chưa có bản ROCm/Vulkan ổn định -> STT chạy CPU.
+      // - Dịch chạy qua Ollama: Ollama tự dùng ROCm/Vulkan trên iGPU
+      //   (nhanh hơn CPU ~2x trên Ryzen AI Max, đo thật 32.8 vs 15.5 tok/s).
+      const stt = "base";
+      setModel(stt);
+      setSttEnginePref("cpu");
+      setTransEnginePref("cpu");
+      setTransProvider("ollama");
+
+      const installed = await loadOllamaModels();
+      const picked = pickOllamaModel(installed);
+      if (picked) setOllamaModel(picked);
+
+      if (fullConfig) {
+        const updated = {
+          ...fullConfig,
+          stt_model: stt,
+          stt_engine_preference: "cpu",
+          translation_engine_preference: "cpu",
+          translation_provider: "ollama",
+          ...(picked ? { ollama_model: picked } : {}),
+        };
+        setFullConfig(updated);
+        sublix.saveConfig(updated).catch(console.error);
+      }
+      setStatus({
+        kind: "success",
+        message: picked
+          ? `🔺 Đã chọn cấu hình GPU tích hợp AMD (Radeon / Ryzen AI). Whisper chạy CPU, dịch chạy Ollama trên iGPU với model ${picked}!`
+          : "🔺 Đã chọn cấu hình GPU tích hợp AMD (Radeon / Ryzen AI). Whisper chạy CPU, dịch chạy Ollama. Cài Ollama + model để tận dụng iGPU!",
+      });
     }
   }
 
   const currentPreset: HardwarePreset | null =
-    sttEnginePref === "cpu" && transEnginePref === "cpu" && (model === "base" || model === "tiny") && translationModel === "qwen2.5-1.5b"
+    transProvider === "ollama" && sttEnginePref === "cpu" && (model === "base" || model === "tiny")
+      ? "amd_igpu"
+      : sttEnginePref === "cpu" && transEnginePref === "cpu" && (model === "base" || model === "tiny") && translationModel === "qwen2.5-1.5b"
       ? "cpu"
       : sttEnginePref === "cuda" && (translationModel === "qwen3-4b" || translationModel === "qwen3-8b") && model === "large-v3-turbo-q8_0"
       ? "gpu_high"
@@ -1874,6 +1960,15 @@ export default function SettingsView() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>🚀 GPU Khủng (12-24GB)</div>
                     <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>Large-v3-Turbo Q8 + Qwen3-4B</div>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => applyHardwarePreset("amd_igpu")}
+                    className={`preset-card ${currentPreset === "amd_igpu" ? "active" : ""}`}
+                    style={{ padding: "8px 10px", margin: 0, textAlign: "left" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)" }}>🔺 GPU Tích Hợp AMD (Radeon)</div>
+                    <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: 2 }}>base (140MB) + Ollama trên iGPU</div>
+                  </button>
                 </div>
               </ShellCard>
             </>
@@ -1969,6 +2064,36 @@ export default function SettingsView() {
                         <div className="preset-spec-item">
                           <span className="preset-spec-label">Engine:</span>
                           <span className="preset-spec-val">NVIDIA CUDA GPU</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preset 4: GPU tích hợp AMD (Radeon / Ryzen AI) */}
+                  <div
+                    className={`preset-card ${currentPreset === "amd_igpu" ? "active" : ""}`}
+                    onClick={() => applyHardwarePreset("amd_igpu")}
+                  >
+                    <div>
+                      <div className="preset-header">
+                        <span className="preset-title">🔺 GPU Tích Hợp AMD (Radeon / Ryzen AI)</span>
+                        <span className="preset-tag">AMD iGPU · Ollama ROCm</span>
+                      </div>
+                      <div className="preset-desc">
+                        Dành cho máy có GPU tích hợp AMD (Radeon 780M/890M, Ryzen AI Max, Radeon 8050S…). Whisper chạy CPU, còn phần dịch chạy qua <strong>Ollama</strong> — Ollama tự dùng ROCm/Vulkan trên iGPU nên nhanh hơn CPU khoảng 2×. Không cần card NVIDIA rời.
+                      </div>
+                      <div className="preset-specs">
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">STT Model:</span>
+                          <span className="preset-spec-val">base (140MB) — CPU</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Dịch LLM:</span>
+                          <span className="preset-spec-val">Ollama (Qwen3-4B ưu tiên) — iGPU</span>
+                        </div>
+                        <div className="preset-spec-item">
+                          <span className="preset-spec-label">Engine:</span>
+                          <span className="preset-spec-val">AMD iGPU qua Ollama (ROCm)</span>
                         </div>
                       </div>
                     </div>
@@ -2155,15 +2280,44 @@ export default function SettingsView() {
                       </div>
                       <div className="settings-row" style={{ marginBottom: 12 }}>
                         <label style={{ minWidth: 100 }}>Model Name:</label>
-                        <input
-                          type="text"
-                          value={ollamaModel}
-                          onChange={(e) => setOllamaModel(e.target.value)}
-                          placeholder="smtek/qwen3.8-27b:q4_k_m hoặc qwen:latest"
-                          className="settings-input"
-                          style={{ flex: 1, fontFamily: "monospace" }}
-                        />
+                        <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
+                          <select
+                            className="settings-input"
+                            value={ollamaModelList.some((m) => m.name === ollamaModel) ? ollamaModel : ""}
+                            onChange={(e) => { if (e.target.value) setOllamaModel(e.target.value); }}
+                            style={{ flex: 1, fontFamily: "monospace" }}
+                          >
+                            <option value="">
+                              {ollamaModelList.length > 0
+                                ? "— Chọn model đã cài —"
+                                : "Ollama chưa chạy hoặc chưa có model"}
+                            </option>
+                            {ollamaModelList.map((m) => (
+                              <option key={m.name} value={m.name}>
+                                {m.name}
+                                {m.params ? ` (${m.params}` : ""}
+                                {m.quant ? ` ${m.quant}` : ""}
+                                {m.size_gb > 0 ? ` • ${m.size_gb.toFixed(1)}GB` : ""}
+                                {m.params || m.quant ? ")" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={ollamaModel}
+                            onChange={(e) => setOllamaModel(e.target.value)}
+                            placeholder="Hoặc gõ tag model tay"
+                            className="settings-input"
+                            style={{ flex: 1, fontFamily: "monospace" }}
+                          />
+                        </div>
                       </div>
+                      {ollamaModelList.length > 0 && (
+                        <div style={{ fontSize: 10.5, color: "var(--t3)", marginTop: -6, marginBottom: 10 }}>
+                          {ollamaModelList.length} model Ollama đã cài • Ollama tự dùng ROCm/Vulkan trên GPU tích hợp AMD
+                          (nhanh hơn CPU khoảng 2×)
+                        </div>
+                      )}
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
                         <button
                           onClick={saveProviderSettings}
@@ -2923,7 +3077,11 @@ export default function SettingsView() {
                     <span style={{ fontSize: 11.5, opacity: 0.8 }}>Chế độ tăng tốc:</span>
                     <span style={{ fontSize: 11, color: "var(--ac)", display: "flex", alignItems: "center", gap: 4 }}>
                       {sttServerEngine === "cuda" || engine === "cuda" ? <IconZap size={13} /> : <IconCpu size={13} />}
-                      {sttServerEngine === "cuda" || engine === "cuda" ? "NVIDIA CUDA GPU" : "CPU Đa Luồng"}
+                      {sttServerEngine === "cuda" || engine === "cuda"
+                      ? "NVIDIA CUDA GPU"
+                      : transProvider === "ollama"
+                      ? "Ollama (GPU nếu hỗ trợ)"
+                      : "CPU Đa Luồng"}
                     </span>
                   </div>
                 </div>

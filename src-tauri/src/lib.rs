@@ -154,6 +154,7 @@ pub fn run() {
             test_audio,
             scan_audio_levels,
             get_translation_engine,
+            ollama_models,
             preload_translation_server,
             get_stt_engine,
             preload_stt_server_cmd,
@@ -570,6 +571,25 @@ fn get_translation_engine() -> Option<String> {
     translate::current_engine()
 }
 
+/// Danh sách model Ollama đã cài trên máy.
+/// Dùng cho preset "AMD iGPU (Ollama)" và dropdown chọn model trong Cài đặt.
+#[tauri::command]
+async fn ollama_models(app: tauri::AppHandle) -> Result<Vec<translate::server::OllamaModelInfo>, String> {
+    let cfg = config::AppConfig::load(&app);
+    let url = if cfg.ollama_url.trim().is_empty() {
+        "http://localhost:11434".to_string()
+    } else {
+        cfg.ollama_url.trim().to_string()
+    };
+    // Blocking HTTP -> chay off main thread de khong treo UI.
+    tauri::async_runtime::spawn_blocking(move || {
+        translate::server::list_ollama_models(&url)
+    })
+    .await
+    .map_err(|e| format!("Task loi: {e}"))?
+    .map_err(|e| format!("{e}"))
+}
+
 #[tauri::command]
 fn preload_translation_server(
     app: tauri::AppHandle,
@@ -714,7 +734,11 @@ fn download_whisper_binary_cmd(app: tauri::AppHandle) -> Result<(), String> {
             "message": "Downloading whisper.cpp (~30MB)..."
         }),
     );
-    stt::whisper_local::ensure_binary_with_engine().map_err(|e| {
+    // BUG-H11: tôn trọng engine người dùng đã chọn trong cài đặt.
+    let stt_pref = stt::EnginePreference::from_str(
+        &config::AppConfig::load(&app).stt_engine_preference,
+    );
+    stt::whisper_local::ensure_binary_with_engine_pref(stt_pref).map_err(|e| {
         let _ = app.emit(
             "setup:progress",
             serde_json::json!({

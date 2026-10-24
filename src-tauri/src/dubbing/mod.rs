@@ -2423,7 +2423,10 @@ pub fn analyze_and_create_project_full(
             let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
             let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
                 .context("Không tìm thấy model Whisper")?;
-            let (whisper_bin, _engine) = crate::stt::whisper_local::ensure_binary_with_engine()
+            let (whisper_bin, _engine) =
+                crate::stt::whisper_local::ensure_binary_with_engine_pref(
+                    crate::stt::EnginePreference::from_str(&cfg.stt_engine_preference),
+                )
                 .context("Không tìm thấy whisper binary")?;
 
             let mut whisper_cmd = Command::new(&whisper_bin);
@@ -2784,15 +2787,15 @@ fn render_amix_chunk(
     }
     filter_script.push_str(&format!("amix=inputs={num_inputs}:normalize=0,volume={volume:.2}[out]"));
 
-    let script_file = temp_dir.join(format!("{out_filename}_filter.txt"));
-    fs::write(&script_file, &filter_script)?;
-
+    // BUG-H12: `-filter_complex_script` đã bị FFMPEG 8+ gỡ bỏ (ffmpeg 9 chỉ còn
+    // `-filter_complex`). Truyền graph trực tiếp qua argv — Rust không qua shell
+    // nên không lỗi quoting; độ dài graph << 32KB (mỗi chunk ≤ 28 input).
     let mut cmd = Command::new(ffmpeg_bin);
     cmd.arg("-y");
     for (in_path, _) in inputs {
         cmd.arg("-i").arg(in_path);
     }
-    cmd.arg("-filter_complex_script").arg(&script_file);
+    cmd.arg("-filter_complex").arg(&filter_script);
     cmd.arg("-map").arg("[out]");
     cmd.arg("-c:a").arg("pcm_s16le");
     cmd.arg(&out_path);
@@ -2801,7 +2804,6 @@ fn render_amix_chunk(
     cmd.creation_flags(CREATE_NO_WINDOW);
 
     let status = run_child_with_cancel(cmd, my_gen)?;
-    let _ = fs::remove_file(&script_file);
     if !status.success() {
         return Err(anyhow::anyhow!("FFmpeg amix chunk render failed"));
     }
@@ -3423,11 +3425,10 @@ pub fn export_dubbed_video(
         }
     };
 
-    let filter_script_path = temp_dir.join("filter_complex.txt");
-    fs::write(&filter_script_path, &mix_filter)
-        .context("Failed to write filter_complex_script")?;
-
-    remux.arg("-filter_complex_script").arg(&filter_script_path);
+    // BUG-H12: `-filter_complex_script` đã bị FFMPEG 8+ gỡ bỏ (ffmpeg 9 chỉ còn
+    // `-filter_complex`). Truyền graph trực tiếp qua argv — Rust không qua shell
+    // nên không lỗi quoting; độ dài graph << 32KB (mỗi chunk ≤ 28 input).
+    remux.arg("-filter_complex").arg(&mix_filter);
 
     // Video mapping & encoding
     if sub_mode == "hardsub" && srt_path_opt.is_some() {

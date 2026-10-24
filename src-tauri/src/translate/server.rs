@@ -985,10 +985,16 @@ pub fn translate_via_ollama(
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": user_prompt }
         ],
-        "temperature": 0.3
+        "temperature": 0.3,
+        // Tat thinking mode (Qwen3 "Thinking" sinh hang tram token suy luan -> cham,
+        // va co the lo reasoning vao phu de). Ollama bo qua tham so nay voi model
+        // khong ho tro.
+        "think": false
     });
 
-    let client = Client::builder().timeout(Duration::from_secs(25)).build()?;
+    // Timeout rộng: request đầu tiên phải nạp model vào RAM/VRAM (10-120s tuỳ
+    // kích thước model + tốc độ ổ đĩa), các request sau thì nhanh.
+    let client = Client::builder().timeout(Duration::from_secs(120)).build()?;
     let t0 = Instant::now();
     let resp = client
         .post(format!("{}/v1/chat/completions", base_url))
@@ -1035,7 +1041,87 @@ pub fn translate_via_ollama(
     Ok(translated)
 }
 
-/// Helper to parse numbered batch translations like `[1] Text`, `1. Text`, `[1]: Text`
+/// Thông tin 1 model Ollama đã cài (dùng cho preset "AMD iGPU" + dropdown chọn model).
+#[derive(Debug, Clone, Serialize)]
+pub struct OllamaModelInfo {
+    /// Tag đầy đủ, ví dụ `qwen2.5:3b` — truyền thẳng cho API Ollama.
+    pub name: String,
+    /// Dung lượng model trên đĩa (GB).
+    pub size_gb: f64,
+    /// Họ model, ví dụ `qwen2`.
+    pub family: String,
+    /// Số tham số, ví dụ `3.1B`.
+    pub params: String,
+    /// Mức lượng tử, ví dụ `Q4_K_M`.
+    pub quant: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaTagsResponse {
+    #[serde(default)]
+    models: Vec<OllamaTagModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaTagModel {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    size: u64,
+    #[serde(default)]
+    details: Option<OllamaTagDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaTagDetails {
+    #[serde(default)]
+    family: String,
+    #[serde(default)]
+    parameter_size: String,
+    #[serde(default)]
+    quantization_level: String,
+}
+
+/// Trả về danh sách model Ollama đã cài đặt trên máy (GET /api/tags).
+/// Dùng để preset "AMD iGPU" chọn đúng model sẵn có thay vì hardcode,
+/// và để UI hiện dropdown model thay vì ô text tự do.
+pub fn list_ollama_models(base_url: &str) -> Result<Vec<OllamaModelInfo>> {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err(anyhow!("Ollama URL rong"));
+    }
+    let client = Client::builder().timeout(Duration::from_secs(8)).build()?;
+    let resp = client
+        .get(format!("{base}/api/tags"))
+        .send()
+        .with_context(|| format!("Khong ket noi duoc Ollama tai {base}"))?;
+    if !resp.status().is_success() {
+        return Err(anyhow!("Ollama tra ve {}", resp.status()));
+    }
+    let tags: OllamaTagsResponse = resp
+        .json()
+        .with_context(|| "Khong parse duoc danh sach model Ollama")?;
+    Ok(tags
+        .models
+        .into_iter()
+        .filter(|m| !m.name.is_empty())
+        .map(|m| {
+            let d = m.details.unwrap_or(OllamaTagDetails {
+                family: String::new(),
+                parameter_size: String::new(),
+                quantization_level: String::new(),
+            });
+            OllamaModelInfo {
+                name: m.name,
+                size_gb: (m.size as f64) / 1_073_741_824.0,
+                family: d.family,
+                params: d.parameter_size,
+                quant: d.quantization_level,
+            }
+        })
+        .collect())
+}
+
 pub fn parse_batch_response(raw: &str, count: usize, target: &str) -> Vec<Option<String>> {
     let mut results = vec![None; count];
     for line in raw.lines() {
@@ -1539,10 +1625,15 @@ pub fn translate_batch_via_ollama(
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": user_prompt }
         ],
-        "temperature": 0.2
+        "temperature": 0.2,
+        // Tat thinking mode (Qwen3 "Thinking" sinh hang tram token suy luan -> cham,
+        // va co the lo reasoning vao phu de). Ollama bo qua tham so nay voi model
+        // khong ho tro.
+        "think": false
     });
 
-    let client = Client::builder().timeout(Duration::from_secs(60)).build()?;
+    // Batch duong dai: nhieu cau + lan nap model dau tien -> timeout phai rong.
+    let client = Client::builder().timeout(Duration::from_secs(300)).build()?;
     let t0 = Instant::now();
     let resp = client
         .post(format!("{}/v1/chat/completions", base_url))

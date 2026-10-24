@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, warn};
 
+use super::whisper_server::EnginePreference;
+
 /// Project-relative directories
 const BINARIES_DIR: &str = "binaries";
 const MODELS_DIR: &str = "models";
@@ -512,18 +514,20 @@ fn find_cpu_whisper_cli() -> Option<PathBuf> {
         .find(|p| p.exists())
 }
 
-fn find_whisper_cli_with_engine() -> Option<(PathBuf, SttEngine)> {
-    if let Some(p) = find_cuda_whisper_cli() {
-        return Some((p, SttEngine::Cuda));
+fn find_whisper_cli_with_engine(pref: EnginePreference) -> Option<(PathBuf, SttEngine)> {
+    match pref {
+        EnginePreference::Cpu => find_cpu_whisper_cli().map(|p| (p, SttEngine::Cpu)),
+        EnginePreference::Cuda => find_cuda_whisper_cli()
+            .map(|p| (p, SttEngine::Cuda))
+            .or_else(|| find_cpu_whisper_cli().map(|p| (p, SttEngine::Cpu))),
+        EnginePreference::Auto => find_cuda_whisper_cli()
+            .map(|p| (p, SttEngine::Cuda))
+            .or_else(|| find_cpu_whisper_cli().map(|p| (p, SttEngine::Cpu))),
     }
-    if let Some(p) = find_cpu_whisper_cli() {
-        return Some((p, SttEngine::Cpu));
-    }
-    None
 }
 
 pub fn ensure_binary_with_engine() -> Result<(PathBuf, SttEngine)> {
-    if let Some((path, engine)) = find_whisper_cli_with_engine() {
+    if let Some((path, engine)) = find_whisper_cli_with_engine(EnginePreference::Auto) {
         info!("✅ whisper-cli found: {} (engine={})", path.display(), engine.as_str());
         return Ok((path, engine));
     }
@@ -537,7 +541,43 @@ pub fn ensure_binary_with_engine() -> Result<(PathBuf, SttEngine)> {
     extract_zip(&zip_path, &dir)?;
     let _ = std::fs::remove_file(&zip_path);
 
-    let (binary_path, engine) = find_whisper_cli_with_engine().ok_or_else(|| {
+    let (binary_path, engine) = find_whisper_cli_with_engine(EnginePreference::Auto).ok_or_else(|| {
+        anyhow::anyhow!("whisper-cli.exe not found after extraction in {}", dir.display())
+    })?;
+    Ok((binary_path, engine))
+}
+
+/// Tương tự `ensure_binary_with_engine` nhưng **tôn trọng engine preference**.
+///
+/// BUG-H11: trước đây luôn ưu tiên binary CUDA nếu tồn tại, KHÔNG quan tâm
+/// `stt_engine_preference`. Trên máy có NVIDIA nhưng người dùng chọn "CPU"
+/// (hoặc máy chỉ có GPU AMD — không chạy được CUDA) thì app vẫn ép binary
+/// CUDA → Whisper fail với thông báo chung chung "không tạo được phụ đề".
+///
+/// - `Cpu`  → luôn dùng binary CPU (bỏ qua CUDA hoàn toàn)
+/// - `Cuda` → ưu tiên CUDA, không có thì fallback CPU (an toàn)
+/// - `Auto` → thử CUDA trước, không có thì CPU (giữ đúng hành vi cũ)
+pub fn ensure_binary_with_engine_pref(pref: EnginePreference) -> Result<(PathBuf, SttEngine)> {
+    if let Some((path, engine)) = find_whisper_cli_with_engine(pref) {
+        info!(
+            "✅ whisper-cli found: {} (engine={}, pref={})",
+            path.display(),
+            engine.as_str(),
+            pref.as_str()
+        );
+        return Ok((path, engine));
+    }
+
+    warn!("⬇️ whisper-cli not found, downloading {}...", WHISPER_CPP_ZIP_URL);
+    let dir = crate::config::app_base_dir().join(BINARIES_DIR);
+    std::fs::create_dir_all(&dir).context("Failed to create binaries directory")?;
+
+    let zip_path = dir.join("whisper-bin-x64.zip");
+    download_file(WHISPER_CPP_ZIP_URL, &zip_path)?;
+    extract_zip(&zip_path, &dir)?;
+    let _ = std::fs::remove_file(&zip_path);
+
+    let (binary_path, engine) = find_whisper_cli_with_engine(pref).ok_or_else(|| {
         anyhow::anyhow!("whisper-cli.exe not found after extraction in {}", dir.display())
     })?;
     Ok((binary_path, engine))
@@ -558,7 +598,7 @@ pub fn current_engine() -> Option<SttEngine> {
 }
 
 pub fn has_binary() -> bool {
-    find_whisper_cli_with_engine().is_some()
+    find_whisper_cli_with_engine(EnginePreference::Auto).is_some()
 }
 
 pub fn has_model(variant: ModelVariant) -> bool {

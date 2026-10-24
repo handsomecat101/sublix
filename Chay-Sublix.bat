@@ -12,7 +12,7 @@ rem  - Cua so console nay la log cua app; dong no = tat app
 rem  - Muon ban dong goi sieu toc: src-tauri\target\release\sublix.exe
 rem ============================================================
 
-set "PROJECT_DIR=H:\AI Project\sub-lix-fork-2026-10-19"
+set "PROJECT_DIR=C:\AI Project\Sublix"
 
 rem 1) Tat Sublix dang chay (neu co) de tranh khoa file
 taskkill /F /IM sublix.exe /T >nul 2>&1
@@ -29,9 +29,9 @@ cd /d "%PROJECT_DIR%"
 rem 3) Dam bao cargo/rustc co trong PATH cua phien nay
 set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 
-rem 3b) FORK: build Rust ra thu muc RIENG (khong dung target cua ban goc)
-rem     Target cua ban goc da bi xoa de giai phong dia, nen fork dung thu muc rieng.
-set "CARGO_TARGET_DIR=H:\AI Project\sub-lix-fork-build-2026-10-19"
+rem 3b) Build Rust ra thu muc trong workspace (mac dinh cua Cargo)
+rem     Khong dung target cua ban goc o may cu (H:) - may nay chi co o C:.
+set "CARGO_TARGET_DIR=%PROJECT_DIR%\src-tauri\target"
 
 rem 4) Cai dependencies neu thieu (may moi / node_modules bi xoa)
 if not exist "node_modules" (

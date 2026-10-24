@@ -449,10 +449,15 @@ pub fn generate_file_subtitles(
         Err(e) => return Err(format!("Không tìm thấy model Whisper: {e:#}")),
     };
 
-    let (whisper_bin, _engine) = match crate::stt::whisper_local::ensure_binary_with_engine() {
-        Ok(b) => b,
-        Err(e) => return Err(format!("Không tìm thấy whisper binary: {e:#}")),
-    };
+    // BUG-H11: tôn trọng engine người dùng đã chọn — nếu họ chọn "CPU" thì
+    // không được ép binary CUDA (máy AMD / không có NVIDIA sẽ fail).
+    let stt_pref =
+        crate::stt::EnginePreference::from_str(&crate::config::AppConfig::load(&app).stt_engine_preference);
+    let (whisper_bin, _engine) =
+        match crate::stt::whisper_local::ensure_binary_with_engine_pref(stt_pref) {
+            Ok(b) => b,
+            Err(e) => return Err(format!("Không tìm thấy whisper binary: {e:#}")),
+        };
 
     let src_lang = source_lang.unwrap_or_else(|| "auto".to_string());
 

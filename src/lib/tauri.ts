@@ -28,6 +28,23 @@ export interface AppInfo {
   description: string;
 }
 
+/**
+ * Model Ollama đã cài trên máy.
+ * Dùng cho preset "AMD iGPU (Ollama)" + dropdown chọn model trong Cài đặt.
+ */
+export interface OllamaModelInfo {
+  /** Tag đầy đủ, ví dụ `qwen2.5:3b` */
+  name: string;
+  /** Dung lượng trên đĩa (GB) */
+  size_gb: number;
+  /** Họ model, ví dụ `qwen2` */
+  family: string;
+  /** Số tham số, ví dụ `3.1B` */
+  params: string;
+  /** Mức lượng tử, ví dụ `Q4_K_M` */
+  quant: string;
+}
+
 export interface ModelStatusItem {
   name: string;
   label: string;
@@ -207,6 +224,11 @@ export const sublix = {
 
   async appInfo(): Promise<AppInfo> {
     return await invoke<AppInfo>("app_info");
+  },
+
+  /** Liệt kê model Ollama đã cài (rỗng nếu Ollama chưa chạy). */
+  async ollamaModels(): Promise<OllamaModelInfo[]> {
+    return await invoke<OllamaModelInfo[]>("ollama_models");
   },
 
   async startLive(opts: {

@@ -1,3 +1,23 @@
+## v0.11.36 — 2026-10-24
+### Thêm cấu hình phần cứng cho GPU tích hợp AMD (Radeon / Ryzen AI)
+
+**Bối cảnh:** Sublix mới chỉ có 3 preset phần cứng, tất cả đều giả định có card NVIDIA rời (hoặc thuần CPU). Máy có GPU tích hợp AMD (Radeon 780M/890M, Ryzen AI Max, Radeon 8050S…) bị rơi vào nhánh CPU dù GPU hoàn toàn dùng được — mình đo thật trên Ryzen AI Max 390: Ollama chạy iGPU **32,83 tok/s** so với CPU **15,53 tok/s** (nhanh hơn **2,11×**).
+
+**Fix v0.11.36:**
+- **Preset thứ 4** `🔺 GPU Tích Hợp AMD (Radeon / Ryzen AI)` trong Cài đặt → *1-Click Presets* (cả card nhỏ trong sidebar lẫn card lớn trong grid). **3 preset cũ giữ nguyên, không đổi hành vi.**
+- Khi bấm preset: STT = `base` (Whisper CPU), provider dịch = **Ollama**, engine = CPU cho phần STT. Tự động chọn model Ollama phù hợp: ưu tiên `Qwen3-4B` → model trong khoảng 1,5–6,5 GB → model nhỏ nhất.
+- **Backend:** thêm Tauri command `ollama_models` (`GET /api/tags`) trả về danh sách model Ollama đã cài kèm dung lượng/số tham số/mức lượng tử. Chạy `spawn_blocking` để không treo UI.
+- **Frontend:** thêm `OllamaModelInfo` + wrapper `sublix.ollamaModels()`; ô *Model Name* trong panel Ollama nay là **dropdown liệt kê model đã cài** kèm ô nhập tag tay; hiển thị *Trạng Thái Hệ Thống* ghi *"Ollama (GPU nếu hỗ trợ)"* khi provider là Ollama.
+
+**Vì sao không dùng GGUF nhúng cho máy AMD:**
+- Windows 11 mặc định bật **Smart App Control** (WDAC) → binary `llama-server.exe` của llama.cpp **chưa ký** bị chặn: *"An Application Control policy has blocked this file"*. Đã thử cả 3 bản (CPU b10472, CPU b11829, Vulkan) — đều bị chặn; `Unblock-File` vô tác dụng (file không có `Zone.Identifier`).
+- `whisper.cpp` chưa có bản ROCm/Vulkan cho Windows (chỉ CUDA + CPU) → STT trên máy AMD buộc phải chạy CPU (đo thật: 2,6 s cho clip 8 s).
+- `ollama.exe` **có chữ ký hợp lệ** (Ollama Inc.) nên Smart App Control cho phép, và bản Windows tự dùng ROCm (`rocm_v7_1`) cho GPU AMD — đây là đường duy nhất vừa chạy được vừa tận dụng iGPU.
+
+**Bằng chứng (đo thật trên máy này):**
+- Ollama detect iGPU: `library=ROCm compute=gfx1151 name=ROCm0 "AMD Radeon(TM) 8050S Graphics" total="12.2 GiB"`, `offloaded 37/37 layers to GPU`.
+- Benchmark `qwen2.5:3b`: GPU **32,83 tok/s** (generate) / 406,8 tok/s (prompt eval) — CPU **15,53 tok/s** / 187 tok/s.
+
 
 ## v0.11.35 — 2026-10-23
 ### Sửa Lỗi Xuất Video Không Có Tiếng Việt + TTS Batch Nhanh Gấp 10 Lần
