@@ -9,6 +9,61 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-24 22:40 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
+- **Loại:** `@handoff` của người điều phối — Orca run `run_80e8fbd4887e`; thợ báo qua `orca orchestration` (KHÔNG heartbeat nữa để tiết kiệm token; chỉ status/question/escalation/worker_done).
+- **Đã commit (local, chưa push sau `62e4da8`):** `c9ccaad` TTS VieNeu/ZeroTTS/cloud + vi_normalize · `14ad5e4` MiniMax M3.1 Flash + fix timeout M3 rơi xuống dịch từng câu · `ae680ca`/`7081964`/`577bb44` giao diện mới (component chung, Tải video, Studio 5 bước).
+- **Đang làm:** mcode #1 `TSK-STUDIO-MODEL-PICKER` · mcode #2 `TSK-FEAT-CONTEXT-TRANSLATE` (+ `llm_reasoning_effort`, `translate_options_get/set`) · CommandCode `TSK-UI-REDESIGN-R2-5-7` · mcode #3 `TSK-FEAT-STT-ENGINES`.
+- **Tiếp theo:** gắn `ModelDownloadRow` + STT vào Studio/Cài đặt → Studio gọi dịch theo ngữ cảnh → R2-8 kiểm tra tổng trên app PO + Opus duyệt thẩm mỹ → push 1 lần. Quy tắc: Claude (Sonnet/Opus) chỉ cho việc khó/thẩm mỹ; còn lại mcode/CommandCode.
+- **Lưu ý:** key MiniMax + OpenRouter đã nạp vào config app (không in ra); Smart App Control chặn exe copy → verify GUI riêng chưa được (BUG-H09); không `taskkill` app PO theo tên.
+
+---
+
+### 2026-10-24 21:55 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2A` — vòng 2 code UI R2-1..R2-4; **chưa commit**).
+- **R2-1:** token `--step-sub/--step-tr/--step-dub` trong `src/App.css` + 3 component dùng chung `src/components/ui/{Segmented,SplitButton,ContextMenu}.tsx` (mỗi file < 120 dòng, `React.memo`).
+- **R2-2:** `src/views/MasterTopbar.tsx/.css` — **1 component thay 2 bản copy** (Studio + `SettingsView.tsx`); chuột phải nút ↶ = menu 3 lớp hoàn tác (Audio / Bản dịch / Phụ đề) thay 3 chip cũ; bỏ "Nhập video" trùng + nút Tiến Trình modal; overlay còn 1 icon 👁.
+- **R2-3:** panel trái → `src/views/studio/StudioPipelinePanel.tsx` + `StudioVoiceStep.tsx` — rail 5 bước, accordion 1-mở, **1 nút chạy split** `▶ Chạy N bước đã bật | ▾`, chuột phải vai 7 mục (giọng gốc · gộp · về 1/2 vai · xoá), **engine + giọng đọc đọc từ backend** (`tts_engines_status` + `dubbing_get_voices`), **đã gỡ `TTS_ENGINE_MODELS` hard-code và map `vietneu:`→`kokoro:`** (backend tự fallback ở `tts_vieneu::route_voice`).
+- **R2-4:** provider dịch chỉ đọc "Ollama · qwen2.5:3b — **Đổi**" → mở Cài đặt; **xoá hẳn** 3 select model + 3 ô API key khỏi Studio.
+- **Verify:** `tsc` 0 lỗi · `build` OK · `node --test` 79/79 · GUI instance riêng (CDP 9225 / Vite 1423) **8/9 PASS** (hồi quy kéo khối + kéo handle In/Out vẫn chạy; check trạng thái engine chưa chạy được vì `target/debug/sublix.exe` — bản app PO — **chưa có** lệnh `tts_engines_status`, cần build lại exe).
+- **⚠️ Cần PO xử lý:** lúc dọn instance verify tôi đã tắt nhầm 1 tiến trình `sublix.exe` (PID 34400) do lệnh dọn "mọi app trừ PID cũ 47852" — app của PO có thể đã được mở lại với PID mới nên bị dính. Hiện app PO + Vite 1420 đều **không còn chạy**; cần PO khởi động lại `npm run tauri dev`.
+
+---
+
+### 2026-10-25 00:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-6`, **chưa commit** — chỉ JSX/CSS tab Tải video, **logic giữ nguyên 100%**).
+- **Giao diện mới (PLAN §4.4):** 1 cột max 1480px; ô nhập lớn + nút **Tải N link** ngay cạnh (Enter = tải, Shift+Enter xuống dòng); chip **Chất lượng / Phụ đề / ⚙ Nâng cao** (popover chứa cookies + 3 cờ reup + cắt đoạn); picker playlist dạng dải ngang; danh sách dạng **HÀNG** (thumbnail 112×63, pill nền tảng/chất lượng/phụ đề, thanh tiến độ + tốc độ + còn lại, 1 nút chính theo trạng thái) + lọc Tất cả/Đang tải/Đang đợi/Xong/Lỗi + ô lọc tên; menu **⋯/chuột phải dùng `ContextMenu` dùng chung** (6 mục: Mở Studio · Player ngoài · Hiện thư mục · Tải lại phụ đề · Sao chép link · Xoá); footer 1 dòng (thư mục + nền tảng hỗ trợ + bản quyền).
+- **Giữ nguyên:** `handleStartDownload`/`handleInspect`/`handleFetchSubs`, hàng đợi 3 song song, BUG-053 dedupe, listener sự kiện, BUG-045 (luôn mount), reup/batch/MP3. Thêm debounce 600 ms tự đọc link khi dán (tái dùng `handleInspect`).
+- **Verify:** `tsc` 0 lỗi + `npm run build` OK **trên bản sao HEAD + 6 file của tôi** (vì `SublixStudioView.tsx` worker R2A đang sửa dở — đã escalation); GUI instance riêng (exe patch 1420→1424, Vite 1424, CDP 9226 — đã tắt + gỡ junction/bản sao): picker **184/184 mục**, tải thật → **✓ Xong · 465 KB**, menu ⋯ **6/6 mục**, "Mở trong Studio" mở đúng video, reup `.info.txt` BOM 5 dòng đúng, Kuaishou → lỗi sớm. Ảnh: `%TEMP%\sublix-verify-dl\dl-{tab-after,row-active,menu-active,adv-active,kuaishou-active}.png`.
+- **Cần biết khi verify CDP:** DownloaderView **luôn mount** (BUG-045) → phải bấm tab "Tải video" TRƯỚC khi chụp; nếu không, ảnh sẽ là tab khác dù DOM vẫn thao tác được (bài học từ chính phiên này).
+
+---
+
+### 2026-10-24 23:35 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-BENCH-MINIMAX-FLASH` — **đo thật + sửa code trong `translate/` + UI; KHÔNG commit, KHÔNG push**).
+- **Báo cáo:** `docs/BENCH_TRANSLATE_2026-10.md` · harness: `src-tauri/examples/bench_translate.rs` (chạy đúng `translate::translate_batch_with_config` với `AppConfig::load_or_default()` = config thật của app) · dữ liệu: 60 câu tiếng Anh StarCraft từ `gui-2026-10-20/dump-78-cues.json` (%TEMP%\sublix-bench-translate\).
+- **Tên model đã xác minh:** `MiniMax-M3.1-Flash` (docs chính thức MiniMax, đọc 2026-10-24; coordinator xác minh `GET /v1/models = 200`).
+- **Tốc độ (60 câu, ×2):** (a) Ollama qwen2.5:3b local **24,56 s** (lô đầu 7,98 s) · (b) MiniMax-M3 **timeout lô 15 câu** → fallback từng câu (170–200 s ở chunk 5) · (c) M3.1-Flash **effort=max 215,07 s** → **sau bản vá `reasoning_effort=low` còn 26,33 s** (lô đầu **5,30 s**, nhanh hơn local 1,5×), 0 lỗi, 0 lọt `<think>`. (d) DeepSeek **không có key** → 60/60 lỗi, ghi rõ.
+- **Chất lượng (giám khảo MiniMax-M3, 1–5):** local Ollama **4,27** · M3 **4,77** · **M3.1-Flash (bản vá) 4,72 ≥ local** ✅ (giám khảo Ollama 3B: 4,91 / 4,81 / 4,91 — dễ tính, chỉ đối chiếu).
+- **Đã thêm (PHẦN 2):** nút `⚡ MiniMax M3.1 Flash` cạnh nút MiniMax-M3 ở `SettingsView.tsx` (**chỉ thêm**, không đổi model mặc định) + `translate/server.rs` xử lý đúng M3.1-Flash (`reasoning_effort=low`, timeout 120 s/60 s; M3 giữ nguyên). **Bắt buộc**: dùng M3.1-Flash mà không có bản vá thì chậm hơn local 8,8×.
+- **Cần coordinator/PO quyết:** (1) `npm run build`/`tsc` **đang đỏ vì `SublixStudioView.tsx` của Sonnet** (24 lỗi, file tôi sửa = 0 lỗi); (2) có nên sửa timeout của `MiniMax-M3` không (lô 15 câu hiện timeout 60 s — tôi **không** sửa theo đúng phạm vi); (3) DeepSeek cần key để đo.
+
+---
+### 2026-10-24 22:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-TTS-3ENGINES` — **chỉ backend + command + wrapper**, UI để vòng thiết kế lại; chưa commit). Lỗi: `BUG-082..084`.
+- **Engine thật (offline):** `vietneu:` = **VieNeu v3 Turbo** (25 giọng, clone `vietneu:clone=<wav>`), `zerotts:` = **ZeroTTS** (8 giọng), cloud `gcloud:` (Chirp3 HD 30 giọng) + `fptai:` (7 giọng, key lưu `sublix-tts-keys.json`, không qua `config:updated`). Mã: `dubbing/{tts_common,tts_vieneu,tts_zerotts,tts_cloud,tts_status,vi_normalize}.rs` + `scripts/{vieneu,zerotts}_tts.py`; `voice_models.rs` thêm 4 mục catalog (tải verify đủ byte, tự `pip install` deps sau khi tải). Project cũ `vietneu:*`: model chưa tải → vẫn fallback Kokoro.
+- **Đo thật (CPU Ryzen AI Max 390, whisper turbo):** VieNeu batch WER **0%** (RTF 0,98 gồm nạp model; model 637 MB); ZeroTTS **0%** (RTF 1,88 batch 3 câu gồm nạp; model 909 MB; lần đo riêng 1,7%); **Kokoro s3: WER 30% → 10%** nhờ `vi_normalize` (≥ 24 test). MP4 5 câu lồng bằng `vietneu:vi_bac_nam`: 2 track audio (ffprobe), mean −21,6 dB. `cargo test --lib` **113/113**, `tsc` 0, `npm run build` OK (CARGO_TARGET_DIR `%TEMP%\sublix-cc-target`).
+- **CUDA (RTX 3090):** CHƯA test được (máy dev không NVIDIA). `tts_engine_install_deps` tự gỡ `onnxruntime` và cài `onnxruntime-gpu` + `nvidia-cudnn/cublas/cuda-runtime/cufft/curand/nvrtc-cu12` khi `nvidia-smi` có; sidecar tự dùng `CUDAExecutionProvider` (ép CPU bằng `stt_engine_preference=cpu`). Kiểm tra: command `tts_engine_diagnose("vieneu")` → `cuda:true`, log `DEVICE cuda`. Nếu lỗi DLL: cần CUDA 12.x + cuDNN 9 trong PATH.
+- **Việc cho vòng UI:** gắn `tauri.ts` (`ttsEnginesStatus/ttsCloudSetKey/ttsCloudTest/ttsEngineInstallDeps/ttsEngineDiagnose`) vào Cài đặt/Studio; Studio vẫn hard-code `TTS_ENGINE_MODELS` + `mapVoiceForEngine` (map `vietneu:`→`kokoro:` ở frontend) — **phải sửa** thì VieNeu thật mới được gọi từ Studio. Component UI mẫu đã viết nhưng bỏ ra ngoài repo (scratchpad `TtsEnginesPanel.tsx.txt`). Preview 1 câu VieNeu/ZeroTTS ~8–9 s (nạp model mỗi lần); export dùng batch nên nhanh.
+
+### 2026-10-24 21:30 - Claude Opus 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-REDESIGN-P1` vòng 1 — **chỉ khảo sát + thiết kế + mockup, KHÔNG sửa code app**, chưa commit).
+- **Báo cáo:** `docs/UI_REDESIGN_PLAN.md` — kiểm kê từng control (file:dòng) panel trái Studio + Tải video + tóm tắt 4 tab, **18 nhóm trùng lặp đã xác minh** (vd: Quét & Phân vai `:6277`/`:6827`, Lồng tiếng `:6641`/`:6846`, provider dịch 2 nơi 2 danh sách khác nhau).
+- **Số đo thật:** panel trái Studio **45 control**, nội dung **1687 px nhưng chỉ thấy 405 px** ở 1080p → thiết kế mới **20 control**, quy trình 5 bước, 1 nút chạy dạng split, vừa 1 màn.
+- **Mockup:** `docs/ui-mockups/{studio,tai-video,cai-dat}.html` + ảnh trước/sau/so sánh trong `docs/ui-mockups/shots/` (instance riêng CDP 9225, đã tắt; app PO 9223 không bị đụng).
+- **Vòng 2:** 8 bước (~7 ngày), chỉ bắt đầu khi mcode xong `SublixStudioView.*` và CommandCode xong `DownloaderView.*`; giữ nguyên timeline/kéo thả/In-Out/logic downloader.
+
+---
+
 ### 2026-10-24 21:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-INTEGRATE-MODULES` — đã **GẮN** 6 module timeline vào `SublixStudioView.tsx`; chưa commit).
 - **Đã gắn:** timecode (ô nhập Enter nhảy tới, clamp, sai định dạng → viền đỏ) · copy/paste `Ctrl+C`/`Ctrl+V` (dán tại playhead, id mới, báo xung đột **KHÔNG** tự xoá) · auto-follow page-scroll khi phát (tạm ngưng 1.5s sau khi cuộn tay) · J/K/L (L 1→2→4→8x, J tự seek lùi ≤15 lần/s, K+L nhích 1 frame) · marker M/Shift+M/Ctrl+Shift+M (vạch memo, lưu project cache) · khoá track (🔒 cạnh nút M, chặn move/trim/split/delete/sửa chữ/dán).
@@ -28,60 +83,3 @@
 - **Verify:** `cargo test --lib` **77/77 PASS** (+10); `tsc` 0 lỗi; `npm run build` OK. Chạy THẬT bằng đúng `build_download_command`: **IG Reel** → ra `.mp4` + `.jpg` + `.info.txt` (BOM, 5 dòng đầu đúng tiếng Việt); **Pinterest** cắt `00:00:05-00:00:15` → ffprobe **10.000000s**; tải lại lần 2 → archive bỏ qua (không tải lại).
 - **Lưu ý môi trường:** build/test phải dùng `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` — Smart App Control chặn binary vừa relink trong `src-tauri/target` (`BUG-H09`); 2 tiến trình `sublix.exe` (dev app của PO) đang chạy nên **không** `cargo clean` được target repo (đã né, không kill).
 
----
-
-### 2026-10-24 18:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-RES-VI-VOICE` — **chỉ nghiên cứu + thử nghiệm NGOÀI repo, KHÔNG sửa code app**).
-- **Báo cáo:** `docs/VI_VOICE_MODELS_2026.md` (3 phần, bảng 20 ứng viên offline + 13 cloud) · **nghe thử:** `%TEMP%\sublix-voice-bench\index.html` (30 file WAV, 11 model × 3 câu). Đo thật: **WER/CER** (whisper.cpp large-v3-turbo) + **RTF** + **nghiêng điệu F0** + **DNSMOS offline** (33 file).
-- **Phát hiện #1:** **Kokoro hiện tại BỎ RƠI số & ngày tháng** — câu "Ngày 24 tháng 10 năm 2026 … thắng 3-1" bị đọc thành "Ngày tháng 5 ở … thắng ở" → **WER 30 %**, CER 19,7 %. Đồng thời **SHA256 file Kokoro trong repo TRÙNG bản public mới nhất** → không có "nâng cấp Kokoro" nào đáng chờ.
-- **Phát hiện #2 (BUG thật):** **Edge-TTS vi-VN trả 0 byte** cho một số câu, `synthesize_speech()` **không retry** ⇒ câu mất tiếng. Đã ghi `BUG-H13`; cộng đồng xác nhận (`rany2/edge-tts#473`, đúng voice `vi-VN-HoaiMyNeural`, còn mở). Cần thêm retry 3–5 lần.
-- **Đề xuất top 3:** **VieNeu-TTS v3 Turbo** (Apache-2.0, offline CPU, 25 giọng, **clone được**, WER TB 3,3 %, bản clone **0 %**, RTF 0,92 — **#4/11 bảng VI YodaLingua**) → **ZeroTTS** (MIT, WER 1,03 %/UTMOS 2,91 công khai, chưa chạy) → **Google Chirp 3 HD / FPT.AI free tier**. **Loại F5-TTS** (WER S3 40 %, RTF 43, không thương mại). **Piper/VITS** làm engine siêu nhanh cho preview (RTF 0,16) — mặc định tắt chờ chốt license.
-- **Cần biết:** máy **KHÔNG có API key nào** (`minimax_api_key` rỗng) → không chạy được cloud trả phí; `VITS-OpenBible-Vietnamese` vướng dependency Windows (torchaudio→torchcodec→FFmpeg shared) → đã ghi lý do, bỏ qua. Chi tiết lỗi: `ISSUE_LOG.md` → `BUG-H13`.
-
----
-
-### 2026-10-24 18:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-FIX-DND-RANGE`, **chưa commit / chưa bump version**). Chi tiết lỗi + số đo: `ISSUE_LOG.md` → `BUG-076..081`.
-- **Kéo thả khối (Zero-Button, không thêm nút):** kéo giữa = dời (cả nhóm khi Ctrl/Shift-chọn nhiều), kéo mép khối phụ đề = trim, hít 8px (playhead / mép khối / In-Out; nút nam châm bật-tắt, Alt tạm tắt), chặn chồng khối kề, Esc huỷ, 1 lần kéo = 1 Ctrl+Z. Chuyển động bằng transform DOM ref, chỉ `setSegments` khi thả; khối voice tách `StudioTimelineVoiceBlock` (`React.memo`) + callback ổn định qua `blockApiRef` (tuân Note timeline 10-12).
-- **Sửa:** Ctrl/Shift+click giữ nhiều khối (trước `[6]`, sau `[2,6,7]`); voice 1.5x hết tua giật (10 → 4 lần tua / 7s, baseline 1x = 3, `audio.playbackRate` 1 → 1.5); ducking không ghi đè volume người dùng; menu vùng In/Out đổi tên + chạy THẬT trên câu CHỒNG LẤN vùng (pipeline vùng nay có lồng tiếng, giữ id/vai/bản dịch/tiếng câu ngoài vùng, kết quả cắt trong [In,Out], toast báo số câu).
-- **Verify:** `tsc` 0 lỗi, `npm run build` OK; GUI trên **instance riêng** (CDP 9224 = bản sao `sublix.exe` trỏ Vite 1422; app PID 47852 / cổng 9223 không bị đụng). Không sửa Rust → không chạy `cargo test`.
-- **Cần biết:** HMR của Vite 1420 (app đang chạy của anh Tuấn) đã nạp lại `SublixStudioView.*` mỗi lần tôi lưu — nên restart app 9223 để chắc chắn dùng bản mới. Script CDP + ảnh bằng chứng nằm trong scratchpad của phiên (đường dẫn ở `worker_done`); chưa đưa vào repo.
-
----
-
-### 2026-10-24 17:30 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-RES-DL-PLATFORMS` — **chỉ nghiên cứu, KHÔNG sửa code**).
-- **Báo cáo:** `docs/DOWNLOADER_PLATFORM_EXPANSION.md` — chạy thử **THẬT 29 nền tảng** (`yt-dlp 2026.10.21`, 2026-10-24, `--simulate` + kết quả/lỗi **nguyên văn**): **11 nền tảng tải được** (Facebook, **Instagram Reel — không cần login**, Twitch, Kick, Dailymotion, VK, Niconico, Pinterest, Snapchat, MangoTV, YouTube).
-- **Phát hiện chính:** **Threads / Kuaishou / Kwai / Migu / Lemon8 KHÔNG có extractor yt-dlp** → `Unsupported URL`; đặc biệt **`kuaishou` & `migu` đang có trong `get_platform` (`downloader/mod.rs:471,507`) nhưng yt-dlp không hỗ trợ** (lỗi tiềm ẩn). Vimeo giờ **bắt buộc đăng nhập**; TVer/Abema **chặn geo Nhật**; Rumble trả **403**; Reddit + NicoChannelPlus fail **do DNS mạng local** (cần chạy lại ở mạng khác).
-- **Tính năng reup còn thiếu trong code:** `--download-archive` (chống trùng bền vững), `--write-info-json` (xuất metadata để viết caption), `--write-thumbnail`, `--download-sections` — **đều là 1 cờ yt-dlp, độ khó S**.
-- **Khuyến nghị:** top-8 nền tảng thêm trước = Instagram Reels · Facebook · Twitch · Kick · Dailymotion · VK · Pinterest · Snapchat Spotlight (đều độ khó **S** = thêm host + nhãn); top-5 tính năng reup = metadata export · download-archive · thumbnail · kênh/hashtag + hẹn giờ · cắt đoạn. **Không đề xuất né Content ID/DRM.**
-- **Lưu ý:** `docs/…EXPANSION.md` là **tài liệu tham khảo**, không tự động là scope; KHÔNG đụng code (worker khác đang sửa `SublixStudioView.*`).
-
----
-
-### 2026-10-24 16:45 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-MODULES-EASY` — viết module + test trong FILE RIÊNG, **CHƯA gắn** vào `SublixStudioView.tsx`).
-- **Đã tạo:** 6 module logic thuần TS trong `src/lib/timeline/` (`timecode`, `shuttle`, `markers`, `trackLock`, `clipboard`, `autoFollow` — không React, không DOM, không import chéo) + `src/views/studio/TimecodeInput.tsx` (`React.memo`, viền đỏ khi sai định dạng) + `docs/TIMELINE_INTEGRATION_PLAN.md` (chỉ dẫn gắn từng module kèm số dòng + rủi ro hiệu năng).
-- **Verify:** `node --test scripts/timeline-tests/` → **79 pass / 0 fail** (mỗi module ≥ 10 case; case biên: chuỗi rỗng, số âm, frame > fps, marker trùng, paste chồng lấn, shuttle max 8x); `npx tsc --noEmit` **0 lỗi**; `npm run build` **OK** (vite 67 modules, 6.5s).
-- **API khớp code thật:** `SubtitleItem` → `TimelineSegment` (cùng cấu trúc → gán thẳng qua structural typing); `formatTimecodeDisplay` giống **y hệt** `formatTimecode()` (`:115`); `handleSeek` (`:1829`) làm callback `onSeek` của TimecodeInput; `saveUndoHistory` (`:1498`) là bắt buộc cho mọi thao tác đổi `segments`.
-- **Lưu ý:** thêm 2 file phụ **trong thư mục test** — `scripts/timeline-tests/package.json` + `index.ts` — vì **Node 24.20 KHÔNG quét thư mục** với `node --test <dir>` (báo `Cannot find module`); có 2 file này thì đúng lệnh `node --test scripts/timeline-tests/` chạy được. Không ảnh hưởng build (`scripts/` nằm ngoài `include: ["src"]`).
-- **Chưa làm (để bước sau):** chưa gắn module nào vào app; `SublixStudioView.tsx/.css` **không bị tôi sửa** (đang là worker Sonnet sửa, file modified lúc 16:34). Thứ tự gắn đề xuất: `timecode` → `clipboard` → `autoFollow` → `shuttle` (cần throttle ≥ 100ms) → `markers` → `trackLock`.
-
----
-
-### 2026-10-24 15:45 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-RES-TIMELINE-GAP` — **chỉ nghiên cứu, KHÔNG sửa code**).
-- **Báo cáo:** `docs/TIMELINE_GAP_ANALYSIS.md` — bảng **43 dòng tính năng** Premiere Pro vs Sublix (Có / Thiếu / Lỗi + `file:dòng` + ưu tiên P0–P3 + độ khó S/M/L) + **9 dự án OSS** (link / số sao / license / cập nhật cuối, đã kiểm tra 24-10-2026) + top-5 khuyến nghị.
-- **Root cause 2 lỗi PO báo:** (1) *kéo thả khối* → **không có handler kéo nào**; `handleNudgeSegment` (`:4034`) chỉ sửa `start`/`end` bằng **click ±0.2s**, còn CSS `cursor: ew-resize` (`.css:1579`) nói dối. (2) *In/Out không chạy* → **5 lỗi chồng nhau**: lọc vùng bằng "chứa trong" thay vì "chồng lấn" (`:3052`/`:3206`), TTS không fallback + `catch{}` nuốt lỗi (`:3267-3268`), `prev.filter` **xoá mất** câu ở mép vùng (`:2982`/`:3528`), dịch hỏng fallback sang nguyên văn (`:3112`), dịch lại **ghi đè** bản dịch tay (`:3117-3131`).
-- **Lỗi phụ đáng sửa:** nút magnet (`:6520`) + nút liên kết (`:6526`) **chỉ đổi class/toast, không có logic**; tooltip ghi phím `(N)`/`(P)` **không tồn tại**; mute per-vai dùng chung flag toàn cục (`:6893`); **không có redo**; **không auto-follow playhead** khi phát; không có track lock/solo.
-- **Khuyến nghị:** **không cần thay thư viện timeline** — 5 hạng mục P0/P1 đều nên **tự viết**; chỉ cân nhắc cài `wavesurfer.js` (BSD-3-Clause) cho lớp âm thanh; đọc-học `Clypra` (MIT, trùng stack Tauri v2 + React 19) + `FilmCraft` (MIT OR Apache-2.0); **tránh** Remotion (license thương mại 2 bậc) và `open-video-editor` (GPL-3.0).
-- **Lưu ý:** `docs/TIMELINE_GAP_ANALYSIS.md` là **tài liệu tham khảo**, không tự động là scope. Worker `TSK-TIMELINE-FIX-DND-RANGE` đang sửa song song `SublixStudioView.*` — không đụng file đó. Đã dọn 1 tin `@done` cũ (2026-10-12) khỏi đáy file; nội dung của nó đã nằm trong `ISSUE_LOG.md` (`BUG-059`/`BUG-060` + 4 Note bắt buộc).
-
----
-
-### 2026-10-24 11:30 - Claude Code (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-FEAT-DL-BATCH-AUDIO`, **chưa commit / chưa bump version** — chờ PO duyệt).
-- **Tab Tải video:** ô nhập thành textarea nhiều link (mỗi dòng 1 link; tách + lọc + loại trùng ở backend `downloader_parse_urls`); link playlist → `downloader_expand_playlist` (`--flat-playlist -J`, trần 200 mục, báo rõ khi bị cắt) → danh sách checkbox "Chọn hết / Bỏ chọn"; các mục vào hàng đợi có sẵn (`queued`, tối đa 3 tải song song, chống trùng BUG-053). Chế độ MP3/M4A đã có sẵn trong ô chất lượng → chỉ đổi nhãn + chip "🎵 Âm thanh MP3"; nút Studio giữ bật (Studio nhận .mp3 — đã verify).
-- **Code mới:** `downloader/batch.rs` (252 dòng) + `batch_tests.rs`, `DownloaderBatchPicker.tsx`; `mod.rs` chỉ thêm `pub mod batch;`; `lib.rs` chỉ thêm 2 command. Không đụng lifecycle/Job Object (TSK-018).
-- **Verify:** `cargo test --lib` **67 pass / 0 fail** (+7 test mới); `tsc` 0 lỗi; `npm run build` OK; yt-dlp thật: playlist JODA15 → 4 mục ("JOD" 517s, "JOD2" 363s), Google Search Stories → 13 mục; GUI (instance tách riêng CDP 9224): 4 link MP3 → 3 "Đang tải" + 1 "Đang đợi" → 4 file mp3 (ffprobe codec mp3, 19–163s).
-- **Lưu ý:** mở MP3 trong Studio chạy fallback transcode (videoWidth=0) → chạy được nhưng thừa 1 lượt ffmpeg + toast "không hiển thị hình" — đề xuất Studio bỏ qua fallback khi file là audio.

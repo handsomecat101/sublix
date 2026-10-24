@@ -157,6 +157,13 @@
 | `BUG-080` | Lệnh vùng In/Out sai: lọc "nằm TRỌN trong vùng" bỏ câu bị cắt ngang; pipeline vùng không lồng tiếng; đánh số lại id + thay cả roster → tiếng ghi nhầm câu / câu ngoài vùng mất vai; câu mới tràn quá Out đè câu kế; lỗi dịch/TTS bị nuốt; vùng 0 giây | `src/views/SublixStudioView.tsx` | Một quy tắc "câu thuộc vùng" duy nhất (chồng lấn: `isSegInRange`); thay câu bằng `mergeRangeSegments` (giữ id/vai câu ngoài vùng, cắt kết quả trong [In,Out]); bước TTS nối tiếp chỉ nhận `onlyIds` | ✅ Fixed |
 | `BUG-081` | `isAnalyzing` kẹt `true` mãi (nút/menu AI khóa) khi pipeline `dubImmediately` bị lỗi hoặc ra 0 câu — `finally` chỉ nhả cờ khi `!dubImmediately`, `handleRunVoiceOnly` thoát sớm không nhả | `src/views/SublixStudioView.tsx` (`handleRunAnalysis`, `handleRunVoiceOnly`) | Mọi lối thoát của tác vụ chạy nối tiếp phải nhả cờ busy (kể cả `return` sớm và nhánh catch) | ✅ Fixed |
 
+### 🧾 Lỗi Fix Tại TSK-FEAT-TTS-3ENGINES (Claude Sonnet 5.5 — 2026-10-24):
+| ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
+|----|------------------------|----------------|-------------------------------|--------|
+| `BUG-082` | TTS **bỏ rơi/đọc sai chữ số** (Kokoro: "24 tháng 10 năm 2026 … 3-1" → "tháng 5 ở … ở", WER 30%); tiền tố `vietneu:` là GIẢ (map sang Kokoro) | `dubbing/mod.rs`, `dubbing/vi_normalize.rs` | Chuẩn hóa số/ngày/giờ/tiền thành CHỮ trước MỌI engine (`normalize_vi`); tỷ số viết "ba một" (gạch nối khiến engine đọc "ba, một chiếc…": WER 15–20%) | ✅ Fixed (Kokoro s3 30%→10%) |
+| `BUG-083` | `voice_models` tải model không verify byte + không tạo thư mục con → file thiếu vẫn "đã tải"; mục có subfolder (`onnx/…`) lỗi tạo file | `voice_models.rs` | `VoiceModelFile.bytes` chính xác + so khớp sau tải + `Content-Length` + `create_dir_all(parent)` (xử lý BUG-012 cho nhóm voice) | ✅ Fixed |
+| `BUG-084` | Smart App Control chặn **exe test/build-script** mới biên dịch (`os error 4551`) — ngẫu nhiên theo hash | `cargo test` | Lỗi 4551: chạm file (đổi mtime) để biên dịch lại hash mới rồi chạy lại; dùng chung `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` (xem BUG-H09) | 🟡 Workaround |
+
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
 ### [BUG-001] Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy trên máy build
