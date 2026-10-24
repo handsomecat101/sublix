@@ -15,6 +15,7 @@ pub mod config;
 pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
+pub mod model_download;
 pub mod overlay;
 pub mod stt;
 pub mod translate;
@@ -126,6 +127,88 @@ async fn translate_batch(
     .map_err(|e| e.to_string())?
 }
 
+/// Dịch kịch bản **theo ngữ cảnh** (TSK-FEAT-CONTEXT-TRANSLATE).
+///
+/// 2 lượt: (1) LLM đọc hiểu toàn bộ lời thoại → bản tham chiếu {tóm tắt, nhân vật,
+/// xưng hô, thuật ngữ, giọng điệu}; (2) dịch từng lô ~20 câu với bản tham chiếu,
+/// `[speaker]` trên từng dòng, 5 câu liền trước và hạn mức độ dài theo thời lượng.
+///
+/// Phát sự kiện tiến trình: `translate:progress` → `{done, total, phase}`.
+#[tauri::command]
+async fn translate_script_contextual(
+    app: tauri::AppHandle,
+    lines: Vec<translate::contextual::ScriptLine>,
+    source_lang: String,
+    target_lang: String,
+) -> Result<Vec<translate::contextual::ContextualLine>, String> {
+    let emit_app = app.clone();
+    tokio::task::spawn_blocking(move || {
+        let cfg = config::AppConfig::load(&app);
+        let mut progress = |done: u32, total: u32, phase: &str| {
+            let _ = emit_app.emit(
+                "translate:progress",
+                serde_json::json!({ "done": done, "total": total, "phase": phase }),
+            );
+        };
+        Ok(translate::contextual_run::translate_script_contextual(
+            &lines,
+            &source_lang,
+            &target_lang,
+            &cfg,
+            &mut progress,
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Đọc các lựa chọn dịch hiện tại + danh sách model (nút chọn nhanh, Ollama, GGUF).
+///
+/// `supports_reasoning` = provider/model có nhận tham số mức độ suy luận hay không.
+#[tauri::command]
+async fn translate_options_get(app: tauri::AppHandle) -> Result<translate::TranslateOptions, String> {
+    let cfg = config::AppConfig::load(&app);
+    let url = if cfg.ollama_url.trim().is_empty() {
+        "http://localhost:11434".to_string()
+    } else {
+        cfg.ollama_url.trim().to_string()
+    };
+    // Blocking HTTP -> off main thread de khong treo UI.
+    let ollama = tauri::async_runtime::spawn_blocking(move || {
+        translate::server::list_ollama_models(&url)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.name)
+            .collect::<Vec<String>>()
+    })
+    .await
+    .unwrap_or_default();
+    Ok(translate::translate_options(&cfg, &ollama))
+}
+
+/// Ghi lựa chọn dịch (chỉ field được truyền — **không** đụng tới API key).
+///
+/// Config được **đọc từ đĩa** rồi chỉ sửa field tương ứng, nên key không bao giờ bị mất.
+/// Lưu atomic (BUG-013) + emit `config:updated`.
+#[tauri::command]
+fn translate_options_set(
+    app: tauri::AppHandle,
+    provider: Option<String>,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+) -> Result<config::AppConfig, String> {
+    let mut cfg = config::AppConfig::load(&app);
+    translate::apply_translate_options(
+        &mut cfg,
+        provider.as_deref(),
+        model.as_deref(),
+        reasoning_effort.as_deref(),
+    );
+    cfg.save(&app).map_err(|e| format!("{e:#}"))?;
+    let _ = app.emit("config:updated", &cfg);
+    Ok(cfg)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -144,6 +227,9 @@ pub fn run() {
             transcribe_test,
             translate_test,
             translate_batch,
+            translate_script_contextual,
+            translate_options_get,
+            translate_options_set,
             show_overlay,
             hide_overlay,
             set_overlay_click_through,
@@ -166,6 +252,13 @@ pub fn run() {
             check_setup,
             voice_model_list,
             voice_model_download,
+            stt_engines_status,
+            stt_set_engine,
+            stt_model_download,
+            stt_model_cancel,
+            stt_model_delete,
+            stt_transcribe,
+            stt_write_srt,
             download_whisper_binary_cmd,
             download_stt_model_cmd,
             download_translation_model_cmd,
@@ -706,6 +799,21 @@ async fn voice_model_download(app: tauri::AppHandle, id: String) -> Result<(), S
                         "percent": pct
                     }),
                 );
+                // Sự kiện dùng chung cho UI tải model (STT + TTS).
+                let _ = app_p.emit(
+                    model_download::EVENT,
+                    serde_json::json!({
+                        "model_id": name,
+                        "kind": model_download::KIND_TTS,
+                        "phase": model_download::phase::DOWNLOADING,
+                        "bytes_done": downloaded,
+                        "bytes_total": total,
+                        "speed_bps": 0,
+                        "eta_s": null,
+                        "file": null,
+                        "message": "Đang tải model giọng đọc",
+                    }),
+                );
             }
         })
     })
@@ -718,6 +826,20 @@ async fn voice_model_download(app: tauri::AppHandle, id: String) -> Result<(), S
                 "model:download_progress",
                 serde_json::json!({ "component": "voice", "name": id, "percent": 100, "phase": "done" }),
             );
+            let _ = app.emit(
+                model_download::EVENT,
+                serde_json::json!({
+                    "model_id": id,
+                    "kind": model_download::KIND_TTS,
+                    "phase": model_download::phase::DONE,
+                    "bytes_done": 0,
+                    "bytes_total": 0,
+                    "speed_bps": 0,
+                    "eta_s": 0,
+                    "file": null,
+                    "message": "Model giọng đọc đã sẵn sàng",
+                }),
+            );
             Ok(())
         }
         Err(e) => {
@@ -726,9 +848,305 @@ async fn voice_model_download(app: tauri::AppHandle, id: String) -> Result<(), S
                 "model:download_progress",
                 serde_json::json!({ "component": "voice", "name": id, "phase": "error", "error": msg }),
             );
+            let _ = app.emit(
+                model_download::EVENT,
+                serde_json::json!({
+                    "model_id": id,
+                    "kind": model_download::KIND_TTS,
+                    "phase": model_download::phase::ERROR,
+                    "bytes_done": 0,
+                    "bytes_total": 0,
+                    "speed_bps": 0,
+                    "eta_s": null,
+                    "file": null,
+                    "message": msg,
+                }),
+            );
             Err(msg)
         }
     }
+}
+
+// ---- TSK-FEAT-STT-ENGINES: catalog engine STT + tải model có tiến trình chi tiết ----
+
+/// Trạng thái toàn bộ engine STT (whisper.cpp + sherpa-onnx).
+#[tauri::command]
+fn stt_engines_status(app: tauri::AppHandle) -> Vec<stt::SttEngineStatus> {
+    let selected = config::AppConfig::load(&app).stt_asr_engine;
+    stt::stt_catalog::status_list(&selected)
+}
+
+/// Chọn engine STT đang dùng (rỗng = whisper.cpp mặc định).
+#[tauri::command]
+fn stt_set_engine(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let id = id.trim().to_string();
+    if !id.is_empty() && stt::stt_catalog::spec(&id).is_none() {
+        return Err(format!("Không có engine STT này: {id}"));
+    }
+    let mut cfg = config::AppConfig::load(&app);
+    cfg.stt_asr_engine = id;
+    cfg.save(&app).map_err(|e| format!("{e:#}"))?;
+    let _ = app.emit("config:updated", &cfg);
+    Ok(())
+}
+
+/// Tải model STT (emit `model:download-progress` ~4 lần/giây).
+#[tauri::command]
+async fn stt_model_download(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let app_c = app.clone();
+    let id_c = id.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let spec = stt::stt_catalog::spec(&id_c)
+            .ok_or_else(|| format!("Không có engine STT này: {id_c}"))?;
+
+        // Engine whisper.cpp dùng đường tải sẵn có (không đổi hành vi cũ).
+        if spec.builtin {
+            let variant = spec
+                .whisper_variant
+                .as_deref()
+                .and_then(ModelVariant::from_name)
+                .ok_or_else(|| "Model whisper không hợp lệ".to_string())?;
+            let app_p = app_c.clone();
+            let name = spec.id.clone();
+            let mut last_pct = 0u32;
+            stt::whisper_local::ensure_model_with_progress(variant, move |downloaded, total, pct| {
+                if pct > last_pct || pct == 100 {
+                    last_pct = pct;
+                    let _ = app_p.emit(
+                        model_download::EVENT,
+                        serde_json::json!({
+                            "model_id": name,
+                            "kind": model_download::KIND_STT,
+                            "phase": model_download::phase::DOWNLOADING,
+                            "bytes_done": downloaded,
+                            "bytes_total": total,
+                            "speed_bps": 0,
+                            "eta_s": null,
+                            "file": null,
+                            "message": "Đang tải model Whisper",
+                        }),
+                    );
+                }
+            })
+            .map_err(|e| format!("{e:#}"))?;
+            return Ok(());
+        }
+
+        let dir = stt::stt_catalog::model_dir(&spec.id);
+        let emit_app = app_c.clone();
+        let mut emit = move |p: model_download::DownloadProgress| {
+            let _ = emit_app.emit(model_download::EVENT, &p);
+        };
+
+        model_download::download_files(
+            &spec.id,
+            model_download::KIND_STT,
+            &dir,
+            &spec.files,
+            &mut emit,
+        )
+        .map_err(|e| format!("{e:#}"))?;
+
+        // Giải nén gói model → thư mục engine (chỉ engine dạng .tar.bz2).
+        if spec.archive {
+            emit(model_download::DownloadProgress {
+                model_id: spec.id.clone(),
+                kind: model_download::KIND_STT.to_string(),
+                phase: model_download::phase::EXTRACTING.to_string(),
+                bytes_done: stt::stt_catalog::total_bytes(&spec),
+                bytes_total: stt::stt_catalog::total_bytes(&spec),
+                speed_bps: 0,
+                eta_s: Some(0),
+                file: None,
+                message: "Đang giải nén model".to_string(),
+            });
+            let archive = dir.join("_archive.tar.bz2");
+            stt::sherpa_asr::extract_archive(&spec.id, &archive).map_err(|e| format!("{e:#}"))?;
+            // Xoá gói nén để không tốn gấp đôi dung lượng.
+            let _ = std::fs::remove_file(&archive);
+        }
+
+        // Cài thư viện Python (sherpa-onnx / onnxruntime).
+        if !stt::sherpa_asr::deps_ready() {
+            emit(model_download::DownloadProgress {
+                model_id: spec.id.clone(),
+                kind: model_download::KIND_STT.to_string(),
+                phase: model_download::phase::INSTALLING_DEPS.to_string(),
+                bytes_done: stt::stt_catalog::total_bytes(&spec),
+                bytes_total: stt::stt_catalog::total_bytes(&spec),
+                speed_bps: 0,
+                eta_s: None,
+                file: None,
+                message: "Đang cài thư viện Python (sherpa-onnx)".to_string(),
+            });
+            let mut line = |l: &str| info!("[pip sherpa] {l}");
+            stt::sherpa_asr::install_deps(&mut line).map_err(|e| format!("{e:#}"))?;
+        }
+
+        emit(model_download::DownloadProgress {
+            model_id: spec.id.clone(),
+            kind: model_download::KIND_STT.to_string(),
+            phase: model_download::phase::DONE.to_string(),
+            bytes_done: stt::stt_catalog::total_bytes(&spec),
+            bytes_total: stt::stt_catalog::total_bytes(&spec),
+            speed_bps: 0,
+            eta_s: Some(0),
+            file: None,
+            message: "Model đã sẵn sàng".to_string(),
+        });
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
+}
+
+/// Hủy tải model STT đang chạy.
+#[tauri::command]
+fn stt_model_cancel(id: String) -> Result<(), String> {
+    if stt::stt_catalog::spec(&id).is_none() {
+        return Err(format!("Không có engine STT này: {id}"));
+    }
+    model_download::cancel(&id);
+    Ok(())
+}
+
+/// Xoá model STT đã cài (giải phóng dung lượng).
+#[tauri::command]
+fn stt_model_delete(id: String) -> Result<(), String> {
+    let spec = stt::stt_catalog::spec(&id)
+        .ok_or_else(|| format!("Không có engine STT này: {id}"))?;
+    if spec.builtin {
+        if let Some(variant) = spec.whisper_variant.as_deref().and_then(ModelVariant::from_name) {
+            stt::whisper_local::delete_model(variant).map_err(|e| format!("{e:#}"))?;
+            return Ok(());
+        }
+        return Err("Model whisper không xoá được".to_string());
+    }
+    let dir = stt::stt_catalog::model_dir(&id);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("Không xoá được model: {e:#}"))?;
+    }
+    Ok(())
+}
+
+/// Nhận dạng giọng nói bằng engine đã chọn (mặc định whisper.cpp).
+/// Trả về đúng định dạng segment mà pipeline Studio đang dùng.
+#[tauri::command]
+async fn stt_transcribe(
+    app: tauri::AppHandle,
+    wav_path: String,
+    language: Option<String>,
+    engine_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let cfg = config::AppConfig::load(&app);
+    let engine = engine_id
+        .unwrap_or(cfg.stt_asr_engine)
+        .trim()
+        .to_string();
+    let pref = cfg.stt_engine_preference.clone();
+    let lang = language.unwrap_or_else(|| "auto".to_string());
+
+    tauri::async_runtime::spawn_blocking(move || {
+        transcribe_with_engine(&engine, &wav_path, &lang, &pref)
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
+}
+
+/// Nhận dạng bằng engine đã chọn — trả về JSON **thống nhất** cho mọi engine.
+///
+/// - whisper.cpp: chạy CLI với `-osrt` (timestamp mức câu)
+/// - sherpa-onnx: sidecar trả token timestamp (mức từ) → gom thành câu
+fn transcribe_with_engine(
+    engine: &str,
+    wav_path: &str,
+    language: &str,
+    preference: &str,
+) -> Result<serde_json::Value, String> {
+    // Rỗng (hoặc whisper) → đường whisper.cpp sẵn có.
+    if engine.is_empty() || engine.starts_with("whisper") {
+        let variant = ModelVariant::best_installed().unwrap_or(ModelVariant::LargeV3TurboQ8);
+        let whisper = stt::whisper_local::WhisperLocal::new(variant)
+            .map_err(|e| format!("{e:#}"))?;
+        let segments = whisper
+            .transcribe_to_segments(wav_path, Some(language))
+            .map_err(|e| format!("{e:#}"))?;
+        let text = segments
+            .iter()
+            .map(|s| s.original.trim())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let _ = preference; // whisper.cpp tự chọn binary theo engine preference.
+        return Ok(serde_json::json!({
+            "engine": "whisper",
+            "family": "whisper",
+            "text": text,
+            "language": language,
+            "audio_duration_secs": 0.0,
+            "inference_duration_secs": 0.0,
+            "timestamps": "sentence",
+            "segments": segments,
+        }));
+    }
+
+    let spec =
+        stt::stt_catalog::spec(engine).ok_or_else(|| format!("Không có engine STT này: {engine}"))?;
+    let result = stt::sherpa_asr::transcribe(
+        &spec.id,
+        &spec.family,
+        std::path::Path::new(wav_path),
+        language,
+        preference,
+    )
+    .map_err(|e| format!("{e:#}"))?;
+    serde_json::to_value(&result).map_err(|e| format!("{e:#}"))
+}
+
+/// Ghi kết quả nhận dạng ra file SRT (cùng định dạng phụ đề của Sublix).
+#[tauri::command]
+async fn stt_write_srt(
+    app: tauri::AppHandle,
+    wav_path: String,
+    srt_path: String,
+    language: Option<String>,
+    engine_id: Option<String>,
+) -> Result<String, String> {
+    let cfg = config::AppConfig::load(&app);
+    let engine = engine_id.unwrap_or(cfg.stt_asr_engine).trim().to_string();
+    let pref = cfg.stt_engine_preference.clone();
+    let lang = language.unwrap_or_else(|| "auto".to_string());
+    let out = std::path::PathBuf::from(&srt_path);
+
+    tauri::async_runtime::spawn_blocking(move || {
+        // whisper.cpp: dùng chính CLI xuất SRT (timestamp mức câu).
+        if engine.is_empty() || engine.starts_with("whisper") {
+            let variant =
+                ModelVariant::best_installed().unwrap_or(ModelVariant::LargeV3TurboQ8);
+            let whisper = stt::whisper_local::WhisperLocal::new(variant)
+                .map_err(|e| format!("{e:#}"))?;
+            let segments = whisper
+                .transcribe_to_segments(&wav_path, Some(&lang))
+                .map_err(|e| format!("{e:#}"))?;
+            file_sub::write_srt_file(&out, &segments, "original").map_err(|e| format!("{e:#}"))?;
+            return Ok(out.to_string_lossy().to_string());
+        }
+
+        let spec = stt::stt_catalog::spec(&engine)
+            .ok_or_else(|| format!("Không có engine STT này: {engine}"))?;
+        let result = stt::sherpa_asr::transcribe(
+            &spec.id,
+            &spec.family,
+            std::path::Path::new(&wav_path),
+            &lang,
+            &pref,
+        )
+        .map_err(|e| format!("{e:#}"))?;
+        stt::sherpa_asr::write_srt(&out, &result).map_err(|e| format!("{e:#}"))?;
+        Ok(out.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
 // ---- TSK-FEAT-TTS-3ENGINES: trạng thái engine TTS, key cloud (lưu file riêng, không trả key), cài deps, chẩn đoán CUDA ----

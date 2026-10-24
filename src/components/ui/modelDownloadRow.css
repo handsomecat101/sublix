@@ -1,0 +1,185 @@
+/* ModelDownloadRow — hàng tải model dùng chung (src/components/ui/).
+   Dùng token theme của src/App.css nên tự đổi màu theo 4 theme. */
+
+.ui-mdl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-1, var(--bg-inset));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ui-mdl.is-selected {
+  border-color: var(--ac-br);
+  box-shadow: 0 0 0 1px var(--ac-br) inset;
+}
+
+/* ---------- Header ---------- */
+.ui-mdl-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ui-mdl-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ui-mdl-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.ui-mdl-lang {
+  font-size: 11px;
+  color: var(--t3);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.ui-mdl-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ac-txt);
+  background: var(--ac-soft);
+  border: 1px solid var(--ac-br);
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ui-mdl-chip {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.ui-mdl-size {
+  font-size: 11.5px;
+  color: var(--t3);
+  white-space: nowrap;
+}
+
+/* ---------- Mô tả + meta ---------- */
+.ui-mdl-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--t3);
+}
+.ui-mdl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 10.5px;
+  color: var(--t3);
+}
+
+/* ---------- Thanh tiến trình ---------- */
+.ui-mdl-bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.ui-mdl-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--grad-ac);
+  transition: width 0.25s ease;
+}
+.ui-mdl-fill.is-busy {
+  background-image: linear-gradient(
+    100deg,
+    var(--ac-br) 0%,
+    var(--ac-txt) 45%,
+    var(--ac-br) 90%
+  );
+  background-size: 220% 100%;
+  animation: ui-mdl-stripe 1.15s linear infinite;
+}
+.ui-mdl-fill.is-error {
+  background: var(--danger, #d2453b);
+}
+@keyframes ui-mdl-stripe {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-mdl-fill.is-busy {
+    animation: none;
+  }
+}
+
+/* ---------- Dòng trạng thái ---------- */
+.ui-mdl-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+}
+.ui-mdl-phase {
+  font-weight: 700;
+  color: var(--t2);
+}
+.ui-mdl-phase.is-error {
+  color: var(--danger, #d2453b);
+}
+.ui-mdl-pct {
+  font-weight: 700;
+  color: var(--ac-txt);
+}
+.ui-mdl-msg {
+  color: var(--t3);
+}
+
+/* ---------- Nút ---------- */
+.ui-mdl-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.ui-mdl-btn {
+  border: 1px solid var(--line);
+  background: var(--bg-inset);
+  color: var(--t2);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.ui-mdl-btn:hover {
+  background: var(--hover);
+  color: var(--t1);
+}
+.ui-mdl-btn.is-primary {
+  background: var(--grad-ac);
+  color: #fff;
+  border-color: transparent;
+}
+.ui-mdl-btn.is-primary:hover {
+  filter: brightness(1.08);
+}
+.ui-mdl-btn.is-danger:hover {
+  border-color: var(--danger, #d2453b);
+  color: var(--danger, #d2453b);
+}
+.ui-mdl-btn:focus-visible {
+  outline: 2px solid var(--ac-txt);
+  outline-offset: 2px;
+}

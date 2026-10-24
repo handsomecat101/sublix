@@ -1,6 +1,14 @@
 //! Tauri command wrappers — type-safe bridge to Rust backend (Sublix v0.5.0).
 
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  ContextualLine,
+  ScriptLine,
+  TranslateModelOption,
+  TranslateOptions,
+} from "./types";
+
+export type { ContextualLine, ScriptLine, TranslateModelOption, TranslateOptions };
 
 export interface AudioDevice {
   id: string;
@@ -104,6 +112,73 @@ export interface ModelDownloadProgress {
   percent: number;
   phase?: "downloading" | "done" | "error";
   error?: string;
+}
+
+/** TSK-FEAT-STT-ENGINES: payload sự kiện `model:download-progress` (dùng chung STT + TTS). */
+export interface ModelDownloadProgressState {
+  model_id: string;
+  kind: "stt" | "tts";
+  phase:
+    | "downloading"
+    | "verifying"
+    | "extracting"
+    | "installing_deps"
+    | "done"
+    | "error";
+  bytes_done: number;
+  bytes_total: number;
+  speed_bps: number;
+  eta_s: number | null;
+  file: string | null;
+  message: string;
+}
+
+/** @deprecated dùng `ModelDownloadProgressState`. */
+export type ModelDownloadPhase = ModelDownloadProgressState;
+
+/** TSK-FEAT-STT-ENGINES: một engine nhận dạng trong catalog. */
+export interface SttEngineStatus {
+  id: string;
+  name: string;
+  label: string;
+  family: "whisper" | "sensevoice" | "paraformer" | "parakeet" | "canary";
+  languages: string[];
+  lang_label: string;
+  desc: string;
+  size_mb: number;
+  size_note: string;
+  license: string;
+  rtf_note: string;
+  requires_cuda: boolean;
+  word_timestamps: boolean;
+  notes: string;
+  state: "not_downloaded" | "downloading" | "ready" | "error";
+  downloaded: boolean;
+  bytes_downloaded: number;
+  bytes_total: number;
+  progress_pct: number;
+  error: string | null;
+  is_default: boolean;
+  selected: boolean;
+}
+
+/** TSK-FEAT-STT-ENGINES: một câu có timestamp từ engine sherpa. */
+export interface SttSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** TSK-FEAT-STT-ENGINES: kết quả nhận dạng (cùng định dạng segment của pipeline Studio). */
+export interface SttAsrResult {
+  text: string;
+  language: string;
+  engine: string;
+  family: string;
+  audio_duration_secs: number;
+  inference_duration_secs: number;
+  timestamps: "word" | "synthetic";
+  segments: SttSegment[];
 }
 
 export interface VoiceSampleProgress {
@@ -232,6 +307,22 @@ export const sublix = {
     });
   },
 
+  /**
+   * Dịch kịch bản theo ngữ cảnh (2 lượt: đọc hiểu → dịch theo lô có ngữ cảnh trượt).
+   * Phát sự kiện tiến trình `translate:progress` với {done, total, phase}.
+   */
+  async translateScriptContextual(
+    lines: ScriptLine[],
+    sourceLang: string,
+    targetLang: string,
+  ): Promise<ContextualLine[]> {
+    return await invoke<ContextualLine[]>("translate_script_contextual", {
+      lines,
+      sourceLang,
+      targetLang,
+    });
+  },
+
   async showOverlay(): Promise<void> {
     return await invoke("show_overlay");
   },
@@ -326,6 +417,24 @@ export const sublix = {
 
   async getConfig(): Promise<AppConfig> {
     return await invoke<AppConfig>("get_config");
+  },
+
+  /** Đọc lựa chọn dịch hiện tại + danh sách model (nút chọn nhanh, Ollama, GGUF). */
+  async translateOptionsGet(): Promise<TranslateOptions> {
+    return await invoke<TranslateOptions>("translate_options_get");
+  },
+
+  /** Ghi lựa chọn dịch (chỉ field được truyền — không đụng API key). */
+  async translateOptionsSet(opts: {
+    provider?: string;
+    model?: string;
+    reasoningEffort?: string;
+  }): Promise<AppConfig> {
+    return await invoke<AppConfig>("translate_options_set", {
+      provider: opts.provider,
+      model: opts.model,
+      reasoningEffort: opts.reasoningEffort,
+    });
   },
 
   async saveConfig(newConfig: AppConfig): Promise<AppConfig> {
@@ -486,6 +595,53 @@ export const sublix = {
 
   async voiceSampleData(modelId: string, voiceId: string): Promise<string | null> {
     return await invoke<string | null>("voice_sample_data", { modelId, voiceId });
+  },
+
+  // TSK-FEAT-STT-ENGINES: catalog engine STT + tải model có tiến trình chi tiết
+  async sttEnginesStatus(): Promise<SttEngineStatus[]> {
+    return await invoke<SttEngineStatus[]>("stt_engines_status");
+  },
+
+  async sttSetEngine(id: string): Promise<void> {
+    return await invoke<void>("stt_set_engine", { id });
+  },
+
+  async sttModelDownload(id: string): Promise<void> {
+    return await invoke<void>("stt_model_download", { id });
+  },
+
+  async sttModelCancel(id: string): Promise<void> {
+    return await invoke<void>("stt_model_cancel", { id });
+  },
+
+  async sttModelDelete(id: string): Promise<void> {
+    return await invoke<void>("stt_model_delete", { id });
+  },
+
+  async sttTranscribe(
+    wavPath: string,
+    language?: string,
+    engineId?: string,
+  ): Promise<SttAsrResult> {
+    return await invoke<SttAsrResult>("stt_transcribe", {
+      wavPath,
+      language,
+      engineId,
+    });
+  },
+
+  async sttWriteSrt(
+    wavPath: string,
+    srtPath: string,
+    language?: string,
+    engineId?: string,
+  ): Promise<string> {
+    return await invoke<string>("stt_write_srt", {
+      wavPath,
+      srtPath,
+      language,
+      engineId,
+    });
   },
 
   async dubbingAnalyze(

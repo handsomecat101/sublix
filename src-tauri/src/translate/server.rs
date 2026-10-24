@@ -846,22 +846,51 @@ struct MinimaxProfile {
     single_timeout_secs: u64,
 }
 
+/// Muc do suy luan hien tai (tu `config.llm_reasoning_effort`).
+///
+/// Dung state toan cuc de khong phai doi chu ky ham cua tung provider
+/// (`translate_via_minimax`, `translate_batch_via_openrouter`, ...). Gia tri den tu
+/// config cua app -> mang tinh chat toan cuc, gan 1 lan moi request.
+static REASONING_EFFORT: std::sync::OnceLock<std::sync::RwLock<String>> = std::sync::OnceLock::new();
+
+/// Set muc do suy luan hien tai (goi 1 lan dau moi request tu `translate/mod.rs`).
+pub fn set_reasoning_effort(effort: &str) {
+    let cell = REASONING_EFFORT.get_or_init(|| {
+        std::sync::RwLock::new(super::reasoning::normalize_effort(effort))
+    });
+    if let Ok(mut g) = cell.write() {
+        *g = super::reasoning::normalize_effort(effort);
+    }
+}
+
+/// Doc muc do suy luan hien tai.
+fn current_reasoning_effort() -> String {
+    REASONING_EFFORT
+        .get()
+        .and_then(|c| c.read().ok().map(|g| g.clone()))
+        .unwrap_or_else(|| super::reasoning::EFFORT_AUTO.to_string())
+}
+
 fn minimax_profile(model: &str) -> MinimaxProfile {
-    let m = model.trim();
-    if m.contains("M3.1-Flash") {
-        MinimaxProfile {
-            reasoning_effort: Some("low"),
-            batch_timeout_secs: 120,
-            single_timeout_secs: 60,
-        }
-    } else {
-        // M3 suy luận dài: lô 15 câu hay vượt 60s rồi rơi xuống dịch từng câu (mất ngữ cảnh)
-        // — đo ở docs/BENCH_TRANSLATE_2026-10.md. Nới timeout để lô dịch xong trọn.
-        MinimaxProfile {
-            reasoning_effort: None,
-            batch_timeout_secs: 180,
-            single_timeout_secs: 60,
-        }
+    let (fields, _supports) =
+        super::reasoning::reasoning_fields("minimax", model, &current_reasoning_effort());
+    let reasoning_effort = fields
+        .get("reasoning_effort")
+        .and_then(|v| v.as_str())
+        .map(|s| match s {
+            "low" => "low",
+            "medium" => "medium",
+            "high" => "high",
+            "max" => "max",
+            _ => "low",
+        });
+    // M3 suy luan dai: lo 15 cau hay vuot timeout -> roi xuong dich tung cau (mat ngu canh)
+    // — do o docs/BENCH_TRANSLATE_2026-10.md. Noi timeout de lo dich xong tron.
+    let m31 = model.contains("M3.1-Flash");
+    MinimaxProfile {
+        reasoning_effort,
+        batch_timeout_secs: if m31 { 120 } else { 180 },
+        single_timeout_secs: 60,
     }
 }
 
@@ -869,6 +898,131 @@ fn minimax_profile(model: &str) -> MinimaxProfile {
 fn apply_minimax_profile(body: &mut serde_json::Value, profile: &MinimaxProfile) {
     if let Some(effort) = profile.reasoning_effort {
         body["reasoning_effort"] = serde_json::json!(effort);
+    }
+}
+
+/// Gọi LLM theo provider đang cấu hình với **system/user prompt tùy chỉnh**.
+///
+/// Dùng cho "dịch theo ngữ cảnh" — cần nhét bản tham chiếu (tóm tắt, xưng hô,
+/// thuật ngữ) + cửa sổ trượt vào prompt, thứ mà `translate_batch_via_*` cố định không làm được.
+///
+/// Provider `gguf` (llama-server cục bộ) không hỗ trợ prompt tùy chỉnh → trả lỗi,
+/// caller tự fallback sang đường llama-server với glossary.
+pub fn chat_completion_custom(
+    cfg: &crate::config::AppConfig,
+    provider: &str,
+    model: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+    timeout_secs: u64,
+) -> Result<String> {
+    let messages = serde_json::json!([
+        { "role": "system", "content": system_prompt },
+        { "role": "user", "content": user_prompt }
+    ]);
+
+    match provider.to_lowercase().as_str() {
+        "minimax" => {
+            if cfg.minimax_api_key.trim().is_empty() {
+                return Err(anyhow!(
+                    "Chưa cài đặt MiniMax API Key. Vui lòng nhập API Key trong tab Cài đặt."
+                ));
+            }
+            let model_name = if model.trim().is_empty() { "MiniMax-M3" } else { model.trim() };
+            let profile = minimax_profile(model_name);
+            let mut body = serde_json::json!({
+                "model": model_name,
+                "messages": messages,
+                "reasoning_split": true
+            });
+            apply_minimax_profile(&mut body, &profile);
+            let client = Client::builder()
+                .timeout(Duration::from_secs(timeout_secs.max(profile.batch_timeout_secs)))
+                .build()?;
+            let resp = client
+                .post("https://api.minimax.io/v1/chat/completions")
+                .header("Authorization", format!("Bearer {}", cfg.minimax_api_key.trim()))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .with_context(|| "HTTP POST to MiniMax API failed")?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let err_text = resp.text().unwrap_or_default();
+                return Err(anyhow!("MiniMax API returned {}: {}", status, err_text));
+            }
+            let chat_resp: ChatResponse =
+                resp.json().with_context(|| "Failed to parse MiniMax response")?;
+            Ok(chat_resp
+                .choices
+                .into_iter()
+                .next()
+                .map(|c| c.message.content)
+                .unwrap_or_default())
+        }
+        "ollama" => {
+            let base_url = if cfg.ollama_url.trim().is_empty() {
+                "http://localhost:11434".to_string()
+            } else {
+                cfg.ollama_url.trim().trim_end_matches('/').to_string()
+            };
+            let model_name = if model.trim().is_empty() {
+                cfg.ollama_model.trim()
+            } else {
+                model.trim()
+            };
+            let body = serde_json::json!({
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.3,
+                "think": false
+            });
+            let client = Client::builder().timeout(Duration::from_secs(timeout_secs)).build()?;
+            let resp = client
+                .post(format!("{base_url}/v1/chat/completions"))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .with_context(|| format!("HTTP POST to Ollama ({base_url}) failed"))?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let err_text = resp.text().unwrap_or_default();
+                return Err(anyhow!("Ollama returned {}: {}", status, err_text));
+            }
+            let chat_resp: ChatResponse =
+                resp.json().with_context(|| "Failed to parse Ollama response")?;
+            Ok(chat_resp
+                .choices
+                .into_iter()
+                .next()
+                .map(|c| c.message.content)
+                .unwrap_or_default())
+        }
+        "deepseek" => chat_completion_openai_compatible(
+            "https://api.deepseek.com/chat/completions",
+            &cfg.deepseek_api_key,
+            model,
+            "deepseek-chat",
+            system_prompt,
+            user_prompt,
+            timeout_secs,
+            "DeepSeek",
+            serde_json::json!({}),
+        ),
+        "openrouter" => chat_completion_openai_compatible(
+            "https://openrouter.ai/api/v1/chat/completions",
+            &cfg.openrouter_api_key,
+            model,
+            "deepseek/deepseek-chat",
+            system_prompt,
+            user_prompt,
+            timeout_secs,
+            "OpenRouter",
+            super::reasoning::reasoning_fields("openrouter", model, &current_reasoning_effort()).0,
+        ),
+        other => Err(anyhow!(
+            "Provider '{other}' chưa hỗ trợ dịch theo ngữ cảnh (cần MiniMax / Ollama / DeepSeek / OpenRouter)"
+        )),
     }
 }
 
@@ -1214,13 +1368,14 @@ fn chat_completion_openai_compatible(
     user_prompt: &str,
     timeout_secs: u64,
     label: &str,
+    extra: serde_json::Value,
 ) -> Result<String> {
     let model_name = if model.trim().is_empty() {
         default_model
     } else {
         model.trim()
     };
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model_name,
         "messages": [
             { "role": "system", "content": system_prompt },
@@ -1228,6 +1383,12 @@ fn chat_completion_openai_compatible(
         ],
         "temperature": 0.2
     });
+    // tham so rieng theo provider (vd OpenRouter: reasoning.effort)
+    if let Some(obj) = extra.as_object() {
+        for (k, v) in obj {
+            body[k] = v.clone();
+        }
+    }
     let client = Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .build()?;
@@ -1309,6 +1470,7 @@ fn translate_via_openai_compatible(
         &user_prompt,
         timeout_secs,
         label,
+        super::reasoning::reasoning_fields("openrouter", model, &current_reasoning_effort()).0,
     )?;
     let translated = post_process(&raw, target);
     if !translated.is_empty() {
@@ -1393,6 +1555,7 @@ fn translate_batch_via_openai_compatible(
         &user_prompt,
         timeout_secs,
         label,
+        super::reasoning::reasoning_fields("openrouter", model, &current_reasoning_effort()).0,
     )?;
     let parsed = parse_batch_response(&raw, items.len(), target);
     info!(

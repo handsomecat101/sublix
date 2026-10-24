@@ -449,6 +449,58 @@ impl WhisperLocal {
             inference_duration_secs: inference_duration,
         })
     }
+
+    /// Transcribe a WAV file và trả về **segment có mốc thời gian**.
+    ///
+    /// whisper.cpp chỉ xuất timestamp mức câu (qua `-osrt`), nên ta gọi CLI một
+    /// lần và parse file `.srt` bằng đúng bộ đọc SRT mà Sublix đang dùng — đầu ra
+    /// vì vậy **cùng định dạng** với engine sherpa.
+    pub fn transcribe_to_segments(
+        &self,
+        wav_path: &str,
+        language: Option<&str>,
+    ) -> Result<Vec<crate::file_sub::SubtitleSegment>> {
+        let wav_path = Path::new(wav_path);
+        if !wav_path.exists() {
+            return Err(anyhow::anyhow!("WAV file not found: {}", wav_path.display()));
+        }
+        let lang = language.unwrap_or("auto");
+        let uid = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let stem = std::env::temp_dir().join(format!("sublix-whisper-seg-{uid}"));
+        let srt_file = stem.with_extension("srt");
+
+        let mut cmd = Command::new(&self.binary_path);
+        cmd.arg("-m")
+            .arg(&self.model_path)
+            .arg("-f")
+            .arg(wav_path)
+            .arg("-l")
+            .arg(lang)
+            .arg("-osrt")
+            .arg("-of")
+            .arg(&stem)
+            .arg("--no-prints");
+        if self.engine == SttEngine::Cpu {
+            cmd.arg("-ng");
+        }
+        let output = cmd
+            .output()
+            .with_context(|| format!("Failed to run whisper-cli at {}", self.binary_path.display()))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!(
+                "whisper-cli failed (exit {:?}): {}",
+                output.status.code(),
+                stderr
+            ));
+        }
+        let content = std::fs::read_to_string(&srt_file).unwrap_or_default();
+        let _ = std::fs::remove_file(&srt_file);
+        Ok(crate::file_sub::parse_srt_content(&content))
+    }
 }
 
 fn parse_whisper_output(stdout: &str) -> String {
@@ -609,6 +661,17 @@ pub fn has_model(variant: ModelVariant) -> bool {
 
 pub fn model_looks_valid(variant: ModelVariant) -> bool {
     has_model(variant)
+}
+
+/// Xoá file model đã tải (dùng cho nút "Xoá" trong catalog engine STT).
+pub fn delete_model(variant: ModelVariant) -> Result<()> {
+    for p in candidate_paths(MODELS_DIR, variant.filename()) {
+        if p.exists() {
+            std::fs::remove_file(&p)
+                .with_context(|| format!("Không xoá được model {}", p.display()))?;
+        }
+    }
+    Ok(())
 }
 
 pub fn ensure_model(variant: ModelVariant) -> Result<PathBuf> {

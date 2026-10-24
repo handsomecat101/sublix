@@ -27,6 +27,11 @@
 | `BUG-063` | Studio không đổi được video khác do effect dính `filePath` & Thiếu xuất Softsub / Multi-track Audio | `SublixStudioView.tsx`, `dubbing/mod.rs` | Bỏ state nội bộ khỏi deps của prop sync effect, tập trung reset state qua `handleLoadNewVideoFile` và gọi `onClearPendingFile` | ✅ Fixed |
 | `BUG-082` | `kuaishou` & `migu` vẫn được `get_platform` nhận diện nhưng **yt-dlp (2026.10.21) KHÔNG có extractor** → dán link sẽ ăn `Unsupported URL`; hint cũ còn khuyên "cập nhật yt-dlp" (vô ích vì upstream chưa hỗ trợ) | `downloader/mod.rs`, `downloader/reup.rs`, `downloader/batch.rs` | Chặn **SỚM** ở `fetch_video_info`/`start_download`/`expand_playlist` + báo tiếng Việt rõ ràng, KHÔNG gợi ý cập nhật yt-dlp | ✅ Fixed |
 | `BUG-H13` | Edge-TTS vi-VN **trả 0 byte** cho một số câu tiếng Việt; `synthesize_speech()` không retry ⇒ câu đó **mất tiếng** trong bản dịch | `dubbing/mod.rs` (`synthesize_speech`) | Retry 3–5 lần (giãn 1–1,5 s) + kiểm tra file đầu ra > 0 byte; coi Edge-TTS là fallback, không phải mặc định | 🔴 Open |
+| `BUG-H14` | **SenseVoice int8 bản 2025-09-09 rớt chữ** — model + `tokens.txt` lệch tokenizer ⇒ WER **40,19 %** (bản fp32 cùng repo vẫn đúng) | `stt/stt_catalog.rs` (chọn bản model) | Chỉ dùng bản **2024-07-17** (int8 khớp fp32 100 %); **luôn verify SHA-256** file `model` + `tokens` sau khi tải | ✅ Fixed (task `TSK-FEAT-STT-ENGINES`) |
+| `BUG-H15` | Bản mirror HF của **Parakeet** không tương thích `sherpa-onnx 2.0.0`: encoder cần tensor `[N,C,T]` còn runtime truyền `[N,T,C]` → *"Got invalid dimensions for input: audio_signal"*; `decoder.int8.onnx` cũng thiếu metadata `vocab_size` | `stt/stt_catalog.rs`, `scripts/sherpa_asr.py` | Chỉ dùng **gói release chính thức** của sherpa-onnx (có SHA-256 trong GitHub API); nếu mirror HF thì phải tự **patch metadata** `vocab_size`/`context_size` vào decoder | 🔴 Open (chưa tải được release — mạng nghẽn) |
+| `BUG-H16` | Sự kiện tiến trình tải model báo **`speed_bps = 0` ở event đầu tiên** (đo tốc độ theo cửa sổ 500 ms nhưng emit mỗi 250 ms) ⇒ UI hiện "— MB/s" và ETA rỗng lúc đầu | `src-tauri/src/model_download.rs` (`SpeedMeter`) | Đo tốc độ theo **cửa sổ trượt 1,2 s**, tối thiểu 200 ms mới tính ⇒ event đầu tiên đã có tốc độ + ETA | ✅ Fixed (task `TSK-FEAT-STT-ENGINES`) |
+| `BUG-H17` | Tải **release asset của GitHub bị nghẽn 0 byte** từ máy dev (cả `curl` lẫn `urllib`, retry 3 lần) trong khi Hugging Face tải bình thường | `src-tauri/src/model_download.rs` | Mọi model phải có **URL dự phòng** (HF mirror) + `Resume` bằng HTTP `Range`; không được coi "0 byte" là thành công | 🟡 Workaround (đã thêm `fallback_url`) |
+| `BUG-H18` | **2 lượt tải cùng 1 model chạy song song** ghi chung file `.part` ⇒ file hỏng (đúng kích thước nhưng **sai SHA-256**), không tự phát hiện | `src-tauri/src/model_download.rs` | Giữ **khoá in-process** theo `model_id` (`is_in_progress`): lượt thứ hai bị từ chối, không ghi cùng file; luôn verify byte **và** SHA-256 trước khi cài | ✅ Fixed (task `TSK-FEAT-STT-ENGINES`) |
 | `BUG-085` | **Cài đặt ghi đè API key bằng chuỗi rỗng**: `fullConfig` nạp lúc mở app, key được nạp thẳng vào file sau đó → bấm "Lưu" ghi bản cũ (key = "") và **xoá key thật** (đã xảy ra với minimax/openrouter) | `src/views/settings/configMerge.ts` (mới), `SettingsView.tsx` | **Luôn đọc lại config từ đĩa ngay trước khi lưu**, gộp bằng hàm thuần; chỉ ghi field vừa sửa + key VỪA GÕ (rỗng = giữ nguyên); xoá key phải là hành động chủ động | ✅ Fixed |
 
 ---
@@ -164,6 +169,7 @@
 | `BUG-082` | TTS **bỏ rơi/đọc sai chữ số** (Kokoro: "24 tháng 10 năm 2026 … 3-1" → "tháng 5 ở … ở", WER 30%); tiền tố `vietneu:` là GIẢ (map sang Kokoro) | `dubbing/mod.rs`, `dubbing/vi_normalize.rs` | Chuẩn hóa số/ngày/giờ/tiền thành CHỮ trước MỌI engine (`normalize_vi`); tỷ số viết "ba một" (gạch nối khiến engine đọc "ba, một chiếc…": WER 15–20%) | ✅ Fixed (Kokoro s3 30%→10%) |
 | `BUG-083` | `voice_models` tải model không verify byte + không tạo thư mục con → file thiếu vẫn "đã tải"; mục có subfolder (`onnx/…`) lỗi tạo file | `voice_models.rs` | `VoiceModelFile.bytes` chính xác + so khớp sau tải + `Content-Length` + `create_dir_all(parent)` (xử lý BUG-012 cho nhóm voice) | ✅ Fixed |
 | `BUG-084` | Smart App Control chặn **exe test/build-script** mới biên dịch (`os error 4551`) — ngẫu nhiên theo hash | `cargo test` | Lỗi 4551: chạm file (đổi mtime) để biên dịch lại hash mới rồi chạy lại; dùng chung `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` (xem BUG-H09) | 🟡 Workaround |
+| `BUG-H19` | **Đo lỗi tiếng Việt bằng cách bỏ dấu**: `ngươi` (đại từ cổ) và `người` (con người) bỏ dấu đều ra `nguoi` ⇒ metric "số dòng chứa ngươi" đếm sai hàng loạt dòng (đo 60 câu: 8 dòng thực chỉ có **2**) | `src-tauri/src/translate/pronoun_audit.rs` | Trước khi bỏ dấu, thay các cặp từ trùng nhau bằng sentinel riêng (`ngươi`/`người`, `cậu`/`câu`, `bạn`/`bàn`, `tao`/`táo`); cũng loại `chỉ` khỏi danh sách đại từ gọi nhau | 🟡 Workaround |
 
 ## 🔍 Chi Tiết Các Lỗi Kỹ Thuật Nghiêm Trọng
 
@@ -562,5 +568,15 @@
   1. **Form ghi đè toàn bộ config là mẫu lỗi kinh điển** khi dữ liệu có thể bị thay đổi từ nguồn khác (script, agent, instance khác). Luôn `read-modify-write` trên bản mới nhất.
   2. **Ô nhập bí mật phải phân biệt "chưa nhập" với "xoá"** — dùng cờ dirty, không dùng chuỗi rỗng làm tín hiệu.
   3. Tách logic gộp thành **hàm thuần** để test được mà không cần app/Tauri.
+
+---
+
+### [BUG-H19] Bỏ dấu tiếng Việt làm TRÙNG các từ khác nhau — đo metric sai
+- **Ngày:** 2026-10-24 | **Phát hiện bởi:** mcode #2 (đo xưng hô cho `TSK-FEAT-CONTEXT-TRANSLATE`) | **Status:** 🟡 Workaround (đã xử lý trong `pronoun_audit.rs`)
+- **Triệu chứng:** metric "số dòng có `ngươi`" báo **8 dòng** cho bản dịch 60 câu, nhưng tra tay chỉ thấy **2 dòng** thật sự chứa "ngươi". Tìm ra 6 dòng còn lại chứa **"người"** (con người).
+- **Root Cause:** bỏ dấu kiểu Unicode gộp `ngươi` và `người` về cùng chuỗi `nguoi`; tương tự `cậu`/`câu` → `cau`, `bạn`/`bàn` → `ban`, `tao`/`táo` → `tao`. Ngoài ra `chỉ` → `chi` làm hàng loạt dòng bị tính nhầm là đại từ gọi nhau "chị".
+- **Cách phòng tránh:** (1) trước khi bỏ dấu, thay từng cặp bằng **sentinel riêng** rồi mới bỏ dấu; (2) bỏ các từ quá dễ nhầm khỏi danh sách đại từ; (3) **luôn đối chiếu kết quả metric với đếm tay trên vài chục dòng** trước khi kết luận.
+- **Bài học:** metric tự động nào cũng cần **một ca kiểm tra thủ công nhỏ**; lỗi bỏ dấu làm sai kết luận đảo ngược (lúc đầu tưởng đường mới tăng `ngươi` 9→11, thực ra là 3→5).
+- **Ghi chú WDAC:** `cargo test` có thể bị chặn `os error 4551` (Smart App Control) ngay sau khi build — cách vượt: **đổi mtime file nguồn** để dựng lại hash rồi chạy lại (xem `BUG-084`), `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`.
 
 ---

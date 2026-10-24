@@ -8,6 +8,12 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
+pub mod bench;
+pub mod contextual;
+pub mod reasoning;
+pub mod contextual_run;
+pub mod contextual_types;
+pub mod pronoun_audit;
 pub mod server;
 
 use crate::stt::EnginePreference;
@@ -409,6 +415,9 @@ pub fn translate_batch_with_config(
         return Vec::new();
     }
 
+    // Muc do suy luan: gan 1 lan truoc khi di (config-driven, xem `translate::reasoning`).
+    server::set_reasoning_effort(&cfg.llm_reasoning_effort);
+
     let mut results = Vec::with_capacity(items.len());
     let chunk_size = 15;
 
@@ -568,6 +577,160 @@ pub fn current_engine() -> Option<String> {
 pub fn current_model() -> Option<String> {
     server::current_model().map(|m| m.name().to_string())
 }
+
+/// 1 model trong danh sách lựa chọn dịch.
+#[derive(Debug, Clone, Serialize)]
+pub struct TranslateModelOption {
+    /// "minimax" | "openrouter" | "deepseek" | "ollama" | "local" (GGUF)
+    pub provider: String,
+    /// id model (đưa vào config theo provider tương ứng)
+    pub id: String,
+    /// nhãn hiển thị
+    pub label: String,
+    /// true = chạy local (không cần key)
+    pub local: bool,
+}
+
+/// Các lựa chọn dịch hiện tại + danh sách model (cho UI).
+#[derive(Debug, Clone, Serialize)]
+pub struct TranslateOptions {
+    pub provider: String,
+    pub model: String,
+    pub reasoning_effort: String,
+    pub supports_reasoning: bool,
+    pub models: Vec<TranslateModelOption>,
+}
+
+/// Model ghim sẵn (nút chọn nhanh) — theo hợp đồng coordinator 2026-10-24.
+pub fn quick_models() -> Vec<TranslateModelOption> {
+    vec![
+        TranslateModelOption {
+            provider: "minimax".into(),
+            id: "MiniMax-M3".into(),
+            label: "⭐ MiniMax-M3 (Token Plan)".into(),
+            local: false,
+        },
+        TranslateModelOption {
+            provider: "minimax".into(),
+            id: "MiniMax-M3.1-Flash".into(),
+            label: "⚡ MiniMax M3.1 Flash".into(),
+            local: false,
+        },
+        TranslateModelOption {
+            provider: "openrouter".into(),
+            id: "deepseek/deepseek-v4.1-flash".into(),
+            label: "⚡ DeepSeek V4.1 Flash (OpenRouter)".into(),
+            local: false,
+        },
+        TranslateModelOption {
+            provider: "openrouter".into(),
+            id: "~deepseek/deepseek-flash-latest".into(),
+            label: "⚡ DeepSeek Flash Latest (alias OpenRouter)".into(),
+            local: false,
+        },
+        TranslateModelOption {
+            provider: "deepseek".into(),
+            id: "deepseek-chat".into(),
+            label: "DeepSeek Chat".into(),
+            local: false,
+        },
+    ]
+}
+
+/// Ghép danh sách model đầy đủ: ghim sẵn + model Ollama đang cài + model GGUF cục bộ.
+pub fn build_model_list(ollama_models: &[String]) -> Vec<TranslateModelOption> {
+    let mut list = quick_models();
+    for m in ollama_models {
+        list.push(TranslateModelOption {
+            provider: "ollama".into(),
+            id: m.clone(),
+            label: format!("🦙 {m} (Ollama local)"),
+            local: true,
+        });
+    }
+    for v in TranslationModelVariant::ALL {
+        list.push(TranslateModelOption {
+            provider: "local".into(),
+            id: v.name().to_string(),
+            label: v.label().to_string(),
+            local: true,
+        });
+    }
+    list
+}
+
+/// Lấy model đang dùng theo provider hiện tại.
+pub fn current_model_for(cfg: &crate::config::AppConfig) -> String {
+    match cfg.translation_provider.to_lowercase().as_str() {
+        "minimax" => cfg.minimax_model.clone(),
+        "ollama" => cfg.ollama_model.clone(),
+        "deepseek" => cfg.deepseek_model.clone(),
+        "openrouter" => cfg.openrouter_model.clone(),
+        _ => cfg.translation_model.clone(),
+    }
+}
+
+/// Gom lựa chọn dịch hiện tại + danh sách model.
+pub fn translate_options(
+    cfg: &crate::config::AppConfig,
+    ollama_models: &[String],
+) -> TranslateOptions {
+    let model = current_model_for(cfg);
+    let supports = reasoning::supports_reasoning(&cfg.translation_provider, &model);
+    TranslateOptions {
+        provider: cfg.translation_provider.clone(),
+        model,
+        reasoning_effort: reasoning::normalize_effort(&cfg.llm_reasoning_effort),
+        supports_reasoning: supports,
+        models: build_model_list(ollama_models),
+    }
+}
+
+/// Gán model đã chọn vào **đúng** field của config theo provider đang chọn.
+/// (Provider "local"/gguf -> `translation_model`.)
+pub fn apply_model_choice(cfg: &mut crate::config::AppConfig, model: &str) {
+    match cfg.translation_provider.to_lowercase().as_str() {
+        "minimax" => cfg.minimax_model = model.to_string(),
+        "ollama" => cfg.ollama_model = model.to_string(),
+        "deepseek" => cfg.deepseek_model = model.to_string(),
+        "openrouter" => cfg.openrouter_model = model.to_string(),
+        _ => cfg.translation_model = model.to_string(),
+    }
+}
+
+/// Áp dụng lựa chọn dịch lên config (CHỈ sửa field được truyền).
+///
+/// - `provider` → `translation_provider`
+/// - `model` → field model tương ứng với provider (xem `apply_model_choice`)
+/// - `reasoning_effort` → `llm_reasoning_effort` (chuẩn hoá về auto|low|medium|high|max)
+///
+/// **Không bao giờ** đụng tới `minimax_api_key` / `deepseek_api_key` / `openrouter_api_key`.
+pub fn apply_translate_options(
+    cfg: &mut crate::config::AppConfig,
+    provider: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) {
+    if let Some(p) = provider {
+        let p = p.trim().to_lowercase();
+        if !p.is_empty() {
+            cfg.translation_provider = p;
+        }
+    }
+    if let Some(m) = model {
+        let m = m.trim();
+        if !m.is_empty() {
+            apply_model_choice(cfg, m);
+        }
+    }
+    if let Some(e) = reasoning_effort {
+        cfg.llm_reasoning_effort = reasoning::normalize_effort(e);
+    }
+}
+
+#[cfg(test)]
+#[path = "options_tests.rs"]
+mod options_tests;
 
 #[cfg(test)]
 mod tests {

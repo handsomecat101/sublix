@@ -1,3 +1,14 @@
+## ARCHIVED 2026-10-25 (mcode #3 prune: giu 8 tin gan nhat)
+
+### 2026-10-24 22:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-TTS-3ENGINES` — **chỉ backend + command + wrapper**, UI để vòng thiết kế lại; chưa commit). Lỗi: `BUG-082..084`.
+- **Engine thật (offline):** `vietneu:` = **VieNeu v3 Turbo** (25 giọng, clone `vietneu:clone=<wav>`), `zerotts:` = **ZeroTTS** (8 giọng), cloud `gcloud:` (Chirp3 HD 30 giọng) + `fptai:` (7 giọng, key lưu `sublix-tts-keys.json`, không qua `config:updated`). Mã: `dubbing/{tts_common,tts_vieneu,tts_zerotts,tts_cloud,tts_status,vi_normalize}.rs` + `scripts/{vieneu,zerotts}_tts.py`; `voice_models.rs` thêm 4 mục catalog (tải verify đủ byte, tự `pip install` deps sau khi tải). Project cũ `vietneu:*`: model chưa tải → vẫn fallback Kokoro.
+- **Đo thật (CPU Ryzen AI Max 390, whisper turbo):** VieNeu batch WER **0%** (RTF 0,98 gồm nạp model; model 637 MB); ZeroTTS **0%** (RTF 1,88 batch 3 câu gồm nạp; model 909 MB; lần đo riêng 1,7%); **Kokoro s3: WER 30% → 10%** nhờ `vi_normalize` (≥ 24 test). MP4 5 câu lồng bằng `vietneu:vi_bac_nam`: 2 track audio (ffprobe), mean −21,6 dB. `cargo test --lib` **113/113**, `tsc` 0, `npm run build` OK (CARGO_TARGET_DIR `%TEMP%\sublix-cc-target`).
+- **CUDA (RTX 3090):** CHƯA test được (máy dev không NVIDIA). `tts_engine_install_deps` tự gỡ `onnxruntime` và cài `onnxruntime-gpu` + `nvidia-cudnn/cublas/cuda-runtime/cufft/curand/nvrtc-cu12` khi `nvidia-smi` có; sidecar tự dùng `CUDAExecutionProvider` (ép CPU bằng `stt_engine_preference=cpu`). Kiểm tra: command `tts_engine_diagnose("vieneu")` → `cuda:true`, log `DEVICE cuda`. Nếu lỗi DLL: cần CUDA 12.x + cuDNN 9 trong PATH.
+- **Việc cho vòng UI:** gắn `tauri.ts` (`ttsEnginesStatus/ttsCloudSetKey/ttsCloudTest/ttsEngineInstallDeps/ttsEngineDiagnose`) vào Cài đặt/Studio; Studio vẫn hard-code `TTS_ENGINE_MODELS` + `mapVoiceForEngine` (map `vietneu:`→`kokoro:` ở frontend) — **phải sửa** thì VieNeu thật mới được gọi từ Studio. Component UI mẫu đã viết nhưng bỏ ra ngoài repo (scratchpad `TtsEnginesPanel.tsx.txt`). Preview 1 câu VieNeu/ZeroTTS ~8–9 s (nạp model mỗi lần); export dùng batch nên nhanh.
+
+---
+
 # AGENT_CHAT_ARCHIVE.md — Kho Lưu Trữ Tin Cũ (CHỈ đọc khi cần tra cứu lịch sử)
 
 > Được tách ra từ `AGENT_CHAT.md` ngày 2026-10-07 (chỉ đạo của PO: gọn bảng bàn giao để agent không tốn token mỗi phiên).
@@ -474,3 +485,31 @@
 - **API khớp code thật:** `SubtitleItem` → `TimelineSegment` (cùng cấu trúc → gán thẳng qua structural typing); `formatTimecodeDisplay` giống **y hệt** `formatTimecode()` (`:115`); `handleSeek` (`:1829`) làm callback `onSeek` của TimecodeInput; `saveUndoHistory` (`:1498`) là bắt buộc cho mọi thao tác đổi `segments`.
 - **Lưu ý:** thêm 2 file phụ **trong thư mục test** — `scripts/timeline-tests/package.json` + `index.ts` — vì **Node 24.20 KHÔNG quét thư mục** với `node --test <dir>` (báo `Cannot find module`); có 2 file này thì đúng lệnh `node --test scripts/timeline-tests/` chạy được. Không ảnh hưởng build (`scripts/` nằm ngoài `include: ["src"]`).
 - **Chưa làm (để bước sau):** chưa gắn module nào vào app; `SublixStudioView.tsx/.css` **không bị tôi sửa** (đang là worker Sonnet sửa, file modified lúc 16:34). Thứ tự gắn đề xuất: `timecode` → `clipboard` → `autoFollow` → `shuttle` (cần throttle ≥ 100ms) → `markers` → `trackLock`.
+
+## ARCHIVED 2026-10-24 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-24 21:30 - Claude Opus 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-REDESIGN-P1` vòng 1 — **chỉ khảo sát + thiết kế + mockup, KHÔNG sửa code app**, chưa commit).
+- **Báo cáo:** `docs/UI_REDESIGN_PLAN.md` — kiểm kê từng control (file:dòng) panel trái Studio + Tải video + tóm tắt 4 tab, **18 nhóm trùng lặp đã xác minh** (vd: Quét & Phân vai `:6277`/`:6827`, Lồng tiếng `:6641`/`:6846`, provider dịch 2 nơi 2 danh sách khác nhau).
+- **Số đo thật:** panel trái Studio **45 control**, nội dung **1687 px nhưng chỉ thấy 405 px** ở 1080p → thiết kế mới **20 control**, quy trình 5 bước, 1 nút chạy dạng split, vừa 1 màn.
+- **Mockup:** `docs/ui-mockups/{studio,tai-video,cai-dat}.html` + ảnh trước/sau/so sánh trong `docs/ui-mockups/shots/` (instance riêng CDP 9225, đã tắt; app PO 9223 không bị đụng).
+- **Vòng 2:** 8 bước (~7 ngày), chỉ bắt đầu khi mcode xong `SublixStudioView.*` và CommandCode xong `DownloaderView.*`; giữ nguyên timeline/kéo thả/In-Out/logic downloader.
+
+---
+
+---
+
+## ARCHIVED 2026-10-24 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-24 23:35 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-BENCH-MINIMAX-FLASH` — **đo thật + sửa code trong `translate/` + UI; KHÔNG commit, KHÔNG push**).
+- **Báo cáo:** `docs/BENCH_TRANSLATE_2026-10.md` · harness: `src-tauri/examples/bench_translate.rs` (chạy đúng `translate::translate_batch_with_config` với `AppConfig::load_or_default()` = config thật của app) · dữ liệu: 60 câu tiếng Anh StarCraft từ `gui-2026-10-20/dump-78-cues.json` (%TEMP%\sublix-bench-translate\).
+- **Tên model đã xác minh:** `MiniMax-M3.1-Flash` (docs chính thức MiniMax, đọc 2026-10-24; coordinator xác minh `GET /v1/models = 200`).
+- **Tốc độ (60 câu, ×2):** (a) Ollama qwen2.5:3b local **24,56 s** (lô đầu 7,98 s) · (b) MiniMax-M3 **timeout lô 15 câu** → fallback từng câu (170–200 s ở chunk 5) · (c) M3.1-Flash **effort=max 215,07 s** → **sau bản vá `reasoning_effort=low` còn 26,33 s** (lô đầu **5,30 s**, nhanh hơn local 1,5×), 0 lỗi, 0 lọt `<think>`. (d) DeepSeek **không có key** → 60/60 lỗi, ghi rõ.
+- **Chất lượng (giám khảo MiniMax-M3, 1–5):** local Ollama **4,27** · M3 **4,77** · **M3.1-Flash (bản vá) 4,72 ≥ local** ✅ (giám khảo Ollama 3B: 4,91 / 4,81 / 4,91 — dễ tính, chỉ đối chiếu).
+- **Đã thêm (PHẦN 2):** nút `⚡ MiniMax M3.1 Flash` cạnh nút MiniMax-M3 ở `SettingsView.tsx` (**chỉ thêm**, không đổi model mặc định) + `translate/server.rs` xử lý đúng M3.1-Flash (`reasoning_effort=low`, timeout 120 s/60 s; M3 giữ nguyên). **Bắt buộc**: dùng M3.1-Flash mà không có bản vá thì chậm hơn local 8,8×.
+- **Cần coordinator/PO quyết:** (1) `npm run build`/`tsc` **đang đỏ vì `SublixStudioView.tsx` của Sonnet** (24 lỗi, file tôi sửa = 0 lỗi); (2) có nên sửa timeout của `MiniMax-M3` không (lô 15 câu hiện timeout 60 s — tôi **không** sửa theo đúng phạm vi); (3) DeepSeek cần key để đo.
+
+---
+
+---

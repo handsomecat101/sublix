@@ -37,6 +37,12 @@ pub struct AppConfig {
     #[serde(default = "default_stt_model")]
     pub stt_model: String,
 
+    /// Selected offline STT engine id (TSK-FEAT-STT-ENGINES).
+    /// Empty = keep the built-in whisper.cpp engine (default, backward compatible).
+    /// Otherwise one of the ids from `stt::stt_catalog::catalog()`.
+    #[serde(default = "default_stt_asr_engine")]
+    pub stt_asr_engine: String,
+
     /// Selected local LLM translation model variant name.
     #[serde(default = "default_translation_model")]
     pub translation_model: String,
@@ -127,6 +133,13 @@ pub struct AppConfig {
     #[serde(default)]
     pub glossary: Vec<String>,
 
+    /// Mức độ suy luận cho LLM cloud: "auto" | "low" | "medium" | "high" | "max".
+    ///
+    /// "auto" = giữ hành vi đã tối ưu: MiniMax-M3.1-Flash → `low`, model khác → mặc định
+    /// của nhà cung cấp (tức không gửi tham số).
+    #[serde(default = "default_reasoning_effort")]
+    pub llm_reasoning_effort: String,
+
     /// UI theme: "cinema" | "studio" | "light" | "vibrant".
     #[serde(default = "default_theme")]
     pub theme: String,
@@ -138,6 +151,11 @@ fn default_auto() -> String {
 
 fn default_stt_model() -> String {
     "large-v3-turbo-q8_0".to_string()
+}
+
+/// Default STT engine = the built-in whisper.cpp (empty = whisper).
+fn default_stt_asr_engine() -> String {
+    String::new()
 }
 
 fn default_translation_model() -> String {
@@ -212,12 +230,17 @@ fn default_theme() -> String {
     "cinema".to_string()
 }
 
+fn default_reasoning_effort() -> String {
+    "auto".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             stt_engine_preference: default_auto(),
             translation_engine_preference: default_auto(),
             stt_model: default_stt_model(),
+            stt_asr_engine: default_stt_asr_engine(),
             translation_model: default_translation_model(),
             source_lang: default_source_lang(),
             target_lang: default_target_lang(),
@@ -240,6 +263,7 @@ impl Default for AppConfig {
             openrouter_api_key: default_empty_string(),
             openrouter_model: default_openrouter_model(),
             glossary: Vec::new(),
+            llm_reasoning_effort: default_reasoning_effort(),
             theme: default_theme(),
         }
     }

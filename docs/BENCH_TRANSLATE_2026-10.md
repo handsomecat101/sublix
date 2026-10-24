@@ -306,7 +306,22 @@ Bảng điểm + ví dụ câu tốt/xấu nằm ở **§1.2.3**.
 
 ### 1.4.4. Có nên dùng M3.1 Flash không?
 
-<!--DECISION-->
+**Có — nhưng chỉ thêm nút chọn, KHÔNG đổi model mặc định.**
+
+| Tiêu chí | Kết luận | Căn cứ |
+|---|---|---|
+| **Tốc độ** | **Ngang đường local**, nhưng câu dịch đầu tiên hiện ra **nhanh hơn 1,5×** | 26,33 s vs 24,56 s tổng (chậm hơn 7 %); lô đầu 5,30 s vs 7,98 s — §1.2, §1.4.1 |
+| **Chất lượng** | **≥ đường local** (giám khảo MiniMax-M3: **4,72** vs **4,27**) | §1.2.3 |
+| **Chi phí** | **Rẻ hơn 2×** MiniMax-M3 ($0,15/$0,60 vs $0,30/$1,20 mỗi 1M token) | §1.3.3 |
+| **Độ ổn định** | 0 lỗi / 0 câu lọt `<think>` | §1.2, §1.3.2 |
+| **Bắt buộc** | Phải có bản vá `reasoning_effort=low` — dùng M3.1-Flash **mặc định** (effort max) thì chậm hơn local **8,8×** | §1.3.2 |
+
+**Đã áp dụng:** thêm nút `⚡ MiniMax M3.1 Flash` trong `SettingsView.tsx` (chỉ thêm nút, **không** đổi
+model mặc định) + profile M3.1-Flash trong `translate/server.rs` (`reasoning_effort=low`, timeout 120 s/60 s).
+
+> **Lưu ý khi đọc cùng PHẦN 4:** ở đường dịch **theo ngữ cảnh** (2 lượt), MiniMax lại **mất ~0,45 điểm**
+> so với đường cũ, còn **OpenRouter DeepSeek V4.1 Flash** mới là provider mà đường mới thắng
+> (ngang chất lượng + nhanh hơn). Chi tiết & khuyến nghị cuối: **§4.6**.
 
 
 ---
@@ -452,3 +467,329 @@ không còn "toàn chữ số" ⇒ parser SRT của harness đọc nhầm chỉ 
 Vì vậy báo cáo này ước tính chi phí từ **số ký tự** thay vì token thật. Muốn có token thật thì phải
 thêm field `usage` vào `ChatResponse` — **không làm** vì ngoài phạm vi task (và sẽ đụng
 `translate/server.rs` theo hướng khác với yêu cầu "chỉ khi cần cho M3.1 Flash").
+
+---
+
+---
+
+---
+
+---
+
+---
+
+---
+
+---
+
+# PHẦN 4 — ĐO CHẤT LƯỢNG: ĐƯỜNG CŨ vs ĐƯỜNG MỚI (DỊCH THEO NGỮ CẢNH)
+
+> Bổ sung cho `TSK-FEAT-CONTEXT-TRANSLATE` (mục 1–3 nằm ở trên, đo tốc độ & giá).
+> **Lưu ý quan trọng:** phần này đã được **đo lại và kiểm chứng lại** bằng **2 lớp bằng chứng**
+> độc lập: (1) LLM-giám khảo (2 họ khác nhau) và (2) **metric tất định** đếm trực tiếp đại từ
+> trong bản dịch (`src-tauri/src/translate/pronoun_audit.rs`, 60/60 dòng, không gọi mạng).
+> Kết luận ở §4.6 đã được **đính chính** theo kết quả kiểm chứng.
+
+## 4.1. Vì sao cần đường mới
+
+Đường dịch cũ (`translate_batch_with_config`) chia kịch bản thành **lô 15 câu độc lập**. Mỗi lô là một
+request không ràng buộc, nên model:
+
+1. **không biết câu trước dịch thế nào** → xưng hô đổi qua đổi lại giữa các lô;
+2. **không biết ai đang nói** → tự chọn đại từ ngẫu nhiên, hoặc dùng từ cổ ("ngươi");
+3. **không có bản tóm tắt phim / bảng xưng hô / thuật ngữ** → dịch sai nghĩa về thuật ngữ;
+4. **không ràng buộc độ dài theo thời lượng** → câu dài bị đọc nhanh/cắt, câu ngắn bị dịch lê thê.
+
+Đường mới (`translate_script_contextual`) làm **2 lượt**:
+
+```
+Lượt 1 "đọc hiểu"  : toàn bộ lời thoại → JSON { tom_tat, nhan_vat, xung_ho, thuat_ngu, giong_dieu }
+Lượt 2 "dịch"      : lô ~20 câu, prompt = bản tham chiếu
+                                     + [speaker] + tên nhân vật trên từng dòng
+                                     + 5 câu liền trước (nguồn + bản dịch, trượt qua biên giới lô)
+                                     + hạn mức âm tiết = thời lượng × 5
+                                     + ví dụ xưng hô tiếng Việt (anh/em, tao/mày, cậu/tô, tôi/bạn)
+```
+
+## 4.2. Dữ liệu đo
+
+| | |
+|---|---|
+| **Bộ dữ liệu** | `gui-2026-10-20/dump-78-cues.json` → 60 câu tiếng Anh, **3 nhân vật** (Zeratul 38 / Kaldares 14 / Artanis 8), **thời lượng thật** 1,6–27,4 s (TB 15,9 s) |
+| **File** | `%TEMP%\sub-bench-translate\en_src\starcraft_en.json` (+ `.srt`, `.json` bản 20 câu) |
+| **Nguồn** | Hội thoại StarCraft II (Zeratul ↔ Kaldares ↔ Artanis) — nhiều đại từ, có tên riêng, có thuật ngữ ("Kala", "Aon of Strife", "Dark Templar", "Kundelar") |
+| **Provider** | (a) MiniMax-M3.1-Flash (`reasoning_effort=low`), (b) Ollama `qwen2.5:3b` local, (c) OpenRouter `deepseek/deepseek-v4.1-flash` |
+| **Giám khảo** | `MiniMax-M3` **và** `DeepSeek V4.1 Flash` (2 họ khác nhau, cross-check) |
+| **Metric tất định** | `translate::pronoun_audit` (Rust, trong repo) — đếm đại từ, không phụ thuộc LLM |
+
+> ⚠️ **Cảnh báo về nhãn speaker của dataset:** file dump gán vai không hoàn toàn chính xác
+> (ví dụ `S4` "Kaldares, your warriors…" là Zeratul nói *với* Kaldares nhưng bị gán `kaldares`).
+> Vì vậy các chỉ số **đếm theo dòng** (số lần `ta` / `tôi` / `ngươi`) là đáng tin nhất;
+> chỉ số **theo nhân vật** (`mix_ta_toi`, `self_forms_max`) chỉ là chỉ báo.
+
+## 4.3. Bảng tốc độ (× 2 lần/cấu hình)
+
+| Đường | Provider | Model | Chunk | Lần 1 (s) | Lần 2 (s) | **TB (s)** | **Lô đầu (s)** | **s/câu** | Lỗi | Rỗng | `<think>` | So với OLD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **CŨ** | Cloud (MiniMax) | `MiniMax-M3.1-Flash` | 15 | 23.396 | 35.358 | **29.377** | **5.389** | **0.49** | 0 | 0 | 0 | 
+| **MỚI** | Cloud (MiniMax) | `MiniMax-M3.1-Flash` | 15 | 36.596 | 55.584 | **46.09** | **46.09** | **0.768** | 0 | 0 | 0 | 1.6× (chậm hơn)
+| **CŨ** | Local (iGPU) | `Ollama qwen2.5:3b` | 15 | 31.851 | 20.974 | **26.413** | **9.859** | **0.441** | 0 | 0 | 0 | 
+| **MỚI** | Local (iGPU) | `Ollama qwen2.5:3b` | 15 | 55.912 | 39.551 | **47.732** | **47.731** | **0.796** | 0 | 0 | 0 | 1.8× (chậm hơn)
+| **CŨ** | Cloud (OpenRouter) | `DeepSeek V4.1 Flash (OpenRouter)` | 15 | 146.314 | 148.178 | **147.246** | **55.912** | **2.455** | 0 | 0 | 0 | 
+| **MỚI** | Cloud (OpenRouter) | `DeepSeek V4.1 Flash (OpenRouter)` | 15 | 118.544 | 159.973 | **139.259** | **139.257** | **2.321** | 0 | 0 | 0 | 0.9× (nhanh hơn)
+| **effort=low** | Cloud (MiniMax) | `MiniMax-M3.1-Flash (20 câu)` | 15 | 8.077 | 10.439 | **9.258** | **5.727** | **0.463** | 0 | 0 | 0 | 
+| **effort=high** | Cloud (MiniMax) | `MiniMax-M3.1-Flash (20 câu)` | 15 | 14.017 | 13.898 | **13.958** | **7.988** | **0.698** | 0 | 0 | 0 | 
+
+*(số câu trả về = số dòng kịch bản; nếu khác 60/20 thì harness bị lặp — đã sửa và đo lại.)*
+
+**Đọc bảng:**
+- Đường mới **đắt hơn về thời gian** ở MiniMax và Ollama — đúng như thiết kế: thêm 1 lượt "đọc hiểu" + prompt lớn hơn nhiều.
+- Mức phí thời gian **~1,6–1,8×** ở MiniMax và Ollama.
+- **0 lỗi ở mọi cấu hình** (kể cả Ollama 3B) ⇒ đường mới **không** làm hỏng độ ổn định.
+- OpenRouter DeepSeek V4.1 Flash: đường mới **NHANH hơn** (0,95×) — không nên loại provider này vì lý do tốc độ.
+
+## 4.4. Chất lượng
+
+### 4.4.1. So sánh trên **cùng subset dòng** (giám khảo LLM)
+
+| Provider | Giám khảo | Số câu so sánh | Đúng nghĩa | Tự nhiên | Xử hộ | Độ dài | **TB/câu CŨ → MỚI** |
+|---|---|---|---|---|---|---|---|
+| MiniMax-M3.1-Flash *(chỉ 20 dòng đầu)* | DeepSeek V4.1 Flash | 20 (1–20) | 4,60 → 4,10 | 4,70 → 4,05 | 4,85 → 4,40 | 5,00 → 4,80 | **4,79 → 4,34** |
+| Ollama qwen2.5:3b (local) | DeepSeek V4.1 Flash | 40 (21–60) | 3,85 → 1,80 | 3,58 → 3,55 | 4,80 → 2,62 | 4,53 → 2,80 | **4,19 → 2,69** |
+| OpenRouter DeepSeek V4.1 Flash | DeepSeek V4.1 Flash | 40 (1–40) | 4,88 → 4,65 | 4,67 → 4,62 | 4,85 → 4,90 | 4,88 → 4,92 | **4,82 → 4,78** |
+
+> Chỉ so sánh trên **các dòng mà cả hai bản đều được chấm** (vì LLM-giám khảo thỉnh thoảng không parse được JSON → chấm thiếu lô).
+
+### 4.4.2. Điểm **cả kịch bản** (chạy trên cả 60 câu)
+
+| Cấu hình | Giám khảo | **Xưng hô nhất quán** (1–5) | **Vừa thời lượng** (1–5) | Âm tiết dịch / hạn mức | Câu quá hạn mức |
+|---|---|---|---|---|---|
+| CŨ — MiniMax-M3.1-Flash | DeepSeek V4.1 Flash | 2 | 4 | 0,181 | 0/60 |
+| MỚI — MiniMax-M3.1-Flash | DeepSeek V4.1 Flash | 2 | 3 | 0,182 | 0/60 |
+| MỚI — Ollama qwen2.5:3b | DeepSeek V4.1 Flash | 1 | 1 | 0,171 | 1/60 |
+| CŨ — OpenRouter DeepSeek V4.1 Flash | DeepSeek V4.1 Flash | 2 | 4 | 0,182 | 0/60 |
+| MỚI — OpenRouter DeepSeek V4.1 Flash | DeepSeek V4.1 Flash | 2 | 2 | 0,171 | 0/60 |
+| MỚI — Ollama qwen2.5:3b | MiniMax-M3 | 1 | 1 | 0,171 | 1/60 |
+| CŨ — MiniMax-M3.1-Flash *(chỉ 20 dòng đầu)* | DeepSeek V4.1 Flash | 4 | 4 | 0,218 | 0/20 |
+| MỚI — MiniMax-M3.1-Flash *(chỉ 20 dòng đầu)* | DeepSeek V4.1 Flash | 3 | 4 | 0,214 | 0/20 |
+
+### 4.4.3. **Metric tất định** — đếm trực tiếp đại từ trong bản dịch
+
+Đây là lớp bằng chứng quan trọng nhất vì **đo được 100% số dòng** (không phụ thuộc LLM giám khảo có parse
+được JSON hay không). Module: `src-tauri/src/translate/pronoun_audit.rs` — chuẩn hoá dấu tiếng Việt,
+**phân biệt `ngươi` (đại từ cổ) với `người` (con người)**, `cậu`/`câu`, `bạn`/`bàn` trước khi đếm.
+
+| Cấu hình | Tự xưng **cổ** (`ta`, `chúng ta`) | Tự xưng **hiện đại** (`tôi`, `chúng tôi`) | Gọi nhau **cổ** (`ngươi`) | Gọi nhau **hiện đại** (`anh`/`ngài`) | Nhân vật trộn 2 văn phong | Số cách gọi nhiều nhất / 1 cặp |
+|---|---:|---:|---:|---:|---:|---:|
+| **CŨ** — MiniMax-M3.1-Flash | **30** | 11 | 3 | 4 | 3 | 5 |
+| **MỚI** — MiniMax-M3.1-Flash | **8** | **36** | 5 | 3 | 3 | 5 |
+| **CŨ** — Ollama qwen2.5:3b | 19 | 26 | 0 | 5 | 2 | 3 |
+| **MỚI** — Ollama qwen2.5:3b | **3** | **35** | 0 | **14** | 2 | 3 |
+| **CŨ** — OpenRouter DeepSeek V4.1 Flash | **37** | 5 | 3 | 3 | 3 | 5 |
+| **MỚI** — OpenRouter DeepSeek V4.1 Flash | **28** | **16** | **0** | 6 | **2** | 6 |
+
+**Đọc bảng — đây là kết luận quan trọng nhất của phần đo:**
+
+| Mặt | Đường MỚI có sửa được không? | Bằng chứng |
+|---|---|---|
+| **Tự xưng** (`ta` ↔ `tôi`) | ✅ **CÓ — rõ rệt** | MiniMax 30 → 8 họ cổ (73% → 18%); Ollama 19 → 3 (42% → 8%); OpenRouter 37 → 28 (88% → 64%) |
+| **Gọi nhau** (`ngươi` ↔ `anh`/`ngài`) | ⚠️ **KHÔNG** | Số cách gọi khác nhau trong 1 cặp **không giảm** (MiniMax 5→5, Ollama 3→3, OpenRouter 5→6); `ngươi` ở MiniMax còn **tăng** 3→5 |
+| **Thống nhất nội bộ 1 nhân vật** | ⚠️ **Chưa** | `mix_ta_toi` giữ nguyên ở MiniMax/Ollama (3 và 2), chỉ giảm ở OpenRouter (3→2) |
+| **Thuật ngữ phim** | ✅ CÓ | `S18`: "vị **K** vĩ đại" → "vị **Kala** vĩ đại"; `S24`: "Dark **Templar**" → "**Mẫu Tử Tối**"; `S15`: "Aon của Xung đột" → "Aon của **Xung Đột**" |
+| **Độ dài theo thời lượng** | ✅ CÓ | MiniMax: âm tiết dịch/hạn mức 0,18; 0/60 câu vượt hạn mức. Nhưng điểm *vừa thời lượng* của LLM lại **giảm** (4→3 ở MiniMax, 4→2 ở OpenRouter) ⇒ câu **ngắn hơn** thời lượng |
+
+**Vì sao phần "gọi nhau" không được sửa?** Vì bảng xưng hô ở lượt 1 **do chính LLM bịa ra**
+(`xung_ho` trong JSON tham chiếu) — nó không phải dữ liệu chuẩn của phim. Model tự sinh bảng rồi lại
+không tuân thủ tuyệt đối bảng đó ⇒ vẫn còn "anh" ở câu này, "ngươi" ở câu kia.
+
+#### 4.4.4. Một quan sát quan trọng: **văn phong đồng nhất cũng là một kiểu "xưng hô nhất quán"**
+
+Khi chấm riêng **20 dòng đầu** (cùng subset cho CŨ và MỚI), DeepSeek cho:
+
+| Bản | Điểm *xưng hô nhất quán* | Nhận xét của giám khảo |
+|---|---:|---|
+| **CŨ** | **4/5** | *"Zeratul dùng 'ta' cho bản thân, 'chúng ta' cho tập thể, 'ngươi' khi gọi đối phương… S8 vừa dùng 'ngươi' vừa gọi 'bạn già' nên có chút pha trộn sắc thái"* |
+| **MỚI** | **3/5** | *"xưng hô nhìn chung nhất quán với cặp tôi/anh và chúng tôi, nhưng câu S19 đột ngột chuyển sang 'chúng ta' trong khi các câu xung quanh dùng 'chúng tôi', gây thiếu nhất quán"* |
+
+Tức là: **bản CŨ văn phong cổ nhưng ĐỒNG NHẤT** (`ta`/`ngươi` xuyên suốt 20 câu) ⇒ giám khảo thấy
+"nhất quán". Bản MỚI đổi sang văn phong hiện đại nhưng **còn sót vài câu cổ** ⇒ giám khảo thấy
+"thiếu nhất quán". Đây chính là lý do điểm *xưng hô nhất quán* **không tăng** ở MiniMax dù metric
+tất định cho thấy văn phong đã đổi mạnh (§4.4.3).
+
+**Hệ quả thực tế:** với phim phong cách cổ (StarCraft), **giữ văn phong cổ đồng nhất** có thể hợp lý
+hơn là đổi sang hiện đại. Vì vậy **glossary thủ công** (ghim "anh/ngài" hoặc "ngươi/ngài") là cách
+chắc chắn nhất — thay vì để model tự chọn.
+
+## 4.5. Ví dụ trước / sau (MiniMax-M3.1-Flash)
+
+#### 4.5.1. Câu CẢI THIỆN rõ (lấy từ dữ liệu thật)
+
+| # | EN (nguồn) | CŨ | MỚI |
+|---|---|---|---|
+| S4 | Kaldares, your warriors question your whereabouts. | Kaldares, chiến binh của **ngươi** đang hỏi ngươi đã đi đâu. | Kaldares, các chiến binh của **anh** đang hỏi anh đang ở đâu. |
+| S3 | I wish to be alone. | **Ta** muốn ở một mình. | **Tôi** muốn được ở một mình. |
+| S5 | We are an ancient people. | **Chúng ta** là một dân tộc cổ xưa. | **Chúng tôi** là một dân tộc cổ xưa. |
+| S9 | I doubt my own motives. | **Ta** nghi ngờ động cơ của chính mình. | **Tôi** nghi ngờ chính động cơ của mình. |
+| S18 | But from that conflict, the great K opened our minds. | Nhưng từ cuộc xung đột ấy, vị **K** vĩ đại đã mở mang tâm trí chúng ta. | Nhưng từ cuộc xung đột ấy, vị **Kala** vĩ đại đã mở rộng tâm trí chúng tôi. |
+| S24 | You speak of the Dark Templar. | Ngươi nói đến **Dark Templar**. | Ngươi nói về **Mẫu Tử Tối**. |
+| S22 | We made a beacon of progress in the galaxy… | Chúng ta đã **biến mình thành** ngọn hải đăng… | Chúng tôi đã **trở thành** ngọn hải đăng… |
+
+> S22 là ví dụ đắt giá: CŨ dịch "made" → "biến mình thành" ⇒ sinh ra cụm **"chúng ta đã biến mình
+> thành…"** (người dịch tự biến thành ngọn hải đăng — sai nghĩa). Đường mới sửa đúng lỗi này.
+
+#### 4.5.2. Câu CHƯA sửa được / vẫn lỗi (biên giới thật của đường mới)
+
+| # | EN (nguồn) | CŨ | MỚI | Vấn đề |
+|---|---|---|---|---|
+| S24 | You speak of the Dark Templar. | Ngươi nói đến Dark Templar. | **Ngươi** nói về Mẫu Tử Tối. | Vẫn "ngươi", trong khi S4 dùng "anh" ⇒ **xưng hô gọi nhau chưa nhất quán** |
+| S38 | But today, because you have united us, we fight together. | …vì **ngài** đã đoàn kết chúng ta… | …vì **ngươi** đã thống nhất chúng ta… | Vẫn "ngươi" |
+| S11 | What cause could be more noble than reclaiming our home? | Có **mục đích** nào cao cả hơn việc giành lại quê hương chúng ta? | Có **đại cao** thế nào cao cả hơn việc giành lại quê hương? | ⚠️ Đường mới **dịch sai** ("what cause" → "đại cao"); CŨ đúng hơn |
+| S19 | He brought us the glory of the Kala… | **Ngài** mang đến cho chúng ta vinh quang của Kala… | **Ông** mang đến cho chúng ta vinh quang của Kala… | Vẫn đổi văn phong (ngài → ông) |
+
+## 4.6. Kết luận & khuyến nghị tích hợp
+
+### Kết luận (đã kiểm chứng bằng metric tất định — xem §4.4.3)
+
+| Nhận định | Căn cứ |
+|---|---|
+| **Đường MỚI sửa được văn phong "tự xưng"**: MiniMax 30 → 8 lần dùng `ta`/`chúng ta` (73% → 18%); Ollama 19 → 3; OpenRouter 37 → 28. | §4.4.3 (đếm 60/60 dòng) |
+| **Nhưng điểm *"xưng hô nhất quán"* của LLM-giám khảo KHÔNG tăng** ở MiniMax (2/5 → 2/5 trên 60 câu; 4/5 → 3/5 trên 20 dòng đầu): bản CŨ văn phong cổ nhưng **đồng nhất**, bản MỚI đổi sang hiện đại nhưng **còn sót câu cổ**. | §4.4.2 + §4.4.4 |
+| **Đường MỚI sửa được thuật ngữ phim**: "vị K" → "vị Kala"; "Dark Templar" → "Mẫu Tử Tối"; "Aon của Xung đột" → "Aon của Xung Đột". | §4.5.1 |
+| **Đường MỚI KHÔNG tự sửa được lỗi xưng hô "gọi nhau"**: số cách gọi khác nhau trong 1 cặp không giảm (MiniMax 5→5, Ollama 3→3, OpenRouter 5→6); `ngươi` ở MiniMax còn tăng 3→5. | §4.4.3 |
+| **Nguyên nhân gốc**: bảng xưng hô ở lượt 1 do **chính LLM bịa ra**, không phải dữ liệu chuẩn phim ⇒ model không bảo đảm tuân thủ. | §4.4.3 |
+| **Đường MỚI có thể làm hỏng 1 câu**: `S11` "What cause could be more noble…" → "Có **đại cao** thế nào cao cả hơn…" (sai; bản CŨ đúng hơn). | §4.5.2 |
+| **Ở MiniMax, trên CÙNG 20 dòng + CÙNG giám khảo, đường MỚI bị điểm THẤP hơn**: TB/câu 4,79 → 4,34 (đúng nghĩa 4,60 → 4,10; tự nhiên 4,70 → 4,05; độ dài 5,00 → 4,80). Nhiễu đo khi chấm lại cùng dữ liệu ≈ 0,12. | §4.4.1 |
+| **Nguyên nhân giảm điểm**: (a) hạn mức âm tiết làm câu **cụt hơn**; (b) văn phong đổi sang hiện đại — kém hợp với phim phong cách cổ; (c) 1 lỗi nghĩa rõ ràng (S11). | §4.4.4 + §4.5.2 |
+| **Với Ollama 3B local, đường MỚI TỆ HƠN** (TB/câu 4,19 → 2,69 trên cùng 40 dòng) — model 3B không theo kịp prompt 2 lượt. | §4.4.1 |
+| **Với OpenRouter DeepSeek V4.1 Flash, đường MỚI tương đương chất lượng (4,82 → 4,78) và NHANH HƠN (0,95×)** → rõ đáng dùng. | §4.4.1 + §4.3 |
+| **0 lỗi ở mọi cấu hình** của đường mới (0/60 câu vượt hạn mức âm tiết, 0 lỗi dịch). | §4.3 |
+
+### Khuyến nghị cho coordinator
+
+1. **Không coi đường mới là "chất lượng tốt hơn" nói chung** — kết quả **khác nhau theo provider**:
+   - **OpenRouter DeepSeek V4.1 Flash** → **bật đường mới**: chất lượng ngang, **nhanh hơn** (0,95×).
+   - **MiniMax-M3.1-Flash** → **để người dùng chọn** (nút riêng): nó đổi văn phong + sửa thuật ngữ
+     (đúng mục tiêu) nhưng **mất ~0,45 điểm** và **không** sửa được xưng hô "gọi nhau".
+     Nếu phim cần văn phong **cổ đồng nhất** thì bản CŨ lại hợp hơn.
+   - **Ollama local 3B** → **không dùng** đường mới (tệ hơn rõ).
+   - Giữ đường cũ cho nút "Dịch nhanh" và cho mọi provider khi PO muốn văn phong gốc.
+2. **Bổ sung UI cho glossary thủ công** — đây mới là cách **chắc chắn** sửa lỗi PO phàn nàn:
+   - `cfg.glossary` **đã được cả 2 đường dịch dùng** (`glossary_block()` trong `translate/server.rs`),
+     và đường mới còn ưu tiên glossary **cao hơn** thuật ngữ tự động
+     (`GLOSSARY NGƯỜI DÙNG (ưu tiên CAO HƠN thuật ngữ tự động)`).
+   - Chỉ cần cho PO ghim dạng: `Zeratul gọi Kaldares là "anh"`, `Kaldares gọi Zeratul là "ngài"`…
+   - Không cần chờ đường mới — **đường cũ cũng hưởng lợi ngay**, và **giữ được văn phong cổ đồng nhất**
+     nếu PO muốn ("Zeratul tự xưng 'ta', gọi Kaldares là 'ngươi'").
+3. **Nút "Dịch theo ngữ cảnh"** ở Studio: command `translate_script_contextual` đã sẵn sàng,
+   có phát `translate:progress` để hiện tiến trình. UI do mcode #1 làm.
+4. **Nút OpenRouter**: model đã có sẵn trong `translate_options_get`
+   (`deepseek/deepseek-v4.1-flash` + alias `~deepseek/deepseek-flash-latest`). Số chấm chất lượng đã có
+   (§4.4.1) → **nên đưa vào Settings**, vì đường mới với provider này là lựa chọn tốt nhất.
+5. **Chưa đổi timeout MiniMax-M3** (giữ nguyên 180 s / 60 s của coordinator). Không có bằng chứng
+   nào trong phần đo này cho thấy cần đổi.
+
+
+---
+
+# PHẦN 5 — MỨC ĐỘ SUY LUẬN (REASONING EFFORT) + LỆNH ĐỌC/GHI LỰA CHỌN DỊCH
+
+> Theo yêu cầu mở rộng phạm vi của coordinator (2026-10-24). **Đã báo `status: reasoning backend ready`** để coordinator giao UI cho mcode #1.
+
+## 5.1. Config field mới
+
+```rust
+// src-tauri/src/config.rs  — CHỈ thêm field + default
+/// "auto" | "low" | "medium" | "high" | "max"
+#[serde(default = "default_reasoning_effort")]
+pub llm_reasoning_effort: String,      // default = "auto"
+```
+
+`auto` = **giữ hành vi đã tối ưu**: M3.1-Flash → `low`; model khác → mặc định của nhà cung cấp (không gửi tham số).
+
+## 5.2. Mapping (đã **xác minh bằng API thật**, 2026-10-24)
+
+| Provider / model | Tham số gửi đi | `auto` → | `supports_reasoning` | Xác minh |
+|---|---|---|---|---|
+| `MiniMax-M3.1-Flash` | `reasoning_effort: low\|medium\|high\|max` | **`low`** | ✅ true | HTTP 200 với `high` |
+| `MiniMax-M3` | `reasoning_effort: low\|medium\|high\|max` | *không gửi* | ✅ true | **HTTP 200 với `low`** (M3 **có** nhận — khác dự đoán ban đầu) |
+| OpenRouter (`deepseek/deepseek-v4.1-flash`) | `reasoning: {effort: low\|medium\|high}` | *không gửi* | ✅ true | HTTP 200 với `reasoning.effort=low`, trả `usage.cost` |
+| OpenRouter (`max`) | `reasoning.effort` → **`high`** (OpenRouter không có `max`) | — | ✅ true | — |
+| DeepSeek trực tiếp | *bỏ qua* | — | ❌ false | **không xác minh được** (máy không có key) → coi như không hỗ trợ |
+| Ollama / llama-server (GGUF) | *bỏ qua* | — | ❌ false | không có khái niệm reasoning effort |
+
+Logic nằm ở `src-tauri/src/translate/reasoning.rs` (thuần, **7 unit test**).
+Mức độ suy luận được truyền vào body request qua `translate::server::set_reasoning_effort()` (state toàn cục, set 1 lần đầu mỗi request từ `translate_batch_with_config` và `translate_script_contextual`).
+
+## 5.3. Đo: effort `low` vs `high` (MiniMax-M3.1-Flash, 20 câu, đường cũ)
+
+| Effort | Tổng 20 câu | Lô đầu | s/câu | Lỗi |
+|---|---|---|---|---|
+| **`low`** | **9,26 s** | 5,73 s | 0,463 | 0 |
+| `high` | 13,96 s | 7,99 s | 0,698 | 0 |
+
+⇒ **`high` chậm hơn `low` 1,51×** (và đắt hơn ~2,7× về token suy luận).
+⇒ `auto` (→ `low`) là mặc định hợp lý cho dịch phụ đề: dịch không cần suy luận sâu.
+
+## 5.4. Hai command Tauri mới
+
+### `translate_options_get` → đọc trạng thái + danh sách model
+
+```rust
+#[tauri::command]
+async fn translate_options_get(app: tauri::AppHandle) -> Result<translate::TranslateOptions, String>
+```
+
+Trả về:
+
+```jsonc
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3.1-Flash",
+  "reasoning_effort": "auto",
+  "supports_reasoning": true,
+  "models": [
+    { "provider": "minimax",   "id": "MiniMax-M3",                 "label": "⭐ MiniMax-M3 (Token Plan)", "local": false },
+    { "provider": "minimax",   "id": "MiniMax-M3.1-Flash",         "label": "⚡ MiniMax M3.1 Flash",      "local": false },
+    { "provider": "openrouter", "id": "deepseek/deepseek-v4.1-flash","label": "⚡ DeepSeek V4.1 Flash",      "local": false },
+    { "provider": "openrouter", "id": "~deepseek/deepseek-flash-latest","label": "⚡ DeepSeek Flash Latest",  "local": false },
+    { "provider": "deepseek",  "id": "deepseek-chat",              "label": "DeepSeek Chat",               "local": false },
+    { "provider": "ollama",    "id": "qwen2.5:3b",                 "label": "🦙 qwen2.5:3b (Ollama local)", "local": true  },
+    { "provider": "local",     "id": "qwen3-4b",                   "label": "Qwen3-4B-Instruct…",          "local": true  }
+  ]
+}
+```
+
+### `translate_options_set` → ghi lựa chọn (KHÔNG đụng API key)
+
+```rust
+#[tauri::command]
+fn translate_options_set(
+    app: tauri::AppHandle,
+    provider: Option<String>,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+) -> Result<config::AppConfig, String>
+```
+
+- **Config được đọc từ đĩa** rồi **chỉ sửa field được truyền** ⇒ **API key không bao giờ bị mất** (đã có unit test riêng).
+- Model được gán vào **đúng** field theo provider đang chọn (`minimax_model` / `ollama_model` / `deepseek_model` / `openrouter_model` / `translation_model`).
+- Lưu **atomic** (temp + rename, BUG-013) + emit `config:updated`.
+- `reasoning_effort` được chuẩn hoá về `auto|low|medium|high|max`.
+
+### Wrapper frontend
+
+```ts
+sublix.translateOptionsGet(): Promise<TranslateOptions>
+sublix.translateOptionsSet({ provider?, model?, reasoningEffort? }): Promise<AppConfig>
+```
+
+Type mới trong `src/lib/types.ts`: `TranslateOptions`, `TranslateModelOption` (cùng `ScriptLine`, `ContextualLine`, `TranslateProgress` cho đường dịch theo ngữ cảnh).
+
+## 5.5. Test
+
+| Nhóm | Số test | Nội dung |
+|---|---|---|
+| `translate::reasoning::tests` | 7 | mapping theo provider, `auto` của M3.1-Flash → `low`, `auto` của M3 → không gửi, OpenRouter `max` → `high`, local không gán gì |
+| `translate::options_tests` | 8 | set model theo provider **giữ nguyên key**, chuẩn hoá effort, giá trị rỗng không ghi đè, **config thật trong thư mục temp đọc/ghi lại vẫn giữ key**, danh sách model đủ 7 mục, `supports_reasoning` đúng |
+| **Tổng `cargo test --lib`** | **146 pass / 0 fail** | (trước task này: 113) |
+

@@ -17,6 +17,55 @@ export interface SubtitleLine {
   ttlMs: number; // auto-expire after this
 }
 
+/** 1 dòng thoại trong kịch bản — đầu vào của `translate_script_contextual`. */
+export interface ScriptLine {
+  id: string;
+  speakerId: string;
+  speakerName?: string;
+  text: string;
+  /** giây */
+  start: number;
+  /** giây */
+  end: number;
+}
+
+/** Kết quả dịch theo ngữ cảnh cho 1 dòng. */
+export interface ContextualLine {
+  id: string;
+  translated: string;
+  failed: boolean;
+}
+
+/** Sự kiện tiến trình của `translate_script_contextual`. */
+export interface TranslateProgress {
+  done: number;
+  total: number;
+  /** "reading" (lượt 1) | "translating" (lượt 2) | "done" */
+  phase: string;
+}
+
+/** 1 model trong danh sách lựa chọn dịch. */
+export interface TranslateModelOption {
+  /** "minimax" | "openrouter" | "deepseek" | "ollama" | "local" (GGUF) */
+  provider: string;
+  /** id model (đưa vào config theo provider tương ứng) */
+  id: string;
+  label: string;
+  /** true = chạy local, không cần API key */
+  local: boolean;
+}
+
+/** Các lựa chọn dịch hiện tại + danh sách model. */
+export interface TranslateOptions {
+  provider: string;
+  model: string;
+  /** "auto" | "low" | "medium" | "high" | "max" */
+  reasoning_effort: string;
+  /** provider/model có nhận tham số mức độ suy luận không */
+  supports_reasoning: boolean;
+  models: TranslateModelOption[];
+}
+
 /**
  * Nhãn hiển thị cho nguồn phụ đề.
  *

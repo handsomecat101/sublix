@@ -9,6 +9,40 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-24 23:34 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-CONTEXT-TRANSLATE` — **đo lại + kiểm chứng lại toàn bộ**, **đính chính** kết luận ở tin 00:05; **chưa commit, không push**).
+- **Mới:** module `src-tauri/src/translate/pronoun_audit.rs` (+12 test) — **metric tất định** đếm đại từ, đo được **60/60 dòng** (không phụ thuộc LLM-giám khảo có parse được JSON không); phân biệt `ngươi`/`người`, `cậu`/`câu`, `bạn`/`bàn` trước khi bỏ dấu (nếu không sẽ đếm sai hàng loạt dòng).
+- **⛔ Đính chính quan trọng (tin 00:05 nói "đường MỚI sửa được lỗi xưng hô" là CHƯA đúng đủ):** metric tất định cho thấy đường mới **đổi mạnh văn phong tự xưng** (MiniMax `ta` 30→8; Ollama 19→3; OpenRouter 37→28) nhưng **KHÔNG sửa được phần "gọi nhau"** (số cách gọi/1 cặp không giảm; `ngươi` MiniMax 3→5) ⇒ điểm *xưng hô nhất quán* của DeepSeek là **2/5 cho CẨU lẫn MỚI** (phán quyết đó **đúng**).
+- **Chất lượng (cùng subset dòng + cùng giám khảo DeepSeek):** MiniMax 20 dòng đầu **4,79 → 4,34**; Ollama 40 dòng **4,19 → 2,69**; OpenRouter 40 dòng **4,82 → 4,78**. ⇒ **Ollama 3B local: đường mới TỆ hơn rõ** (không dùng). OpenRouter: ngang chất lượng + **nhanh hơn** (0,95×) ⇒ **nên dùng**. MiniMax: đổi văn phong nhưng mất ~0,45 điểm ⇒ **để PO chọn**.
+- **Nguyên nhân gốc:** bảng xưng hô ở lượt 1 do **LLM tự bịa**, không phải dữ liệu chuẩn phim ⇒ model không bảo đảm tuân thủ. ⇒ **Cách chắc chắn sửa lỗi PO = glossary thủ công** (`cfg.glossary` đã được **cả 2 đường** dùng, đường mới còn ưu tiên cao hơn).
+- **Verify:** `cargo test --lib` **171 pass / 0 fail** / 15 ignored · `npx tsc --noEmit` 0 lỗi · `npm run build` OK. Báo cáo: `docs/BENCH_TRANSLATE_2026-10.md` PHẦN 4 (đã ghép lại, §4.4.1–4.4.4 + ví dụ + kết luận đính chính).
+- **Cần coordinator quyết:** (1) UI nút "Dịch theo ngữ cảnh" cho mcode #1; (2) có đưa **OpenRouter** vào Settings không (đường mới là lựa chọn tốt nhất với provider này); (3) có làm UI **glossary thủ công** không (khuyến nghị mạnh).
+
+---
+### 2026-10-25 00:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-FEAT-STT-ENGINES` — engine STT chính xác hơn Whisper cho **EN + ZH**; **chưa commit, không push**).
+- **Báo cáo:** `docs/STT_MODELS_2026.md` (bảng 11 ứng viên + 2 bảng đo thật + khuyến nghị + 5 lỗi kỹ thuật) · code mới `src-tauri/src/model_download.rs` + `src-tauri/src/stt/{stt_catalog,sherpa_asr,stt_integration_tests}.rs` + `src-tauri/scripts/sherpa_asr.py` · `src-tauri/src/config.rs` (+`stt_asr_engine`) · `src-tauri/src/lib.rs` (+7 command) · `src/lib/tauri.ts` (+wrapper) · `src/components/ui/ModelDownloadRow.tsx/.css` (**mới, CHƯA gắn vào Studio/Cài đặt — chờ coordinator giao gắn**).
+- **Đo thật** (clip 2 phút, phụ đề **thủ công** YouTube: TEDxNorthAdams EN + TEDxTaipei zh-TW, Ryzen AI Max 390 CPU): **SenseVoice Small int8 → WER 7,18 % (EN) · CER 4,72 % (ZH)**, RTF **0,065**, RAM 788 MB, **có timestamp từ** · **Paraformer-zh → CER 5,79 %**, RTF 0,032, **không** timestamp từ · baseline whisper: base 4,31 %/5,58 % (RTF 0,15) · turbo **6,22 %/4,08 % nhưng RTF 1,22/1,62** ⇒ whisper turbo CPU mất **~42 phút** cho video 26 phút của PO, SenseVoice **~2 phút**.
+- **Khuyến nghị:** **Trung → SenseVoice int8 (#1), Paraformer-zh (#2)**; **Anh → whisper turbo nếu có CUDA, SenseVoice int8 nếu CPU-only**; **đa ngôn ngữ → SenseVoice (5 ngôn ngữ, 228 MB)**. Whisper **giữ nguyên làm mặc định**.
+- **Lỗi phát hiện:** `BUG-H14` SenseVoice int8 **2025-09-09 rớt chữ** (WER 40 %) — dùng bản **2024-07-17**; `BUG-H15` mirror HF Parakeet sai layout tensor + thiếu metadata `vocab_size`; `BUG-H16` event tải báo speed 0 ở event đầu (đã fix); `BUG-H17` GitHub release nghẽn 0 byte ⇒ đã thêm **URL dự phòng HF + resume Range**; `BUG-H18` 2 lượt tải song song ghi chung `.part` ⇒ file hỏng (đúng size, sai SHA) → đã thêm **khoá in-process theo `model_id`**.
+- **Verify:** `cargo test --lib` **171 pass / 0 fail** (15 test `#[ignore]` = integration thật) · **integration thật 3/3 PASS** (tải model có `%`/tốc độ/ETA + verify SHA-256 → nhận dạng clip ZH → **SRT UTF-8 đúng chuẩn, 31 cue**) · `npx tsc --noEmit` **0 lỗi** · `npm run build` OK · ảnh component 6 trạng thái: `%TEMP%\sublix-stt-bench\shots\model-download-row-states.png`.
+- **Cần coordinator/PO:** (1) **giao gắn** `ModelDownloadRow` + catalog STT vào Cài đặt/Studio; (2) **Parakeet chưa đo được** (GitHub release nghẽn, HF mirror sai layout) — cần mạng ổn để đo lại; (3) **chưa đo CUDA RTX 3090** — toàn bộ số là CPU; (4) SAC chặn binary Rust mới build ở `%TEMP%` (os error 4551) — chờ reputation rồi chạy lại, **không tắt SAC**.
+
+---
+### 2026-10-25 00:05 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-CONTEXT-TRANSLATE` — **backend trước, Studio nối sau**; **không commit, không push**).
+- **Báo cáo:** `docs/BENCH_TRANSLATE_2026-10.md` (thêm PHẦN 4 đo CŨ vs MỚI + PHẦN 5 reasoning effort) · module mới `src-tauri/src/translate/{contextual.rs,contextual_run.rs,contextual_types.rs,contextual_tests.rs,reasoning.rs,reasoning_tests.rs,bench.rs,bench_tests.rs,options_tests.rs}` · `src-tauri/src/translate/server.rs` (+`chat_completion_custom`) · `src-tauri/src/config.rs` (+`llm_reasoning_effort`) · `src-tauri/src/lib.rs` (+3 command) · `src/lib/tauri.ts` + `src/lib/types.ts` (+wrapper) · `src-tauri/examples/bench_translate.rs` (mở rộng `--mode old|new --dataset`).
+- **Vấn đề gốc:** đường cũ chia lô 15 câu **độc lập** → không biết câu trước, không biết ai nói, không có bảng xưng hô/thuật ngữ, không ràng buộc độ dài theo thời lượng. Đường mới = **2 lượt** (đọc hiểu → dịch có bản tham chiếu + `[speaker]` + 5 câu trượt + hạn mức âm tiết = thời lượng×5).
+- **Đo thật (60 câu StarCraft, 3 nhân vật, timestamp thật):** CŨ MiniMax **29,38 s** → MỚI **46,09 s** (1,57×, 0 lỗi); CŨ Ollama qwen2.5:3b **26,41 s** → MỚI **47,73 s** (1,81×, 0 lỗi); CŨ OpenRouter DeepSeek V4.1 Flash **147,25 s** → MỚI **139,26 s** (0,95× — **nhanh hơn** đường cũ). ⇒ **đường mới ổn định ở mọi provider (0 lỗi)**, chỉ tốn thêm ~1,6–1,8× thời gian.
+- **Chất lượng:** đường CŨ dịch từ cổ **"ngươi"** (thay "anh/ngài"), word-for-word **"wave"→"Sóng"** (đáng lẽ "đợt tấn công"), **"higher"→"Cao đẳng"** (= đại học!), và xưng hô **đổi qua đổi lại giữa các lô** — đúng lỗi PO phàn nàn. Đường MỚI sửa được các lỗi này.
+- **Reasoning effort:** thêm `llm_reasoning_effort` (auto|low|medium|high|max) + `translate_options_get/set` (chỉ ghi field được truyền, **không xoá API key**, lưu atomic + emit `config:updated`) + wrapper `translateOptionsGet/Set`. **Đã xác minh bằng API thật:** MiniMax-M3 **có** nhận `reasoning_effort` (HTTP 200), M3.1-Flash có, OpenRouter nhận `reasoning.effort` (max→high); DeepSeek trực tiếp không có key → bỏ qua; ollama/gguf không hỗ trợ. Đo 20 câu: **low 9,26 s vs high 13,96 s (high chậm 1,51×)**.
+- **Kiểm tra:** `cargo test --lib` **146 pass / 0 fail** (trước: 113) · `cargo build --example bench_translate` OK · `npx tsc --noEmit` **0 lỗi toàn repo** · `npm run build` OK.
+- **Lưu ý môi trường:** Smart App Control (WDAC) chặn binary Rust mới build ở `%TEMP%` (os error 4551) → phải build/chạy trong `src-tauri\target` (repo) hoặc `%TEMP%\sublix-cc-target`; `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target` như task ghi **không chạy được** trên máy này.
+- **Cần coordinator:** (1) giao UI gọi `translate_script_contextual` + nút "Dịch theo ngữ cảnh" cho mcode #1; (2) quyết có thêm nút OpenRouter hay không (hiện **chậm hơn** MiniMax → chưa rõ thắng).
+
+---
+
+
 ### 2026-10-24 23:05 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-STUDIO-MODEL-PICKER` — chọn model dịch + mức suy luận ngay trong Studio; **chưa commit**).
 - **Đã làm:** `src/views/studio/StudioTranslateOptions.tsx` (React.memo) + `src/views/studio/translateOptions.ts` — gọi `invoke("translate_options_get"/"translate_options_set")` **trực tiếp** bằng type khai báo cục bộ vì `src/lib/tauri.ts` đang do mcode #2 sửa (không đụng file đó).
@@ -58,33 +92,5 @@
 - **Giữ nguyên:** `handleStartDownload`/`handleInspect`/`handleFetchSubs`, hàng đợi 3 song song, BUG-053 dedupe, listener sự kiện, BUG-045 (luôn mount), reup/batch/MP3. Thêm debounce 600 ms tự đọc link khi dán (tái dùng `handleInspect`).
 - **Verify:** `tsc` 0 lỗi + `npm run build` OK **trên bản sao HEAD + 6 file của tôi** (vì `SublixStudioView.tsx` worker R2A đang sửa dở — đã escalation); GUI instance riêng (exe patch 1420→1424, Vite 1424, CDP 9226 — đã tắt + gỡ junction/bản sao): picker **184/184 mục**, tải thật → **✓ Xong · 465 KB**, menu ⋯ **6/6 mục**, "Mở trong Studio" mở đúng video, reup `.info.txt` BOM 5 dòng đúng, Kuaishou → lỗi sớm. Ảnh: `%TEMP%\sublix-verify-dl\dl-{tab-after,row-active,menu-active,adv-active,kuaishou-active}.png`.
 - **Cần biết khi verify CDP:** DownloaderView **luôn mount** (BUG-045) → phải bấm tab "Tải video" TRƯỚC khi chụp; nếu không, ảnh sẽ là tab khác dù DOM vẫn thao tác được (bài học từ chính phiên này).
-
----
-
-### 2026-10-24 23:35 - mcode #2 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-BENCH-MINIMAX-FLASH` — **đo thật + sửa code trong `translate/` + UI; KHÔNG commit, KHÔNG push**).
-- **Báo cáo:** `docs/BENCH_TRANSLATE_2026-10.md` · harness: `src-tauri/examples/bench_translate.rs` (chạy đúng `translate::translate_batch_with_config` với `AppConfig::load_or_default()` = config thật của app) · dữ liệu: 60 câu tiếng Anh StarCraft từ `gui-2026-10-20/dump-78-cues.json` (%TEMP%\sublix-bench-translate\).
-- **Tên model đã xác minh:** `MiniMax-M3.1-Flash` (docs chính thức MiniMax, đọc 2026-10-24; coordinator xác minh `GET /v1/models = 200`).
-- **Tốc độ (60 câu, ×2):** (a) Ollama qwen2.5:3b local **24,56 s** (lô đầu 7,98 s) · (b) MiniMax-M3 **timeout lô 15 câu** → fallback từng câu (170–200 s ở chunk 5) · (c) M3.1-Flash **effort=max 215,07 s** → **sau bản vá `reasoning_effort=low` còn 26,33 s** (lô đầu **5,30 s**, nhanh hơn local 1,5×), 0 lỗi, 0 lọt `<think>`. (d) DeepSeek **không có key** → 60/60 lỗi, ghi rõ.
-- **Chất lượng (giám khảo MiniMax-M3, 1–5):** local Ollama **4,27** · M3 **4,77** · **M3.1-Flash (bản vá) 4,72 ≥ local** ✅ (giám khảo Ollama 3B: 4,91 / 4,81 / 4,91 — dễ tính, chỉ đối chiếu).
-- **Đã thêm (PHẦN 2):** nút `⚡ MiniMax M3.1 Flash` cạnh nút MiniMax-M3 ở `SettingsView.tsx` (**chỉ thêm**, không đổi model mặc định) + `translate/server.rs` xử lý đúng M3.1-Flash (`reasoning_effort=low`, timeout 120 s/60 s; M3 giữ nguyên). **Bắt buộc**: dùng M3.1-Flash mà không có bản vá thì chậm hơn local 8,8×.
-- **Cần coordinator/PO quyết:** (1) `npm run build`/`tsc` **đang đỏ vì `SublixStudioView.tsx` của Sonnet** (24 lỗi, file tôi sửa = 0 lỗi); (2) có nên sửa timeout của `MiniMax-M3` không (lô 15 câu hiện timeout 60 s — tôi **không** sửa theo đúng phạm vi); (3) DeepSeek cần key để đo.
-
----
-### 2026-10-24 22:30 - Claude Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-FEAT-TTS-3ENGINES` — **chỉ backend + command + wrapper**, UI để vòng thiết kế lại; chưa commit). Lỗi: `BUG-082..084`.
-- **Engine thật (offline):** `vietneu:` = **VieNeu v3 Turbo** (25 giọng, clone `vietneu:clone=<wav>`), `zerotts:` = **ZeroTTS** (8 giọng), cloud `gcloud:` (Chirp3 HD 30 giọng) + `fptai:` (7 giọng, key lưu `sublix-tts-keys.json`, không qua `config:updated`). Mã: `dubbing/{tts_common,tts_vieneu,tts_zerotts,tts_cloud,tts_status,vi_normalize}.rs` + `scripts/{vieneu,zerotts}_tts.py`; `voice_models.rs` thêm 4 mục catalog (tải verify đủ byte, tự `pip install` deps sau khi tải). Project cũ `vietneu:*`: model chưa tải → vẫn fallback Kokoro.
-- **Đo thật (CPU Ryzen AI Max 390, whisper turbo):** VieNeu batch WER **0%** (RTF 0,98 gồm nạp model; model 637 MB); ZeroTTS **0%** (RTF 1,88 batch 3 câu gồm nạp; model 909 MB; lần đo riêng 1,7%); **Kokoro s3: WER 30% → 10%** nhờ `vi_normalize` (≥ 24 test). MP4 5 câu lồng bằng `vietneu:vi_bac_nam`: 2 track audio (ffprobe), mean −21,6 dB. `cargo test --lib` **113/113**, `tsc` 0, `npm run build` OK (CARGO_TARGET_DIR `%TEMP%\sublix-cc-target`).
-- **CUDA (RTX 3090):** CHƯA test được (máy dev không NVIDIA). `tts_engine_install_deps` tự gỡ `onnxruntime` và cài `onnxruntime-gpu` + `nvidia-cudnn/cublas/cuda-runtime/cufft/curand/nvrtc-cu12` khi `nvidia-smi` có; sidecar tự dùng `CUDAExecutionProvider` (ép CPU bằng `stt_engine_preference=cpu`). Kiểm tra: command `tts_engine_diagnose("vieneu")` → `cuda:true`, log `DEVICE cuda`. Nếu lỗi DLL: cần CUDA 12.x + cuDNN 9 trong PATH.
-- **Việc cho vòng UI:** gắn `tauri.ts` (`ttsEnginesStatus/ttsCloudSetKey/ttsCloudTest/ttsEngineInstallDeps/ttsEngineDiagnose`) vào Cài đặt/Studio; Studio vẫn hard-code `TTS_ENGINE_MODELS` + `mapVoiceForEngine` (map `vietneu:`→`kokoro:` ở frontend) — **phải sửa** thì VieNeu thật mới được gọi từ Studio. Component UI mẫu đã viết nhưng bỏ ra ngoài repo (scratchpad `TtsEnginesPanel.tsx.txt`). Preview 1 câu VieNeu/ZeroTTS ~8–9 s (nạp model mỗi lần); export dùng batch nên nhanh.
-
-### 2026-10-24 21:30 - Claude Opus 5.5 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-REDESIGN-P1` vòng 1 — **chỉ khảo sát + thiết kế + mockup, KHÔNG sửa code app**, chưa commit).
-- **Báo cáo:** `docs/UI_REDESIGN_PLAN.md` — kiểm kê từng control (file:dòng) panel trái Studio + Tải video + tóm tắt 4 tab, **18 nhóm trùng lặp đã xác minh** (vd: Quét & Phân vai `:6277`/`:6827`, Lồng tiếng `:6641`/`:6846`, provider dịch 2 nơi 2 danh sách khác nhau).
-- **Số đo thật:** panel trái Studio **45 control**, nội dung **1687 px nhưng chỉ thấy 405 px** ở 1080p → thiết kế mới **20 control**, quy trình 5 bước, 1 nút chạy dạng split, vừa 1 màn.
-- **Mockup:** `docs/ui-mockups/{studio,tai-video,cai-dat}.html` + ảnh trước/sau/so sánh trong `docs/ui-mockups/shots/` (instance riêng CDP 9225, đã tắt; app PO 9223 không bị đụng).
-- **Vòng 2:** 8 bước (~7 ngày), chỉ bắt đầu khi mcode xong `SublixStudioView.*` và CommandCode xong `DownloaderView.*`; giữ nguyên timeline/kéo thả/In-Out/logic downloader.
-
----
 
 ---
