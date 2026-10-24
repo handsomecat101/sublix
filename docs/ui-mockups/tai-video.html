@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Tải video (mockup vòng 1)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  .page { height: 1032px; display: flex; flex-direction: column; padding: 18px 28px 0; gap: 14px; max-width: 1480px; margin: 0 auto; }
+  /* Ô nhập lệnh */
+  .cmd { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .cmd-row { display: flex; gap: 10px; align-items: stretch; }
+  .url { flex: 1; min-height: 64px; border-radius: 10px; background: var(--bg-inset); border: 1px solid var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); padding: 10px 14px; font-family: var(--font-mono); font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; position: relative; }
+  .url .ln { display: flex; align-items: center; gap: 8px; }
+  .url .plat { font-family: var(--font-ui); font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 4px; }
+  .url .cnt { position: absolute; right: 10px; top: 8px; font-family: var(--font-ui); font-size: 11px; color: var(--t3); }
+  .go { width: 210px; justify-content: center; font-size: 15px !important; border-radius: 10px !important; flex-direction: column; gap: 2px !important; }
+  .go small { font-size: 10.5px; font-weight: 600; opacity: .75; }
+  .opts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .oc { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-card); font-size: 12px; }
+  .oc .k { color: var(--t3); } .oc b { font-weight: 700; } .oc::after { content: "▾"; color: var(--t4); font-size: 10px; }
+  .oc.adv::after { content: ""; }
+  /* Danh sách */
+  .lh { display: flex; align-items: center; gap: 8px; }
+  .ftab { padding: 5px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; color: var(--t3); }
+  .ftab.on { background: var(--ac-soft); color: var(--ac-txt); box-shadow: inset 0 0 0 1px var(--ac-br); }
+  .ftab i { font-style: normal; opacity: .7; margin-left: 4px; }
+  .items { flex: 1; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; }
+  .it { display: grid; grid-template-columns: 112px 1fr 240px 190px 30px; gap: 16px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); background: var(--bg-card-2); }
+  .it:hover, .it.hl { background: var(--hover); }
+  .th { width: 112px; height: 63px; border-radius: 6px; position: relative; overflow: hidden; }
+  .th span { position: absolute; right: 4px; bottom: 4px; font-size: 10px; font-family: var(--font-mono); background: rgba(0,0,0,.75); padding: 0 4px; border-radius: 3px; }
+  .ti { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; align-items: center; }
+  .src { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #e8a33d, #f0d9a8); border-radius: 3px; }
+  .pm { display: flex; justify-content: space-between; font-size: 11px; color: var(--t3); margin-top: 5px; font-family: var(--font-mono); }
+  .act { display: flex; gap: 6px; justify-content: flex-end; align-items: center; } .act .pill { padding: 3px 8px; }
+  .more { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--t3); }
+  .menu { position: absolute; width: 230px; background: #1f1a15; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-1); padding: 5px; font-size: 12.5px; z-index: 5; }
+  .menu div { padding: 7px 10px; border-radius: 6px; display: flex; justify-content: space-between; }
+  .menu div:hover, .menu .f { background: var(--hover); }
+  .menu hr { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; }
+  .menu .k { color: var(--t4); font-size: 11px; }
+  .foot { height: 40px; display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--t3); border-top: 1px solid var(--line-soft); padding: 0 4px; }
+  .pick { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.12</span></div>
+  <nav class="tabs">
+    <span class="tab">🎬 Studio</span><span class="tab on">⬇ Tải video <span class="badge">2</span></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span>
+  </nav>
+  <div class="top-mid"></div>
+  <div class="top-right">
+    <span class="status-pill"><span class="dot" style="background:var(--ac)"></span>Đang tải 2 · đợi 1</span>
+    <span class="icon-btn" title="Overlay (Ctrl+Shift+O)">👁</span>
+  </div>
+</header>
+
+<main class="page">
+  <!-- 1. Ô nhập + nút chính -->
+  <section class="card cmd">
+    <div class="cmd-row">
+      <div class="url">
+        <span class="cnt">3 link · tự nhận nền tảng</span>
+        <div class="ln"><span class="plat" style="background:rgba(239,68,68,.15);color:#f87171">YouTube</span>https://www.youtube.com/watch?v=yN-Q-tFFElc</div>
+        <div class="ln"><span class="plat" style="background:rgba(0,242,234,.12);color:#2dd4bf">TikTok</span>https://www.tiktok.com/@cinema.recap/video/7421…</div>
+        <div class="ln"><span class="plat" style="background:rgba(0,161,214,.15);color:#38bdf8">Bilibili</span>https://www.bilibili.com/video/BV1xK4y1…<span class="muted" style="font-family:var(--font-ui)">— playlist 12 tập, chọn bên dưới</span></div>
+      </div>
+      <span class="btn primary lg go">⬇ Tải 3 link<small>Enter</small></span>
+    </div>
+    <div class="opts">
+      <span class="oc"><span class="k">Chất lượng</span><b>Cao nhất</b></span>
+      <span class="oc"><span class="k">Phụ đề</span><b>Tự tải nếu có (vi, en)</b></span>
+      <span class="oc adv">⚙ Nâng cao <span class="pill ac">1 đang bật</span></span>
+      <span class="grow"></span>
+      <span class="dim" style="font-size:11px">Dán link là tự đọc thông tin · Shift+Enter xuống dòng · Ctrl+V dán</span>
+    </div>
+    <!-- playlist picker gọn, hiện ngay dưới khi có playlist -->
+    <div class="pick">
+      <div class="row between" style="padding:7px 12px;background:var(--bg-inset);font-size:12px"><span><b>Bilibili · Phim ngắn mùa 1</b> <span class="muted">— 12 tập, đã chọn 3</span></span><span class="row" style="gap:12px"><span class="link">Chọn hết</span><span class="link" style="color:var(--t3)">Bỏ chọn</span><span class="dim">⌃</span></span></div>
+      <div class="row" style="padding:6px 12px;gap:18px;font-size:12px;color:var(--t2)"><span>☑ Tập 1 · 08:12</span><span>☑ Tập 2 · 07:55</span><span>☑ Tập 3 · 09:03</span><span class="muted">☐ Tập 4 · 08:40</span><span class="muted">☐ Tập 5 · 08:21</span><span class="dim">… +7</span></div>
+    </div>
+  </section>
+
+  <!-- 2. Danh sách tải -->
+  <div class="lh">
+    <span class="ftab on">Tất cả<i>5</i></span><span class="ftab">Đang tải<i>2</i></span><span class="ftab">Đang đợi<i>1</i></span><span class="ftab">Xong<i>1</i></span><span class="ftab">Lỗi<i>1</i></span>
+    <span class="grow"></span>
+    <span class="inp" style="width:240px;height:28px;color:var(--t4)">🔍 Lọc theo tên…</span>
+    <span class="more">⋯</span>
+  </div>
+
+  <section class="items" style="position:relative">
+    <div class="it">
+      <div class="th" style="background:linear-gradient(135deg,#3b2b1a,#1b1410)"><span>08:39</span></div>
+      <div style="min-width:0"><div class="ti">JOD — Tập đặc biệt (bản đầy đủ)</div>
+        <div class="meta"><span class="pill" style="color:#f87171;border-color:rgba(239,68,68,.35)">YouTube</span><span class="pill">1080p</span><span class="pill">Phụ đề: chờ</span></div>
+        <div class="src">youtube.com/watch?v=yN-Q-tFFElc</div></div>
+      <div><div class="bar"><i style="width:62%"></i></div><div class="pm"><span>62,4%</span><span>4,8 MB/s</span><span>còn 0:12</span></div></div>
+      <div class="act"><span class="pill ac">⚡ Đang tải</span><span class="btn">⏸ Tạm dừng</span></div>
+      <span class="more">⋯</span>
+    </div>
+    <div class="it">
+      <div class="th" style="background:linear-gradient(135deg,#123,#0a141c)"><span>00:58</span></div>
+      <div style="min-width:0"><div class="ti">Cinema recap — "The last call" phần 3</div>
+        <div class="meta"><span class="pill" style="color:#2dd4bf;border-color:rgba(45,212,191,.35)">TikTok</span><span class="pill">720p</span></div>
+        <div class="src">tiktok.com/@cinema.recap/video/7421…</div></div>
+      <div><div class="bar"><i style="width:18%"></i></div><div class="pm"><span>18,0%</span><span>2,1 MB/s</span><span>còn 0:31</span></div></div>
+      <div class="act"><span class="pill ac">⚡ Đang tải</span><span class="btn">⏸ Tạm dừng</span></div>
+      <span class="more">⋯</span>
+    </div>
+    <div class="it">
+      <div class="th" style="background:linear-gradient(135deg,#0c2533,#08121a)"><span>08:12</span></div>
+      <div style="min-width:0"><div class="ti">Phim ngắn mùa 1 — Tập 1</div>
+        <div class="meta"><span class="pill" style="color:#38bdf8;border-color:rgba(56,189,248,.35)">Bilibili</span><span class="pill">Cao nhất</span></div>
+        <div class="src">bilibili.com/video/BV1xK4y1… · p=1</div></div>
+      <div><div class="bar"><i style="width:0"></i></div><div class="pm"><span>Đang đợi lượt (tối đa 3 song song)</span></div></div>
+      <div class="act"><span class="pill">⏳ Đang đợi</span><span class="btn ghost">✕ Huỷ</span></div>
+      <span class="more">⋯</span>
+    </div>
+    <div class="it hl">
+      <div class="th" style="background:linear-gradient(135deg,#2a2016,#120e0a)"><span>06:21</span></div>
+      <div style="min-width:0"><div class="ti">JOD2 [aVjGozRKnS0].mp4</div>
+        <div class="meta"><span class="pill" style="color:#f87171;border-color:rgba(239,68,68,.35)">YouTube</span><span class="pill">1280×720</span><span class="pill">13,1 MB</span><span class="pill ok">Phụ đề: en, vi</span></div>
+        <div class="src">C:\Users\…\downloads\JOD2 [aVjGozRKnS0].mp4</div></div>
+      <div class="pm" style="margin:0;color:var(--ok-txt);font-family:var(--font-ui)">✓ Xong lúc 18:42 · 13,1 MB</div>
+      <div class="act"><span class="btn primary">🎬 Mở trong Studio</span></div>
+      <span class="more" style="background:var(--hover)">⋯</span>
+    </div>
+    <div class="it">
+      <div class="th" style="background:linear-gradient(135deg,#2a1414,#120909)"><span>—</span></div>
+      <div style="min-width:0"><div class="ti">migu.cn/video/abc123</div>
+        <div class="meta"><span class="pill dang">Nền tảng không hỗ trợ (yt-dlp)</span></div>
+        <div class="src">migu.cn/video/abc123</div></div>
+      <div class="pm" style="margin:0;color:var(--dang-txt);font-family:var(--font-ui)">Unsupported URL — kiểm tra lại link</div>
+      <div class="act"><span class="btn">↻ Thử lại</span></div>
+      <span class="more">⋯</span>
+    </div>
+
+    <!-- menu chuột phải / ⋯ -->
+    <div class="menu" style="right:18px;top:300px">
+      <div class="f">🎬 Mở trong Studio <span class="k">Enter</span></div>
+      <div>▶ Phát bằng trình phát ngoài</div>
+      <div>📁 Hiện trong thư mục</div>
+      <div>📝 Tải lại phụ đề</div>
+      <div>🔗 Sao chép link gốc <span class="k">Ctrl+C</span></div>
+      <hr>
+      <div style="color:var(--dang-txt)">🗑 Xoá khỏi danh sách <span class="k">Del</span></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>📁 Lưu vào <span class="mono">C:\Users\haiba\AppData\Roaming\com.sublix.desktop\downloads</span></span><span class="link">Mở thư mục</span>
+    <span class="grow"></span>
+    <span class="dim">Hỗ trợ YouTube, TikTok, Douyin, Bilibili, Facebook, Instagram Reels, X, Twitch, Kick, Dailymotion, VK… · Chỉ tải nội dung bạn có quyền sử dụng.</span>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Cài đặt (mockup vòng 1)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  .ws { display: grid; grid-template-columns: 260px 1fr 320px; height: 1032px; }
+  .nav { padding: 14px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .nv { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 8px; color: var(--t2); }
+  .nv .ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--bg-card); border: 1px solid var(--line-soft); font-size: 13px; }
+  .nv b { display: block; font-size: 12.5px; } .nv small { color: var(--t4); font-size: 10.5px; }
+  .nv.on { background: var(--ac-soft); color: var(--ac-txt); box-shadow: inset 0 0 0 1px var(--ac-br); }
+  .grp { font-size: 10px; letter-spacing: .08em; color: var(--t4); font-weight: 800; padding: 12px 10px 4px; }
+  .main { padding: 22px 34px; overflow: hidden; display: flex; flex-direction: column; gap: 18px; }
+  h1 { margin: 0; font-size: 19px; } .sub { color: var(--t3); margin-top: 4px; }
+  .sec { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .sec h2 { margin: 0; font-size: 13.5px; }
+  .provs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .pv { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-card-2); display: flex; flex-direction: column; gap: 4px; }
+  .pv b { font-size: 12.5px; } .pv small { color: var(--t3); font-size: 11px; }
+  .pv.on { border-color: var(--ac); background: var(--ac-soft); box-shadow: 0 0 0 3px var(--ac-soft); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .test { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: var(--ok-soft); border: 1px solid var(--ok-br); color: var(--ok-txt); font-size: 12px; }
+  .side { border-left: 1px solid var(--line); background: var(--bg-side); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .kv { display: flex; justify-content: space-between; font-size: 12px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+  .kv span:first-child { color: var(--t3); }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .ps { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-card-2); font-size: 11px; color: var(--t3); }
+  .ps b { display: block; color: var(--t1); font-size: 12.5px; margin-bottom: 3px; }
+  .ps.on { border-color: var(--ac); background: var(--ac-soft); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.12</span></div>
+  <nav class="tabs">
+    <span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab on">⚙ Cài đặt</span>
+  </nav>
+  <div class="top-mid"></div>
+  <div class="top-right"><span class="status-pill"><span class="dot"></span>Sẵn sàng</span><span class="icon-btn">👁</span></div>
+</header>
+<div class="ws">
+  <aside class="panel nav">
+    <div class="grp">BẮT ĐẦU</div>
+    <div class="nv"><span class="ic">⚡</span><span><b>Cấu hình theo máy</b><small>4 cấu hình mẫu 1 chạm</small></span></div>
+    <div class="grp">XỬ LÝ AI</div>
+    <div class="nv"><span class="ic">🎤</span><span><b>Nhận dạng giọng nói</b><small>Whisper base · CPU</small></span></div>
+    <div class="nv on"><span class="ic">🌐</span><span><b>Dịch thuật</b><small>Ollama · qwen2.5:3b</small></span></div>
+    <div class="nv"><span class="ic">🗣</span><span><b>Giọng đọc (TTS)</b><small>VietNeu · Kokoro · Edge</small></span></div>
+    <div class="nv"><span class="ic">📦</span><span><b>Mô hình đã tải</b><small>Tải / cập nhật / xoá</small></span></div>
+    <div class="grp">GIAO DIỆN</div>
+    <div class="nv"><span class="ic">🪟</span><span><b>Overlay Live</b><small>Cỡ chữ, vị trí, độ mờ</small></span></div>
+    <div class="nv"><span class="ic">🎨</span><span><b>Chủ đề &amp; ngôn ngữ</b><small>Cinema · Studio · Sáng · Rực</small></span></div>
+    <div class="grp">KHÁC</div>
+    <div class="nv"><span class="ic">📝</span><span><b>Nhật ký cập nhật</b><small>v0.12.0</small></span></div>
+  </aside>
+
+  <main class="main">
+    <div><h1>Dịch thuật</h1><div class="sub">Một nơi duy nhất cấu hình nhà cung cấp dịch — Studio, Live và Lịch sử đều dùng cấu hình này.</div></div>
+
+    <section class="card sec">
+      <div class="row between"><h2>Nhà cung cấp</h2><span class="dim" style="font-size:11px">Studio chỉ hiển thị tên đang dùng + link “Đổi”</span></div>
+      <div class="provs">
+        <div class="pv on"><b>Ollama (máy này)</b><small>Miễn phí · offline · iGPU AMD</small><span class="pill ok" style="align-self:flex-start">Đang dùng</span></div>
+        <div class="pv"><b>MiniMax M3</b><small>Mạng · cần API key</small><span class="pill" style="align-self:flex-start">Chưa có key</span></div>
+        <div class="pv"><b>DeepSeek</b><small>Mạng · rẻ · nhanh</small><span class="pill" style="align-self:flex-start">Chưa có key</span></div>
+        <div class="pv"><b>OpenRouter</b><small>Mạng · nhiều model</small><span class="pill" style="align-self:flex-start">Chưa có key</span></div>
+        <div class="pv"><b>GGUF nhúng</b><small>llama-server · offline</small><span class="pill warn" style="align-self:flex-start">Bị Windows chặn</span></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><span class="lbl">Địa chỉ Ollama</span><span class="inp mono">http://localhost:11434</span></div>
+        <div class="field"><span class="lbl">Model</span><span class="sel mono">qwen2.5:3b — 3.1B Q4_K_M · 1,8 GB</span></div>
+        <div class="field"><span class="lbl">Ngôn ngữ đích mặc định</span><span class="sel">Tiếng Việt</span></div>
+        <div class="field"><span class="lbl">Phong cách mặc định</span><div class="seg"><span class="on">Truyền cảm</span><span>Sát nghĩa</span><span>Thân mật</span></div></div>
+      </div>
+      <div class="test">✓ Dịch thử thành công trong 6,0 s — “We're out of time.” → “Chúng ta hết thời gian rồi.” <span class="grow"></span><span class="btn">↻ Dịch thử lại</span></div>
+      <div class="dim" style="font-size:11px">Tự lưu khi thay đổi — không cần nút “Lưu cấu hình”.</div>
+    </section>
+
+    <section class="card sec">
+      <div class="row between"><h2>Cấu hình theo máy</h2><span class="dim" style="font-size:11px">chỉ 1 nơi (trước đây lặp ở cột trái + lưới giữa)</span></div>
+      <div class="presets">
+        <div class="ps"><b>💻 Chỉ CPU</b>base + Qwen2.5-1.5B</div>
+        <div class="ps"><b>⚡ GPU 4–8 GB</b>base + Qwen2.5-3B · CUDA</div>
+        <div class="ps"><b>🚀 GPU 12–24 GB</b>Large-v3-Turbo + Qwen3-4B</div>
+        <div class="ps on"><b>🔺 GPU tích hợp AMD</b>base + Ollama trên iGPU <span class="pill ok">Đang dùng</span></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="side">
+    <div style="font-weight:700">Trạng thái hệ thống</div>
+    <div>
+      <div class="kv"><span>Nhận dạng</span><span>Whisper base · CPU</span></div>
+      <div class="kv"><span>Dịch</span><span style="color:var(--ok-txt)">Ollama · sẵn sàng</span></div>
+      <div class="kv"><span>Tăng tốc</span><span>AMD Radeon 8050S (ROCm)</span></div>
+      <div class="kv"><span>Giọng đọc</span><span>VietNeu · Kokoro</span></div>
+      <div class="kv"><span>Thư mục mô hình</span><span class="link">Mở</span></div>
+    </div>
+    <div class="dim" style="font-size:11px;line-height:1.5">Thông tin ở đây đọc từ cấu hình thật (thay cho thẻ “Động cơ &amp; phần cứng AI” đang ghi cứng “GPU CUDA” ở tab Tiến trình).</div>
+  </aside>
+</div>
+</body>
+</html>

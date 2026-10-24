@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Studio (mockup vòng 1)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  .ws { display: flex; height: 732px; }
+  .left { width: 340px; display: flex; flex-direction: column; }
+  /* thanh tiến trình quy trình 5 bước */
+  .rail { display: flex; align-items: center; padding: 12px 14px 10px; gap: 0; border-bottom: 1px solid var(--line-soft); }
+  .rs { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 52px; font-size: 10.5px; color: var(--t4); font-weight: 600; }
+  .rs i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10.5px; border: 1.5px solid var(--line); color: var(--t4); background: var(--bg); }
+  .rs.done i { background: var(--ok); border-color: var(--ok); color: #0e1a10; }
+  .rs.done { color: var(--t2); }
+  .rs.cur i { border-color: var(--ac); color: var(--ac); box-shadow: 0 0 0 3px var(--ac-soft); }
+  .rs.cur { color: var(--ac-txt); }
+  .rl { flex: 1; height: 1.5px; background: var(--line); margin-bottom: 16px; }
+  .rl.done { background: var(--ok); }
+  .steps { flex: 1; overflow: hidden; padding: 10px 10px 0; display: flex; flex-direction: column; gap: 8px; }
+  .st { border: 1px solid var(--line); border-radius: 10px; background: var(--bg-card); }
+  .st-h { display: flex; align-items: center; gap: 8px; padding: 9px 10px; }
+  .st-n { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 10.5px; font-weight: 800; color: #111; flex: none; }
+  .st-t { font-weight: 700; font-size: 12.5px; }
+  .st-s { font-size: 11px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-run { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--t3); border: 1px solid var(--line-soft); font-size: 10px; }
+  .st.open { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.035); }
+  .st.off .st-t, .st.off .st-s { color: var(--t4); }
+  .st-b { padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 9px; }
+  .adv { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--t3); font-weight: 600; padding-top: 2px; }
+  .role { display: grid; grid-template-columns: 8px 1fr auto; gap: 5px 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line-soft); }
+  .role .c { width: 8px; height: 8px; border-radius: 50%; }
+  .role .nm { font-weight: 700; font-size: 12px; }
+  .role .vo { grid-column: 2 / 4; display: flex; gap: 6px; }
+  .role .vo .sel { flex: 1; height: 27px; font-size: 11.5px; }
+  .gender { font-size: 10.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--t2); }
+  .add-role { text-align: center; font-size: 11.5px; color: var(--t3); padding: 6px; border: 1px dashed var(--line); border-radius: 8px; }
+  .foot { padding: 10px; border-top: 1px solid var(--line); background: rgba(0,0,0,.15); display: flex; flex-direction: column; gap: 6px; }
+  .split { display: flex; }
+  .split .btn.primary:first-child { flex: 1; justify-content: center; border-radius: 10px 0 0 10px; padding: 11px; font-size: 13.5px; }
+  .split .btn.primary:last-child { border-radius: 0 10px 10px 0; border-left: 1px solid rgba(0,0,0,.25); padding: 0 12px; }
+  .hint { font-size: 10px; white-space: nowrap; color: var(--t4); text-align: center; }
+  /* giữa */
+  .mid { flex: 1; display: flex; flex-direction: column; background: #0c0b0a; }
+  .vbar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); }
+  .vbar .sel { height: 26px; font-size: 11.5px; }
+  .stage { flex: 1; display: grid; place-items: center; }
+  .frame { width: 900px; height: 506px; border-radius: 6px; background: radial-gradient(ellipse at 40% 30%, #2b2f36 0%, #15171b 55%, #0b0c0e 100%); position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.6); overflow: hidden; }
+  .frame::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 50%; background: linear-gradient(180deg, transparent, rgba(232,163,61,.08)); }
+  .subline { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); background: rgba(0,0,0,.72); padding: 6px 14px; border-radius: 6px; color: #f6d27a; font-weight: 700; font-size: 18px; white-space: nowrap; }
+  /* phải */
+  .right { width: 360px; border-left: 1px solid var(--line); background: var(--bg-side); display: flex; flex-direction: column; }
+  .rh { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
+  .stats { display: flex; gap: 10px; font-size: 11px; color: var(--t3); }
+  .stats b { color: var(--t1); }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .fc { font-size: 11px; padding: 2px 8px; border-radius: 12px; border: 1px solid var(--line); color: var(--t3); }
+  .fc.on { color: var(--ac-txt); border-color: var(--ac-br); background: var(--ac-soft); }
+  .list { flex: 1; overflow: hidden; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .cue { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-soft); background: var(--bg-card); display: flex; flex-direction: column; gap: 4px; }
+  .cue.sel-c { border-color: var(--ac-br); background: var(--ac-soft); }
+  .cue .tc { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); display: flex; justify-content: space-between; }
+  .cue .o { font-size: 11px; color: var(--t3); }
+  .cue .t { font-size: 12.5px; font-weight: 600; }
+  /* timeline (giữ nguyên — chỉ minh hoạ) */
+  .tl { height: 300px; border-top: 1px solid var(--line); background: #100e0c; }
+  .tlbar { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); }
+  .tracks { display: grid; grid-template-columns: 160px 1fr; }
+  .th { height: 40px; display: flex; align-items: center; padding: 0 10px; font-size: 11px; font-weight: 700; color: var(--t3); border-bottom: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); }
+  .tb { height: 40px; border-bottom: 1px solid var(--line-soft); position: relative; }
+  .blk { position: absolute; top: 7px; height: 26px; border-radius: 4px; font-size: 10.5px; padding: 5px 6px; overflow: hidden; white-space: nowrap; color: #08131a; font-weight: 600; }
+  .wave { position: absolute; inset: 6px 0; background: repeating-linear-gradient(90deg, rgba(56,189,248,.55) 0 2px, transparent 2px 5px); mask: linear-gradient(180deg, transparent 10%, #000 30%, #000 70%, transparent 90%); opacity: .7; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.12</span></div>
+  <nav class="tabs">
+    <span class="tab on">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span>
+  </nav>
+  <div class="top-mid"><div class="chip-file">🎞 <b>A2Z_TEST_EN_dubbed.mp4</b><span class="muted mono">00:40</span><span class="x">✕</span></div></div>
+  <div class="top-right">
+    <span class="status-pill"><span class="dot"></span>Sẵn sàng</span>
+    <span class="icon-btn" title="Hoàn tác (Ctrl+Z) — chuột phải: chọn lớp hoàn tác">↶</span>
+    <span class="icon-btn" title="Overlay (Ctrl+Shift+O)">👁</span>
+    <span class="btn">＋ Mở video <span class="kbd">Ctrl+I</span></span>
+    <span class="btn primary">⤓ Xuất video</span>
+  </div>
+</header>
+
+<div class="ws">
+  <!-- ============ PANEL TRÁI MỚI ============ -->
+  <aside class="left panel">
+    <div class="rail">
+      <div class="rs done"><i>✓</i>Nguồn</div><div class="rl done"></div>
+      <div class="rs done"><i>✓</i>Phụ đề</div><div class="rl done"></div>
+      <div class="rs done"><i>✓</i>Dịch</div><div class="rl"></div>
+      <div class="rs cur"><i>4</i>Lồng tiếng</div><div class="rl"></div>
+      <div class="rs"><i>5</i>Xuất</div>
+    </div>
+
+    <div class="steps">
+      <!-- 1+2 gộp: Nguồn & Phụ đề -->
+      <div class="st">
+        <div class="st-h">
+          <span class="st-n" style="background:var(--step-sub)">2</span>
+          <div class="grow"><div class="st-t">Phụ đề gốc</div><div class="st-s">8 câu · Tự nhận ngôn ngữ (EN) · lấy từ file .vi.srt</div></div>
+          <span class="pill ok">Xong</span><span class="sw on"></span><span class="dim">›</span>
+        </div>
+      </div>
+      <div class="st">
+        <div class="st-h">
+          <span class="st-n" style="background:var(--step-tr)">3</span>
+          <div class="grow"><div class="st-t">Dịch</div><div class="st-s">→ Tiếng Việt · Truyền cảm · Ollama qwen2.5:3b</div></div>
+          <span class="pill ok">8/8</span><span class="sw on"></span><span class="dim">›</span>
+        </div>
+      </div>
+      <!-- Lồng tiếng: đang mở -->
+      <div class="st open">
+        <div class="st-h">
+          <span class="st-n" style="background:var(--step-dub)">4</span>
+          <div class="grow"><div class="st-t">Lồng tiếng</div><div class="st-s">2 vai · VietNeu · chưa tạo giọng</div></div>
+          <span class="st-run" title="Chạy riêng bước này">▶</span><span class="sw on"></span><span class="dim">⌄</span>
+        </div>
+        <div class="st-b">
+          <div class="field"><span class="lbl">Số người nói</span>
+            <div class="seg"><span>Tự động</span><span>1 người</span><span class="on">2 người</span></div></div>
+          <div class="field"><span class="lbl">Bộ giọng đọc</span>
+            <div class="seg"><span class="on">VietNeu ▶</span><span>Kokoro</span><span>Edge (mạng)</span></div></div>
+          <div class="field"><div class="row between"><span class="lbl">Vai &amp; giọng</span><span class="dim" style="font-size:10.5px">chuột phải: giọng gốc · gộp · xoá</span></div>
+            <div class="role"><span class="c" style="background:#3B82F6"></span><span class="nm">Người dẫn</span><span class="row"><span class="gender">♂ Nam</span><span class="dim">5 câu</span></span>
+              <div class="vo"><span class="sel">VietNeu Nam — Bắc, truyền cảm</span><span class="icon-btn" style="width:27px;height:27px">▶</span></div></div>
+            <div class="role" style="margin-top:6px"><span class="c" style="background:#EC4899"></span><span class="nm">Nhân vật 2</span><span class="row"><span class="gender">♀ Nữ</span><span class="dim">3 câu</span></span>
+              <div class="vo"><span class="sel">VietNeu Nữ — Nam, nhẹ nhàng</span><span class="icon-btn" style="width:27px;height:27px">▶</span></div></div>
+            <div class="add-role" style="margin-top:6px">＋ Thêm vai</div>
+          </div>
+        </div>
+      </div>
+      <!-- Nâng cao gấp -->
+      <div class="st" style="border-style:dashed;background:transparent">
+        <div class="st-h"><span style="width:18px;text-align:center;color:var(--t3)">⚙</span>
+          <div class="grow"><div class="st-t" style="color:var(--t2);font-size:12px">Nâng cao</div><div class="st-s">Mô hình nhận dạng · Hồ sơ phim (khoá xưng hô)</div></div><span class="dim">›</span></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="split"><span class="btn primary">▶ Chạy 3 bước đã bật</span><span class="btn primary">▾</span></div>
+      <div class="hint">▾ chạy riêng: phụ đề · dịch · lồng tiếng · vùng In–Out &nbsp;<span class="kbd">Ctrl+Enter</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ GIỮA (giữ nguyên chức năng) ============ -->
+  <section class="mid">
+    <div class="vbar"><span class="sel">Bản dịch</span><span class="sel">Vừa khung</span><span class="grow"></span><span class="dim" style="font-size:11px">Song ngữ: phím B</span></div>
+    <div class="stage"><div class="frame"><div class="subline">Chúng ta đã hết thời gian rồi. Thành phố sắp mất điện.</div></div></div>
+  </section>
+
+  <!-- ============ PHẢI: danh sách câu + thống kê (thay tab Tóm tắt & Review) ============ -->
+  <aside class="right">
+    <div class="rh">
+      <div class="row between"><span style="font-weight:700">Phụ đề</span><span class="stats"><span><b>8</b> câu</span><span><b>40s</b></span><span><b>2</b> vai</span><span><b>~118</b> WPM</span></span></div>
+      <div class="inp" style="height:28px;color:var(--t4)">🔍 Tìm trong phụ đề…</div>
+      <div class="chips"><span class="fc on">Tất cả 8</span><span class="fc">Chưa dịch 0</span><span class="fc">Thiếu tiếng 8</span><span class="fc">Câu &gt;12s 0</span><span class="fc">● Người dẫn 5</span><span class="fc">● NV2 3</span></div>
+    </div>
+    <div class="list">
+      <div class="cue sel-c"><div class="tc"><span>00:00.00 → 00:05.44</span><span style="color:#3B82F6">● Người dẫn</span></div><div class="o">We're out of time. The city is about to lose power.</div><div class="t">Chúng ta đã hết thời gian rồi. Thành phố sắp mất điện.</div></div>
+      <div class="cue"><div class="tc"><span>00:05.44 → 00:09.19</span><span style="color:#EC4899">● NV2</span></div><div class="o">You know I don't want it like this.</div><div class="t">Anh biết mà, tôi không muốn như thế này.</div></div>
+      <div class="cue"><div class="tc"><span>00:09.19 → 00:13.67</span><span style="color:#3B82F6">● Người dẫn</span></div><div class="o">Listen to me, there isn't much left.</div><div class="t">Hãy nghe tôi, còn lại không nhiều đâu.</div></div>
+      <div class="cue"><div class="tc"><span>00:13.67 → 00:20.55</span><span style="color:#EC4899">● NV2</span></div><div class="o">They told us it was a simple job…</div><div class="t">Họ bảo chúng ta nhiệm vụ đơn giản, nhưng không một điều gì trong đêm nay đơn giản.</div></div>
+      <div class="cue"><div class="tc"><span>00:20.55 → 00:26.39</span><span style="color:#3B82F6">● Người dẫn</span></div><div class="o">Get everyone onto the roof now.</div><div class="t">Hãy đưa mọi người lên mái nhà ngay lập tức. Anh nghe chưa?</div></div>
+      <div class="cue"><div class="tc"><span>00:26.39 → 00:32.24</span><span style="color:#3B82F6">● Người dẫn</span></div><div class="o">Something is coming.</div><div class="t">Có điều gì đó sắp đến. Tôi đã chờ đợi ba năm để có…</div></div>
+    </div>
+  </aside>
+</div>
+
+<!-- ============ TIMELINE (KHÔNG đổi ở vòng 2 — chỉ minh hoạ vị trí) ============ -->
+<section class="tl">
+  <div class="tlbar"><span class="seg" style="width:230px"><span class="on">Chọn V</span><span>Tua T</span><span>Vùng R</span></span><span class="grow"></span><span class="btn primary" style="border-radius:20px;padding:6px 10px">▶</span><span class="mono muted">00:00.00 / 00:40.00</span><span class="grow"></span><span class="dim" style="font-size:11px">Công cụ timeline giữ nguyên (TSK-TIMELINE-*)</span></div>
+  <div class="tracks">
+    <div class="th">VIDEO</div><div class="tb" style="background:repeating-linear-gradient(90deg,#1d1f24 0 118px,#15161a 118px 120px)"></div>
+    <div class="th">♬ TIẾNG GỐC</div><div class="tb"><div class="wave"></div></div>
+    <div class="th">💬 PHỤ ĐỀ</div><div class="tb">
+      <div class="blk" style="left:0;width:160px;background:#5eead4">Chúng ta đã hết thời gian…</div><div class="blk" style="left:163px;width:110px;background:#5eead4">Anh biết mà…</div><div class="blk" style="left:276px;width:130px;background:#5eead4">Hãy nghe tôi…</div><div class="blk" style="left:409px;width:200px;background:#5eead4">Họ bảo chúng ta nhiệm vụ…</div><div class="blk" style="left:612px;width:170px;background:#5eead4">Hãy đưa mọi người…</div></div>
+    <div class="th" style="color:#93c5fd">● Người dẫn</div><div class="tb"><div class="blk" style="left:0;width:160px;background:#3B82F6;color:#fff;opacity:.5">chưa có tiếng</div></div>
+    <div class="th" style="color:#f9a8d4">● Nhân vật 2</div><div class="tb"><div class="blk" style="left:163px;width:110px;background:#EC4899;color:#fff;opacity:.5">chưa có tiếng</div></div>
+  </div>
+</section>
+</body>
+</html>
