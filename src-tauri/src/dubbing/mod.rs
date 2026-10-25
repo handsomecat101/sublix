@@ -35,6 +35,10 @@ pub mod tts_vieneu;
 pub mod tts_zerotts;
 pub mod vi_normalize;
 
+// TSK-DUBBING-STT-ENGINE: chọn engine STT theo config `stt_asr_engine` cho
+// pipeline lồng tiếng (mặc định vẫn là whisper.cpp).
+pub mod stt_select;
+
 #[cfg(test)]
 #[path = "tts_real_tests.rs"]
 mod tts_real_tests;
@@ -2493,64 +2497,119 @@ pub fn analyze_and_create_project_full(
                 .with_context(|| format!("Đọc phụ đề có sẵn {}", srt_path.display()))?;
             (content, format!("srt:{srt_lang}"))
         } else {
-            // 2b. Transcribe with Whisper CLI (không có .srt cạnh video)
-            let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
-            let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
-                .context("Không tìm thấy model Whisper")?;
-            let (whisper_bin, _engine) =
-                crate::stt::whisper_local::ensure_binary_with_engine_pref(
-                    crate::stt::EnginePreference::from_str(&cfg.stt_engine_preference),
-                )
-                .context("Không tìm thấy whisper binary")?;
+            // 2b. Chọn engine STT (config `stt_asr_engine`; rỗng = whisper).
+            //     Nếu người dùng chọn engine sherpa (SenseVoice / Paraformer /
+            //     Parakeet) và model ĐÃ TẢI → nhận dạng bằng engine đó (nhanh
+            //     hơn và chính xác hơn hẳn với tiếng Trung). Chưa tải / lỗi →
+            //     rơi về Whisper + log tracing + phát event cảnh báo.
+            let sherpa = crate::dubbing::stt_select::try_sherpa(&cfg, &temp_wav, &src_lang);
+            let sherpa_result = match sherpa {
+                crate::dubbing::stt_select::SherpaAttempt::Ready {
+                    srt_content,
+                    engine_id,
+                    engine_label,
+                    sentence_timestamps_only,
+                } => {
+                    info!(
+                        "🎧 Nhận dạng bằng engine STT sherpa: {engine_id} ({})",
+                        if sentence_timestamps_only {
+                            "chỉ có timestamp câu"
+                        } else {
+                            "có timestamp từ"
+                        }
+                    );
+                    emit(
+                        "transcribing",
+                        18.0,
+                        &format!("🎧 Đang nhận dạng bằng engine {engine_label}..."),
+                        0,
+                        100,
+                    );
+                    Some((srt_content, format!("sherpa:{engine_id}")))
+                }
+                crate::dubbing::stt_select::SherpaAttempt::Fallback {
+                    engine_id,
+                    engine_label,
+                    reason,
+                } => {
+                    warn!(
+                        "⚠️ Engine STT {engine_id} không dùng được ({reason}) — rơi về Whisper"
+                    );
+                    emit(
+                        "transcribing",
+                        18.0,
+                        &format!(
+                            "⚠️ Engine {engine_label} không dùng được ({reason}) — chuyển sang Whisper"
+                        ),
+                        0,
+                        100,
+                    );
+                    None
+                }
+                crate::dubbing::stt_select::SherpaAttempt::NotRequested => None,
+            };
+            if let Some((content, source)) = sherpa_result {
+                (content, source)
+            } else {
+                // 2c. Transcribe with Whisper CLI (không có .srt cạnh video)
+                let stt_variant = ModelVariant::from_name(&cfg.stt_model).unwrap_or(ModelVariant::LargeV3TurboQ8);
+                let model_path = crate::stt::whisper_local::ensure_model(stt_variant)
+                    .context("Không tìm thấy model Whisper")?;
+                let (whisper_bin, _engine) =
+                    crate::stt::whisper_local::ensure_binary_with_engine_pref(
+                        crate::stt::EnginePreference::from_str(&cfg.stt_engine_preference),
+                    )
+                    .context("Không tìm thấy whisper binary")?;
 
-            let mut whisper_cmd = Command::new(&whisper_bin);
-            if let Some(bin_dir) = whisper_bin.parent() {
-                whisper_cmd.current_dir(bin_dir);
-            }
-            whisper_cmd
-                .arg("-m")
-                .arg(&model_path)
-                .arg("-f")
-                .arg(&temp_wav)
-                .arg("-l")
-                .arg(&src_lang)
-                .arg("-osrt")
-                .arg("-of")
-                .arg(&temp_srt_stem)
-                .arg("-sns")
-                .arg("-nth")
-                .arg("0.65")
-                .arg("-bo")
-                .arg("1")
-                .arg("-bs")
-                .arg("1")
-                .arg("-t")
-                .arg("8");
+                let mut whisper_cmd = Command::new(&whisper_bin);
+                if let Some(bin_dir) = whisper_bin.parent() {
+                    whisper_cmd.current_dir(bin_dir);
+                }
+                whisper_cmd
+                    .arg("-m")
+                    .arg(&model_path)
+                    .arg("-f")
+                    .arg(&temp_wav)
+                    .arg("-l")
+                    .arg(&src_lang)
+                    .arg("-osrt")
+                    .arg("-of")
+                    .arg(&temp_srt_stem)
+                    .arg("-sns")
+                    .arg("-nth")
+                    .arg("0.65")
+                    .arg("-bo")
+                    .arg("1")
+                    .arg("-bs")
+                    .arg("1")
+                    .arg("-t")
+                    .arg("8");
 
-            if _engine == crate::stt::SttEngine::Cuda {
-                whisper_cmd.arg("-fa");
-            }
+                if _engine == crate::stt::SttEngine::Cuda {
+                    whisper_cmd.arg("-fa");
+                }
 
-            #[cfg(windows)]
-            whisper_cmd.creation_flags(CREATE_NO_WINDOW);
+                #[cfg(windows)]
+                whisper_cmd.creation_flags(CREATE_NO_WINDOW);
 
-            let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
-                .context("Lỗi thực thi whisper-cli")?;
+                let whisper_res = run_child_with_cancel(whisper_cmd, my_gen)
+                    .context("Lỗi thực thi whisper-cli")?;
 
-            if is_generation_cancelled(my_gen) {
-                let _ = fs::remove_file(&temp_wav);
+                if is_generation_cancelled(my_gen) {
+                    let _ = fs::remove_file(&temp_wav);
+                    let _ = fs::remove_file(&temp_srt_file);
+                    return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+                }
+
+                if !whisper_res.success() || !temp_srt_file.exists() {
+                    let _ = fs::remove_file(&temp_wav);
+                    return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
+                }
+
+                let content = fs::read_to_string(&temp_srt_file).context("Đọc SRT tạm")?;
                 let _ = fs::remove_file(&temp_srt_file);
-                return Err(anyhow::anyhow!("Đã dừng tiến trình theo yêu cầu của bạn."));
+                (content, "whisper".to_string())
             }
-
-            if !whisper_res.success() || !temp_srt_file.exists() {
-                let _ = fs::remove_file(&temp_wav);
-                return Err(anyhow::anyhow!("Whisper không tạo được phụ đề cho tệp này."));
-            }
-
-            let content = fs::read_to_string(&temp_srt_file).context("Đọc SRT tạm")?;
-            let _ = fs::remove_file(&temp_srt_file);
-            (content, "whisper".to_string())
         };
 
     let mut raw_segments = crate::file_sub::parse_srt_content(&raw_srt_content);

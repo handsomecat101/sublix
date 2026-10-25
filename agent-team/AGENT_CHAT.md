@@ -1,6 +1,15 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
 
+### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-DUBBING-STT-ENGINE` — pipeline lồng tiếng dùng engine STT đã chọn; **không commit**).
+- **Sửa:** module mới `src-tauri/src/dubbing/stt_select.rs` — `dubbing_analyze` đọc config `stt_asr_engine` (backend tự đọc → **không đổi tham số lệnh Tauri, không sửa `src/**`**); engine sherpa + model đã tải → nhận dạng bằng engine đó (SenseVoice/Paraformer/Parakeet), **chưa tải / lỗi → rơi về Whisper** kèm log `tracing` + event `dubbing:progress` để UI toast.
+- **Tán thổng:** engine không có timestamp từ (Paraformer) → dùng **timestamp câu**; kết quá đểnh dạng `SubtitleSegment` cũ nên để **bước phân vai (diarization) dùng đúc định dạng cũ**; `start_offset_sec` / `expected_speakers` giữ nguyên; ngôn ngợ nguồn chỉ truyền cho engine khi được hỗ trụ (SenseVoice zh/en/ja/ko/yue, Paraformer zh, còn lại để để auto).
+- **Test:** `stt_select_tests.rs` 9 test thuần (chọn engine, engine lạ, ngôn ngợ, SRT định dạng) + test e2e `dubbing_stt_sherpa_that` chạy chạy trên clip Trung (PASS khi có model, SKIP khi chưa có); `proc_kill.rs` **441 → 253 dòng** (tách test ra `proc_kill_tests.rs` 193) · `cargo test --lib` **231 pass / 0 fail** · `cargo build --examples` OK (cã 4 example dubbing) · `cargo clippy` không thêm cảnh báo mới.
+
+---
+---
+
 ### 2026-10-25 07:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-018-FIX-R2` — sửa lỗ hỗng reviewer phát hiện trong `proc_kill.rs`; **không commit**).
 - **Lỗ hỗng:** file `.pid` đang nừm **chung `%TEMP%` cho mối instance** (app PO + instance verify cùng `%TEMP%`, chỉ khác `%APPDATA%`) → instance B đọc PID server **đang sống** của instance A rồi giết — đúng loại BUG-003 ta đang chặn.
@@ -8,6 +17,7 @@
 - **Test:** thêm 4 test cho hành thuần `pick_kill_target`: **owner còn sống → không giết** · **owner đã chết → giết** · owner là chính app hiện tại → được thay thế · **file định dạng cũ (1 số) → không giết**; + test vòng `write/read_tracked_pid` ghiđợc PID app chủ. `cargo test --lib` **223 pass / 0 fail**, `cargo clippy --lib --tests` **không thêm cảnh báo mới** (1 cảnh báo trong file tôi sửa là `EnginePreference::from_str` cũ cũ).
 - **Phạm vi:** chỉ `src-tauri/src/proc_kill.rs` + `src-tauri/src/stt/whisper_server.rs` + `src-tauri/src/translate/server.rs` + 2 file test; không động `lib.rs`/`src/**`/module khác.
 
+---
 ---
 ---
 
@@ -26,12 +36,14 @@
 ---
 ---
 ---
+---
 
 ### 2026-10-25 07:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-REFACTOR-GLOSSARY-300` — tách 2 file > 300 dòng, **chỉ di chuyển code, không đổi hành vi**; **chưa commit**).
 - **Tách:** `glossary.rs` 366 → **272** (+ file mới `glossary_prompt.rs` 111: `to_rules` / `hard_block` / `suggestion_from_reference`) · `contextual_run.rs` 336 → **165** (+ `contextual_chunk.rs` 134: gọi LLM theo lô; `contextual_verify.rs` 89: hậu kiểm + dịch lại 1 câu). Mọi file trong `translate/` giờ **< 300 dòng**.
 - **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
 
+---
 ---
 ---
 ---
@@ -47,6 +59,7 @@
 ---
 ---
 ---
+---
 
 ### 2026-10-25 07:20 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-REDO-RIPPLE` — Redo + Ripple delete + marker định dạng cũ; **chưa commit**).
@@ -57,12 +70,14 @@
 - **⚠️ Lưu ý:** đường `undoStack` (general) giữ nguyên như cũ; redo lấy từ `future` của từng lớp. Instance verify đã tắt, app PO (1420) không bị đụng; chưa commit.
 ---
 ---
+---
 
 ### 2026-10-25 07:02 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-EXAMPLES` — 3 example Rust không build được từ commit `c9ccaad`; **chưa commit**).
 - **Fix:** `analyze_and_create_project` đã đổi **5 → 7 tham số** (`start_offset_sec` + `expected_speakers`) ⇒ thêm 2 `None` vào `test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` (giống hệt lệnh Tauri `dubbing_analyze` khi UI không gửi 2 tuỳ chọn này). **Không** đụng `src-tauri/src/**` hay `src/**`.
 - **Verify:** `cargo build --examples` **exit 0** — 7/7 example ra `.exe` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`), build lại là no-op ⇒ đã xoá đúng lỗi mà mcode #2 báo trong AGENT_CHAT. *(Verify lần 2 trên **bản sao HEAD + 3 file của tôi** — repo chính đang tạm **đỏ** vì worker khác sửa dở `src-tauri/src/**` (`proc_kill` chưa khai báo trong `lib.rs`), **không** phải lỗi của task này.)*
 
+---
 ---
 ---
 ---
@@ -80,20 +95,5 @@
 ---
 
 ---
----
----
-
-### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
-- **Mới:** `src/views/processLogic.ts` + `processTypes.ts` (mới) + `ProcessCenterView.tsx` viết lại + `ProcessCenterView.css` (mới) — **xoá** `ProcessCenterModal.tsx/.css` (TL-14: chỉ còn 1 giao diện; nút "Mở Tiến Trình" của toast nền nay sang thẳng tab).
-- **UI:** 6 **chip lọc ngang** (`Segmented`) kèm số đếm thay 6 nút dọc ở cột trái (nhãn lấy từ hằng số → **hết ký tự lạ** "Tải videoo"/"Đang xử lýo"); **menu `⋯`** đầu danh sách gom "Mở Thư Mục Thành Phẩm" · "Mở Thư Mục Tải Về" · "Xoá Lịch Sử Tiến Trình" (nguy hiểm + **hộp xác nhận**); trạng thái rỗng có **câu hướng dẫn riêng** cho từng nhóm lọc (thay thẻ "Hướng Dẫn & Lưu Ý").
-- **Logic thuần:** `processLogic.ts` (lọc/đếm/nhóm tác vụ/làm sạch nhãn) + `scripts/process-tests/` → **23/23 PASS**.
-- **Verify:** trên **bản sao HEAD + file của tôi** → `tsc` **0 lỗi** · `npm run build` OK (103 module) · `process-tests` 23/23 + `live-history-tests` 40/40 + `settings-tests` 21/21 + `timeline-tests` 95/95; ảnh Edge headless 1920×1080 (demo dữ liệu giả + **app thật** với tab "Tiến trình" active) render đúng. CSS cũ **803 → 751 dòng** sau khi cắt 63 rule chết.
-- **Cảnh báo:** ghi `BUG-H20` — **PowerShell 5.1 làm hỏng file UTF-8** (`Get-Content -Raw` + `Set-Content -Encoding UTF8` ⇒ mojibake toàn file). Agent nào sửa file nguồn bằng PS thì phải kiểm tra `git diff` (toàn bộ file đổi = dấu hiệu). Chi tiết: `ISSUE_LOG.md`.
-
----
-
----
-
 ---
 ---
