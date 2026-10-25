@@ -151,6 +151,8 @@ import { computeFollowScroll } from "../lib/timeline/autoFollow";
 import { TimecodeInput } from "./studio/TimecodeInput";
 // [TSK-FIX-BUG-R2-8-01] Sinh id task DUY NHẤT theo lần chạy (logic thuần, test được).
 import { makeTaskRunId } from "./processLogic";
+import { jobQueue, JobCancelledError, type JobKind } from "../lib/studio/jobQueue";
+import { isForeignRun } from "../lib/studio/runRouting";
 // [TSK-TABS-3.5] Chặn kết quả của video cũ ghi đè video mới (logic thuần, test được).
 import { projectDisplayName, staleProjectNotice } from "../lib/studio/resultGuard";
 
@@ -171,6 +173,12 @@ export interface StudioTaskUpdatePayload {
   outputPath?: string;
   error?: string;
   targetTab?: "downloader" | "file_sub" | "dubbing" | "live" | "models" | "studio";
+  /** [TSK-TABS-P2] Tab Studio đã chạy tác vụ → "Mở lại trong Studio" mở đúng tab. */
+  tabId?: string;
+  /** [TSK-TABS-P2] Video gốc của dự án (mở lại khi tab đã đóng). */
+  sourcePath?: string;
+  /** [TSK-TABS-P2] `runId` của job (khớp `run_id` trong `dubbing:progress`) → tab Tiến trình khoá đúng lượt. */
+  runId?: string;
 }
 
 export interface SublixStudioViewProps {
@@ -819,6 +827,23 @@ interface SavedStudioProject {
   markers?: TimelineMarker[];
 }
 
+// [TSK-TABS-P2] Hàm huỷ backend của hàng đợi — đặt 1 LẦN khi nạp module. Chỉ job
+// `running` mới gọi tới đây (job `queued` chỉ bị bỏ khỏi hàng, không có gì để huỷ).
+jobQueue.setCancelHandler(async () => {
+  const isTauri =
+    typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
+  if (isTauri) await sublix.dubbingCancel();
+});
+
+/** [TSK-TABS-P2] Thân các việc nặng — chạy trong slot của `jobQueue` (xem `runHeavy`). */
+interface HeavyImpls {
+  stt: (forceRange?: boolean) => Promise<SubtitleItem[] | null>;
+  translate: (inputSegs?: SubtitleItem[], forceRange?: boolean) => Promise<void>;
+  voice: (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>) => Promise<void>;
+  analysis: (forceRange?: boolean, dubImmediately?: boolean, forceTranslate?: boolean) => Promise<void>;
+  exportVideo: () => Promise<void>;
+}
+
 export default function SublixStudioView({
   appVersion,
   onNavigateTab,
@@ -894,6 +919,9 @@ export default function SublixStudioView({
       status: "running",
       fileName: currentName,
       targetTab: "studio",
+      tabId,
+      sourcePath: filePath || undefined,
+      runId: slotRunIdRef.current ?? undefined,
       ...payload,
     } as StudioTaskUpdatePayload);
   };
@@ -1175,6 +1203,14 @@ export default function SublixStudioView({
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analyzeProgress, setAnalyzeProgress] = useState<number>(0);
   const [analyzeMessage, setAnalyzeMessage] = useState<string>("");
+  // [TSK-TABS-P2] Vị trí của tab này trong hàng đợi việc nặng (1 = kế tiếp; null = không xếp hàng).
+  const [queuedPosition, setQueuedPosition] = useState<number | null>(null);
+  /** runId của job đang GIỮ SLOT của instance này (null = không giữ). */
+  const slotRunIdRef = useRef<string | null>(null);
+  /** runId các job đã bị huỷ lúc đang chạy ⇒ vòng lặp frontend (TTS, dịch lô) phải dừng. */
+  const abortedRunsRef = useRef<Set<string>>(new Set());
+  /** Bản MỚI NHẤT của các hàm thân việc nặng (job xếp hàng chạy sau ⇒ tránh closure cũ). */
+  const heavyImplsRef = useRef<HeavyImpls | null>(null);
 
   // R2-03 & R2-D: Real audio peaks and filmstrip video thumbnails
   const [audioPeaks, setAudioPeaks] = useState<number[]>(
@@ -1481,8 +1517,8 @@ export default function SublixStudioView({
   useEffect(() => {
     if (!onStatus) return;
     const payload: StudioTabStatus = {
-      busy: isAnalyzing ? "running" : "idle",
-      percent: Math.max(0, Math.min(100, Math.round(analyzeProgress))),
+      busy: queuedPosition !== null ? "queued" : isAnalyzing || isExporting ? "running" : "idle",
+      percent: Math.max(0, Math.min(100, Math.round(isExporting && !isAnalyzing ? exportProgress : analyzeProgress))),
       dirty: false, // Studio tự autosave vào cache ⇒ không cần cờ "chưa lưu"
       title: fileName || filePath.split(/[\\/]/).pop() || "Video mới",
       path: filePath,
@@ -1500,7 +1536,7 @@ export default function SublixStudioView({
         statusTimerRef.current = null;
       }
     };
-  }, [onStatus, tabId, isAnalyzing, analyzeProgress, fileName, filePath]);
+  }, [onStatus, tabId, isAnalyzing, isExporting, queuedPosition, exportProgress, analyzeProgress, fileName, filePath]);
 
   // R5-01: cleanup loadedMetadataTimer khi component unmount hoặc đổi file
   // (tránh setState sau khi component đã unmount → React warning).
@@ -3760,6 +3796,7 @@ export default function SublixStudioView({
           srcLang,
           targetLang,
           filePath?.trim() || undefined,
+          makeTaskRunId("retranslate", Date.now()), // có run_id ⇒ tab khác không lẫn phase
         );
         const hit = results[0];
         if (!hit || hit.failed || !hit.translated) {
@@ -4546,11 +4583,13 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 1 — CHỈ TRÍCH XUẤT PHỤ ĐỀ (STT ONLY / SUB GỐC)
   // =========================================================================
-  const handleRunSttOnly = async (forceRange?: boolean): Promise<SubtitleItem[] | null> => {
+  const runSttOnlyImpl = async (forceRange?: boolean): Promise<SubtitleItem[] | null> => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return null;
     }
+    // [TSK-TABS-P2] Id lượt chạy của slot đang giữ — lọc sự kiện + gửi xuống backend.
+    const runId = slotRunIdRef.current ?? undefined;
     setIsAnalyzing(true);
     setTimelineProcessType("stt");
     setTimelineProgress(10);
@@ -4599,6 +4638,7 @@ export default function SublixStudioView({
     let unlisten: (() => void) | null = null;
     try {
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
+        if (isForeignRun(event.payload.run_id, runId)) return;
         let pct = event.payload.percent;
         let msg = event.payload.message;
 
@@ -4700,7 +4740,8 @@ export default function SublixStudioView({
           durLimit,
           startOffset,
           1, // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
-          preferExistingSrt
+          preferExistingSrt,
+          runId,
         );
       }
 
@@ -4827,7 +4868,9 @@ export default function SublixStudioView({
   // =========================================================================
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 2 — CHỈ DỊCH THUẬT (TRANSLATE ONLY / LLM)
   // =========================================================================
-  const handleRunTranslateOnly = async (inputSegs?: SubtitleItem[], forceRange?: boolean) => {
+  const runTranslateOnlyImpl = async (inputSegs?: SubtitleItem[], forceRange?: boolean): Promise<void> => {
+    // [TSK-TABS-P2] Id lượt chạy của slot — gửi xuống backend để `translate:progress` lọc đúng tab.
+    const runId = slotRunIdRef.current ?? undefined;
     const activeSegs = inputSegs && inputSegs.length > 0 ? inputSegs : segments;
     if (activeSegs.length === 0) {
       showToast("⚠ Chưa có câu thoại nào để dịch! Hãy chạy 'Chỉ Làm Sub' trước.");
@@ -4904,6 +4947,7 @@ export default function SublixStudioView({
             // [TSK-STUDIO-GLOSSARY] Truyền project → backend dùng bảng thuật ngữ
             // của dự án (`<video>.sublix-glossary.json`) làm ràng buộc CỨNG.
             filePath?.trim() || undefined,
+            runId,
           );
           const ctxFailed = ctxResults.filter((r) => r.failed || !r.translated).length;
           const ctxById = new Map(ctxResults.map((r) => [r.id, r]));
@@ -4971,6 +5015,8 @@ export default function SublixStudioView({
       let failedCount = 0;
 
       for (let i = 0; i < total; i += BATCH_SIZE) {
+        // Đã bị Dừng (job huỷ lúc đang chạy) ⇒ thôi dịch tiếp, nhả slot sớm.
+        if (runId && abortedRunsRef.current.has(runId)) return;
         const chunk = targetSegs.slice(i, i + BATCH_SIZE);
         const texts = chunk.map((s) => s.original);
 
@@ -5087,7 +5133,8 @@ export default function SublixStudioView({
   // ROUND-8 & ROUND-14: CÔNG ĐOẠN 3 — CHỈ TẠO GIỌNG ĐỌC / TTS (VOICE ONLY)
   // =========================================================================
   // onlyIds: chỉ tạo tiếng cho đúng các id này (dùng sau khi bóc tách vùng → chỉ câu MỚI, không đụng câu ngoài vùng)
-  const handleRunVoiceOnly = async (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>) => {
+  const runVoiceOnlyImpl = async (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>): Promise<void> => {
+    const runId = slotRunIdRef.current ?? undefined;
     const allSegs = overrideSegs || segmentsRef.current || segments;
     // [TSK-TABS-3.5] Chụp video TRƯỚC vòng lặp TTS → nếu đổi video thì bỏ tiếng
     // đã tạo (không ghi đè video mới).
@@ -5151,6 +5198,8 @@ export default function SublixStudioView({
       let ttsFailedCount = 0;
 
       for (let i = 0; i < total; i++) {
+        // Đã bị Dừng (job huỷ lúc đang chạy) ⇒ thôi tạo tiếp, nhả slot sớm.
+        if (runId && abortedRunsRef.current.has(runId)) break;
         const seg = targetSegs[i];
         // Câu dịch lỗi → KHÔNG tạo lồng tiếng (tránh đọc nhãn lỗi hoặc đọc nhầm
         // text gốc cho một câu chưa có bản dịch).
@@ -5216,6 +5265,9 @@ export default function SublixStudioView({
         );
       }
 
+      // Dừng giữa chừng: giữ phần đã tạo, KHÔNG báo "hoàn tất".
+      if (runId && abortedRunsRef.current.has(runId)) return;
+
       setTimelineProgress(100);
       setAnalyzeProgress(100);
       setTimelineProcessMessage("Hoàn tất tạo giọng đọc!");
@@ -5264,11 +5316,13 @@ export default function SublixStudioView({
   // ROUND-8: 1-CLICK TOÀN BỘ PIPELINE (STT + DIARIZATION + TRANSLATION + VOICE)
   // =========================================================================
   // forceTranslate: lệnh menu "Bóc tách + dịch + lồng tiếng vùng" luôn dịch, không phụ thuộc switch "Dịch phụ đề".
-  const handleRunAnalysis = async (forceRange?: boolean, dubImmediately: boolean = false, forceTranslate: boolean = false) => {
+  const runAnalysisImpl = async (forceRange?: boolean, dubImmediately: boolean = false, forceTranslate: boolean = false): Promise<void> => {
     if (!filePath) {
       showToast("⚠ Vui lòng mở hoặc kéo thả video trước khi phân tích");
       return;
     }
+    // [TSK-TABS-P2] Id lượt chạy của slot — lọc sự kiện + gửi xuống backend.
+    const runId = slotRunIdRef.current ?? undefined;
     setIsAnalyzing(true);
     setTimelineProcessType(dubImmediately ? "pipeline" : "stt");
     setAnalyzeProgress(5);
@@ -5306,12 +5360,14 @@ export default function SublixStudioView({
     if (rawRange && range && (range.start < rawRange.start - 0.01 || range.end > rawRange.end + 0.01)) {
       showToast(`ℹ️ Vùng được nới ra ${formatTimecode(range.start)} ➔ ${formatTimecode(range.end)} để không cắt ngang câu ở mép`);
     }
-    let analysisFailed = false;
+    // Bước TTS nối tiếp (dubImmediately) đã nhận quyền nhả cờ `isAnalyzing` chưa.
+    let voiceTookOver = false;
 
     let unlisten: (() => void) | null = null;
     try {
       await handleSaveProviderConfig();
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
+        if (isForeignRun(event.payload.run_id, runId)) return;
         setAnalyzeProgress(event.payload.percent);
         setTimelineProgress(event.payload.percent);
         setAnalyzeMessage(event.payload.message);
@@ -5343,7 +5399,8 @@ export default function SublixStudioView({
         durLimit,
         startOffset,
         expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined,
-        preferExistingSrt
+        preferExistingSrt,
+        runId,
       );
 
       // Video đã đổi trong lúc phân tích ⇒ bỏ kết quả (không ghi đè video mới).
@@ -5531,17 +5588,21 @@ export default function SublixStudioView({
 
         if (dubImmediately) {
           showToast(`⚡ Đã phân tích xong ${newCount} câu thoại${rangeNote}. Bắt đầu tổng hợp giọng đọc...`);
-          setTimeout(() => {
+          // [TSK-TABS-P2] AWAIT bước TTS (trước đây `void` + setTimeout) ⇒ chuỗi
+          // phân tích → TTS giữ MỘT slot liền mạch; job tab khác không chen vào giữa.
+          await new Promise<void>((resolve) => setTimeout(resolve, 350));
+          if (!(runId && abortedRunsRef.current.has(runId))) {
             // Theo vùng: chỉ đọc ĐÚNG các câu mới (id sau khi ghép) — không đụng câu ngoài vùng
-            void handleRunVoiceOnly(forceRange, allAfter, newIdSet);
-          }, 350);
+            voiceTookOver = true;
+            await handleRunVoiceOnly(forceRange, allAfter, newIdSet);
+          }
         } else {
           showToast(`✅ Đã phân tích xong ${newCount} câu & ${mappedSpeakers.length} vai${rangeNote}! Vui lòng xem lại vai diễn, chọn giọng rồi bấm "Bắt Đầu Lồng Tiếng".`);
         }
       }
     } catch (err) {
       console.error("Analysis backend error:", err);
-      analysisFailed = true;
+      voiceTookOver = false; // lỗi ném ra ⇒ không còn bước nối tiếp nào giữ cờ
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes("hủy") || errMsg.includes("cancel") || errMsg.includes("dừng")) {
         setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
@@ -5567,8 +5628,8 @@ export default function SublixStudioView({
       if (unlisten) {
         unlisten();
       }
-      // dubImmediately: bước TTS nối tiếp sẽ tự nhả cờ — nhưng nếu phân tích LỖI thì không có bước nối tiếp → phải nhả ở đây
-      if (!dubImmediately || analysisFailed) {
+      // Bước TTS nối tiếp tự nhả cờ; MỌI đường thoát khác (lỗi, đổi video, bị Dừng, không có project) phải nhả ở đây (BUG-081).
+      if (!voiceTookOver) {
         setTimeout(() => {
           setIsAnalyzing(false);
           setTimelineProcessType(null);
@@ -5577,13 +5638,126 @@ export default function SublixStudioView({
     }
   };
 
-  // Cancel video analysis / dubbing pipeline
+  // ══════════════════════════════════════════════════════════════════════════
+  // [TSK-TABS-P2] HÀNG ĐỢI VIỆC NẶNG — toàn app chỉ 1 job nặng chạy một lúc.
+  //
+  // `runHeavy` bọc thân việc (`run*Impl`) vào `jobQueue`:
+  //  - sinh `runId` TRƯỚC, impl đọc từ `slotRunIdRef` để lọc sự kiện + gửi xuống backend;
+  //  - gọi LỒNG từ bên trong một job đang giữ slot (analysis → voice, workflow nhiều
+  //    bước) ⇒ chạy thẳng, KHÔNG xếp hàng lại (tránh tự kẹt) ⇒ 1 slot liền mạch;
+  //  - slot nhả trong `finally` của job (mọi đường thoát: xong / lỗi / Dừng / đổi video).
+  // ══════════════════════════════════════════════════════════════════════════
+  const jobTabKey = tabId ?? "studio_default";
+
+  // Theo dõi vị trí chờ của tab này (cập nhật khi hàng đợi đổi).
+  useEffect(() => {
+    return jobQueue.subscribe((snap) => {
+      const mine = snap.queued.find((job) => job.tabId === jobTabKey);
+      setQueuedPosition(mine ? mine.position : null);
+    });
+  }, [jobTabKey]);
+
+  // Gỡ instance (đóng tab) giữa lúc đang chạy ⇒ vòng lặp frontend phải dừng.
+  useEffect(() => {
+    return () => {
+      const held = slotRunIdRef.current;
+      if (held) abortedRunsRef.current.add(held);
+    };
+  }, []);
+
+  interface HeavyHooks {
+    /** Vào hàng mà phải chờ (position ≥ 1). */
+    onQueued?: (position: number) => void;
+    /** Job tới lượt chạy (trước khi thân việc tự đặt cờ của nó). */
+    onStart?: () => void;
+    /** Job bị huỷ khi còn xếp hàng (chưa chạy). */
+    onDropped?: () => void;
+  }
+
+  const runHeavy =
+    <A extends unknown[], R>(
+      kind: JobKind,
+      own: (...args: A) => Promise<R>,
+      pick: (impls: HeavyImpls) => (...args: A) => Promise<R>,
+      fallback: R,
+      hooks: HeavyHooks = {},
+    ) =>
+    async (...args: A): Promise<R> => {
+      // Gọi lồng trong job đang giữ slot (chưa bị huỷ) ⇒ chạy thẳng.
+      const held = slotRunIdRef.current;
+      if (held && !abortedRunsRef.current.has(held)) return own(...args);
+
+      const runId = makeTaskRunId(`job_${kind}`, Date.now());
+      let started = false;
+      try {
+        const handle = jobQueue.enqueue({
+          tabId: jobTabKey,
+          runId,
+          kind,
+          run: async () => {
+            started = true;
+            slotRunIdRef.current = runId;
+            hooks.onStart?.();
+            try {
+              // Bản impl MỚI NHẤT (job chờ lâu ⇒ closure lúc bấm đã cũ).
+              const impl = heavyImplsRef.current ? pick(heavyImplsRef.current) : own;
+              return await impl(...args);
+            } finally {
+              // Nhả slot ở MỌI đường thoát (BUG-081).
+              if (slotRunIdRef.current === runId) slotRunIdRef.current = null;
+              abortedRunsRef.current.delete(runId);
+            }
+          },
+        });
+        if (handle.position > 0) hooks.onQueued?.(handle.position);
+        return await handle.done;
+      } catch (err) {
+        if (err instanceof JobCancelledError) {
+          if (started) {
+            // Huỷ lúc đang chạy: báo cho vòng lặp frontend dừng (còn giữ slot tới khi dừng thật).
+            if (slotRunIdRef.current === runId) abortedRunsRef.current.add(runId);
+          } else {
+            hooks.onDropped?.();
+          }
+          return fallback;
+        }
+        throw err;
+      }
+    };
+
+  const queuedBusyHooks: HeavyHooks = {
+    onQueued: () => {
+      setIsAnalyzing(true);
+      setAnalyzeMessage("Đang chờ lượt…");
+    },
+    onStart: () => {
+      // Thân việc tự đặt lại `isAnalyzing`; nhánh thoát sớm của nó không để cờ kẹt.
+      setIsAnalyzing(false);
+    },
+    onDropped: () => {
+      setIsAnalyzing(false);
+      setAnalyzeMessage("");
+    },
+  };
+
+  const handleRunSttOnly = runHeavy("stt", runSttOnlyImpl, (i) => i.stt, null, queuedBusyHooks);
+  const handleRunTranslateOnly = runHeavy("translate", runTranslateOnlyImpl, (i) => i.translate, undefined, queuedBusyHooks);
+  const handleRunVoiceOnly = runHeavy("voice", runVoiceOnlyImpl, (i) => i.voice, undefined, queuedBusyHooks);
+  const handleRunAnalysis = runHeavy("analyze", runAnalysisImpl, (i) => i.analysis, undefined, queuedBusyHooks);
+
+  /**
+   * Dừng việc CỦA TAB NÀY: job còn xếp hàng ⇒ chỉ bỏ khỏi hàng (KHÔNG gọi `dubbingCancel`);
+   * job đang chạy ⇒ `jobQueue.cancel` gọi `dubbingCancel` đúng 1 lần (xem setCancelHandler).
+   * Không động tới job của tab khác.
+   */
   const handleCancelAnalysis = async () => {
     try {
-      const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
-      if (isTauri) {
-        await sublix.dubbingCancel();
-      }
+      const snap = jobQueue.getState();
+      const mine = [...snap.queued, ...(snap.running ? [snap.running] : [])].filter(
+        (job) => job.tabId === jobTabKey,
+      );
+      for (const job of mine) jobQueue.cancel(job.runId);
+      setIsExporting(false);
       showToast("🛑 Đã gửi lệnh dừng phân tích video.");
       setAnalyzeMessage("Tiến trình đã bị người dùng hủy.");
       setTimelineProcessMessage("Đã hủy");
@@ -5674,7 +5848,7 @@ export default function SublixStudioView({
         // Cache theo GIỌNG ⇒ dùng câu mẫu chung của backend, KHÔNG truyền câu có tên
         // vai (nếu không, vai đầu tiên nghe sẽ "đóng băng" tên mình vào mẫu của giọng).
         try {
-          dataUri = await sublix.voiceSampleEnsure(spkVoice);
+          dataUri = await sublix.voiceSampleEnsureUrl(spkVoice);
         } catch (e) {
           console.warn("voice sample ensure failed:", e);
           dataUri = null;
@@ -5876,9 +6050,9 @@ export default function SublixStudioView({
 
       if (engineKey === "kokoro") {
         if (isTauriEnv) {
-          dataUri = await sublix.voiceSampleData("kokoro-vi", "tuan_ngoc").catch(() => null);
+          dataUri = await sublix.voiceSampleDataUrl("kokoro-vi", "tuan_ngoc").catch(() => null);
           if (!dataUri) {
-            dataUri = await sublix.voiceSampleData("kokoro-vi", "diem_trinh").catch(() => null);
+            dataUri = await sublix.voiceSampleDataUrl("kokoro-vi", "diem_trinh").catch(() => null);
           }
         }
         if (!dataUri && isTauriEnv) {
@@ -6211,11 +6385,13 @@ export default function SublixStudioView({
     setShowExportModal(true);
   };
 
-  const handleConfirmExportVideo = async () => {
+  const runExportImpl = async (): Promise<void> => {
     if (!filePath) {
       showToast("⚠️ Vui lòng mở hoặc kéo thả video trước khi xuất");
       return;
     }
+    // [TSK-TABS-P2] Id lượt chạy của slot — lọc sự kiện + gửi xuống backend.
+    const runId = slotRunIdRef.current ?? undefined;
     setShowExportModal(false);
     setIsExporting(true);
     setExportProgress(5);
@@ -6256,6 +6432,7 @@ export default function SublixStudioView({
       };
 
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
+        if (isForeignRun(event.payload.run_id, runId)) return;
         setExportProgress(event.payload.percent);
         setExportMessage(event.payload.message);
       });
@@ -6263,7 +6440,7 @@ export default function SublixStudioView({
       // [TSK-TABS-3.5] Chụp video TRƯỚC await → nếu đã đổi video thì không gắn kết quả
       // vào video mới, nhưng vẫn báo đường dẫn file đã xuất (file đúng của dự án cũ).
       const startedPath = filePath;
-      const outPath = await sublix.dubbingExport(project);
+      const outPath = await sublix.dubbingExport(project, undefined, runId);
       if (staleProjectNotice(startedPath, filePathRef.current)) {
         showToast(`🎉 Đã xuất xong video cũ (${projectDisplayName(startedPath)}): ${outPath}`);
         return;
@@ -6279,6 +6456,30 @@ export default function SublixStudioView({
       if (unlisten) unlisten();
       setIsExporting(false);
     }
+  };
+
+  // [TSK-TABS-P2] Xuất video cũng đi qua hàng đợi (cùng slot với bóc tách/dịch/TTS).
+  const handleConfirmExportVideo = runHeavy("export", runExportImpl, (i) => i.exportVideo, undefined, {
+    onQueued: () => {
+      setShowExportModal(false);
+      setIsExporting(true);
+      setExportProgress(0);
+      setExportDonePath("");
+      setExportMessage("Đang chờ lượt…");
+    },
+    onStart: () => setIsExporting(false),
+    onDropped: () => {
+      setIsExporting(false);
+      setExportMessage("");
+    },
+  });
+  // Bản MỚI NHẤT của mọi thân việc nặng — job chờ lâu trong hàng sẽ dùng bản này.
+  heavyImplsRef.current = {
+    stt: runSttOnlyImpl,
+    translate: runTranslateOnlyImpl,
+    voice: runVoiceOnlyImpl,
+    analysis: runAnalysisImpl,
+    exportVideo: runExportImpl,
   };
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -6580,7 +6781,6 @@ export default function SublixStudioView({
     if (!isActive) return;
     let alive = true;
     let unlistenProgress: (() => void) | null = null;
-    let unlistenTranslate: (() => void) | null = null;
 
     void listen<ModelDownloadProgressState>("model:download-progress", (event) => {
       if (!alive) return;
@@ -6598,9 +6798,22 @@ export default function SublixStudioView({
       })
       .catch((err) => console.warn("Nghe model:download-progress thất bại:", err));
 
+    return () => {
+      alive = false;
+      if (unlistenProgress) unlistenProgress();
+    };
+  }, [isActive, loadSttEngines]);
+
+  // [TSK-TABS-P2] Phase dịch theo ngữ cảnh: KHÔNG còn cổng `isActive` (tab nền vẫn
+  // nhận tiến độ của việc đang chạy) — lọc theo `run_id` của slot mình thay thế.
+  useEffect(() => {
+    let alive = true;
+    let unlistenTranslate: (() => void) | null = null;
     void listen<TranslateProgress>("translate:progress", (event) => {
       if (!alive) return;
       const payload = event.payload;
+      if (isForeignRun(payload.run_id, slotRunIdRef.current ?? undefined)) return;
+      if (payload.run_id && !slotRunIdRef.current) return; // lượt của instance khác
       if (payload.phase === "reading") {
         setTranslatePhase("🧠 Đọc hiểu kịch bản trước khi dịch…");
       } else if (payload.phase === "translating") {
@@ -6614,13 +6827,11 @@ export default function SublixStudioView({
         else fn();
       })
       .catch((err) => console.warn("Nghe translate:progress thất bại:", err));
-
     return () => {
       alive = false;
-      if (unlistenProgress) unlistenProgress();
       if (unlistenTranslate) unlistenTranslate();
     };
-  }, [isActive, loadSttEngines]);
+  }, []);
 
   /** Chọn engine STT → lưu config ngay (không có nút Lưu). */
   const handleSelectSttEngine = useCallback(async (engineId: string) => {
@@ -7127,7 +7338,7 @@ export default function SublixStudioView({
     setPreviewVoiceId(voiceId);
     setPreviewVoiceStatus("loading");
     try {
-      const dataUri = await sublix.voiceSampleEnsure(voiceId);
+      const dataUri = await sublix.voiceSampleEnsureUrl(voiceId);
       if (token !== voicePreviewTokenRef.current) return; // đã bị dừng / thay bằng mẫu khác
       if (!dataUri) {
         showToast("⚠️ Chưa tạo được mẫu cho giọng này (engine chưa sẵn sàng?)");
@@ -7229,6 +7440,7 @@ export default function SublixStudioView({
       glossarySuggestEstimateSec,
       running: isAnalyzing,
       runningLabel: analyzeMessage,
+      queuedPosition,
       openStep: pipelineOpenStep,
       hasRange: inPoint !== null && outPoint !== null,
       rangeLabel:
@@ -7284,6 +7496,7 @@ export default function SublixStudioView({
       glossarySuggestEstimateSec,
       isAnalyzing,
       analyzeMessage,
+      queuedPosition,
       pipelineOpenStep,
       inPoint,
       outPoint,
@@ -7496,7 +7709,13 @@ export default function SublixStudioView({
           { id: "process", label: "Tiến trình", icon: <IconClock size={13} /> },
           { id: "models", label: "Cài đặt", icon: <IconSettings size={13} /> },
         ]}
-        statusLabel={isAnalyzing ? analyzeMessage || "Đang xử lý…" : "Sẵn sàng"}
+        statusLabel={
+          queuedPosition !== null
+            ? `Đang chờ #${queuedPosition}`
+            : isAnalyzing
+            ? analyzeMessage || "Đang xử lý…"
+            : "Sẵn sàng"
+        }
         onStatusClick={() => onNavigateTab?.("process")}
         // [UI_R2-8_REVIEW mục 12] Nút 👁 overlay (mockup có) — bật/tắt cửa sổ phụ đề nổi.
         overlay={{
@@ -9897,7 +10116,11 @@ export default function SublixStudioView({
           <div className="studio-modal-box">
             <div className="studio-modal-title">
               <IconClapper size={18} />
-              <span>Đang Xuất Video & Đóng Gói Media...</span>
+              <span>
+                {queuedPosition !== null
+                  ? `Đang chờ lượt #${queuedPosition} để xuất video...`
+                  : "Đang Xuất Video & Đóng Gói Media..."}
+              </span>
             </div>
             <div className="studio-progress-bar-bg">
               <div className="studio-progress-bar-fill" style={{ width: `${exportProgress}%` }} />
@@ -9908,6 +10131,9 @@ export default function SublixStudioView({
             <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 6 }}>
               Vui lòng không đóng cửa sổ trong lúc FFmpeg đang xử lý và đóng gói video...
             </div>
+            <button type="button" className="studio-btn-action-danger" style={{ marginTop: 10 }} onClick={handleCancelAnalysis}>
+              {queuedPosition !== null ? "Hủy chờ" : "■ Dừng xuất"}
+            </button>
           </div>
         </div>
       )}

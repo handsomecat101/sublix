@@ -148,6 +148,8 @@ export interface StudioPipelineState {
   running: boolean;
   /** Nhãn tiến độ khi đang chạy. */
   runningLabel: string;
+  /** Vị trí trong hàng đợi việc nặng (1 = kế tiếp); null = không xếp hàng. */
+  queuedPosition: number | null;
   /** Bước đang mở trong accordion. */
   openStep: PipelineOpenStep;
   /** Có vùng In–Out. */

@@ -11,7 +11,7 @@ import SublixStudioView, {
   type StudioTabStatus,
 } from "../SublixStudioView";
 import { StudioTabStripConnected, StudioTabsContext } from "./StudioTabStrip";
-import { sublix } from "../../lib/tauri";
+import { jobQueue } from "../../lib/studio/jobQueue";
 import {
   MAX_STUDIO_TABS,
   addTab,
@@ -23,7 +23,7 @@ import {
 
 export interface StudioTabsHostProps {
   /** Yêu cầu mở video từ bên ngoài (SettingsView / tab Tiến trình). */
-  openRequest?: { path: string; nonce: number } | null;
+  openRequest?: { path: string; nonce: number; tabId?: string } | null;
   /** Video mở sẵn (tab đầu tiên khi vào Studio). */
   initialPath?: string;
   /** Báo tổng việc đang chạy lên trên (ô trạng thái topbar). */
@@ -228,13 +228,14 @@ function StudioTabsHostInner({
   const confirmClose = useCallback(() => {
     if (!dialog) return;
     if (dialog.kind === "busy") {
-      // Dừng việc của tab rồi đóng. Instance bị gỡ NGAY trong lượt này nên effect
-      // `cancelRequest` của nó không kịp chạy ⇒ host tự gửi lệnh huỷ backend.
-      // (P1 chưa có hàng đợi: lệnh huỷ là toàn cục — P2 sẽ huỷ đúng job của tab.)
-      const isTauri =
-        typeof window !== "undefined" &&
-        Boolean((window as any).__TAURI_INTERNALS__ || (window as any).__TAURI__);
-      if (isTauri) void sublix.dubbingCancel().catch(() => {});
+      // Dừng việc CỦA TAB NÀY rồi đóng. Instance bị gỡ NGAY trong lượt này nên effect
+      // `cancelRequest` của nó không kịp chạy ⇒ host huỷ thẳng qua hàng đợi theo tabId:
+      // job `queued` ⇒ chỉ bỏ khỏi hàng; job `running` ⇒ hàng đợi gọi `dubbingCancel`
+      // (không động tới job của tab khác).
+      const snap = jobQueue.getState();
+      for (const job of [...snap.queued, ...(snap.running ? [snap.running] : [])]) {
+        if (job.tabId === dialog.tabId) jobQueue.cancel(job.runId);
+      }
       cancelNonceRef.current[dialog.tabId] = (cancelNonceRef.current[dialog.tabId] ?? 0) + 1;
       setTabs((prev) =>
         prev.map((tab) =>
@@ -273,7 +274,13 @@ function StudioTabsHostInner({
     if (!openRequest) return;
     if (openRequest.nonce === lastOpenNonceRef.current) return;
     lastOpenNonceRef.current = openRequest.nonce;
-    openVideo(openRequest.path);
+    // "Mở lại trong Studio": tab của tác vụ còn ⇒ nhảy đúng tab; đã đóng ⇒ mở lại từ video gốc.
+    const wanted = openRequest.tabId;
+    if (wanted && stateRef.current.tabs.some((tab) => tab.id === wanted)) {
+      setActiveId(wanted);
+      return;
+    }
+    if (openRequest.path) openVideo(openRequest.path);
   }, [openRequest, openVideo]);
 
   /** Instance báo trạng thái → cập nhật tab (chỉ số liệu nhẹ). */

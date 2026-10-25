@@ -58,7 +58,9 @@ function StudioPipelinePanelInner({
     state.workflowTranslate ? "Dịch" : null,
     state.workflowVoice ? "Lồng tiếng" : null,
   ].filter((x): x is string => x !== null);
-  const runLabel = state.running
+  const runLabel = state.queuedPosition !== null
+    ? `■ Hủy chờ — Đang chờ #${state.queuedPosition}`
+    : state.running
     ? `■ Dừng — ${state.runningLabel || "đang xử lý"}`
     : enabledSteps.length > 0
     ? `▶ Chạy ${enabledSteps.length} bước đã bật`

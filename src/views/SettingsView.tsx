@@ -26,6 +26,7 @@ import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
 // [TSK-TABS-P1] Host tab Studio (mount-all) — thay cho 1 instance `<SublixStudioView>`.
 import StudioTabsHost from "./studio/StudioTabsHost";
+import { resolveProgressTaskKey } from "../lib/studio/runRouting";
 import DownloaderView from "./DownloaderView";
 import { StudioShell } from "./StudioShell";
 // TSK-UI-REDESIGN-R2-7B: tab Live + Lịch sử tách riêng (UI_REDESIGN_PLAN §4.5/§4.6).
@@ -153,8 +154,22 @@ export default function SettingsView() {
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
   const [pendingStudioPath, setPendingStudioPath] = useState<string>("");
   // [TSK-TABS-P1] Yêu cầu mở video cho host (tab mới / nhảy tab cùng path).
-  const [studioOpenRequest, setStudioOpenRequest] = useState<{ path: string; nonce: number } | null>(null);
+  const [studioOpenRequest, setStudioOpenRequest] = useState<{ path: string; nonce: number; tabId?: string } | null>(null);
   const studioOpenNonceRef = useRef(0);
+
+  /**
+   * [TSK-TABS-P2] "Mở lại trong Studio" từ tab Tiến trình / toast nổi: nhảy đúng tab
+   * đã chạy tác vụ; tab đã đóng ⇒ host mở lại từ `sourcePath` (video gốc).
+   */
+  const handleOpenStudioTask = (target: { tabId?: string; sourcePath?: string; outputPath?: string }) => {
+    studioOpenNonceRef.current += 1;
+    setStudioOpenRequest({
+      path: (target.sourcePath ?? "").replace(/\//g, "\\").trim(),
+      tabId: target.tabId,
+      nonce: studioOpenNonceRef.current,
+    });
+    setActiveTab("studio");
+  };
 
   const handleRouteToStudio = (path: string) => {
     const safe = path ? path.replace(/\//g, "\\").trim() : "";
@@ -314,12 +329,25 @@ export default function SettingsView() {
   // [TSK-FIX-BUG-R2-8-01] Id lần chạy của luồng "tạo phụ đề" (file_sub:progress).
   const fileSubRunIdRef = useRef<string | null>(null);
 
+  // [TSK-TABS-P2] `run_id` của job Studio → id tác vụ trong tab Tiến trình. Nhiều tab
+  // chạy xen kẽ ⇒ sự kiện `dubbing:progress` khoá theo `run_id` thay vì "lượt hiện tại".
+  const runTaskMapRef = useRef<Map<string, string>>(new Map());
+
   const handleStudioTaskUpdate = (task: any) => {
     const taskId: string =
       (typeof task?.id === "string" && task.id.trim()) ||
       currentRunIdRef.current ||
       makeTaskRunId("dubbing", Date.now());
     currentRunIdRef.current = taskId;
+    if (typeof task?.runId === "string" && task.runId) {
+      runTaskMapRef.current.set(task.runId, taskId);
+    }
+    if (task.status === "completed" || task.status === "error" || task.status === "idle") {
+      // Gọn bảng ánh xạ: bỏ mọi run_id trỏ về tác vụ đã kết thúc.
+      for (const [rid, tid] of runTaskMapRef.current) {
+        if (tid === taskId) runTaskMapRef.current.delete(rid);
+      }
+    }
     if (task.status === "idle") {
       setGlobalTasks((prev) => {
         if (!prev[taskId]) return prev;
@@ -349,6 +377,8 @@ export default function SettingsView() {
           completedAt: Date.now(),
           targetTab: "studio",
           outputPath: task.outputPath || existing?.outputPath,
+          tabId: task.tabId || existing?.tabId,
+          sourcePath: task.sourcePath || existing?.sourcePath,
         };
         saveToProcessHistory(completedTask);
         const next = { ...prev };
@@ -379,6 +409,8 @@ export default function SettingsView() {
           startedAt: existing?.startedAt || Date.now() - 5000,
           completedAt: Date.now(),
           targetTab: "studio",
+          tabId: task.tabId || existing?.tabId,
+          sourcePath: task.sourcePath || existing?.sourcePath,
         };
         saveToProcessHistory(errorTask);
         const next = { ...prev };
@@ -410,6 +442,8 @@ export default function SettingsView() {
           startedAt: existing?.startedAt || Date.now(),
           targetTab: "studio",
           outputPath: task.outputPath || existing?.outputPath,
+          tabId: task.tabId || existing?.tabId,
+          sourcePath: task.sourcePath || existing?.sourcePath,
         },
       };
     });
@@ -658,8 +692,17 @@ export default function SettingsView() {
       // [TSK-FIX-BUG-R2-8-01] Tiến trình backend thuộc về lượt chạy hiện tại ⇒ dùng
       // CHUNG id với Studio (trước đây là hằng "dubbing_active" ⇒ nhiều mục trùng id
       // trong lịch sử ⇒ React key trùng ở tab Tiến trình).
-      const taskId = currentRunIdRef.current || makeTaskRunId("dubbing", Date.now());
-      currentRunIdRef.current = taskId;
+      // [TSK-TABS-P2] Có `run_id` ⇒ khoá theo lượt đó (đúng tab đang chạy), KHÔNG dùng
+      // "lượt hiện tại" (có thể của tab khác). Thiếu `run_id` ⇒ hành vi cũ.
+      // Lượt chưa đăng ký tác vụ (vd xuất video — không gọi onTaskUpdate) ⇒ dùng chính run_id làm id.
+      const routed = resolveProgressTaskKey(p.run_id, runTaskMapRef.current, currentRunIdRef.current);
+      const taskId = routed.taskId || makeTaskRunId("dubbing", Date.now());
+      if (!routed.keyedByRun) currentRunIdRef.current = taskId;
+      const endRun = () => {
+        // Lượt kết thúc ⇒ lượt sau có id mới (chỉ xoá nếu đúng lượt "hiện tại").
+        if (currentRunIdRef.current === taskId) currentRunIdRef.current = null;
+        if (p.run_id) runTaskMapRef.current.delete(p.run_id);
+      };
       if (p.stage === "done" || p.percent >= 100) {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -683,8 +726,7 @@ export default function SettingsView() {
           }
           return prev;
         });
-        // Lượt chạy kết thúc ⇒ lượt sau sẽ có id mới.
-        currentRunIdRef.current = null;
+        endRun();
       } else if (p.stage === "error") {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -701,8 +743,7 @@ export default function SettingsView() {
           }
           return prev;
         });
-        // Lượt chạy lỗi ⇒ lượt sau sẽ có id mới.
-        currentRunIdRef.current = null;
+        endRun();
       } else {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -739,6 +780,8 @@ export default function SettingsView() {
               startedAt: existing?.startedAt || Date.now(),
               targetTab: "studio",
               outputPath: existing?.outputPath,
+              tabId: existing?.tabId,
+              sourcePath: existing?.sourcePath,
             },
           };
         });
@@ -2350,6 +2393,7 @@ export default function SettingsView() {
           historyTasks={processHistory}
           onNavigateToTab={(t) => setActiveTab((t === "file_sub" || t === "dubbing") ? "studio" : (t as any))}
           onClearHistory={handleClearProcessHistory}
+          onOpenStudioTask={handleOpenStudioTask}
           sttServerEngine={sttServerEngine}
           transEnginePref={transEnginePref}
         />
@@ -2377,6 +2421,10 @@ export default function SettingsView() {
           <div
             className="floating-task-toast"
             onClick={() => {
+              if (primaryTask.targetTab === "studio" && primaryTask.tabId) {
+                handleOpenStudioTask({ tabId: primaryTask.tabId, sourcePath: primaryTask.sourcePath });
+                return;
+              }
               setActiveTab((primaryTask.targetTab === "file_sub" || primaryTask.targetTab === "dubbing") ? "studio" : primaryTask.targetTab);
             }}
             title="Bấm để chuyển ngay đến tab đang xử lý"

@@ -12,3 +12,4 @@ import "./tabsModel.test.ts";
 import "./jobQueue.test.ts";
 import "./sessionStore.test.ts";
 import "./tabShortcuts.test.ts";
+import "./runRouting.test.ts";
