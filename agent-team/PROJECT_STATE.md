@@ -54,7 +54,6 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| `TSK-STUDIO-GLOSSARY` | Gắn **Bảng thuật ngữ + xưng hô** vào bước "Dịch" của Studio (editor + gợi ý từ kịch bản + tô vàng câu vi phạm) | **Mavis/mcode (Orca worker)** | 🔴 HIGH | 🟡 Đang làm (khóa 2026-10-25) | `src/views/SublixStudioView.tsx`, `src/views/studio/**`, `src/lib/tauri.ts` (wrapper glossary + projectPath), `src/lib/timeline/glossary.ts` (mới), `scripts/timeline-tests/**` |
 | `TSK-FEAT-GLOSSARY-PRONOUN` | Bảng **thuật ngữ + xưng hô** do người dùng duyệt (thay bảng LLM tự bịa): lưu theo dự án + fallback config, lệnh `glossary_get/set/suggest`, ràng buộc CỨNG trong prompt, hậu kiểm vi phạm `glossary_violation`, component `GlossaryEditor` độc lập | **mcode #2 (Orca worker)** | 🔴 HIGH |  ✅ Xong 2026-10-25  | `src-tauri/src/translate/glossary*.rs` (mới) · `translate/contextual*.rs` · `translate/mod.rs` · `config.rs` · `lib.rs` · `src/components/glossary/**` (mới) · `src/lib/tauri.ts` · `src/lib/types.ts` |
 | `TSK-REFACTOR-GLOSSARY-300` | Tách 2 file > 300 dòng (không đổi hành vi): `glossary.rs` 366→272 (+ `glossary_prompt.rs`), `contextual_run.rs` 336→165 (+ `contextual_chunk.rs`, `contextual_verify.rs`) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src-tauri/src/translate/{glossary,glossary_prompt,contextual_run,contextual_chunk,contextual_verify}.rs` + `translate/mod.rs` — **chưa commit** |
 
@@ -72,6 +71,8 @@
 ---
 
 ## ✅ Task Hoàn Thành (1 dòng / task)
+
+| `TSK-STUDIO-GLOSSARY` | Gắn **bảng thuật ngữ + xưng hô** vào bước "Dịch" của Studio: drawer `GlossaryEditor`, nạp `glossary_get(projectPath)`, lưu `glossary_set` debounce 400ms, gợi ý "từ kịch bản" (không tự ghi), câu vi phạm tô vàng + tooltip + menu "Dịch lại câu này", `translate_script_contextual` truyền `projectPath` | **Mavis/mcode (Orca worker)** | 🔴 HIGH | ✅ Xong 2026-10-25 | `src/views/SublixStudioView.tsx` · `src/views/studio/{StudioGlossaryDrawer,StudioPipelinePanel,StudioTranslateOptions,studioPipelineTypes}` + `StudioPipelinePanel.css` · `src/lib/timeline/glossary.ts` (mới) · `src/lib/tauri.ts` (wrapper + `projectPath`) · `scripts/timeline-tests/glossary.test.ts` — `node --test` **121/121**, `tsc` 0 lỗi, `npm run build` OK, GUI instance riêng **19/19** + E2E (Ollama) PASS — **chưa commit** |
 
 | `TSK-DUBBING-STT-ENGINE` | Pipeline lồng tiếng dùng engine STT đã chọn trong config (`stt_asr_engine`; rỗng = whisper): model đã tải → dùng engine sherpa, chưa tải/lỗi → rơi về Whisper + tracing + event cảnh báo; ngôn ngợ nguồn cho engine khi được hỗ trụ; tách test `proc_kill.rs` ra file riêng | **mcode #3 (Orca worker)** | 🔴 HIGH | ✅ Xong 2026-10-25 | `src-tauri/src/dubbing/stt_select.rs` (mới, 203 dòng) + `stt_select_tests.rs` · `src-tauri/src/dubbing/mod.rs` (nối `dubbing_analyze`) · `src-tauri/src/proc_kill.rs` (441 → 253) + `proc_kill_tests.rs` — `cargo test --lib` **231/231**, `cargo build --examples` OK, test thật e2e SenseVoice trên clip Trung PASS, **không commit** |
 

@@ -324,11 +324,13 @@ export const sublix = {
     lines: ScriptLine[],
     sourceLang: string,
     targetLang: string,
+    projectPath?: string,
   ): Promise<ContextualLine[]> {
     return await invoke<ContextualLine[]>("translate_script_contextual", {
       lines,
       sourceLang,
       targetLang,
+      projectPath: projectPath ?? null,
     });
   },
 

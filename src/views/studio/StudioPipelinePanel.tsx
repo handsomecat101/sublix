@@ -5,6 +5,11 @@ import { SplitButton } from "../../components/ui/SplitButton";
 import StudioVoiceStep from "./StudioVoiceStep";
 import StudioTranslateOptions from "./StudioTranslateOptions";
 import StudioSttEnginePicker from "./StudioSttEnginePicker";
+import StudioGlossaryDrawer from "./StudioGlossaryDrawer";
+import type { Glossary } from "../../lib/types";
+
+/** Bảng rỗng dùng chung (không tạo object mới mỗi render → giữ React.memo của drawer). */
+const EMPTY_GLOSSARY: Glossary = { terms: [], pronouns: [], locked: false };
 import { formatDuration } from "../../lib/timeline/estimate";
 import {
   PIPELINE_STEPS,
@@ -46,7 +51,6 @@ function StudioPipelinePanelInner({
   advancedExtra,
 }: StudioPipelinePanelProps) {
   const [runMenuOpen, setRunMenuOpen] = useState(false);
-  const [glossaryDraft, setGlossaryDraft] = useState("");
 
   // Số bước đang bật → nhãn nút chạy.
   const enabledSteps = [
@@ -279,10 +283,24 @@ function StudioPipelinePanelInner({
                 contextual={state.contextualTranslate}
                 onContextualChange={api.setContextualTranslate}
                 provider={state.translateProvider}
+                glossaryHint={state.glossaryHint}
               />
               {state.translatePhase ? (
                 <div className="spp-estimate live">{state.translatePhase}</div>
               ) : null}
+              {/* [TSK-STUDIO-GLOSSARY] Nút mở bảng thuật ngữ + xưng hô đã duyệt. */}
+              <div className="spp-field">
+                <span className="spp-label">Thuật ngữ &amp; xưng hô</span>
+                <button
+                  type="button"
+                  className="spp-glossary-btn"
+                  onClick={() => api.openGlossary()}
+                  title="Mở bảng thuật ngữ + xưng hô (tự động lưu, không cần bấm Lưu)"
+                >
+                  📖 Thuật ngữ &amp; xưng hô ({state.glossaryCount})
+                  {state.glossaryLocked ? " 🔒" : ""}
+                </button>
+              </div>
               {state.providerLabel ? (
                 <div className="spp-provider-row">
                   <span className="spp-provider-text">
@@ -344,7 +362,9 @@ function StudioPipelinePanelInner({
             <span className="spp-card-num adv-num">⚙</span>
             <div className="spp-card-titles">
               <div className="spp-card-title">Nâng cao</div>
-              <div className="spp-card-sub">Mô hình nhận dạng · Hồ sơ phim</div>
+              {/* [TSK-STUDIO-GLOSSARY] Bảng thuật ngữ + xưng hô đã chuyển sang bước "Dịch"
+                  ⇒ bỏ "Hồ sơ phim" khỏi phụ đề card "Nâng cao". */}
+              <div className="spp-card-sub">Mô hình nhận dạng</div>
             </div>
             <span className="spp-caret">{state.openStep === "advanced" ? "⌄" : "›"}</span>
           </header>
@@ -364,40 +384,8 @@ function StudioPipelinePanelInner({
                   ))}
                 </select>
               </div>
-              <div className="spp-field">
-                <span className="spp-label">Hồ sơ phim (khoá xưng hô)</span>
-                <div className="spp-glossary">
-                  {state.glossary.map((term) => (
-                    <span key={term} className="spp-chip">
-                      {term}
-                      <button
-                        type="button"
-                        className="spp-chip-x"
-                        title="Xoá"
-                        onClick={() => api.removeGlossary(term)}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <input
-                  className="spp-input"
-                  value={glossaryDraft}
-                  placeholder="Cặp tên / xưng hô — Enter để thêm"
-                  onChange={(e) => setGlossaryDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      const term = glossaryDraft.trim();
-                      if (term) {
-                        api.addGlossary(term);
-                        setGlossaryDraft("");
-                      }
-                    }
-                  }}
-                />
-              </div>
+              {/* [TSK-STUDIO-GLOSSARY] Ô chip "Hồ sơ phim" cũ đã bỏ —
+                  thay bằng nút mở GlossaryEditor ở bước "Dịch". */}
               {advancedExtra ? <div className="spp-advanced-extra">{advancedExtra}</div> : null}
             </div>
           ) : null}
@@ -439,6 +427,19 @@ function StudioPipelinePanelInner({
           />
         ) : null}
       </div>
+
+      {/* [TSK-STUDIO-GLOSSARY] Hộp thoại bảng thuật ngữ + xưng hô. */}
+      {state.glossaryOpen ? (
+        <StudioGlossaryDrawer
+          value={state.glossary ?? EMPTY_GLOSSARY}
+          onClose={api.closeGlossary}
+          onChange={api.onGlossaryChange}
+          onSuggest={api.onGlossarySuggest}
+          suggesting={state.glossarySuggesting}
+          suggestEstimateSec={state.glossarySuggestEstimateSec}
+          onSave={api.onGlossarySave}
+        />
+      ) : null}
     </div>
   );
 }

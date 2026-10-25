@@ -1,6 +1,16 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
 
+### 2026-10-25 11:30 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-STUDIO-GLOSSARY` — gắn bảng thuật ngữ + xưng hô vào bước "Dịch" của Studio; **chưa commit**).
+- **Đã làm:** nút **"📖 Thuật ngữ & xưng hô (N)"** ở bước Dịch → drawer bọc `GlossaryEditor` (nạp `glossary_get(projectPath)`, lưu `glossary_set` **debounce 400ms** — không cần bấm Lưu); **"⚡ Gợi ý từ kịch bản"** = 1 lượt đọc hiểu (có tiến trình + ước tính thời gian) và **không tự ghi** (✓ mới nhận); câu vi phạm → **tô vàng** (thẻ phụ đề + khối timeline) + badge/tooltip lý do + menu chuột phải **"🔁 Dịch lại câu này"**; `translate_script_contextual` nay truyền `projectPath` ⇒ backend áp **bảng dự án** làm ràng buộc cứng.
+- **File:** `src/views/SublixStudioView.tsx` · `src/views/studio/{StudioGlossaryDrawer,StudioPipelinePanel,StudioTranslateOptions,studioPipelineTypes}` + `StudioPipelinePanel.css` · `src/lib/timeline/glossary.ts` (mới) · `src/lib/tauri.ts` (wrapper + `projectPath`) · `scripts/timeline-tests/glossary.test.ts`.
+- **Verify:** `node --test scripts/timeline-tests/` **121/121 PASS** · `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** · GUI instance riêng (release build, CDP 9227, identifier riêng + APPDATA riêng) **19/19 PASS**; E2E với Ollama thật: **dịch lại câu ra "mẫu tử tối"** theo bảng dự án (không còn "Dark Templar") + gợi ý LLM hiện dạng ✓/✕.
+- **⚠️ Cần biết:** (1) `GlossaryEditor` (file của worker khác, **không sửa**) có `normalizeGlossary` **xoá dòng trống** ⇒ nút "+ Thêm thuật ngữ" bị nuốt dòng; tôi workaround trong drawer (bắt click phase `capture` rồi chèn lại 1 dòng nháp) — **nên sửa gốc ở `src/components/glossary/glossaryModel.ts`**. (2) Lỗi **backend** (ngoài phạm vi tôi): `glossary_suggest` fail khi LLM trả thuật ngữ dạng **chuỗi cũ** (`"gốc => dịch"`) thay vì object ⇒ mất cả phần xưng hô đã parse được — `ISSUE_LOG.md` `BUG-H21`/`BUG-H22`/`BUG-H23`.
+
+---
+---
+
 ### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-DUBBING-STT-ENGINE` — pipeline lồng tiếng dùng engine STT đã chọn; **không commit**).
 - **Sửa:** module mới `src-tauri/src/dubbing/stt_select.rs` — `dubbing_analyze` đọc config `stt_asr_engine` (backend tự đọc → **không đổi tham số lệnh Tauri, không sửa `src/**`**); engine sherpa + model đã tải → nhận dạng bằng engine đó (SenseVoice/Paraformer/Parakeet), **chưa tải / lỗi → rơi về Whisper** kèm log `tracing` + event `dubbing:progress` để UI toast.
@@ -82,16 +92,7 @@
 ---
 ---
 
-### 2026-10-25 06:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-FEAT-GLOSSARY-PRONOUN` — bảng thuật ngữ + xưng hô **đã duyệt**; **chưa commit, không push**).
-- **Backend:** `translate/glossary.rs` (types + block ràng buộc cứng) · `glossary_store.rs` (file `<project>.sublix-glossary.json` **atomic** + fallback config toàn cục) · `glossary_check.rs` (hậu kiểm tất định, không gọi mạng) · 3 lệnh `glossary_get`/`glossary_set`/`glossary_suggest` (`glossary_suggest` **không tự ghi**) · `contextual.rs` (block ràng buộc đặt TRƯỚC bản tham chiếu; `locked` ⇒ bỏ bảng xưng hô tự sinh) · `config.rs` (+`glossary_table`).
-- **Frontend:** `src/components/glossary/GlossaryEditor.tsx` (component độc lập, props thuần) + `glossaryModel.ts` (logic thuần) + CSS + `scripts/glossary-tests/` (12 test).
-- **Đo thật** (60 câu StarCraft, MiniMax-M3.1-Flash, metric tất định): **CŨ** 29,4s → `nguơi` 3 · **CŨ+glossary** 19,6s → `nguơi` 1 · **MỚI** 46,1s → `nguơi` 11 · **MỚI+glossary** 44,9s → **`nguơi` 0**, `tôi` 42, `anh/ngài` 11, số cách gọi/1 cặp 5→4 · điểm DeepSeek điểm xưng hô **2/5 → 3/5** ố CỪ LÀ CẮ. ⇒ **MỚI + glossary là cấu hình tốt nhất**.
-- **Còn lệch 4–7/60 câu** sau khi áp bảng (model không tuân thủ tuyệt đối) → hậu kiểm gắn `glossary_violation`, UI tô vàng + dịch lại riêng câu 1 lần. Hậu kiểm là **gợi ý**, có báo nhầm (vd "người bạn già" ≠ đại từ) — chấp nhận để PO quyết.
-- **Verify:** `cargo test --lib` **206 pass / 0 fail** / 16 ignored · `npx tsc --noEmit` 0 lỗi · `node --test scripts/glossary-tests/` **12/12** · `cargo build --example bench_translate` OK.
-- **⚠️ Lỗi CÓ SẴN từ commit `c9ccaad` (KHÔNG phải của tôi):** `cargo build --examples` FAIL — `examples/test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` gọi `analyze_and_create_project` (đã đổi thành 7 tham số) với 5 tham số. Cần owner `dubbing/` sửa.
-- **Đề xuất coordinator:** gắn `GlossaryEditor` vào Studio (UI) · cho `translate_script_contextual` nhận `projectPath` để dùng bảng theo dự án · mở nút "Gợi ý từ kịch bản" sau khi bấm "Dịch theo ngữ cảnh".
-
+---
 ---
 
 ---

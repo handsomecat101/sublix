@@ -6,6 +6,7 @@
  */
 import type { ReasoningEffort, TranslateOptions } from "./translateOptions";
 import type { ModelDownloadProgressState } from "../../lib/tauri";
+import type { Glossary, GlossarySuggestion } from "../../lib/types";
 
 /** 5 bước của quy trình (theo thứ tự người dùng làm). */
 export type PipelineStepId = "source" | "sub" | "translate" | "voice" | "export";
@@ -143,8 +144,6 @@ export interface StudioPipelineState {
   voiceOptions: PanelVoiceOption[];
   /** Các vai diễn. */
   roles: PanelRole[];
-  /** Hồ sơ phim (cặp xưng hô). */
-  glossary: string[];
   /** Đang chạy tác vụ nào (null = rảnh). */
   running: boolean;
   /** Nhãn tiến độ khi đang chạy. */
@@ -185,6 +184,20 @@ export interface StudioPipelineState {
   translatePhase: string | null;
   /** Tiến trình tải model STT (null = không tải). */
   sttDownloadProgress?: ModelDownloadProgressState;
+  /** Bảng thuật ngữ + xưng hô (từ backend `glossary_get`). */
+  glossary: Glossary | null;
+  /** Số mục trong bảng (hiển thị "(N)"). */
+  glossaryCount: number;
+  /** Bảng đã khoá hay chưa. */
+  glossaryLocked: boolean;
+  /** Nhắc nhở khi bảng chưa khoá (null = đã khoá, không cần nhắc). */
+  glossaryHint: string | null;
+  /** Hộp thoại bảng thuật ngữ đang mở. */
+  glossaryOpen: boolean;
+  /** Đang chạy "Gợi ý từ kịch bản". */
+  glossarySuggesting: boolean;
+  /** Ước tính giây cho lượt "đọc hiểu" của gợi ý (null = chưa chạy). */
+  glossarySuggestEstimateSec: number | null;
 }
 
 /** Các hành động của panel — truyền từ file cha (state KHÔNG chuyển sang con). */
@@ -220,8 +233,6 @@ export interface StudioPipelineApi {
   runAll: () => void;
   cancel: () => void;
   runRangeOnly: () => void;
-  addGlossary: (term: string) => void;
-  removeGlossary: (term: string) => void;
   openExport: () => void;
   openSettings: () => void;
   /** Chọn model dịch (ghi ngay, không có nút Lưu). */
@@ -238,6 +249,16 @@ export interface StudioPipelineApi {
   cancelSttModelDownload: (engineId: string) => void;
   /** Bật/tắt "Dịch theo ngữ cảnh" (lưu theo provider). */
   setContextualTranslate: (value: boolean) => void;
+  /** Mở hộp thoại bảng thuật ngữ + xưng hô. */
+  openGlossary: () => void;
+  /** Đóng hộp thoại bảng thuật ngữ. */
+  closeGlossary: () => void;
+  /** Bảng thuật ngữ thay đổi (file cha lưu ngay, debounce). */
+  onGlossaryChange: (next: Glossary) => void;
+  /** Bấm "Lưu" trong editor (lưu ngay). */
+  onGlossarySave: (next: Glossary) => void;
+  /** Chạy "Gợi ý từ kịch bản" (gợi ý, KHÔNG tự ghi). */
+  onGlossarySuggest: () => Promise<GlossarySuggestion | null>;
 }
 
 /** Nhãn hiển thị của 5 bước trên rail. */

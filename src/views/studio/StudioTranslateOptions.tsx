@@ -41,6 +41,11 @@ export interface StudioTranslateOptionsProps {
   onContextualChange: (value: boolean) => void;
   /** Provider hiện tại (để biết model local hay cloud). */
   provider: string;
+  /**
+   * [TSK-STUDIO-GLOSSARY] Gợi ý nhỏ cạnh công tắc ngữ cảnh (null = không nhắc).
+   * Thường là: "Khoá bảng xưng hô để dịch nhất quán hơn".
+   */
+  glossaryHint?: string | null;
 }
 
 /** Provider chạy model trên máy → dịch theo ngữ cảnh thường KÉM hơn (đo thật). */
@@ -57,6 +62,7 @@ function StudioTranslateOptionsInner({
   contextual,
   onContextualChange,
   provider,
+  glossaryHint = null,
 }: StudioTranslateOptionsProps) {
   // Công tắc ngữ cảnh — hiện ở MỌI nhánh (kể cả khi backend chưa có lệnh).
   const contextualBlock = (
@@ -74,6 +80,10 @@ function StudioTranslateOptionsInner({
       <span className="spp-hint">
         Đọc hiểu cả kịch bản trước khi dịch → dịch đúng tông giọng, mạch cảnh.
       </span>
+      {/* [TSK-STUDIO-GLOSSARY] Gợi ý nhỏ cạnh công tắc (bảng chưa khoá). */}
+      {glossaryHint ? (
+        <span className="spp-hint spp-glossary-hint">{glossaryHint}</span>
+      ) : null}
       {contextual && LOCAL_PROVIDERS.includes(provider.trim().toLowerCase()) ? (
         <div className="spp-engine-warn">
           <span className="spp-engine-warn-text">

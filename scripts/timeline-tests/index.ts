@@ -24,3 +24,4 @@ import "./autoFollow.test.ts";
 import "./estimate.test.ts";
 import "./history.test.ts";
 import "./ripple.test.ts";
+import "./glossary.test.ts";

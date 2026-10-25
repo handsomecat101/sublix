@@ -17,6 +17,18 @@ import {
 } from "../lib/tauri";
 import type { ScriptLine, TranslateProgress } from "../lib/types";
 import { subtitleSourceLabel } from "../lib/types";
+// [TSK-STUDIO-GLOSSARY] Kiểu bảng thuật ngữ + xưng hô (đọc/ghi qua backend theo project).
+import type { Glossary, GlossarySuggestion } from "../lib/types";
+// [TSK-STUDIO-GLOSSARY] Logic thuần: chuẩn hoá bảng, đối chiếu gợi ý, ước tính thời gian.
+import {
+  diffGlossarySuggestion,
+  estimateGlossarySuggestSeconds,
+  glossaryEntryCount,
+  glossaryLockHint,
+  glossaryViolationClass,
+  normalizeGlossary,
+  stripBlankRows,
+} from "../lib/timeline/glossary";
 import { version as APP_VERSION_PKG } from "../../package.json";
 // R2-3: panel quy trình 5 bước (tách riêng để file này không phình thêm).
 import StudioPipelinePanel from "./studio/StudioPipelinePanel";
@@ -35,6 +47,7 @@ import {
   buildEstimates,
   computeLiveProgress,
   contextualDefaultOn,
+  formatDuration,
   formatLiveProgress,
   loadRateOverrides,
   rateKey,
@@ -178,6 +191,16 @@ export interface SubtitleItem {
   translated: string;
   /** true khi câu này dịch lỗi (nhãn "[Dịch lỗi: ...]" bị loại bỏ, không tạo lồng tiếng). */
   translateFailed?: boolean;
+  /**
+   * [TSK-STUDIO-GLOSSARY] true khi câu này VI PHẠM bảng thuật ngữ / xưng hô đã duyệt
+   * (backend tự kiểm tra tất định, không gọi mạng) → UI tô vàng nhạt.
+   *
+   * Cờ **boolean** + lý do dạng chuỗi ⇒ không phá `React.memo` (không tạo object mới
+   * mỗi render).
+   */
+  glossaryViolation?: boolean;
+  /** Lý do vi phạm (hiện ở tooltip). */
+  glossaryViolationReason?: string | null;
   hasAudio?: boolean;
   audioUrl?: string; // R32: data URI clip tiếng lồng (data:audio/mp3;base64,...)
   audioDuration?: number; // R32: độ dài thật của clip (giây) — dùng để vẽ khối lồng
@@ -304,9 +327,18 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
   onPreFocus,
   onSaveUndoIfChanged,
 }: StudioSegmentCardProps) {
+  // [TSK-STUDIO-GLOSSARY] Câu vi phạm bảng thuật ngữ → tô vàng nhạt + badge lý do.
+  const violationClass = glossaryViolationClass(seg);
   return (
     <div
-      className={`studio-segment-card ${isSelected ? "active" : ""}`}
+      className={`studio-segment-card ${isSelected ? "active" : ""} ${violationClass}`}
+      // [TSK-STUDIO-GLOSSARY] Tô vàng nhạt câu vi phạm bảng thuật ngữ (inline để
+      // không phụ thuộc CSS ngoài phạm vi sửa của task này).
+      style={
+        seg.glossaryViolation
+          ? { borderColor: "rgba(250,204,21,0.65)", background: "rgba(250,204,21,0.07)" }
+          : undefined
+      }
       onClick={() => onSelect(seg)}
     >
       <div className="studio-segment-header-row">
@@ -338,6 +370,25 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
           </button>
         </div>
 
+        {seg.glossaryViolation ? (
+          <span
+            className="studio-segment-glossary-badge"
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 4,
+              whiteSpace: "nowrap",
+              color: "#fde68a",
+              background: "rgba(250,204,21,0.14)",
+              border: "1px solid rgba(250,204,21,0.45)",
+            }}
+            title={`⚠️ Vi phạm bảng thuật ngữ / xưng hô đã duyệt: ${seg.glossaryViolationReason ?? "không rõ lý do"}`}
+          >
+            ⚠️ Thuật ngữ
+          </span>
+        ) : null}
+
         <select
           className="studio-segment-speaker-select"
           style={{ borderColor: spk?.color }}
@@ -362,8 +413,12 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
         type="text"
         className="studio-segment-text-translated"
         style={{
-          background: "rgba(255,255,255,0.03)",
-          border: seg.translateFailed ? "1px solid rgba(248,113,113,0.55)" : "1px solid var(--line-soft)",
+          background: seg.glossaryViolation ? "rgba(250, 204, 21, 0.08)" : "rgba(255,255,255,0.03)",
+          border: seg.translateFailed
+            ? "1px solid rgba(248,113,113,0.55)"
+            : seg.glossaryViolation
+              ? "1px solid rgba(250,204,21,0.6)"
+              : "1px solid var(--line-soft)",
           borderRadius: 4,
           padding: "4px 8px",
           color: "var(--t1)",
@@ -473,21 +528,23 @@ const StudioTimelineSubtitleBlock = memo(function StudioTimelineSubtitleBlock({
   const rawWidth = ((seg.end - seg.start) / totalDur) * timelineWidth;
   const width = Math.max(3, rawWidth);
   const isCompact = width < 30;
+  // [TSK-STUDIO-GLOSSARY] Câu vi phạm bảng thuật ngữ → tô vàng nhạt (class + màu).
+  const violationClass = glossaryViolationClass(seg);
 
   return (
     <div
       key={seg.id}
       data-seg-id={seg.id}
-      className={`studio-timeline-block studio-timeline-subtitle-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""}`}
+      className={`studio-timeline-block studio-timeline-subtitle-block ${isCompact ? "is-compact" : ""} ${isSelected ? "active" : ""} ${isMultiSelected ? "multi-selected" : ""} ${violationClass}`}
       style={{
         left: `${left}px`,
         width: `${width}px`,
-        background: "rgba(45, 212, 191, 0.35)",
-        borderColor: "#2dd4bf",
+        background: violationClass ? "rgba(250, 204, 21, 0.38)" : "rgba(45, 212, 191, 0.35)",
+        borderColor: violationClass ? "#facc15" : "#2dd4bf",
       }}
       onClick={(e) => onBlockClick(seg, e)}
       onMouseDown={(e) => onBlockMouseDown(seg, e)}
-      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}${seg.source ? `  •  Nguồn: ${seg.source === "youtube" ? "Phụ đề YouTube (đã tải)" : "AI tự nhận dạng (Whisper)"}` : ""}  •  Kéo giữa = dời, kéo mép = cắt (Alt = tắt hít)`}
+      title={`[${formatTimecode(seg.start)} → ${formatTimecode(seg.end)}] ${seg.translated || seg.original}${seg.source ? `  •  Nguồn: ${seg.source === "youtube" ? "Phụ đề YouTube (đã tải)" : "AI tự nhận dạng (Whisper)"}` : ""}  •  Kéo giữa = dời, kéo mép = cắt (Alt = tắt hít)${seg.glossaryViolation ? `  •  ⚠️ VI PHẠM THUẬT NGỮ: ${seg.glossaryViolationReason ?? "không rõ lý do"}` : ""}`}
     >
       {!isCompact && (
         <div
@@ -855,7 +912,18 @@ export default function SublixStudioView({
   const [ollamaModel, setOllamaModel] = useState<string>("");
   const [transStyle, setTransStyle] = useState<string>("theatrical");
   // R2-04.3: Glossary starts empty, loaded from AppConfig
-  const [glossary, setGlossary] = useState<string[]>([]);
+  // [TSK-STUDIO-GLOSSARY] Bảng thuật ngữ CŨ dạng chuỗi (config toàn cục) — giữ nguyên
+  // để không mất dữ liệu người dùng; bảng MỚI (thuật ngữ + xưng hô) đọc/ghi qua backend
+  // theo project (`glossary_get` / `glossary_set`).
+  const [legacyGlossary, setLegacyGlossary] = useState<string[]>([]);
+  // [TSK-STUDIO-GLOSSARY] Bảng thuật ngữ + xưng hô đã duyệt (null = chưa nạp).
+  const [glossary, setGlossary] = useState<Glossary | null>(null);
+  /** Hộp thoại bảng thuật ngữ đang mở. */
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  /** Đang chạy "Gợi ý từ kịch bản". */
+  const [glossarySuggesting, setGlossarySuggesting] = useState(false);
+  /** Ước tính giây cho lượt "đọc hiểu" (null = chưa chạy gợi ý). */
+  const [glossarySuggestEstimateSec, setGlossarySuggestEstimateSec] = useState<number | null>(null);
   const [reviewScore, setReviewScore] = useState<number | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string[]>([]);
 
@@ -1109,6 +1177,8 @@ export default function SublixStudioView({
     inPoint: number | null;
     outPoint: number | null;
     segCount: number;
+    /** [TSK-STUDIO-GLOSSARY] Câu nằm dưới con trỏ (menu "Dịch lại câu này"). */
+    segId: number | null;
   }
   const [timelineContextMenu, setTimelineContextMenu] = useState<TimelineContextMenuState | null>(null);
 
@@ -1192,7 +1262,7 @@ export default function SublixStudioView({
       if (cfg.ollama_model) setOllamaModel(cfg.ollama_model);
       if (cfg.target_lang) setTargetLang(cfg.target_lang);
       if (cfg.glossary && Array.isArray(cfg.glossary)) {
-        setGlossary(cfg.glossary);
+        setLegacyGlossary(cfg.glossary);
       }
     }).catch((err) => {
       console.warn("Failed to load initial config:", err);
@@ -1392,7 +1462,7 @@ export default function SublixStudioView({
       cfg.openrouter_model = openrouterModel;
       cfg.minimax_api_key = minimaxKey;
       cfg.minimax_model = minimaxModel;
-      cfg.glossary = glossary;
+      cfg.glossary = legacyGlossary;
       await sublix.saveConfig(cfg);
     } catch (err) {
       console.warn("Could not save config:", err);
@@ -3285,6 +3355,10 @@ export default function SublixStudioView({
     const bounds = getRangeBounds();
     const hasRange = bounds !== null;
 
+    // [TSK-STUDIO-GLOSSARY] Câu nằm dưới con trỏ → menu "Dịch lại câu này".
+    const hitSeg =
+      segmentsRef.current.find((s) => clickTime >= s.start && clickTime < s.end) ?? null;
+
     setTimelineContextMenu({
       visible: true,
       x: e.clientX,
@@ -3294,6 +3368,7 @@ export default function SublixStudioView({
       inPoint: curIn,
       outPoint: curOut,
       segCount: bounds ? segmentsRef.current.filter((s) => isSegInRange(s, bounds.start, bounds.end)).length : 0,
+      segId: hitSeg?.id ?? null,
     });
   };
 
@@ -3330,6 +3405,98 @@ export default function SublixStudioView({
     else if (kind === "translate") void handleRunTranslateOnly(undefined, true);
     else if (kind === "voice") void handleRunVoiceOnly(true);
     else void handleRunAnalysis(true, true, true);
+  };
+
+  /**
+   * [TSK-STUDIO-GLOSSARY] "Dịch lại câu này" — dịch lại **1 câu** (thường là câu đang
+   * vi phạm bảng thuật ngữ / xưng hô đã duyệt).
+   *
+   * - Bật "Dịch theo ngữ cảnh" → gọi `translate_script_contextual` (backend áp bảng
+   *   của project ⇒ câu này sẽ bám bảng đã duyệt).
+   * - Tắt → gọi `translate_batch` cho đúng 1 câu.
+   * - Ghi đè bản dịch của câu đó; các câu khác giữ nguyên.
+   */
+  const handleRetranslateSegment = async (segId: number) => {
+    const seg = segmentsRef.current.find((s) => s.id === segId);
+    if (!seg) {
+      showToast("⚠️ Không tìm thấy câu cần dịch lại.");
+      return;
+    }
+    if (isAnalyzing) {
+      showToast("⏳ Đang có tác vụ AI chạy — hãy chờ xong (hoặc bấm Dừng) rồi thử lại");
+      return;
+    }
+    setIsAnalyzing(true);
+    setTimelineProcessType("translate");
+    setTimelineProgress(10);
+    setAnalyzeProgress(10);
+    const msg = `Đang dịch lại 1 câu (${formatTimecode(seg.start)})...`;
+    setTimelineProcessMessage(msg);
+    setAnalyzeMessage(msg);
+    try {
+      saveTranslationUndo();
+      const srcLang = sttLang === "auto" ? "auto" : sttLang;
+      let translated = "";
+      let violation = false;
+      let reason: string | null = null;
+      if (contextualTranslate) {
+        const speakerNames = new Map(speakersRef.current.map((spk) => [spk.id, spk.name]));
+        const lines: ScriptLine[] = [
+          {
+            id: String(seg.id),
+            speakerId: seg.speakerId,
+            speakerName: speakerNames.get(seg.speakerId),
+            text: seg.original,
+            start: seg.start,
+            end: seg.end,
+          },
+        ];
+        const results = await sublix.translateScriptContextual(
+          lines,
+          srcLang,
+          targetLang,
+          filePath?.trim() || undefined,
+        );
+        const hit = results[0];
+        if (!hit || hit.failed || !hit.translated) {
+          throw new Error("dịch thất bại");
+        }
+        translated = hit.translated;
+        violation = hit.glossaryViolation === true;
+        reason = hit.glossaryViolationReason ?? null;
+      } else {
+        const results = await sublix.translateBatch([seg.original], srcLang, targetLang);
+        translated = (results[0] ?? "").trim();
+        if (!translated) throw new Error("dịch thất bại");
+      }
+      setSegments((prev) =>
+        prev.map((s) =>
+          s.id === segId
+            ? {
+                ...s,
+                translated,
+                translateFailed: false,
+                glossaryViolation: violation,
+                glossaryViolationReason: reason,
+              }
+            : s,
+        ),
+      );
+      setTimelineProgress(100);
+      setAnalyzeProgress(100);
+      showToast(
+        violation
+          ? `🔁 Đã dịch lại câu — vẫn vi phạm bảng thuật ngữ (${reason ?? "không rõ lý do"})`
+          : "🔁 Đã dịch lại câu này.",
+      );
+    } catch (err) {
+      console.warn("Dịch lại 1 câu thất bại:", err);
+      showToast("⚠️ Dịch lại câu này thất bại — bản dịch cũ giữ nguyên.");
+    } finally {
+      setIsAnalyzing(false);
+      setTimelineProgress(100);
+      setAnalyzeProgress(100);
+    }
   };
 
   // Dragging Range Handles on Ruler
@@ -4392,6 +4559,9 @@ export default function SublixStudioView({
             ctxLines,
             sttLang === "auto" ? "auto" : sttLang,
             targetLang,
+            // [TSK-STUDIO-GLOSSARY] Truyền project → backend dùng bảng thuật ngữ
+            // của dự án (`<video>.sublix-glossary.json`) làm ràng buộc CỨNG.
+            filePath?.trim() || undefined,
           );
           const ctxFailed = ctxResults.filter((r) => r.failed || !r.translated).length;
           const ctxById = new Map(ctxResults.map((r) => [r.id, r]));
@@ -4399,8 +4569,18 @@ export default function SublixStudioView({
             prev.map((seg) => {
               const hit = ctxById.get(String(seg.id));
               if (!hit) return seg;
-              if (hit.failed || !hit.translated) return { ...seg, translateFailed: true };
-              return { ...seg, translated: hit.translated, translateFailed: false };
+              if (hit.failed || !hit.translated) {
+                return { ...seg, translateFailed: true, glossaryViolation: false, glossaryViolationReason: null };
+              }
+              // [TSK-STUDIO-GLOSSARY] Gắn cờ vi phạm bảng thuật ngữ (backend tự kiểm tra
+              // tất định) — boolean + chuỗi ⇒ không phá `React.memo`.
+              return {
+                ...seg,
+                translated: hit.translated,
+                translateFailed: false,
+                glossaryViolation: hit.glossaryViolation === true,
+                glossaryViolationReason: hit.glossaryViolationReason ?? null,
+              };
             }),
           );
           setTranslatePhase(null);
@@ -4408,10 +4588,14 @@ export default function SublixStudioView({
           setAnalyzeProgress(100);
           setTimelineProcessMessage("Dịch theo ngữ cảnh hoàn tất!");
           setAnalyzeMessage("Dịch theo ngữ cảnh phụ đề hoàn tất!");
+          // Báo số câu vi phạm bảng (đã duyệt) để người dùng biết cần rà lại.
+          const violations = ctxResults.filter((r) => r.glossaryViolation === true).length;
           showToast(
             ctxFailed > 0
               ? `🧠 Đã dịch theo ngữ cảnh ${ctxResults.length - ctxFailed}/${ctxResults.length} câu — ${ctxFailed} câu lỗi`
-              : `🧠 Đã dịch theo ngữ cảnh xong ${ctxResults.length} câu!`,
+              : violations > 0
+                ? `🧠 Đã dịch theo ngữ cảnh xong ${ctxResults.length} câu — ${violations} câu vi phạm bảng thuật ngữ (tô vàng)`
+                : `🧠 Đã dịch theo ngữ cảnh xong ${ctxResults.length} câu!`,
           );
           notifyTaskUpdate({
             status: "completed",
@@ -6130,6 +6314,151 @@ export default function SublixStudioView({
     return { stepId, text: formatLiveProgress(progress) };
   }, [isAnalyzing, analyzeMessage, pipelineEstimates]);
 
+  /* =========================================================================
+     [TSK-STUDIO-GLOSSARY] BẢNG THUẬT NGỮ + XƯNG HÔ (đã duyệt)
+     -------------------------------------------------------------------------
+     - Nạp: `glossary_get(projectPath)` — file dự án (`<video>.sublix-glossary.json`),
+       không có thì fallback bảng toàn cục trong config.
+     - Ghi: `glossary_set(projectPath, g)` — **debounce ~400ms**, KHÔNG có nút Lưu.
+     - Gợi ý: `glossary_suggest` — 1 lượt "đọc hiểu", **KHÔNG tự ghi** (người dùng ✓).
+     ========================================================================= */
+  /** Bảng hiện tại (ref — handler gọi từ menu chuột phải, không đóng state). */
+  const glossaryRef = useRef<Glossary | null>(glossary);
+  glossaryRef.current = glossary;
+  /** Timer debounce lưu bảng (~400ms). */
+  const glossarySaveTimerRef = useRef<number | null>(null);
+  /** Bảng đang chờ ghi xuống đĩa + project của nó (chốt lúc sửa — đổi file trong lúc
+   *  debounce không được ghi nhầm bảng cũ sang file mới). */
+  const glossaryPendingRef = useRef<{ glossary: Glossary; path: string | undefined } | null>(null);
+
+  /** Đường dẫn "project" của bảng glossary (file cạnh video/SRT). */
+  const glossaryProjectPath = filePath?.trim() || undefined;
+  const glossaryProjectPathRef = useRef<string | undefined>(glossaryProjectPath);
+  glossaryProjectPathRef.current = glossaryProjectPath;
+
+  /** Nạp bảng thuật ngữ của project khi mở file (file dự án → fallback toàn cục). */
+  useEffect(() => {
+    const path = filePath?.trim();
+    if (!path) {
+      setGlossary(null);
+      return;
+    }
+    let cancelled = false;
+    void sublix
+      .glossaryGet(path)
+      .then((g) => {
+        if (cancelled) return;
+        setGlossary(normalizeGlossary(g));
+      })
+      .catch((err) => {
+        console.warn("Không đọc được bảng thuật ngữ:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath]);
+
+  /** Ghi bảng xuống đĩa (backend ghi atomic). Dòng nháp (trống) bị bỏ trước khi ghi. */
+  const persistGlossary = async (next: Glossary | null, path: string | undefined) => {
+    if (!next) return;
+    try {
+      const saved = await sublix.glossarySet(path, stripBlankRows(normalizeGlossary(next)));
+      // Chỉ cập nhật scope/path khi vẫn đang mở đúng project vừa ghi.
+      if (path !== glossaryProjectPathRef.current) return;
+      setGlossary((prev) => (prev ? { ...prev, scope: saved.scope, path: saved.path ?? null } : prev));
+    } catch (err) {
+      console.warn("Không lưu được bảng thuật ngữ:", err);
+      showToast("⚠️ Không lưu được bảng thuật ngữ — thử lại sau.");
+    }
+  };
+
+  /** Bảng đổi → lưu ngay (debounce ~400ms). */
+  const handleGlossaryChange = (next: Glossary) => {
+    const normalized = normalizeGlossary(next);
+    setGlossary(normalized);
+    glossaryPendingRef.current = { glossary: normalized, path: glossaryProjectPathRef.current };
+    if (glossarySaveTimerRef.current !== null) {
+      window.clearTimeout(glossarySaveTimerRef.current);
+    }
+    glossarySaveTimerRef.current = window.setTimeout(() => {
+      glossarySaveTimerRef.current = null;
+      const pending = glossaryPendingRef.current;
+      glossaryPendingRef.current = null;
+      if (pending) void persistGlossary(pending.glossary, pending.path);
+    }, 400);
+  };
+
+  /** Bấm "Lưu" trong editor → ghi ngay (không chờ debounce). */
+  const handleGlossarySave = (next: Glossary) => {
+    const normalized = normalizeGlossary(next);
+    setGlossary(normalized);
+    glossaryPendingRef.current = null;
+    if (glossarySaveTimerRef.current !== null) {
+      window.clearTimeout(glossarySaveTimerRef.current);
+      glossarySaveTimerRef.current = null;
+    }
+    void persistGlossary(normalized, glossaryProjectPathRef.current);
+  };
+
+  /** Tải app / đóng Studio → ghi nốt thay đổi đang chờ debounce (không mất dữ liệu). */
+  useEffect(() => {
+    return () => {
+      if (glossarySaveTimerRef.current !== null) {
+        window.clearTimeout(glossarySaveTimerRef.current);
+        glossarySaveTimerRef.current = null;
+      }
+      const pending = glossaryPendingRef.current;
+      glossaryPendingRef.current = null;
+      if (pending) void persistGlossary(pending.glossary, pending.path);
+    };
+  }, []);
+
+  /** "Gợi ý từ kịch bản" — 1 lượt đọc hiểu; **KHÔNG tự ghi** (người dùng duyệt ✓). */
+  const handleGlossarySuggest = async (): Promise<GlossarySuggestion | null> => {
+    const segs = segmentsRef.current;
+    if (segs.length === 0) {
+      showToast("ℹ️ Chưa có câu thoại nào — hãy bóc tách phụ đề trước khi xin gợi ý.");
+      return null;
+    }
+    const speakerNames = new Map(speakersRef.current.map((spk) => [spk.id, spk.name]));
+    const lines: ScriptLine[] = segs.map((seg) => ({
+      id: String(seg.id),
+      speakerId: seg.speakerId,
+      speakerName: speakerNames.get(seg.speakerId),
+      text: seg.original,
+      start: seg.start,
+      end: seg.end,
+    }));
+    // Ước tính: 1 lượt đọc hiểu ≈ 1/2 bước "Dịch theo ngữ cảnh" (2 lượt).
+    const ctxSeconds = pipelineEstimates.find((item) => item.id === "translate")?.seconds ?? 0;
+    const estimateSec = estimateGlossarySuggestSeconds(ctxSeconds);
+    setGlossarySuggesting(true);
+    setGlossarySuggestEstimateSec(estimateSec);
+    showToast(
+      `📖 Đang đọc hiểu ${lines.length} câu để gợi ý thuật ngữ (ước tính ~${formatDuration(estimateSec)})…`,
+    );
+    try {
+      const suggestion = await sublix.glossarySuggest(
+        lines,
+        sttLang === "auto" ? "auto" : sttLang,
+        targetLang,
+      );
+      const diff = diffGlossarySuggestion(glossaryRef.current, suggestion);
+      const fresh = diff.newTerms.length + diff.newPronouns.length;
+      showToast(
+        fresh > 0
+          ? `📖 Gợi ý xong: ${diff.newTerms.length} thuật ngữ mới · ${diff.newPronouns.length} quy tắc xưng hô mới — bấm ✓ để nhận.`
+          : "📖 Gợi ý xong — không có mục mới so với bảng hiện tại.",
+      );
+      return suggestion;
+    } catch (err) {
+      console.warn("Không lấy được gợi ý thuật ngữ:", err);
+      showToast("⚠️ Không lấy được gợi ý thuật ngữ — kiểm tra kết nối mô hình.");
+      return null;
+    } finally {
+      setGlossarySuggesting(false);
+    }
+  };
   /** Khi 1 lần chạy kết thúc → lưu tốc độ THẬT vào localStorage (tự học). */
   useEffect(() => {
     if (isAnalyzing) {
@@ -6354,6 +6683,12 @@ export default function SublixStudioView({
       voiceOptions: panelVoiceOptions,
       roles: panelRoles,
       glossary,
+      glossaryCount: glossaryEntryCount(glossary),
+      glossaryLocked: glossary?.locked === true,
+      glossaryHint: glossaryLockHint(glossary),
+      glossaryOpen,
+      glossarySuggesting,
+      glossarySuggestEstimateSec,
       running: isAnalyzing,
       runningLabel: analyzeMessage,
       openStep: pipelineOpenStep,
@@ -6396,6 +6731,9 @@ export default function SublixStudioView({
       panelVoiceOptions,
       panelRoles,
       glossary,
+      glossaryOpen,
+      glossarySuggesting,
+      glossarySuggestEstimateSec,
       isAnalyzing,
       analyzeMessage,
       pipelineOpenStep,
@@ -6463,8 +6801,6 @@ export default function SublixStudioView({
       runAll: () => {},
       cancel: () => {},
       runRangeOnly: () => {},
-      addGlossary: () => {},
-      removeGlossary: () => {},
       openExport: () => {},
       openSettings: () => {},
       selectTranslateModel: () => {},
@@ -6474,6 +6810,11 @@ export default function SublixStudioView({
       downloadSttModel: () => {},
       cancelSttModelDownload: () => {},
       setContextualTranslate: () => {},
+      openGlossary: () => {},
+      closeGlossary: () => {},
+      onGlossaryChange: () => {},
+      onGlossarySave: () => {},
+      onGlossarySuggest: async () => null,
     };
   }
   Object.assign(pipelineApiRef.current, {
@@ -6540,14 +6881,6 @@ export default function SublixStudioView({
       setUseRangeOnly(true);
       void handleRunCustomWorkflow();
     },
-    addGlossary: (term: string) => {
-      setGlossary((prev) => (prev.includes(term) ? prev : [...prev, term]));
-      void handleSaveProviderConfig();
-    },
-    removeGlossary: (term: string) => {
-      setGlossary((prev) => prev.filter((t) => t !== term));
-      void handleSaveProviderConfig();
-    },
     openExport: () => handleOpenExportModal(),
     openSettings: () => onNavigateTab?.("models"),
     selectTranslateModel: (modelId: string, provider: string) => {
@@ -6567,6 +6900,12 @@ export default function SublixStudioView({
       void handleCancelSttModelDownload(engineId);
     },
     setContextualTranslate: (value: boolean) => handleSetContextualTranslate(value),
+    // [TSK-STUDIO-GLOSSARY] Bảng thuật ngữ + xưng hô.
+    openGlossary: () => setGlossaryOpen(true),
+    closeGlossary: () => setGlossaryOpen(false),
+    onGlossaryChange: (next: Glossary) => handleGlossaryChange(next),
+    onGlossarySave: (next: Glossary) => handleGlossarySave(next),
+    onGlossarySuggest: () => handleGlossarySuggest(),
   });
   const pipelineApi = pipelineApiRef.current;
 
@@ -9117,10 +9456,30 @@ export default function SublixStudioView({
           className="studio-timeline-context-menu"
           style={{
             left: `${Math.min(timelineContextMenu.x, window.innerWidth - 290)}px`,
-            top: `${Math.min(timelineContextMenu.y, window.innerHeight - 340)}px`,
+            top: `${Math.min(timelineContextMenu.y, window.innerHeight - 400)}px`,
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* [TSK-STUDIO-GLOSSARY] Dịch lại 1 câu (hiện khi con trỏ nằm trên 1 câu). */}
+          {timelineContextMenu.segId !== null ? (
+            <button
+              type="button"
+              className="timeline-ctx-item"
+              onClick={() => {
+                const segId = timelineContextMenu.segId;
+                setTimelineContextMenu(null);
+                if (segId !== null) void handleRetranslateSegment(segId);
+              }}
+            >
+              <span className="timeline-ctx-icon">🔁</span>
+              <div className="timeline-ctx-text">
+                <span className="timeline-ctx-main-text">Dịch lại câu này</span>
+                <span className="timeline-ctx-desc-text">
+                  Dịch lại đúng 1 câu dưới con trỏ (bám bảng thuật ngữ đã duyệt)
+                </span>
+              </div>
+            </button>
+          ) : null}
           {timelineContextMenu.hasRange ? (
             <>
               {/* Header khi đã có vùng chọn In/Out */}

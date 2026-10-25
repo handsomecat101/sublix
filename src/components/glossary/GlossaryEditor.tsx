@@ -7,7 +7,6 @@ import {
   glossaryStats,
   isPronounComplete,
   isTermComplete,
-  normalizeGlossary,
   removePronoun,
   removeTerm,
   rejectSuggestion,
@@ -79,7 +78,9 @@ function GlossaryEditorInner({
 
   const emit = useCallback(
     (next: Glossary) => {
-      onChange?.(normalizeGlossary(next));
+      // Gửi nguyên bảng khi đang sửa: chuẩn hoá ở đây sẽ xoá dòng vừa thêm (còn trống)
+      // hoặc dòng đang gõ dở trùng nguồn. Bỏ dòng trống/trùng làm lúc GHI (cha + backend).
+      onChange?.(next);
     },
     [onChange],
   );
