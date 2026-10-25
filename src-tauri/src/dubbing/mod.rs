@@ -38,6 +38,7 @@ pub mod vi_normalize;
 // TSK-DUBBING-STT-ENGINE: chọn engine STT theo config `stt_asr_engine` cho
 // pipeline lồng tiếng (mặc định vẫn là whisper.cpp).
 pub mod stt_select;
+pub mod ducking;
 
 #[cfg(test)]
 #[path = "tts_real_tests.rs"]

@@ -1,0 +1,77 @@
+{
+  "_doc": "Vector kiem thu DUCKING_SPEC §5. Dung chung cho node --test (envelope.test.ts) va cargo test (ducking_tests.rs). Sai so: thoi gian 1 ms, gain 0.001. 'expected' la diem gay [t, gain_tuyen_tinh] da gop diem trung/thang hang, bo diem cuoi neu chi lap lai gain 1.0.",
+  "defaults": { "duck_level": 0.2, "bridge_gap_sec": 2.0, "attack_sec": 0.3, "release_sec": 1.0, "min_voice_sec": 0.15 },
+  "cases": [
+    {
+      "name": "1 khong co thoai",
+      "duration": 60,
+      "voice": [],
+      "expected": [[0, 1.0]]
+    },
+    {
+      "name": "2 mot cau giua video",
+      "duration": 60,
+      "voice": [[10, 14]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [14, 0.2], [15, 1.0]]
+    },
+    {
+      "name": "3 hai cau cach 1.0s (< bridge) thanh 1 khoi",
+      "duration": 60,
+      "voice": [[10, 12], [13, 15]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [15, 0.2], [16, 1.0]],
+      "gain_checks": [[12.5, 0.2]]
+    },
+    {
+      "name": "4a hai cau cach 2.5s (>= bridge): 2 khoi, giua chung ve 100%",
+      "duration": 60,
+      "voice": [[10, 12], [14.5, 16]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [12, 0.2], [13, 1.0], [14.2, 1.0], [14.5, 0.2], [16, 0.2], [17, 1.0]]
+    },
+    {
+      "name": "4b ramp chong nhau (bridge 0.5, cach 1.0s): lay min, khong len 100%",
+      "duration": 60,
+      "params": { "bridge_gap_sec": 0.5 },
+      "voice": [[10, 12], [13, 15]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [12, 0.2], [12.769231, 0.689762], [13, 0.2], [15, 0.2], [16, 1.0]],
+      "max_gain_between": [[12, 13, 0.69]]
+    },
+    {
+      "name": "5 hai cau cach 10s: 2 khoi doc lap",
+      "duration": 60,
+      "voice": [[10, 12], [22, 24]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [12, 0.2], [13, 1.0], [21.7, 1.0], [22, 0.2], [24, 0.2], [25, 1.0]]
+    },
+    {
+      "name": "6 cau bat dau t=0.1: attack bi cat tai 0",
+      "duration": 60,
+      "voice": [[0.1, 3]],
+      "expected": [[0, 0.341995], [0.1, 0.2], [3, 0.2], [4, 1.0]]
+    },
+    {
+      "name": "7 cau sat cuoi video: release bi cat tai duration",
+      "duration": 20,
+      "voice": [[17, 19.8]],
+      "expected": [[0, 1.0], [16.7, 1.0], [17, 0.2], [19.8, 0.2], [20, 0.275946]]
+    },
+    {
+      "name": "8 chong nhau / chua sap xep / doan ngan < min_voice",
+      "duration": 60,
+      "voice": [[30, 32], [10, 14], [12, 16], [20, 20.1]],
+      "expected": [[0, 1.0], [9.7, 1.0], [10, 0.2], [16, 0.2], [17, 1.0], [29.7, 1.0], [30, 0.2], [32, 0.2], [33, 1.0]]
+    },
+    {
+      "name": "9 bridge 10s tren hoi thoai day: ha ca video",
+      "duration": 30,
+      "params": { "bridge_gap_sec": 10 },
+      "voice": [[5, 7], [10, 12], [15, 17], [20, 22]],
+      "expected": [[0, 1.0], [4.7, 1.0], [5, 0.2], [22, 0.2], [23, 1.0]]
+    },
+    {
+      "name": "10 duck_level = 1.0: khong ha gi",
+      "duration": 60,
+      "params": { "duck_level": 1.0 },
+      "voice": [[10, 12], [30, 35]],
+      "expected": [[0, 1.0]]
+    }
+  ]
+}
