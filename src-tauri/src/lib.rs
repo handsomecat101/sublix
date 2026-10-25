@@ -17,6 +17,7 @@ pub mod dubbing;
 pub mod file_sub;
 pub mod model_download;
 pub mod overlay;
+pub mod proc_kill;
 pub mod stt;
 pub mod translate;
 pub mod voice_models;
@@ -45,57 +46,71 @@ fn capture_test(
     capture_to_wav(&output_path, duration_secs, device_index).map_err(|e| format!("{e:#}"))
 }
 
+/// Nhận dạng thử (BUG-010): phần nặng chạy trên thread riêng để KHÔNG chặn
+/// luồng chính của WebView (UI đơ cứng 60–90 s trước đây).
+///
+/// Tên lệnh, tham số và kiểu trả về **không đổi** ⇒ frontend không cần sửa.
 #[tauri::command]
-fn transcribe_test(
+async fn transcribe_test(
     app: tauri::AppHandle,
     wav_path: String,
     language: Option<String>,
     model_name: Option<String>,
 ) -> Result<TranscriptionResult, String> {
-    let variant = model_name
-        .as_deref()
-        .and_then(ModelVariant::from_name)
-        .filter(|v| stt::has_stt_model(*v))
-        .or_else(ModelVariant::best_installed)
-        .unwrap_or(ModelVariant::LargeV3TurboQ8);
+    tauri::async_runtime::spawn_blocking(move || {
+        let variant = model_name
+            .as_deref()
+            .and_then(ModelVariant::from_name)
+            .filter(|v| stt::has_stt_model(*v))
+            .or_else(ModelVariant::best_installed)
+            .unwrap_or(ModelVariant::LargeV3TurboQ8);
 
-    let cfg = config::AppConfig::load(&app);
-    let pref = stt::EnginePreference::from_str(&cfg.stt_engine_preference);
+        let cfg = config::AppConfig::load(&app);
+        let pref = stt::EnginePreference::from_str(&cfg.stt_engine_preference);
 
-    match stt::transcribe_via_server(&wav_path, language.as_deref(), variant, pref) {
-        Ok(r) => Ok(r),
-        Err(e) => {
-            warn!(
-                "whisper-server unavailable ({}), falling back to subprocess",
-                e
-            );
-            let whisper =
-                stt::whisper_local::WhisperLocal::new(variant).map_err(|e| format!("{e:#}"))?;
-            whisper
-                .transcribe(&wav_path, language.as_deref())
-                .map_err(|e| format!("{e:#}"))
+        match stt::transcribe_via_server(&wav_path, language.as_deref(), variant, pref) {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                warn!(
+                    "whisper-server unavailable ({}), falling back to subprocess",
+                    e
+                );
+                let whisper =
+                    stt::whisper_local::WhisperLocal::new(variant).map_err(|e| format!("{e:#}"))?;
+                whisper
+                    .transcribe(&wav_path, language.as_deref())
+                    .map_err(|e| format!("{e:#}"))
+            }
         }
-    }
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
-/// One-shot test translation from the UI.
+/// One-shot test translation from the UI (BUG-010: chạy ngoài luồng chính).
 #[tauri::command]
-fn translate_test(
+async fn translate_test(
     app: tauri::AppHandle,
     text: String,
     source_lang: String,
     target_lang: String,
     model_name: Option<String>,
 ) -> Result<String, String> {
-    let cfg = config::AppConfig::load(&app);
-    let variant = TranslationModelVariant::resolve_or_best(
-        model_name
-            .as_deref()
-            .or(Some(cfg.translation_model.as_str())),
-    );
-    let pref = stt::EnginePreference::from_str(&cfg.translation_engine_preference);
-    translate::translate_text_with_config(&text, &source_lang, &target_lang, variant, pref, &cfg)
+    tauri::async_runtime::spawn_blocking(move || {
+        let cfg = config::AppConfig::load(&app);
+        let variant = TranslationModelVariant::resolve_or_best(
+            model_name
+                .as_deref()
+                .or(Some(cfg.translation_model.as_str())),
+        );
+        let pref = stt::EnginePreference::from_str(&cfg.translation_engine_preference);
+        translate::translate_text_with_config(
+            &text, &source_lang, &target_lang, variant, pref, &cfg,
+        )
         .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
 #[tauri::command]
@@ -446,10 +461,21 @@ pub fn run() {
     // closing the last handle (or the process terminating) drags the entire
     // yt-dlp/ffmpeg grandchild tree down with us — no zombie processes left
     // behind when the user closes the window or the app crashes.
-    app.run(|_handle, event| {
-        if let tauri::RunEvent::Exit = event {
+    //
+    // BUG-002: whisper-server / llama-server KHÔNG nằm trong Job Object nên
+    // phải dừng tường minh khi app thoát, nếu không chúng vẫn giữ RAM/VRAM
+    // và cổng (11435/11436) ⇒ lần mở sau app không spawn được server mới.
+    app.run(|_handle, event| match event {
+        tauri::RunEvent::ExitRequested { .. } => {
+            stt::whisper_server::stop_server();
+            translate::server::stop_server();
+        }
+        tauri::RunEvent::Exit => {
+            stt::whisper_server::stop_server();
+            translate::server::stop_server();
             downloader::shutdown_all_jobs();
         }
+        _ => {}
     });
 }
 
@@ -559,45 +585,51 @@ struct AudioTestResult {
     has_audio: bool,
 }
 
+/// Đo âm lượng thiết bị đầu vào (BUG-010: quay 3 s + đọc WAV chạy ngoài
+/// luồng chính để UI không đơ).
 #[tauri::command]
-fn test_audio(device_index: Option<usize>) -> Result<AudioTestResult, String> {
-    let path = std::env::temp_dir()
-        .join("sublix-audio-test.wav")
-        .to_string_lossy()
-        .to_string();
-    let fmt = capture_to_wav(&path, 3, device_index).map_err(|e| format!("{e:#}"))?;
-    let metadata = std::fs::metadata(&path).map_err(|e| format!("{e}"))?;
-    let file_size = metadata.len();
+async fn test_audio(device_index: Option<usize>) -> Result<AudioTestResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::env::temp_dir()
+            .join("sublix-audio-test.wav")
+            .to_string_lossy()
+            .to_string();
+        let fmt = capture_to_wav(&path, 3, device_index).map_err(|e| format!("{e:#}"))?;
+        let metadata = std::fs::metadata(&path).map_err(|e| format!("{e}"))?;
+        let file_size = metadata.len();
 
-    let mut reader = hound::WavReader::open(&path).map_err(|e| format!("{e}"))?;
-    let mut peak: f32 = 0.0;
-    let mut sum_sq: f64 = 0.0;
-    let mut n: u64 = 0;
-    for sample in reader.samples::<f32>() {
-        let s = sample.unwrap_or(0.0);
-        let abs = s.abs();
-        if abs > peak {
-            peak = abs;
+        let mut reader = hound::WavReader::open(&path).map_err(|e| format!("{e}"))?;
+        let mut peak: f32 = 0.0;
+        let mut sum_sq: f64 = 0.0;
+        let mut n: u64 = 0;
+        for sample in reader.samples::<f32>() {
+            let s = sample.unwrap_or(0.0);
+            let abs = s.abs();
+            if abs > peak {
+                peak = abs;
+            }
+            sum_sq += (s as f64) * (s as f64);
+            n += 1;
         }
-        sum_sq += (s as f64) * (s as f64);
-        n += 1;
-    }
-    let _ = std::fs::remove_file(&path);
-    let rms = if n > 0 {
-        (sum_sq / n as f64).sqrt() as f32
-    } else {
-        0.0
-    };
-    let has_audio = peak > 0.01;
+        let _ = std::fs::remove_file(&path);
+        let rms = if n > 0 {
+            (sum_sq / n as f64).sqrt() as f32
+        } else {
+            0.0
+        };
+        let has_audio = peak > 0.01;
 
-    Ok(AudioTestResult {
-        device_name: format!("{}Hz/{}ch/{}", fmt.sample_rate, fmt.channels, fmt.sample_type),
-        file_size_bytes: file_size,
-        peak_volume: peak,
-        rms_volume: rms,
-        duration_secs: 3.0,
-        has_audio,
+        Ok(AudioTestResult {
+            device_name: format!("{}Hz/{}ch/{}", fmt.sample_rate, fmt.channels, fmt.sample_type),
+            file_size_bytes: file_size,
+            peak_volume: peak,
+            rms_volume: rms,
+            duration_secs: 3.0,
+            has_audio,
+        })
     })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
 #[derive(serde::Serialize)]
@@ -609,50 +641,56 @@ struct DeviceLevel {
     error: Option<String>,
 }
 
+/// Quét mức âm lượng mọi thiết bị (BUG-010: quét + ghi âm từng thiết bị chạy
+/// ngoài luồng chính để UI không đơ trong lúc quét).
 #[tauri::command]
-fn scan_audio_levels() -> Result<Vec<DeviceLevel>, String> {
-    init_com_best_effort_quiet();
-    let collection = wasapi::DeviceCollection::new(&Direction::Render)
-        .map_err(|e| format!("Failed to enumerate render devices: {e:#}"))?;
-    let devices: Vec<wasapi::Device> = (&collection)
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect devices: {e:#}"))?;
+async fn scan_audio_levels() -> Result<Vec<DeviceLevel>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        init_com_best_effort_quiet();
+        let collection = wasapi::DeviceCollection::new(&Direction::Render)
+            .map_err(|e| format!("Failed to enumerate render devices: {e:#}"))?;
+        let devices: Vec<wasapi::Device> = (&collection)
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to collect devices: {e:#}"))?;
 
-    let mut results = Vec::with_capacity(devices.len());
-    for (i, device) in devices.into_iter().enumerate() {
-        let name = device
-            .get_friendlyname()
-            .unwrap_or_else(|_| "(unnamed)".to_string());
-        let path = std::env::temp_dir()
-            .join(format!("sublix-scan-{i}.wav"))
-            .to_string_lossy()
-            .to_string();
-        let result = measure_device(&device, &path, 1);
-        let _ = std::fs::remove_file(&path);
-        match result {
-            Ok((peak, _file_size)) => {
-                results.push(DeviceLevel {
-                    index: i,
-                    name,
-                    peak_volume: peak,
-                    has_audio: peak > 0.005,
-                    error: None,
-                });
+        let mut results = Vec::with_capacity(devices.len());
+        for (i, device) in devices.into_iter().enumerate() {
+            let name = device
+                .get_friendlyname()
+                .unwrap_or_else(|_| "(unnamed)".to_string());
+            let path = std::env::temp_dir()
+                .join(format!("sublix-scan-{i}.wav"))
+                .to_string_lossy()
+                .to_string();
+            let result = measure_device(&device, &path, 1);
+            let _ = std::fs::remove_file(&path);
+            match result {
+                Ok((peak, _file_size)) => {
+                    results.push(DeviceLevel {
+                        index: i,
+                        name,
+                        peak_volume: peak,
+                        has_audio: peak > 0.005,
+                        error: None,
+                    });
+                }
+                Err(e) => {
+                    results.push(DeviceLevel {
+                        index: i,
+                        name,
+                        peak_volume: 0.0,
+                        has_audio: false,
+                        error: Some(format!("{e:#}")),
+                    });
+                }
             }
-            Err(e) => {
-                results.push(DeviceLevel {
-                    index: i,
-                    name,
-                    peak_volume: 0.0,
-                    has_audio: false,
-                    error: Some(format!("{e:#}")),
-                });
-            }
+            std::thread::sleep(std::time::Duration::from_millis(120));
         }
-        std::thread::sleep(std::time::Duration::from_millis(120));
-    }
-    Ok(results)
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("{e}"))?
 }
 
 fn measure_device(

@@ -26,6 +26,12 @@ use crate::stt::EnginePreference;
 
 const SERVER_PORT: u16 = 11435;
 const SERVER_URL: &str = "http://127.0.0.1:11435";
+/// Tên file thực thi của server (dùng để kiểm tra PID đã ghi nhớ).
+const SERVER_IMAGE: &str = "llama-server.exe";
+/// Tên file `.pid` ghi nhớ tiến trình con.
+const SERVER_PID_NAME: &str = "llama-server";
+/// Thời gian tối đa chờ lấy mutex khi dừng server lúc app thoát.
+const STOP_LOCK_TIMEOUT: Duration = Duration::from_secs(3);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(90);
 const HEALTHCHECK_INTERVAL: Duration = Duration::from_millis(300);
 
@@ -104,7 +110,15 @@ impl TranslationServer {
             engine.as_str()
         );
 
-        kill_existing_server();
+        // Dọn server CŨ mà CHÍNH app này đã spawn ở lần chạy trước.
+        // TUYỆT ĐỐI không `taskkill /IM` (giết nhầm app/instance khác của user)
+        // và không giết server của instance KHÁC đang chạy — file `.pid` lưu
+        // cả PID app chủ, chỉ dọn khi app chủ đã chết (server mồ côi).
+        let pid_file = crate::proc_kill::pid_file_path(SERVER_PID_NAME);
+        let tracked = crate::proc_kill::read_tracked_pid(&pid_file);
+        if let Some(killed) = crate::proc_kill::kill_tracked_server(tracked, SERVER_IMAGE) {
+            info!("🧹 Đã kết thúc llama-server mồ côi (pid={killed})");
+        }
 
         let ngl: u32 = match engine {
             Engine::Cuda => 999,
@@ -134,6 +148,15 @@ impl TranslationServer {
         let mut child = cmd
             .spawn()
             .with_context(|| format!("Failed to spawn llama-server at {}", binary.display()))?;
+
+        // Ghi nhớ PID tiến trình con **và PID app chủ** để lần sau chỉ dọn
+        // đúng server của ta (không dùng `taskkill /IM` — giết nhầm app khác).
+        let child_pid = child.id();
+        let pid_file = crate::proc_kill::pid_file_path(SERVER_PID_NAME);
+        if let Err(e) = crate::proc_kill::write_tracked_pid(&pid_file, child_pid, std::process::id())
+        {
+            warn!("⚠️ Không ghi được file PID llama-server: {e}");
+        }
 
         let started = Instant::now();
         let client = Client::builder()
@@ -402,11 +425,16 @@ impl TranslationServer {
         self.model
     }
 
+    /// Dừng llama-server (chỉ đúng tiến trình con ta đã spawn).
     pub fn stop(&mut self) {
+        let pid = self.child.id();
         let _ = self.child.kill();
         let _ = self.child.wait();
-        kill_existing_server();
-        info!("🛑 Translation server stopped");
+        // Chỉ xoá file .pid nếu nó vẫn trỏ tới PID của ta (tránh xoá nhầm
+        // file của server mới vừa spawn).
+        let pid_file = crate::proc_kill::pid_file_path(SERVER_PID_NAME);
+        crate::proc_kill::remove_tracked_pid_if_matches(&pid_file, pid);
+        info!("🛑 Translation server stopped (pid={pid})");
     }
 }
 
@@ -430,16 +458,6 @@ fn find_server_binary(engine: Engine) -> Result<PathBuf> {
         "llama-server binary not found: {}",
         candidate.display()
     ))
-}
-
-fn kill_existing_server() {
-    let mut cmd = Command::new("taskkill");
-    cmd.args(["/IM", "llama-server.exe", "/F"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    let _ = cmd.output();
 }
 
 fn build_system_prompt_for_http(target: &str) -> String {
@@ -576,6 +594,41 @@ struct ChatMessageOwned {
 // === Shared global TranslationServer instance (supports hot-swapping model & engine!) ===
 
 static TRANSLATION_SERVER: Mutex<Option<TranslationServer>> = Mutex::new(None);
+
+/// Dừng llama-server đang chạy — **idempotent** (gọi nhiều lần cũng an toàn).
+///
+/// Dùng khi app thoát (`RunEvent::Exit` / `ExitRequested`) để không để lại tiến
+/// trình ma giữ RAM/VRAM/cổng (BUG-002). Không chặn lâu: lấy mutex theo vòng
+/// lặp có giới hạn thời gian, hết thời gian thì bỏ qua.
+pub fn stop_server() {
+    let deadline = Instant::now() + STOP_LOCK_TIMEOUT;
+    loop {
+        match TRANSLATION_SERVER.try_lock() {
+            Ok(mut guard) => {
+                if guard.is_some() {
+                    info!("🛑 Dừng llama-server khi app thoát");
+                    // Drop handle → `TranslationServer::stop()` giết đúng PID con.
+                    *guard = None;
+                }
+                return;
+            }
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                warn!("⚠️ Mutex translation server bị poisoned — bỏ qua việc dừng server");
+                return;
+            }
+            Err(std::sync::TryLockError::WouldBlock) => {
+                if Instant::now() >= deadline {
+                    warn!(
+                        "⚠️ Không dừng được llama-server trong {}s (đang bận) — bỏ qua",
+                        STOP_LOCK_TIMEOUT.as_secs()
+                    );
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+}
 
 /// Timeout cho health-check llama-server (ngắn để không treo UI).
 const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
@@ -1989,3 +2042,7 @@ mod tests {
     }
 }
 
+// Test vong doi llama-server (BUG-002/003) — file test rieng.
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod server_tests;

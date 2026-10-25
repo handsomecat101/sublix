@@ -1,6 +1,16 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
 
+### 2026-10-25 07:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-018-FIX-R2` — sửa lỗ hỗng reviewer phát hiện trong `proc_kill.rs`; **không commit**).
+- **Lỗ hỗng:** file `.pid` đang nừm **chung `%TEMP%` cho mối instance** (app PO + instance verify cùng `%TEMP%`, chỉ khác `%APPDATA%`) → instance B đọc PID server **đang sống** của instance A rồi giết — đúng loại BUG-003 ta đang chặn.
+- **Sửa:** file `.pid` giờ **2 số** `<server_pid> <owner_pid>` (PID app chủ). Ham thuan `pick_kill_target` nhân thêm `owner_alive` + `current_pid`: chỉ giết khi **owner đã chết** (server mồ côi) hoặc `owner_pid == PID` hiện tại; **owner còn sống (instance khác) → không giết**; file sai định dạng (chỉ 1 số) → owner không rõ → **không giết** (an toân) và ghi đè file mới sau khi spawn. Thêm `process_is_alive(pid)` (tasklist `/FI`; không xác định → coi như **còn sống** để an toân).
+- **Test:** thêm 4 test cho hành thuần `pick_kill_target`: **owner còn sống → không giết** · **owner đã chết → giết** · owner là chính app hiện tại → được thay thế · **file định dạng cũ (1 số) → không giết**; + test vòng `write/read_tracked_pid` ghiđợc PID app chủ. `cargo test --lib` **223 pass / 0 fail**, `cargo clippy --lib --tests` **không thêm cảnh báo mới** (1 cảnh báo trong file tôi sửa là `EnginePreference::from_str` cũ cũ).
+- **Phạm vi:** chỉ `src-tauri/src/proc_kill.rs` + `src-tauri/src/stt/whisper_server.rs` + `src-tauri/src/translate/server.rs` + 2 file test; không động `lib.rs`/`src/**`/module khác.
+
+---
+---
+
 ### 2026-10-25 07:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
 - **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
@@ -15,12 +25,14 @@
 
 ---
 ---
+---
 
 ### 2026-10-25 07:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-REFACTOR-GLOSSARY-300` — tách 2 file > 300 dòng, **chỉ di chuyển code, không đổi hành vi**; **chưa commit**).
 - **Tách:** `glossary.rs` 366 → **272** (+ file mới `glossary_prompt.rs` 111: `to_rules` / `hard_block` / `suggestion_from_reference`) · `contextual_run.rs` 336 → **165** (+ `contextual_chunk.rs` 134: gọi LLM theo lô; `contextual_verify.rs` 89: hậu kiểm + dịch lại 1 câu). Mọi file trong `translate/` giờ **< 300 dòng**.
 - **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
 
+---
 ---
 ---
 
@@ -34,6 +46,7 @@
 
 ---
 ---
+---
 
 ### 2026-10-25 07:20 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-REDO-RIPPLE` — Redo + Ripple delete + marker định dạng cũ; **chưa commit**).
@@ -43,12 +56,14 @@
 - **Verify:** `node --test scripts/timeline-tests/` **107/107 PASS** (18 case mới) · `tsc` 0 lỗi · `npm run build` OK · GUI instance riêng (release build `npx tauri build --no-bundle` — **không** `cargo build --release`, CDP 9227, APPDATA riêng) **5/5 PASS**: marker cũ hiện đủ 3 vạch, nút ↷ disabled khi rỗng, Shift+Delete dồn câu sau 117,19px → 58,59px, Ctrl+Z rồi Ctrl+Shift+Z khôi phục đúng, menu chuột phải có mục ripple.
 - **⚠️ Lưu ý:** đường `undoStack` (general) giữ nguyên như cũ; redo lấy từ `future` của từng lớp. Instance verify đã tắt, app PO (1420) không bị đụng; chưa commit.
 ---
+---
 
 ### 2026-10-25 07:02 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-EXAMPLES` — 3 example Rust không build được từ commit `c9ccaad`; **chưa commit**).
 - **Fix:** `analyze_and_create_project` đã đổi **5 → 7 tham số** (`start_offset_sec` + `expected_speakers`) ⇒ thêm 2 `None` vào `test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` (giống hệt lệnh Tauri `dubbing_analyze` khi UI không gửi 2 tuỳ chọn này). **Không** đụng `src-tauri/src/**` hay `src/**`.
 - **Verify:** `cargo build --examples` **exit 0** — 7/7 example ra `.exe` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`), build lại là no-op ⇒ đã xoá đúng lỗi mà mcode #2 báo trong AGENT_CHAT. *(Verify lần 2 trên **bản sao HEAD + 3 file của tôi** — repo chính đang tạm **đỏ** vì worker khác sửa dở `src-tauri/src/**` (`proc_kill` chưa khai báo trong `lib.rs`), **không** phải lỗi của task này.)*
 
+---
 ---
 ---
 
@@ -66,6 +81,7 @@
 
 ---
 ---
+---
 
 ### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
@@ -80,17 +96,4 @@
 ---
 
 ---
----
-
-### 2026-10-25 06:50 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-FIX-REUP-SECTION` — chặn đoạn cắt reup ngược + dọn khoá `TSK-018` cũ; **không commit**).
-- **Sửa:** `src-tauri/src/downloader/reup.rs` — `section_arg()` giờ so sánh mốc bắt đầu/kết thúc **theo giây**: `start >= end` → `Err("Thời điểm bắt đầu phải nhỏ hơn thời điểm kết thúc …")`; chỉ có start hoặc chỉ có end vẫn hợp lệ như cũ. Tách `parse_timecode()` + thêm `pub fn timecode_to_secs()` (không lặp logic; `normalize_timecode` giữ nguyên output). **Không `unwrap()`** trong code production; `reup.rs` 269 → **298** dòng (vẫn < 300).
-- **Test mới:** `src-tauri/src/downloader/reup_section_tests.rs` (file mới, **không sửa** `reup_tests.rs`) — 6 test: start<end ok · start=end lỗi · start>end lỗi · định dạng hh:mm:ss / mm:ss / giây lẻ · chỉ 1 mốc · mốc sai định dạng vẫn lỗi như cũ.
-- **PROJECT_STATE:** `TSK-018` (khoá từ 2026-10-12) → **⏸ Tạm dừng (mở khoá 2026-10-25)**. Đã kiểm code: BUG-003 **còn** (`stt/whisper_server.rs:303` + `translate/server.rs:459` vẫn `taskkill /IM <image>.exe /F`), BUG-002 **còn** (`RunEvent::Exit` chỉ gọi `downloader::shutdown_all_jobs()`, không kill whisper-server/llama-server), BUG-010 **còn** (`transcribe_test`/`translate_test`/`test_audio`/`scan_audio_levels` vẫn là command **sync**).
-- **Verify:** `cargo test --lib` **203 pass / 0 fail** (6 test mới đều ok; `reup_tests::section_arg_builds_and_validates` cũ vẫn ok).
-
----
-
----
-
 ---
