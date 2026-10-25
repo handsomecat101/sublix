@@ -39,10 +39,14 @@ pub mod vi_normalize;
 // pipeline lồng tiếng (mặc định vẫn là whisper.cpp).
 pub mod stt_select;
 
+// TSK-FIX-SPEAKER-ROLES: gán người nói theo GIỌNG thật (F0 → giới tính) +
+// gộp cụm khi vượt số vai + MiniMax không ghi đè phân vai theo giọng.
+pub mod speaker_assign;
 
 // TSK-FEAT-VOICE-SAMPLE-CACHE: cache mẫu nghe thử theo (engine, voice_id).
 pub mod voice_samples;
 
+// TSK-FEAT-SMART-DUCKING: đường âm lượng nền theo thoại (docs/DUCKING_SPEC.md).
 pub mod ducking;
 
 #[cfg(test)]
@@ -1779,10 +1783,16 @@ pub fn slugify_speaker(name: &str) -> String {
 }
 
 /// Generate default rich personas for detected speakers across languages
+///
+/// [TSK-FIX-SPEAKER-ROLES] `voice_genders` = giới tính **đo từ F0** (pitch) của
+/// từng cụm người nói (key = `speaker_id`). Có giá trị rõ ràng → dùng giọng TTS
+/// theo giới tính thật; vùng "không chắc" → giữ mặc định cũ + đánh dấu `(~)`
+/// trong label (nghĩa là "ước tính", không chắc từ giọng).
 pub fn generate_default_speakers(
     tgt_lang: &str,
     active_speaker_ids: &[String],
     expected_speakers: Option<usize>,
+    voice_genders: Option<&HashMap<String, speaker_assign::PitchGender>>,
 ) -> Vec<DubbingSpeaker> {
     let mut unique_ids: Vec<String> = active_speaker_ids.to_vec();
     unique_ids.sort();
@@ -1803,10 +1813,18 @@ pub fn generate_default_speakers(
     let rates = ["+0%", "+0%", "-5%", "+5%"];
 
     for (idx, spk_id) in unique_ids.into_iter().enumerate() {
-        let is_male = if expected_speakers == Some(2) || expected_speakers == Some(1) {
+        let fallback_male = if expected_speakers == Some(2) || expected_speakers == Some(1) {
             true
         } else {
             idx % 2 == 0
+        };
+        // [TSK-FIX-SPEAKER-ROLES] Ưu tiên giới tính ĐO TỪ GIỌNG (F0) — chỉ dùng khi
+        // pitch rõ ràng; vùng "không chắc" ⇒ giữ mặc định + đánh dấu `(~)`.
+        let pitch_hint = voice_genders.and_then(|m| m.get(spk_id.as_str()).copied());
+        let (is_male, gender_known) = match pitch_hint {
+            Some(speaker_assign::PitchGender::Male) => (true, true),
+            Some(speaker_assign::PitchGender::Female) => (false, true),
+            _ => (fallback_male, false),
         };
         let p_idx = if is_male && expected_speakers == Some(2) {
             idx % male_pitches.len()
@@ -1865,6 +1883,14 @@ pub fn generate_default_speakers(
             }
         };
 
+        // [TSK-FIX-SPEAKER-ROLES] Đánh dấu "(~)" khi giới tính KHÔNG chắc từ F0
+        // (vùng 165–180 Hz hoặc không đo được) → người dùng biết đây là ước tính.
+        let label = if voice_genders.is_some() && !gender_known {
+            format!("{label} (~)")
+        } else {
+            label
+        };
+
         speakers.push(DubbingSpeaker {
             id: spk_id,
             label,
@@ -1883,12 +1909,18 @@ pub fn generate_default_speakers(
 }
 
 /// Cinematic Diarization and Scripting via MiniMax Cloud API
+///
+/// [TSK-FIX-SPEAKER-ROLES] `voice_genders` = giới tính đo từ F0 (key = `speaker_id`).
+/// - `Some(..)` ⇒ đã có phân vai theo **GIỌNG** (sherpa): MiniMax **KHÔNG** gán lại
+///   người nói, chỉ được **ĐẶT TÊN** nhân vật + dịch; `speaker_id` giữ nguyên.
+/// - `None` ⇒ chưa có sherpa: MiniMax phân vai từ chữ (như cũ).
 pub fn diarize_and_script_via_minimax(
     segments: &mut [DubbingSegment],
     source_lang: &str,
     target_lang: &str,
     api_key: &str,
     model: &str,
+    voice_genders: Option<&HashMap<String, speaker_assign::PitchGender>>,
 ) -> Result<Vec<DubbingSpeaker>> {
     if segments.is_empty() {
         return Ok(Vec::new());
@@ -1900,25 +1932,49 @@ pub fn diarize_and_script_via_minimax(
         model.trim()
     };
 
+    let preserve_voice_ids = voice_genders.is_some();
     let mut transcript_text = String::new();
     for s in segments.iter() {
-        transcript_text.push_str(&format!(
-            "{} [{:.1}s - {:.1}s]: {}\n",
-            s.id, s.start_sec, s.end_sec, s.original_text
-        ));
+        if preserve_voice_ids {
+            // Có speaker_id theo giọng → đưa vào prompt để LLM đặt tên đúng cụm.
+            transcript_text.push_str(&format!(
+                "{} | {} [{:.1}s - {:.1}s]: {}\n",
+                s.speaker_id, s.id, s.start_sec, s.end_sec, s.original_text
+            ));
+        } else {
+            transcript_text.push_str(&format!(
+                "{} [{:.1}s - {:.1}s]: {}\n",
+                s.id, s.start_sec, s.end_sec, s.original_text
+            ));
+        }
     }
 
-    let system_prompt = format!(
-        "Bạn là đạo diễn lồng tiếng phim và chuyên gia phân vai (Speaker Diarization) chuyên nghiệp.\n\
+    let system_prompt = if preserve_voice_ids {
+        format!(
+            "Bạn là đạo diễn lồng tiếng phim và biên kịch chuyên nghiệp.\n\
+             Dưới đây là các câu thoại trong video (ngôn ngữ gốc: {}).\n\
+             Người nói ĐÃ được AI tách sẵn theo giọng nói — mỗi dòng có `speaker_id` cố định.\n\
+             Nhiệm vụ:\n\
+             1. ĐẶT TÊN nhân vật cho mỗi `speaker_id` (dùng đúng `speaker_id` đã cho, KHÔNG tự gán lại người nói).\n\
+             2. Dịch lời thoại sang tiếng {} điện ảnh tự nhiên, phù hợp khẩu hình và cảm xúc nhân vật.\n\
+             QUY TẮC BẮT BUỘC: Trả về DUY NHẤT một JSON array thuần túy (không kèm giải thích, không markdown):\n\
+             [\n  {{\"id\": 1, \"speaker_id\": \"speaker_0\", \"speaker\": \"Tên Nhân Vật\", \"gender\": \"male\", \"text\": \"Lời dịch...\"}}\n]",
+            source_lang.to_uppercase(),
+            target_lang.to_uppercase()
+        )
+    } else {
+        format!(
+            "Bạn là đạo diễn lồng tiếng phim và chuyên gia phân vai (Speaker Diarization) chuyên nghiệp.\n\
          Dưới đây là danh sách các câu thoại trong video (ngôn ngữ gốc: {}).\n\
          Nhiệm vụ:\n\
          1. Phân vai chính xác cho từng câu thoại: chỉ ra tên nhân vật (speaker) và giới tính (gender: \"male\" hoặc \"female\").\n\
          2. Dịch lời thoại sang tiếng {} điện ảnh tự nhiên, phù hợp khẩu hình và cảm xúc nhân vật.\n\
          QUY TẮC BẮT BUỘC: Trả về DUY NHẤT một JSON array thuần túy (không kèm giải thích, không markdown):\n\
          [\n  {{\"id\": 1, \"speaker\": \"Tên Nhân Vật\", \"gender\": \"male\", \"text\": \"Lời dịch...\"}}\n]",
-        source_lang.to_uppercase(),
-        target_lang.to_uppercase()
-    );
+            source_lang.to_uppercase(),
+            target_lang.to_uppercase()
+        )
+    };
 
     let body = serde_json::json!({
         "model": model_name,
@@ -1962,6 +2018,14 @@ pub fn diarize_and_script_via_minimax(
 
     let mut speaker_order: Vec<(String, String, String)> = Vec::new(); // (id, label, gender)
 
+    // [TSK-FIX-SPEAKER-ROLES] Đã có phân vai theo GIỌNG (sherpa) ⇒ MiniMax KHÔNG
+    // được gán lại người nói; chỉ được ĐẶT TÊN nhân vật + DỊCH.
+    let preserve_voice_ids = voice_genders.is_some();
+    // Bỏ phiếu tên nhân vật theo cụm: cụm giọng → {tên: số lần}.
+    let mut name_votes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    // Giới tính do LLM đoán (chỉ dùng khi KHÔNG có pitch).
+    let mut llm_gender: HashMap<String, String> = HashMap::new();
+
     for item in items {
         let id = item["id"].as_u64().unwrap_or(0) as usize;
         let speaker_name = item["speaker"].as_str().unwrap_or("Speaker").trim();
@@ -1981,15 +2045,62 @@ pub fn diarize_and_script_via_minimax(
                 speaker_name,
                 if gender == "female" { "Nữ" } else { "Nam" }
             );
-            speaker_order.push((spk_slug.clone(), label, gender));
+            speaker_order.push((spk_slug.clone(), label, gender.clone()));
         }
+        llm_gender.insert(spk_slug.clone(), gender.clone());
 
         if let Some(seg) = segments.iter_mut().find(|s| s.id == id) {
-            seg.speaker_id = spk_slug;
+            if preserve_voice_ids {
+                // Giữ nguyên speaker_id theo giọng; chỉ gom tên để đặt nhãn.
+                let votes = name_votes.entry(seg.speaker_id.clone()).or_default();
+                *votes.entry(speaker_name.to_string()).or_insert(0) += 1;
+            } else {
+                seg.speaker_id = spk_slug;
+            }
             if !text.is_empty() {
                 // Dùng chung quy tắc: nhãn lỗi dịch không bao giờ nằm trong dubbed_text.
                 apply_translation_to_segment(seg, text.to_string());
             }
+        }
+    }
+
+    if preserve_voice_ids {
+        // Dựng danh sách vai THEO CỤM GIỌNG (speaker_id đã tách sẵn), tên lấy theo
+        // đa số phiếu, giới tính ưu tiên PITCH (F0) rồi mới tới giới tính LLM.
+        let mut cluster_ids: Vec<String> = segments.iter().map(|s| s.speaker_id.clone()).collect();
+        cluster_ids.sort();
+        cluster_ids.dedup();
+        speaker_order.clear();
+        for cluster_id in cluster_ids {
+            let name = name_votes
+                .get(&cluster_id)
+                .and_then(|votes| {
+                    votes
+                        .iter()
+                        .max_by_key(|(_, count)| **count)
+                        .map(|(name, _)| name.clone())
+                })
+                .unwrap_or_else(|| format!("Speaker {}", &cluster_id));
+            let pitch_gender = voice_genders
+                .and_then(|m| m.get(cluster_id.as_str()))
+                .copied();
+            let is_female = match pitch_gender {
+                Some(speaker_assign::PitchGender::Female) => true,
+                Some(speaker_assign::PitchGender::Male) => false,
+                _ => {
+                    let slug = slugify_speaker(&name);
+                    llm_gender
+                        .get(&slug)
+                        .map(|g| g.contains("female") || g.contains("nữ"))
+                        .unwrap_or(false)
+                }
+            };
+            let label = format!("{} ({})", name, if is_female { "Nữ" } else { "Nam" });
+            speaker_order.push((
+                cluster_id.clone(),
+                label,
+                if is_female { "female".to_string() } else { "male".to_string() },
+            ));
         }
     }
 
@@ -2625,11 +2736,49 @@ pub fn analyze_and_create_project_full(
 
     // 3b. Offline AI Speaker Diarization via Sherpa-ONNX (pyannote + wespeaker)
     let mut diarization_engine_used = "heuristic".to_string();
+    // [TSK-FIX-SPEAKER-ROLES] Giới tính đo từ F0 (pitch) của từng cụm giọng.
+    let mut voice_genders: HashMap<String, speaker_assign::PitchGender> = HashMap::new();
+    // Đã có phân vai theo GIỌNG (sherpa) ⇒ MiniMax chỉ đặt tên + dịch, không gán lại.
+    let mut voice_based_diarization = false;
     if sherpa_available() {
         emit("diarizing", 38.0, "Đang phân tích âm sắc giọng nói bằng Sherpa AI (Offline)...", 0, total);
         match run_sherpa_diarization(&temp_wav, &temp_dir, my_gen, expected_speakers) {
             Ok(sherpa_segs) if !sherpa_segs.is_empty() => {
                 info!("🎬 Sherpa Diarization returned {} audio speech turns", sherpa_segs.len());
+
+                // [TSK-FIX-SPEAKER-ROLES] Đo F0 (pitch) từng cụm giọng — sidecar numpy,
+                // offline, không gọi mạng. Lỗi ⇒ giữ giới tính mặc định (đánh dấu "~").
+                let turn_list: Vec<(f64, f64, usize)> = sherpa_segs
+                    .iter()
+                    .map(|t| (t.start, t.end, t.speaker))
+                    .collect();
+                let pitches = match speaker_assign::estimate_speaker_pitches(
+                    &temp_wav,
+                    &turn_list,
+                    &temp_dir,
+                    &find_python(),
+                    my_gen,
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        warn!("⚠️ Đo F0 thất bại ({:#}) — giữ giới tính mặc định", e);
+                        HashMap::new()
+                    }
+                };
+
+                // Gộp cụm khi sherpa ra NHIỀU cụm hơn số vai người chọn —
+                // gộp cụm GẦN NHẤT theo F0, KHÔNG dùng `% n` (modulo gộp nam với nữ).
+                let profiles = speaker_assign::cluster_profiles(&turn_list, &pitches);
+                let max_spk = expected_speakers.unwrap_or(0);
+                let merge = speaker_assign::merge_clusters(&profiles, max_spk);
+                if merge.merged.len() < profiles.len() {
+                    info!(
+                        "🎵 Gộp {} cụm giọng → {} (theo F0, không dùng modulo)",
+                        profiles.len(),
+                        merge.merged.len()
+                    );
+                }
+
                 for seg in parsed_segments.iter_mut() {
                     let mut best_spk = None;
                     let mut max_overlap = 0.0f64;
@@ -2644,15 +2793,14 @@ pub fn analyze_and_create_project_full(
                     }
                     if let Some(spk_num) = best_spk {
                         if max_overlap > 0.05 {
-                            let mapped_num = if let Some(n) = expected_speakers {
-                                if n > 0 { spk_num % n } else { spk_num }
-                            } else {
-                                spk_num
-                            };
+                            let mapped_num = merge.mapping.get(&spk_num).copied().unwrap_or(spk_num);
                             seg.speaker_id = format!("speaker_{mapped_num}");
                         }
                     }
                 }
+                // Giới tính theo F0 của cụm ĐÃ GỘP (key = speaker_id đã gán).
+                voice_genders = speaker_assign::gender_map(&merge.merged);
+                voice_based_diarization = true;
                 diarization_engine_used = "sherpa".to_string();
             }
             Ok(_) => {
@@ -2678,6 +2826,12 @@ pub fn analyze_and_create_project_full(
             &tgt_lang,
             &cfg.minimax_api_key,
             &cfg.minimax_model,
+            // [TSK-FIX-SPEAKER-ROLES] Có sherpa ⇒ giữ speaker_id theo giọng.
+            if voice_based_diarization {
+                Some(&voice_genders)
+            } else {
+                None
+            },
         ) {
             Ok(spks) if !spks.is_empty() => {
                 info!("🎬 MiniMax Diarization & Scripting succeeded with {} characters!", spks.len());
@@ -2696,7 +2850,18 @@ pub fn analyze_and_create_project_full(
     if !minimax_succeeded {
         // Fallback: Generate dynamic speakers based on detected speaker IDs
         let active_ids: Vec<String> = parsed_segments.iter().map(|s| s.speaker_id.clone()).collect();
-        speakers = generate_default_speakers(&tgt_lang, &active_ids, expected_speakers);
+        // [TSK-FIX-SPEAKER-ROLES] Truyền giới tính đo từ F0 (nếu có) để chọn giọng
+        // TTS theo giới tính THẬT thay vì xen kẽ idx % 2.
+        speakers = generate_default_speakers(
+            &tgt_lang,
+            &active_ids,
+            expected_speakers,
+            if voice_based_diarization {
+                Some(&voice_genders)
+            } else {
+                None
+            },
+        );
 
         // Batch translation to target language via local engine / fallback
         emit("scripting", 50.0, &format!("Đang biên kịch {} câu thoại sang {}...", total, tgt_lang.to_uppercase()), 0, total);
