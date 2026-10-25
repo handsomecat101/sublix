@@ -8,6 +8,14 @@
 
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
+
+### 2026-10-25 07:02 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FIX-EXAMPLES` — 3 example Rust không build được từ commit `c9ccaad`; **chưa commit**).
+- **Fix:** `analyze_and_create_project` đã đổi **5 → 7 tham số** (`start_offset_sec` + `expected_speakers`) ⇒ thêm 2 `None` vào `test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` (giống hệt lệnh Tauri `dubbing_analyze` khi UI không gửi 2 tuỳ chọn này). **Không** đụng `src-tauri/src/**` hay `src/**`.
+- **Verify:** `cargo build --examples` **exit 0** — 7/7 example ra `.exe` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`), build lại là no-op ⇒ đã xoá đúng lỗi mà mcode #2 báo trong AGENT_CHAT. *(Verify lần 2 trên **bản sao HEAD + 3 file của tôi** — repo chính đang tạm **đỏ** vì worker khác sửa dở `src-tauri/src/**` (`proc_kill` chưa khai báo trong `lib.rs`), **không** phải lỗi của task này.)*
+
+---
+
 ### 2026-10-25 06:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FEAT-GLOSSARY-PRONOUN` — bảng thuật ngữ + xưng hô **đã duyệt**; **chưa commit, không push**).
 - **Backend:** `translate/glossary.rs` (types + block ràng buộc cứng) · `glossary_store.rs` (file `<project>.sublix-glossary.json` **atomic** + fallback config toàn cục) · `glossary_check.rs` (hậu kiểm tất định, không gọi mạng) · 3 lệnh `glossary_get`/`glossary_set`/`glossary_suggest` (`glossary_suggest` **không tự ghi**) · `contextual.rs` (block ràng buộc đặt TRƯỚC bản tham chiếu; `locked` ⇒ bỏ bảng xưng hô tự sinh) · `config.rs` (+`glossary_table`).
@@ -20,6 +28,8 @@
 
 ---
 
+---
+
 ### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
 - **Mới:** `src/views/processLogic.ts` + `processTypes.ts` (mới) + `ProcessCenterView.tsx` viết lại + `ProcessCenterView.css` (mới) — **xoá** `ProcessCenterModal.tsx/.css` (TL-14: chỉ còn 1 giao diện; nút "Mở Tiến Trình" của toast nền nay sang thẳng tab).
@@ -27,6 +37,8 @@
 - **Logic thuần:** `processLogic.ts` (lọc/đếm/nhóm tác vụ/làm sạch nhãn) + `scripts/process-tests/` → **23/23 PASS**.
 - **Verify:** trên **bản sao HEAD + file của tôi** → `tsc` **0 lỗi** · `npm run build` OK (103 module) · `process-tests` 23/23 + `live-history-tests` 40/40 + `settings-tests` 21/21 + `timeline-tests` 95/95; ảnh Edge headless 1920×1080 (demo dữ liệu giả + **app thật** với tab "Tiến trình" active) render đúng. CSS cũ **803 → 751 dòng** sau khi cắt 63 rule chết.
 - **Cảnh báo:** ghi `BUG-H20` — **PowerShell 5.1 làm hỏng file UTF-8** (`Get-Content -Raw` + `Set-Content -Encoding UTF8` ⇒ mojibake toàn file). Agent nào sửa file nguồn bằng PS thì phải kiểm tra `git diff` (toàn bộ file đổi = dấu hiệu). Chi tiết: `ISSUE_LOG.md`.
+
+---
 
 ---
 
@@ -44,12 +56,16 @@
 
 ---
 
+---
+
 ### 2026-10-25 06:50 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-REUP-SECTION` — chặn đoạn cắt reup ngược + dọn khoá `TSK-018` cũ; **không commit**).
 - **Sửa:** `src-tauri/src/downloader/reup.rs` — `section_arg()` giờ so sánh mốc bắt đầu/kết thúc **theo giây**: `start >= end` → `Err("Thời điểm bắt đầu phải nhỏ hơn thời điểm kết thúc …")`; chỉ có start hoặc chỉ có end vẫn hợp lệ như cũ. Tách `parse_timecode()` + thêm `pub fn timecode_to_secs()` (không lặp logic; `normalize_timecode` giữ nguyên output). **Không `unwrap()`** trong code production; `reup.rs` 269 → **298** dòng (vẫn < 300).
 - **Test mới:** `src-tauri/src/downloader/reup_section_tests.rs` (file mới, **không sửa** `reup_tests.rs`) — 6 test: start<end ok · start=end lỗi · start>end lỗi · định dạng hh:mm:ss / mm:ss / giây lẻ · chỉ 1 mốc · mốc sai định dạng vẫn lỗi như cũ.
 - **PROJECT_STATE:** `TSK-018` (khoá từ 2026-10-12) → **⏸ Tạm dừng (mở khoá 2026-10-25)**. Đã kiểm code: BUG-003 **còn** (`stt/whisper_server.rs:303` + `translate/server.rs:459` vẫn `taskkill /IM <image>.exe /F`), BUG-002 **còn** (`RunEvent::Exit` chỉ gọi `downloader::shutdown_all_jobs()`, không kill whisper-server/llama-server), BUG-010 **còn** (`transcribe_test`/`translate_test`/`test_audio`/`scan_audio_levels` vẫn là command **sync**).
 - **Verify:** `cargo test --lib` **203 pass / 0 fail** (6 test mới đều ok; `reup_tests::section_arg_builds_and_validates` cũ vẫn ok).
+
+---
 
 ---
 
@@ -67,12 +83,16 @@
 
 ---
 
+---
+
 ### 2026-10-25 06:35 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-REFACTOR-SPLIT-300` — tách 4 module Rust > 300 dòng, **chỉ di chuyển code, không đổi hành vi, chưa commit**).
 - **Tách:** `model_download.rs` 774 → `model_download/{mod,progress,http,sha256}.rs` · `stt/stt_catalog.rs` 514 → `stt/stt_catalog/{mod,catalog_types,catalog_data,catalog_data_parakeet}.rs` · `stt/sherpa_asr.rs` 368 → `stt/sherpa_asr/{mod,sherpa_sidecar}.rs` · `translate/bench.rs` 338 → `translate/bench/{mod,score,dataset,bench_tests}.rs`. **File lớn nhất: 271 dòng** (tất cả 14 file đều < 300).
 - **API không đổi:** để so tổt **mới `pub` có trong HEAD đều có trong module mới** (kiểm tự động trước); đễt tên `pub use` để `crate::stt::stt_catalog::SttEngineSpec`, `crate::stt::sherpa_asr::transcribe`, `crate::model_download::EVENT` … vẫn giở nguyên. Đổi tên lệnh `in_progress_slot` → `pub(crate)` + `download_one` → `pub(super)` để module con dùng được.
 - **Verify:** `cargo test --lib` **197 pass / 0 fail** · `cargo build --example bench_translate` **OK** · `cargo clippy --lib`: 6 cảnh báo nừm trong 4 module đãu tách — để **là code di chuyển nguyên văn** (không phải cảnh báo mới) · không sửa `src/**`.
 - **Lưu ý:** đãnh có bố module Rust > 300 dòng khác vẫn còn tách: `dubbing/mod.rs` 4578 · `downloader/mod.rs` 2951 · `translate/server.rs` 1991 · `lib.rs` 1986 · `file_sub.rs` 905 · `stt/whisper_local.rs` 802 · `translate/mod.rs` 754.
+
+---
 
 ---
 
@@ -85,19 +105,6 @@
 - **Logic thuần:** `modelUtils.ts` (`formatBytesVi`/`formatSpeedVi`/`formatEtaVi`/`progressPct`/`sortSttEngines`/`engineSummary`/`recommendSttEngine`) + `scripts/settings-tests/modelUtils.test.ts` (9 case) + `package.json`/`index.ts` để `node --test scripts/settings-tests/` chạy được (Node 24 không quét dir — cùng mẹo `timeline-tests`).
 - **Verify:** `node --test scripts/settings-tests/` **21/21 PASS** (12 cũ + 9 mới), `tsc` 0 lỗi, `npm run build` OK trên **bản sao HEAD + file của tôi**; ảnh frontend-only (Edge headless + stub Tauri, 4 engine gồm 1 đang tải/2 đã tải): `%TEMP%\sublix-verify-settings\settings-stt.jpg` · `settings-stt-tools.jpg` · `settings-tts2.jpg`.
 - **Cần biết:** `ModelDownloadRow` lấy % từ **event** nên ảnh tĩnh chỉ hiện trạng thái (Chưa tải/Xong) — muốn thấy thanh tiến trình phải chạy app thật (để R2-8).
-
----
-
----
-
-### 2026-10-25 02:05 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-UI-REDESIGN-R2-5-7`, **chưa commit**). Fix `BUG-085` (chi tiết: `ISSUE_LOG.md`).
-- **R2-5 Cài đặt:** tách ra `src/views/settings/` (`SettingsNav` nhóm BẮT ĐẦU/XỬ LÝ AI/GIAO DIỆN/KHÁC · `TranslationSection` **5 provider** Ollama/GGUF/MiniMax/DeepSeek/OpenRouter · `TtsSection` đọc `tts_engines_status` + cài deps + chẩn đoán CUDA + key Google/FPT (chỉ hiện ••••4 cuối) · `ThemeSection` · `SystemStatusPanel` đọc config thật); bỏ 4 chấm theme khỏi topbar (PLAN §4.2) + bỏ danh sách preset lặp ở cột trái.
-- **`BUG-085` (quan trọng):** `src/views/settings/configMerge.ts` là **hàm thuần** — luôn gộp trên config **đọc lại từ đĩa ngay trước khi lưu**; chỉ ghi field vừa sửa + key **vừa gõ** (ô rỗng = giữ nguyên), xoá key phải bấm "Xoá key"; field lạ (kể cả field backend mới thêm) không mất. `node --test scripts/settings-tests` → **12/12 PASS**.
-- **Mức độ suy luận (theo yêu cầu PO):** Segmented 5 mức (Tự động/Thấp/Vừa/Cao/Tối đa), **chỉ hiện khi provider cloud + `supports_reasoning`**; lưu qua `translate_options_set` nếu backend có, fallback `llm_reasoning_effort` trong config. Hiện backend/wrapper **chưa có** → đã dựng type hợp đồng + cast có kiểm tra + TODO (không tự viết backend).
-- **R2-7:** `ProcessCenterView` bỏ thẻ "Động Cơ & Phần Cứng AI" ghi cứng "GPU CUDA/Whisper Large-v3" → thẻ **"Trạng thái thật"** (STT server/engine dịch/đang chạy + trỏ sang Cài đặt); Live/Lịch sử **chưa gọn** theo §4.5/4.6 (để sau).
-- **Verify:** `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (working tree đang đỏ do mcode #2 sửa `studioPipelineTypes.ts`/`SublixStudioView.tsx`); ảnh frontend-only (Edge headless, backend giả) `%TEMP%\sublix-verify-settings\settings-{translation,tts,theme}.jpg` + `tab-{live,history,process}.jpg`. **GUI thật để R2-8**: SAC chặn exe copy bị patch (`BUG-H09`) nên không tạo được instance riêng.
-- **Việc cho người sau:** implement `translate_options_get/set` đúng hợp đồng + trả `supports_reasoning`; khi `src/lib/tauri.ts` có wrapper chính thức thì bỏ cast `translateApi`; R2-8 kiểm tra Luu/key trên app thật.
 
 ---
 

@@ -30,6 +30,8 @@ fn main() -> Result<()> {
         Some("en".to_string()),
         Some("vi".to_string()),
         None,
+        None,
+        None,
     )?;
     let analyze_dur = start_time.elapsed();
 

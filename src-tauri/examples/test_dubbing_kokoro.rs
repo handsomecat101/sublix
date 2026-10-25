@@ -34,6 +34,8 @@ fn main() -> Result<()> {
         Some("en".to_string()),
         Some("vi".to_string()),
         None,
+        None,
+        None,
     )?;
     println!("✅ Phân tích xong trong {:.2}s", start.elapsed().as_secs_f32());
     println!("👥 {} vai diễn • {} câu thoại\n", project.speakers.len(), project.segments.len());
