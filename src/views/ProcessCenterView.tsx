@@ -33,6 +33,7 @@ import { ContextMenu, type ContextMenuItem } from "../components/ui/ContextMenu"
 import { SystemStatusPanel } from "./settings/SystemStatusPanel";
 import type { SettingsCtx, TransProvider } from "./settings/types";
 import type { AppTaskItem } from "./processTypes";
+import { resolveStudioReopen } from "./processTypes";
 import {
   buildFilterOptions,
   countProcessFilter,
@@ -49,6 +50,11 @@ export interface ProcessCenterViewProps {
   historyTasks: AppTaskItem[];
   onNavigateToTab: (tab: "studio" | "downloader" | "file_sub" | "dubbing" | "live" | "models") => void;
   onClearHistory: () => void;
+  /**
+   * TSK-TABS-P3-PROCESS-REOPEN: mở đúng tab Studio của tác vụ.
+   * Không truyền ⇒ giữ hành vi cũ (chỉ chuyển sang tab Studio).
+   */
+  onOpenStudioTask?: (task: { tabId?: string; sourcePath?: string; outputPath?: string }) => void;
   sttServerEngine?: string | null;
   transEnginePref?: string;
 }
@@ -113,6 +119,7 @@ function ProcessCenterViewInner({
   historyTasks,
   onNavigateToTab,
   onClearHistory,
+  onOpenStudioTask,
   sttServerEngine,
   transEnginePref = "auto",
 }: ProcessCenterViewProps) {
@@ -208,6 +215,27 @@ function ProcessCenterViewInner({
       await sublix.downloaderOpenFolder();
     }
   }, []);
+
+  /**
+   * TSK-TABS-P3-PROCESS-REOPEN: "Mở lại trong Studio".
+   * Có `onOpenStudioTask` + task biết tab/dự án ⇒ giao cho parent mở đúng tab;
+   * ngược lại giữ hành vi cũ (chỉ chuyển sang tab Studio).
+   */
+  const handleReopenInStudio = useCallback(
+    (task: AppTaskItem) => {
+      const target = resolveStudioReopen(task);
+      if (target.kind === "navigate-studio" || !onOpenStudioTask) {
+        onNavigateToTab("studio");
+        return;
+      }
+      onOpenStudioTask({
+        tabId: task.tabId,
+        sourcePath: task.sourcePath,
+        outputPath: task.outputPath,
+      });
+    },
+    [onNavigateToTab, onOpenStudioTask],
+  );
 
   /** Mở menu `⋯` ngay dưới nút. */
   const handleToggleMenu = useCallback(() => {
@@ -510,7 +538,7 @@ function ProcessCenterViewInner({
                           <button
                             type="button"
                             className="process-btn-jump"
-                            onClick={() => onNavigateToTab("studio")}
+                            onClick={() => handleReopenInStudio(task)}
                           >
                             🚀 Mở lại trong Studio
                           </button>

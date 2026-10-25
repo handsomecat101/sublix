@@ -7,3 +7,4 @@
  * `live-history-tests` / `settings-tests` / `timeline-tests`).
  */
 import "./processLogic.test.ts";
+import "./studioReopen.test.ts";
