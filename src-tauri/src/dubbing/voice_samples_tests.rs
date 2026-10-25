@@ -24,6 +24,30 @@ fn fake_wav(bytes_len: usize) -> Vec<u8> {
     v
 }
 
+/// WAV PCM **thật** (ffprobe đọc được) — cần khi test gọi `sample_is_broken`
+/// (hàm này có gọi ffprobe để kiểm tra file âm thanh thật).
+fn real_wav(secs: f32) -> Vec<u8> {
+    let sample_rate: u32 = 16_000;
+    let samples = (sample_rate as f32 * secs) as usize;
+    let data_len = (samples * 2) as u32;
+    let mut v = Vec::with_capacity(44 + data_len as usize);
+    v.extend_from_slice(b"RIFF");
+    v.extend_from_slice(&(36 + data_len).to_le_bytes());
+    v.extend_from_slice(b"WAVE");
+    v.extend_from_slice(b"fmt ");
+    v.extend_from_slice(&16u32.to_le_bytes()); // kích thước fmt chunk
+    v.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    v.extend_from_slice(&1u16.to_le_bytes()); // mono
+    v.extend_from_slice(&sample_rate.to_le_bytes());
+    v.extend_from_slice(&(sample_rate * 2).to_le_bytes()); // byte rate
+    v.extend_from_slice(&2u16.to_le_bytes()); // block align
+    v.extend_from_slice(&16u16.to_le_bytes()); // bits/sample
+    v.extend_from_slice(b"data");
+    v.extend_from_slice(&data_len.to_le_bytes());
+    v.resize(44 + data_len as usize, 0);
+    v
+}
+
 /// Bỏ file tạm (không assert — test không được fail vì dọn dẹp).
 fn cleanup(dir: &Path) {
     let _ = fs::remove_dir_all(dir);
@@ -204,6 +228,69 @@ fn list_cached_in_sort_va_bo_file_nho() {
 fn list_cached_in_thu_muc_khong_ton_tai_tra_ve_rong() {
     let ids = list_cached_in(Path::new("C:/khong/ton/tai/khong"));
     assert!(ids.is_empty(), "thư mục không tồn tại → danh sách rỗng");
+}
+
+/* ------------------------------------------------------------------ */
+/* Đường dẫn mẫu (TSK-VOICE-PREVIEW-FILE)                             */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn cached_sample_path_in_tra_path_khi_file_hop_le() {
+    let dir = temp_dir("path_ok");
+    write_atomic(&dir, "diem_trinh", "wav", &real_wav(0.2)).expect("ghi");
+    let p = cached_sample_path_in(&dir, "kokoro:diem_trinh", "wav").expect("phai tim thay mau");
+    assert!(p.exists(), "file mau phai ton tai");
+    assert_eq!(p.file_name().unwrap(), "diem_trinh.wav");
+    cleanup(&dir);
+}
+
+#[test]
+fn cached_sample_path_in_none_khi_file_chua_co() {
+    let dir = temp_dir("path_missing");
+    assert!(cached_sample_path_in(&dir, "kokoro:diem_trinh", "wav").is_none());
+    cleanup(&dir);
+}
+
+#[test]
+fn cached_sample_path_in_none_khi_file_hong_va_xoa_no() {
+    let dir = temp_dir("path_broken");
+    fs::write(dir.join("nho.wav"), vec![0u8; 10]).expect("ghi file nho");
+    assert!(cached_sample_path_in(&dir, "kokoro:nho", "wav").is_none());
+    assert!(
+        !dir.join("nho.wav").exists(),
+        "file mau hong phai bi xoa de tao lai"
+    );
+    cleanup(&dir);
+}
+
+#[test]
+fn ensure_sample_path_in_tra_path_khi_da_co_mau_trong_cache() {
+    let dir = temp_dir("ensure_path");
+    write_atomic(&dir, "diem_trinh", "wav", &real_wav(0.2)).expect("ghi");
+    let out = ensure_sample_path_in(ENGINE_KOKORO, "kokoro:diem_trinh", None, &dir)
+        .expect("khong loi");
+    let path = out.expect("phai co path");
+    assert!(Path::new(&path).exists(), "path tra ve phai ton tai: {path}");
+    assert!(
+        path.ends_with("diem_trinh.wav"),
+        "path phai tro dung file mau: {path}"
+    );
+    cleanup(&dir);
+}
+
+#[test]
+fn duong_dan_mau_chi_phu_thuoc_voice_id_khong_co_ten_vai() {
+    // Khoá cache KHÔNG chứa tên vai: cùng 1 voice id -> cùng 1 file, dù text khác nhau.
+    let dir = temp_dir("role");
+    let a = sample_path_in(&dir, "kokoro:diem_trinh", "wav");
+    let b = sample_path_in(&dir, "kokoro:diem_trinh", "wav");
+    assert_eq!(a, b);
+    assert_eq!(
+        a.file_name().unwrap(),
+        "diem_trinh.wav",
+        "ten file chi suy tu voice id (khong them ten vai)"
+    );
+    cleanup(&dir);
 }
 
 /* ------------------------------------------------------------------ */

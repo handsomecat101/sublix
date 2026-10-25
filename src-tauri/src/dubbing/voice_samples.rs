@@ -198,13 +198,25 @@ pub fn sample_data_for_model(model_id: &str, voice_id: &str) -> Option<String> {
     read_data_uri(&path)
 }
 
-/// Tổng hợp 1 mẫu cho giọng rồi lưu cache (atomic). Trả data URI.
-pub(super) fn synthesize_sample(
+/// Tổng hợp 1 mẫu cho giọng rồi lưu cache (atomic). Trả **đường dẫn** file mẫu.
+///
+/// Đường dẫn tuyệt đối ⇒ frontend phát bằng **asset protocol**
+/// (`convertFileSrc`) thay vì chuyển base64 qua IPC ⇒ lần nghe thứ 2 tức thì.
+pub(super) fn synthesize_sample_path(
     engine: &str,
     voice_id: &str,
     text: &str,
-) -> Result<Option<String>> {
-    let dir = samples_dir(engine);
+) -> Result<Option<PathBuf>> {
+    synthesize_sample_path_in(engine, voice_id, text, &samples_dir(engine))
+}
+
+/// Bản nhận **thư mục cache** làm tham số (để unit test không chạm thư mục thật).
+pub(super) fn synthesize_sample_path_in(
+    engine: &str,
+    voice_id: &str,
+    text: &str,
+    dir: &Path,
+) -> Result<Option<PathBuf>> {
     let name = sanitize_voice(voice_id);
     let ext = ext_for_voice(voice_id);
     let lock = lock_for(&format!("{engine}:{name}"));
@@ -213,7 +225,7 @@ pub(super) fn synthesize_sample(
     let final_path = dir.join(format!("{name}.{ext}"));
     // Đã có mẫu hợp lệ → khỏi tổng hợp lại (đây là đường "phát tức thì").
     if final_path.exists() && !sample_is_broken(&final_path) {
-        return Ok(read_data_uri(&final_path));
+        return Ok(Some(final_path));
     }
     let _ = fs::remove_file(&final_path);
 
@@ -232,8 +244,20 @@ pub(super) fn synthesize_sample(
         }
     };
     let _ = fs::remove_file(&tmp);
-    write_atomic(&dir, &name, ext, &bytes)?;
-    read_data_uri(&final_path).map(Some).ok_or_else(|| {
+    write_atomic(dir, &name, ext, &bytes)?;
+    Ok(Some(final_path))
+}
+
+/// Tổng hợp 1 mẫu cho giọng rồi lưu cache (atomic). Trả data URI.
+pub(super) fn synthesize_sample(
+    engine: &str,
+    voice_id: &str,
+    text: &str,
+) -> Result<Option<String>> {
+    let Some(path) = synthesize_sample_path(engine, voice_id, text)? else {
+        return Ok(None);
+    };
+    read_data_uri(&path).map(Some).ok_or_else(|| {
         anyhow::anyhow!("Mẫu nghe thử của giọng {voice_id} không đọc được sau khi tổng hợp.")
     })
 }
@@ -244,11 +268,61 @@ pub fn ensure_sample(voice_id: &str, text: Option<&str>) -> Result<Option<String
     if let Some(uri) = sample_data_for_model(model_folder(engine), voice_id) {
         return Ok(Some(uri));
     }
-    let phrase = text
-        .map(|t| t.trim())
-        .filter(|t| !t.is_empty())
-        .unwrap_or(SAMPLE_PHRASE);
+    let phrase = sample_phrase(text);
     synthesize_sample(engine, voice_id, phrase)
+}
+
+/// Lazy: **đường dẫn tuyệt đối** tới file mẫu (đã cache hoặc vừa tổng hợp).
+///
+/// Dùng để phát bằng **asset protocol** (`convertFileSrc`) — không chuyển base64
+/// qua IPC ⇒ lần nghe thứ 2 tức thì (trước đây mất ~1 s).
+///
+/// Khoá cache **không** chứa tên vai (chỉ `engine` + `voice_id`) ⇒ mọi vai dùng
+/// chung 1 giọng vẫn dùng chung 1 file mẫu.
+pub fn ensure_sample_path(voice_id: &str, text: Option<&str>) -> Result<Option<String>> {
+    let engine = engine_of_voice(voice_id);
+    ensure_sample_path_in(engine, voice_id, text, &samples_dir(engine))
+}
+
+/// Bản nhận **thư mục cache** làm tham số (để unit test không chạm thư mục thật).
+pub(super) fn ensure_sample_path_in(
+    engine: &str,
+    voice_id: &str,
+    text: Option<&str>,
+    dir: &Path,
+) -> Result<Option<String>> {
+    let ext = ext_for_folder(model_folder(engine), voice_id);
+    if let Some(path) = cached_sample_path_in(dir, voice_id, ext) {
+        return Ok(Some(path.to_string_lossy().to_string()));
+    }
+    let phrase = sample_phrase(text);
+    Ok(synthesize_sample_path_in(engine, voice_id, phrase, dir)?
+        .map(|p| p.to_string_lossy().to_string()))
+}
+
+/// Đường dẫn tuyệt đối tới mẫu **đã cache** theo model id (vd "kokoro-vi").
+///
+/// Tương đương `sample_data_for_model` nhưng trả path thay vì data URI.
+pub fn sample_path_for_model(model_id: &str, voice_id: &str) -> Option<String> {
+    let ext = ext_for_folder(model_id, voice_id);
+    let dir = samples_dir_for_model(model_id);
+    cached_sample_path_in(&dir, voice_id, ext).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Đường dẫn file mẫu đã cache trong thư mục `dir` (None nếu chưa có / hỏng).
+fn cached_sample_path_in(dir: &Path, voice_id: &str, ext: &str) -> Option<PathBuf> {
+    let path = sample_path_in(dir, voice_id, ext);
+    if purge_if_broken(&path) {
+        return None;
+    }
+    path.exists().then_some(path)
+}
+
+/// Câu mẫu dùng để tổng hợp (rỗng ⇒ câu mặc định).
+fn sample_phrase(text: Option<&str>) -> &str {
+    text.map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .unwrap_or(SAMPLE_PHRASE)
 }
 
 #[cfg(test)]

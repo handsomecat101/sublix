@@ -420,6 +420,8 @@ pub fn run() {
             voice_sample_data,
             voice_sample_status,
             voice_sample_ensure,
+            voice_sample_ensure_path,
+            voice_sample_data_path,
             voice_samples_prepare,
             voice_samples_prepare_cancel,
             tts_engines_status,
@@ -1861,6 +1863,41 @@ async fn voice_sample_ensure(
         dubbing::voice_samples::maybe_auto_prepare(&app, &engine);
     }
     result
+}
+
+/// TSK-VOICE-PREVIEW-FILE: **đường dẫn tuyệt đối** tới file mẫu nghe thử.
+///
+/// Giống `voice_sample_ensure` (tạo/lấy từ cache, cùng khoá cache — khoá KHÔNG chứa
+/// tên vai) nhưng trả **path** thay vì data-URI base64 ⇒ frontend phát bằng
+/// `convertFileSrc` (asset protocol) ⇒ **không chuyển base64 qua IPC**, lần nghe thứ 2
+/// tức thì.
+///
+/// `None` = chưa có mẫu và không tổng hợp được (ví dụ giọng cloud thiếu key).
+#[tauri::command]
+async fn voice_sample_ensure_path(
+    app: tauri::AppHandle,
+    voice_id: String,
+    text: Option<String>,
+) -> Result<Option<String>, String> {
+    let engine = dubbing::voice_samples::engine_of_voice(&voice_id).to_string();
+    let result = tokio::task::spawn_blocking(move || {
+        dubbing::voice_samples::ensure_sample_path(&voice_id, text.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"));
+    // Vừa nghe 1 giọng → cơ hội tạo nền cho cả engine (nếu app rảnh).
+    if result.is_ok() {
+        dubbing::voice_samples::maybe_auto_prepare(&app, &engine);
+    }
+    result
+}
+
+/// TSK-VOICE-PREVIEW-FILE: **đường dẫn tuyệt đối** tới mẫu đã cache theo model id
+/// (vd "kokoro-vi") — không tổng hợp mới (None nếu chưa có mẫu).
+#[tauri::command]
+fn voice_sample_data_path(model_id: String, voice_id: String) -> Option<String> {
+    dubbing::voice_samples::sample_path_for_model(&model_id, &voice_id)
 }
 
 /// TSK-FEAT-VOICE-SAMPLE-CACHE: tạo mẫu nghe thử **nền** cho mọi giọng của engine

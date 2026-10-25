@@ -1,6 +1,6 @@
 //! Tauri command wrappers — type-safe bridge to Rust backend (Sublix v0.5.0).
 
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type {
   ContextualLine,
   Glossary,
@@ -892,6 +892,41 @@ export const sublix = {
       voiceId,
       text: text ?? null,
     });
+  },
+
+  /**
+   * TSK-VOICE-PREVIEW-FILE: **URL phát mẫu giọng** (asset protocol) thay vì data-URI base64.
+   *
+   * Vì sao: `voiceSampleEnsure` trả base64 của **cả file âm thanh** qua IPC ⇒ lần
+   * nghe thứ 2 vẫn mất ~1 s. Lệnh mới trả **đường dẫn tuyệt đối**, frontend đổi
+   * thành URL `asset://` ⇒ đọc thẳng từ đĩa.
+   *
+   * `?v=<timestamp>` để không dính cache cũ khi file mẫu được tạo lại (asset protocol
+   * chỉ đọc phần `path` của URL ⇒ query **không** ảnh hưởng việc tìm file).
+   *
+   * Trả `null` khi chưa có mẫu và không tổng hợp được (ví dụ giọng cloud thiếu key).
+   */
+  async voiceSampleEnsureUrl(voiceId: string, text?: string): Promise<string | null> {
+    const path = await invoke<string | null>("voice_sample_ensure_path", {
+      voiceId,
+      text: text ?? null,
+    });
+    if (!path) return null;
+    return `${convertFileSrc(path)}?v=${Date.now()}`;
+  },
+
+  /**
+   * TSK-VOICE-PREVIEW-FILE: URL mẫu **đã cache** theo model id (vd "kokoro-vi").
+   *
+   * Không tổng hợp mới (null nếu chưa có mẫu) — dùng cho đường cũ của Kokoro.
+   */
+  async voiceSampleDataUrl(modelId: string, voiceId: string): Promise<string | null> {
+    const path = await invoke<string | null>("voice_sample_data_path", {
+      modelId,
+      voiceId,
+    });
+    if (!path) return null;
+    return `${convertFileSrc(path)}?v=${Date.now()}`;
   },
 
   /** Tạo mẫu nghe thử nền cho mọi giọng của engine (hoặc mọi engine đã cài). */
