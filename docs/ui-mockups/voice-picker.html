@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Ô chọn giọng (mockup)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  body { padding: 18px 22px; }
+  h1 { margin: 0 0 2px; font-size: 17px; font-weight: 800; letter-spacing: .01em; }
+  .sub { color: var(--t3); font-size: 12px; margin-bottom: 14px; }
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 488px 488px; gap: 14px; }
+  .cell { position: relative; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg-side); padding: 12px 14px; overflow: hidden; }
+  .cell-t { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12.5px; margin-bottom: 10px; }
+  .cell-t i { font-style: normal; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; background: var(--ac); color: #1a1209; font-size: 10.5px; font-weight: 800; }
+  .cell-t span { color: var(--t3); font-weight: 500; font-size: 11.5px; }
+
+  /* ---------- hàng vai (giữ như Studio hiện tại, chỉ thay select) ---------- */
+  .role { display: grid; grid-template-columns: 8px 1fr auto; gap: 5px 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line-soft); width: 312px; }
+  .role + .role { margin-top: 6px; }
+  .role .c { width: 8px; height: 8px; border-radius: 50%; }
+  .role .nm { font-weight: 700; font-size: 12px; }
+  .role .vo { grid-column: 2 / 4; display: flex; gap: 6px; }
+  .gender { font-size: 10.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--t2); }
+  .play-role { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--bg-card); color: var(--t2); font-size: 11px; flex: none; }
+
+  /* ---------- NÚT KÍCH HOẠT (trạng thái đóng) ---------- */
+  .vp-trigger { flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 9px; border-radius: 7px; background: var(--bg-inset); border: 1px solid var(--line); font-size: 12.5px; }
+  .vp-trigger .g { color: var(--t3); font-size: 14px; line-height: 1; width: 12px; text-align: center; }
+  .vp-trigger .n { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vp-trigger .fav { color: var(--ac); font-size: 11px; }
+  .vp-trigger .sp { flex: 1; }
+  .vp-trigger .car { color: var(--t4); font-size: 10px; }
+  .vp-trigger.open { border-color: var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); }
+  .vp-trigger.focus { border-color: var(--ac-br); }
+  .eng { font-size: 10px; font-weight: 700; padding: 0 5px; height: 16px; line-height: 15px; border-radius: 4px; border: 1px solid var(--line); color: var(--t3); white-space: nowrap; letter-spacing: .02em; }
+  .eng.off::before { content: "●"; color: var(--ok); font-size: 7px; margin-right: 3px; vertical-align: 1px; }
+  .eng.net::before { content: "☁"; color: var(--t3); font-size: 9px; margin-right: 3px; }
+
+  /* ---------- POPOVER ---------- */
+  .vp { width: 320px; margin-top: 6px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.4); overflow: hidden; display: flex; flex-direction: column; }
+  .vp-head { padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--line-soft); }
+  .vp-search { height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 9px; border-radius: 7px; background: var(--bg-inset); border: 1px solid var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); font-size: 12.5px; }
+  .vp-search .ic { color: var(--t4); font-size: 12px; }
+  .vp-search .ph { color: var(--t4); }
+  .vp-search .caret { width: 1px; height: 15px; background: var(--ac-txt); margin-left: -5px; }
+  .vp-search .clr { margin-left: auto; color: var(--t4); font-size: 11px; }
+  .vp-filter { display: flex; align-items: center; gap: 4px; }
+  .chip { font-size: 11px; padding: 1px 9px; height: 22px; line-height: 19px; border-radius: 11px; border: 1px solid var(--line); color: var(--t3); font-weight: 600; }
+  .chip.on { color: var(--ac-txt); border-color: var(--ac-br); background: var(--ac-soft); }
+  .vp-filter .cnt { margin-left: auto; font-size: 10.5px; color: var(--t4); }
+  .vp-list { padding: 4px; overflow: hidden; }
+  .grp { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .05em; }
+  .grp .eng { text-transform: none; letter-spacing: .02em; }
+  .grp .k { margin-left: auto; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  .grp.star { color: var(--ac-txt); }
+  .vr { position: relative; height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 6px 0 8px; border-radius: 6px; font-size: 12.5px; }
+  .vr .ck { width: 12px; color: var(--ac); font-size: 11px; text-align: center; flex: none; }
+  .vr .g { width: 14px; color: var(--t3); font-size: 14px; line-height: 1; text-align: center; flex: none; }
+  .vr .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t2); }
+  .vr .n mark { background: none; color: var(--ac-txt); font-weight: 700; text-decoration: underline; text-decoration-color: var(--ac-br); text-underline-offset: 2px; }
+  .vr .sp { flex: 1; }
+  .vr .meta { font-size: 11px; color: var(--t4); white-space: nowrap; }
+  .vr .used { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--t3); padding: 0 6px; height: 18px; border-radius: 9px; background: rgba(255,255,255,.04); border: 1px solid var(--line-soft); white-space: nowrap; }
+  .vr .used b { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .ib { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; color: var(--t3); flex: none; }
+  .ib.pl { border: 1px solid var(--line); background: var(--bg-card); color: var(--t1); font-size: 9.5px; }
+  .ib.st { color: var(--t4); font-size: 13px; }
+  .ib.st.on { color: var(--ac); }
+  .ib.ghost { visibility: hidden; }
+  .vr.cur .n { color: var(--ac-txt); font-weight: 700; }
+  .vr.act { background: var(--hover); box-shadow: inset 2px 0 0 var(--ac); }
+  .vr.hov { background: rgba(244,236,222,.075); }
+  .vr.playing { background: var(--ac-soft); }
+  .vr.playing .ib.pl { background: var(--ac); border-color: var(--ac); color: #1a1209; }
+  .vr .prog { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: 1px; background: rgba(232,163,61,.18); }
+  .vr .prog i { display: block; height: 100%; width: 42%; border-radius: 1px; background: var(--ac); }
+  .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
+  .eq i { width: 2px; background: var(--ac); border-radius: 1px; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(232,163,61,.25); border-top-color: var(--ac); display: inline-block; }
+  .vr .gen { font-size: 11px; color: var(--warn-txt); white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .vr.dim .n { color: var(--t3); }
+  .vp-foot { white-space: nowrap; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-top: 1px solid var(--line-soft); font-size: 10.5px; color: var(--t4); background: rgba(0,0,0,.14); }
+  .vp-foot .kbd { font-size: 9.5px; }
+  .vp-foot .link { margin-left: auto; font-size: 11px; }
+  .empty { padding: 26px 18px 22px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .empty .big { font-size: 22px; color: var(--t4); }
+  .empty .t { font-weight: 700; font-size: 12.5px; }
+  .empty .d { font-size: 11.5px; color: var(--t3); }
+  .empty .row { margin-top: 6px; }
+  .tip { position: absolute; z-index: 5; background: #2a231d; border: 1px solid var(--line); color: var(--t1); font-size: 11px; padding: 3px 7px; border-radius: 6px; box-shadow: var(--shadow-1); white-space: nowrap; }
+
+  /* ---------- ô quy tắc / so sánh ---------- */
+  .spec { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+  .spec h4 { margin: 4px 0 0; font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; }
+  .before { font-size: 12px; padding: 6px 9px; border-radius: 6px; background: #b8b8b8; color: #222; font-family: Arial, sans-serif; }
+  .arrow { color: var(--t4); font-size: 11px; padding-left: 4px; }
+  .kt { display: grid; grid-template-columns: 112px 1fr; gap: 5px 10px; font-size: 11.5px; align-items: center; }
+  .kt .k { display: flex; gap: 3px; flex-wrap: wrap; }
+  .kt .kbd { font-size: 10px; }
+  .kt span:not(.kbd) { color: var(--t2); }
+</style>
+</head>
+<body>
+<h1>Ô chọn giọng đọc — <span style="color:var(--ac-txt)">VoicePicker</span></h1>
+<div class="sub">Studio › bước 4 Lồng tiếng (hàng vai) · dùng lại ở Cài đặt › Giọng đọc · thay <span class="mono">&lt;select&gt;</span> gốc của Windows · plan: <span class="mono">docs/UI_REDESIGN_PLAN.md §4.10</span></div>
+
+<div class="board">
+
+  <!-- ① ĐÓNG -->
+  <div class="cell">
+    <div class="cell-t"><i>1</i>Đóng <span>— trong hàng vai, rộng 312px</span></div>
+    <div class="role"><span class="c" style="background:#3B82F6"></span><span class="nm">Người dẫn</span><span class="row"><span class="gender">♂ Nam</span><span class="dim">5 câu</span></span>
+      <div class="vo"><div class="vp-trigger"><span class="g">♂</span><span class="n">Adam bựa</span><span class="fav">★</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▾</span></div><span class="play-role" title="Nghe 1 câu của vai">▶</span></div></div>
+    <div class="role"><span class="c" style="background:#EC4899"></span><span class="nm">Nhân vật 2</span><span class="row"><span class="gender">♀ Nữ</span><span class="dim">3 câu</span></span>
+      <div class="vo"><div class="vp-trigger focus"><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▾</span></div><span class="play-role">▶</span></div></div>
+    <div class="role"><span class="c" style="background:#10B981"></span><span class="nm">Bà cụ</span><span class="row"><span class="gender">♀ Nữ</span><span class="dim">2 câu</span></span>
+      <div class="vo"><div class="vp-trigger"><span class="g">♀</span><span class="n">vi-VN-HoaiMyNeural</span><span class="sp"></span><span class="eng net">Edge</span><span class="car">▾</span></div><span class="play-role">▶</span></div></div>
+
+    <div class="spec" style="margin-top:16px">
+      <h4>Quy tắc nhãn</h4>
+      <div class="before">VN • Adam bựa (VieNeu v3 — offline)</div>
+      <div class="arrow">↓ tên · ★ · badge engine (● offline / ☁ mạng)</div>
+      <div class="vp-trigger" style="width:230px;flex:none"><span class="g">♂</span><span class="n">Adam bựa</span><span class="fav">★</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▾</span></div>
+      <div class="dim" style="font-size:11px;line-height:1.45">"VN •" → tiêu đề nhóm ngôn ngữ (chỉ hiện khi &gt; 1 ngôn ngữ).<br>"(VieNeu v3 — offline)" → badge <b style="color:var(--t3)">VieNeu</b>, chi tiết trong tooltip.<br>Tên dài → cắt "…" + tooltip.</div>
+    </div>
+    <div class="note" data-n="1" style="left:14px;top:448px;max-width:420px">▶ cạnh ô = nghe 1 câu thật của vai (giữ) · ▶ trong danh sách = mẫu giọng</div>
+  </div>
+
+  <!-- ② MỞ — MẶC ĐỊNH -->
+  <div class="cell">
+    <div class="cell-t"><i>2</i>Mở <span>— ô tìm có focus, dòng đang dùng được chọn sẵn</span></div>
+    <div class="vp-trigger open" style="width:312px"><span class="g">♂</span><span class="n">Adam bựa</span><span class="fav">★</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▴</span></div>
+    <div class="vp">
+      <div class="vp-head">
+        <div class="vp-search"><span class="ic">⌕</span><span class="caret"></span><span class="ph">Tìm giọng… (không cần dấu)</span></div>
+        <div class="vp-filter"><span class="chip on">Tất cả</span><span class="chip">♂ Nam</span><span class="chip">♀ Nữ</span><span class="cnt">25 giọng</span></div>
+      </div>
+      <div class="vp-list">
+        <div class="grp star">★ Yêu thích <span class="k">3</span></div>
+        <div class="vr cur act"><span class="ck">✓</span><span class="g">♂</span><span class="n">Adam bựa</span><span class="sp"></span><span class="used"><b style="background:#3B82F6"></b>Người dẫn</span><span class="ib pl">▶</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="used"><b style="background:#EC4899"></b>Nhân vật 2</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Thiện Minh</span><span class="sp"></span><span class="ib st on">★</span></div>
+        <div class="grp">Tất cả <span class="eng off">VieNeu v3</span><span class="k">22</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Trúc Ly</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Mai Anh</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Hải Đăng</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Thùy Dung</span></div>
+      </div>
+      <div class="vp-foot"><span class="kbd">↑↓</span><span class="kbd">↵</span>dùng · <span class="kbd">Ctrl+Space</span>nghe · <span class="kbd">Esc</span><span class="link">Quản lý ›</span></div>
+    </div>
+    <div class="note" data-n="2" style="left:338px;top:150px;max-width:150px">★ luôn ở đầu, kể cả khi đang tìm</div>
+    <div class="note" data-n="3" style="left:338px;top:236px;max-width:150px">Chip vai = giọng đang dùng ở vai khác → tránh trùng giọng</div>
+  </div>
+
+  <!-- ③ HOVER · ĐANG PHÁT · CHƯA CÓ MẪU -->
+  <div class="cell">
+    <div class="cell-t"><i>3</i>Hover · Đang phát · Chưa có mẫu</div>
+    <div class="vp-trigger open" style="width:312px"><span class="g">♂</span><span class="n">Adam bựa</span><span class="fav">★</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▴</span></div>
+    <div class="vp">
+      <div class="vp-head">
+        <div class="vp-search"><span class="ic">⌕</span><span class="caret"></span><span class="ph">Tìm giọng… (không cần dấu)</span></div>
+        <div class="vp-filter"><span class="chip on">Tất cả</span><span class="chip">♂ Nam</span><span class="chip">♀ Nữ</span><span class="cnt">25 giọng</span></div>
+      </div>
+      <div class="vp-list">
+        <div class="grp star">★ Yêu thích <span class="k">3</span></div>
+        <div class="vr cur"><span class="ck">✓</span><span class="g">♂</span><span class="n">Adam bựa</span><span class="sp"></span><span class="used"><b style="background:#3B82F6"></b>Người dẫn</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="used"><b style="background:#EC4899"></b>Nhân vật 2</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Thiện Minh</span><span class="sp"></span><span class="ib st on">★</span></div>
+        <div class="grp">Tất cả <span class="eng off">VieNeu v3</span><span class="k">22</span></div>
+        <div class="vr hov"><span class="ck"></span><span class="g">♀</span><span class="n">Trúc Ly</span><span class="sp"></span><span class="ib pl">▶</span><span class="ib st">☆</span></div>
+        <div class="vr playing"><span class="ck"></span><span class="g">♀</span><span class="n">Mai Anh</span><span class="sp"></span><span class="eq"><i style="height:5px"></i><i style="height:11px"></i><i style="height:7px"></i><i style="height:9px"></i></span><span class="meta">0:02 / 0:05</span><span class="ib pl">■</span><span class="ib st ghost">☆</span><span class="prog"><i></i></span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Hải Đăng</span><span class="sp"></span><span class="gen"><span class="spin"></span>đang tạo mẫu…</span><span class="ib pl" style="opacity:.45">■</span><span class="ib st ghost">☆</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Thùy Dung</span></div>
+      </div>
+      <div class="vp-foot"><span class="kbd">↑↓</span><span class="kbd">↵</span>dùng · <span class="kbd">Ctrl+Space</span>nghe · <span class="kbd">Esc</span><span class="link">Quản lý ›</span></div>
+    </div>
+    <div class="tip" style="left:326px;top:304px">☆ Ghim · Ctrl+S</div>
+    <div class="note" data-n="4" style="left:14px;top:452px;max-width:420px">▶ không đổi giọng vai · 1 mẫu/lúc · chưa có mẫu → tạo rồi tự phát</div>
+  </div>
+
+  <!-- ④ TÌM + LỌC -->
+  <div class="cell">
+    <div class="cell-t"><i>4</i>Tìm "ngoc" + lọc ♀ Nữ</div>
+    <div class="vp-trigger open" style="width:312px"><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▴</span></div>
+    <div class="vp">
+      <div class="vp-head">
+        <div class="vp-search"><span class="ic">⌕</span><span>ngoc</span><span class="caret" style="margin-left:-6px"></span><span class="clr">✕</span></div>
+        <div class="vp-filter"><span class="chip">Tất cả</span><span class="chip">♂ Nam</span><span class="chip on">♀ Nữ</span><span class="cnt">3 / 25</span></div>
+      </div>
+      <div class="vp-list">
+        <div class="grp star">★ Yêu thích <span class="k">1</span></div>
+        <div class="vr cur"><span class="ck">✓</span><span class="g">♀</span><span class="n"><mark>Ngọc</mark> Huyền</span><span class="sp"></span><span class="used"><b style="background:#EC4899"></b>Nhân vật 2</span><span class="ib st on">★</span></div>
+        <div class="grp">Tất cả <span class="eng off">VieNeu v3</span><span class="k">2</span></div>
+        <div class="vr act"><span class="ck"></span><span class="g">♀</span><span class="n"><mark>Ngọc</mark> Trân</span><span class="sp"></span><span class="ib pl">▶</span><span class="ib st">☆</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n"><mark>Ngọc</mark> Linh</span></div>
+      </div>
+      <div class="vp-foot"><span class="kbd">↑↓</span><span class="kbd">↵</span>dùng · <span class="kbd">Ctrl+Space</span>nghe · <span class="kbd">Esc</span><span class="link">Quản lý ›</span></div>
+    </div>
+    <div class="note" data-n="5" style="left:20px;top:340px;max-width:300px">Tìm không dấu, khớp tên + engine + ngôn ngữ. Có kết quả → dòng đầu (sau ★ đang chọn) được chọn sẵn để Enter ngay. Popover co theo nội dung.</div>
+  </div>
+
+  <!-- ⑤ RỖNG -->
+  <div class="cell">
+    <div class="cell-t"><i>5</i>Tìm không thấy</div>
+    <div class="vp-trigger open" style="width:312px"><span class="g">♂</span><span class="n">Adam bựa</span><span class="fav">★</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▴</span></div>
+    <div class="vp">
+      <div class="vp-head">
+        <div class="vp-search"><span class="ic">⌕</span><span>ngoc lan</span><span class="caret" style="margin-left:-6px"></span><span class="clr">✕</span></div>
+        <div class="vp-filter"><span class="chip">Tất cả</span><span class="chip on">♂ Nam</span><span class="chip">♀ Nữ</span><span class="cnt">0 / 25</span></div>
+      </div>
+      <div class="empty">
+        <div class="big">⌕</div>
+        <div class="t">Không có giọng "ngoc lan"</div>
+        <div class="d">trong VieNeu v3 · ♂ Nam</div>
+        <div class="row"><span class="btn">Bỏ lọc ♂ Nam (2 kết quả)</span><span class="btn ghost">Xoá tìm</span></div>
+      </div>
+      <div class="vp-foot"><span class="kbd">Esc</span>xoá tìm · <span class="kbd">Esc</span> lần 2 đóng<span class="link">Quản lý ›</span></div>
+    </div>
+    <div class="note" data-n="6" style="left:20px;top:410px;max-width:300px">Nút gợi ý chỉ hiện khi bỏ lọc giới tính có kết quả (đếm sẵn). Không bao giờ hiện danh sách trống trơn.</div>
+  </div>
+
+  <!-- ⑥ MỞ LÊN TRÊN (hết chỗ phía dưới) -->
+  <div class="cell">
+    <div class="cell-t"><i>6</i>Sát đáy panel <span>— tự lật lên trên</span></div>
+    <div class="vp" style="margin-top:0">
+      <div class="vp-list">
+        <div class="grp star">★ Yêu thích <span class="k">3</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Adam bựa</span><span class="sp"></span><span class="used"><b style="background:#3B82F6"></b>Người dẫn</span><span class="ib st on">★</span></div>
+        <div class="vr cur act"><span class="ck">✓</span><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="ib pl">▶</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Thiện Minh</span><span class="sp"></span><span class="ib st on">★</span></div>
+        <div class="grp">Tất cả <span class="eng off">VieNeu v3</span><span class="k">22</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Trúc Ly</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Mai Anh</span></div>
+      </div>
+      <div class="vp-head" style="border-bottom:0;border-top:1px solid var(--line-soft)">
+        <div class="vp-filter"><span class="chip on">Tất cả</span><span class="chip">♂ Nam</span><span class="chip">♀ Nữ</span><span class="cnt">25 giọng</span></div>
+        <div class="vp-search"><span class="ic">⌕</span><span class="caret"></span><span class="ph">Tìm giọng… (không cần dấu)</span></div>
+      </div>
+    </div>
+    <div class="vp-trigger open" style="width:320px;margin-top:6px"><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="car">▾</span></div>
+    <div style="margin-top:8px;padding:10px;border-radius:10px;background:var(--grad-ac);color:#1a1209;font-weight:800;text-align:center;width:320px">▶ Chạy 2 bước đã bật</div>
+    <div class="note" data-n="7" style="left:20px;top:440px;max-width:300px">Ô tìm luôn nằm sát nút kích hoạt; danh sách không che nút chạy.</div>
+  </div>
+
+  <!-- ⑦ CÀI ĐẶT › GIỌNG ĐỌC (inline) -->
+  <div class="cell">
+    <div class="cell-t"><i>7</i>Cài đặt › Giọng đọc <span>— cùng component, variant="inline"</span></div>
+    <div class="vp" style="width:100%;margin-top:0;box-shadow:none;background:var(--bg-card)">
+      <div class="vp-head">
+        <div class="vp-search" style="box-shadow:none;border-color:var(--line)"><span class="ic">⌕</span><span class="ph">Tìm trong 62 giọng…</span></div>
+        <div class="vp-filter"><span class="chip on">Tất cả</span><span class="chip">♂ Nam</span><span class="chip">♀ Nữ</span><span class="cnt">62 giọng · 3 engine</span></div>
+      </div>
+      <div class="vp-list">
+        <div class="grp star">★ Yêu thích <span class="k">4</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Adam bựa</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">Ngọc Huyền</span><span class="sp"></span><span class="eng off">VieNeu</span><span class="ib st on">★</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♀</span><span class="n">vi-VN-HoaiMyNeural</span><span class="sp"></span><span class="eng net">Edge</span><span class="ib st on">★</span></div>
+        <div class="grp">VieNeu v3 <span class="eng off">offline</span><span class="k">25</span></div>
+        <div class="vr hov"><span class="ck"></span><span class="g">♀</span><span class="n">Trúc Ly</span><span class="sp"></span><span class="ib pl">▶</span><span class="ib st">☆</span></div>
+        <div class="grp">Kokoro <span class="eng off">offline</span><span class="k">14</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">Tuấn Ngọc</span><span class="sp"></span><span class="meta">VN</span></div>
+        <div class="grp">Edge TTS <span class="eng net">mạng</span><span class="k">23</span></div>
+        <div class="vr"><span class="ck"></span><span class="g">♂</span><span class="n">vi-VN-NamMinhNeural</span><span class="sp"></span><span class="meta">VN</span></div>
+      </div>
+    </div>
+    <div class="note" data-n="8" style="left:20px;top:440px;max-width:300px">Ở Cài đặt: không có ✓ / chip vai; ★ ghim ở đây hiện ngay ở Studio.</div>
+  </div>
+
+  <!-- ⑧ BÀN PHÍM -->
+  <div class="cell">
+    <div class="cell-t"><i>8</i>Bàn phím &amp; chuột</div>
+    <div class="kt">
+      <span class="k"><span class="kbd">Enter</span><span class="kbd">Space</span><span class="kbd">↓</span></span><span>(trên nút đóng) mở ô, focus vào ô tìm</span>
+      <span class="k"><span class="kbd">gõ chữ</span></span><span>lọc ngay (không dấu); dòng chọn = kết quả đầu</span>
+      <span class="k"><span class="kbd">↑</span><span class="kbd">↓</span></span><span>chuyển dòng (bỏ qua tiêu đề nhóm, xoay vòng)</span>
+      <span class="k"><span class="kbd">PgUp</span><span class="kbd">PgDn</span></span><span>nhảy 8 dòng</span>
+      <span class="k"><span class="kbd">Home</span><span class="kbd">End</span></span><span>dòng đầu / cuối (khi ô tìm rỗng)</span>
+      <span class="k"><span class="kbd">Enter</span></span><span>dùng giọng, đóng ô, focus về nút</span>
+      <span class="k"><span class="kbd">Ctrl+Space</span></span><span>nghe / dừng mẫu dòng đang chọn</span>
+      <span class="k"><span class="kbd">Ctrl+S</span></span><span>ghim / bỏ ghim ★ dòng đang chọn</span>
+      <span class="k"><span class="kbd">Alt+1</span><span class="kbd">2</span><span class="kbd">3</span></span><span>lọc Tất cả / Nam / Nữ</span>
+      <span class="k"><span class="kbd">Esc</span></span><span>có chữ tìm → xoá; rỗng → đóng (giữ giọng cũ)</span>
+      <span class="k"><span class="kbd">Tab</span></span><span>đóng ô, giữ giọng cũ, sang control kế</span>
+    </div>
+    <div class="spec" style="margin-top:14px">
+      <h4>Chuột</h4>
+      <div class="kt">
+        <span class="k">bấm dòng</span><span>dùng giọng + đóng</span>
+        <span class="k">▶ / ■</span><span>nghe / dừng — không đóng ô, không đổi giọng</span>
+        <span class="k">☆ / ★</span><span>ghim — không đóng ô; dòng ở lại chỗ cũ đến lần mở sau</span>
+        <span class="k">bấm ra ngoài</span><span>đóng, giữ giọng cũ, dừng mẫu</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

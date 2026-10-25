@@ -323,6 +323,104 @@ Nội dung khi mở từng bước:
 | Tiến trình | 9 nút + 2 thẻ tĩnh | 6 chip + `⋯` |
 | Cài đặt | preset ×2, nhà cung cấp ×2 nơi | mỗi thứ 1 nơi |
 
+### 4.10 Ô chọn giọng — `VoicePicker` (mockup `voice-picker.html`, ảnh `shots/voice-picker-all.png`)
+
+*(Số mục là 4.10 vì §4.8 đã là Cài đặt.)* Thay `<select>` gốc ở hàng vai (`StudioVoiceStep.tsx:186`): danh sách xám của Windows, nhãn dài "VN • Adam bựa (VieNeu v3 — offline)", không tìm được, không nghe thử được.
+
+**Bố cục**
+
+```
+Đóng:  [♂ Adam bựa ★ ········· ●VieNeu ▾] [▶]      ← ▶ ngoài ô = nghe 1 câu THẬT của vai (giữ nguyên)
+Mở:    ┌ [⌕ Tìm giọng… (không cần dấu)      ✕] ┐  ← focus sẵn
+       │ (Tất cả)(♂ Nam)(♀ Nữ)        25 giọng │
+       │ ★ YÊU THÍCH                         3 │
+       │ ✓ ♂ Adam bựa      ●Người dẫn  ▶  ★   │  ← dòng đang dùng: ✓ + chữ vàng; được chọn sẵn
+       │   ♀ Ngọc Huyền    ●Nhân vật 2     ★   │  ← chip vai = giọng đang dùng ở vai khác
+       │ TẤT CẢ ●VieNeu v3                  22 │
+       │   ♀ Trúc Ly                    ▶  ☆   │  ← ▶ ☆ chỉ hiện khi hover / dòng đang chọn
+       │ ↑↓ ↵ dùng · Ctrl+Space nghe · Esc  Quản lý › │
+       └───────────────────────────────────────────┘
+```
+
+**Kích thước:** nút 28 px cao (bằng hàng vai cũ), cao chữ 12.5 px. Popover rộng `max(nút, 300)`, tối đa 360 px (Studio = 320), cao tối đa `min(440, chỗ trống)`; ô tìm 32 px · chip lọc 22 · tiêu đề nhóm 22 · dòng **32 px cố định** · chân 30. Nền `#1e1915`, viền `rgba(244,236,222,.13)`, bo 10, bóng `0 14px 40px rgba(0,0,0,.6)`. Render qua **portal** vào `body` (thoát `overflow` của panel); thiếu chỗ phía dưới thì **lật lên trên**, khi đó ô tìm ở sát nút (mockup ⑥).
+
+**Thứ tự nhóm:** ★ Yêu thích (luôn đầu, cả khi đang tìm) → mỗi engine 1 nhóm (Studio chỉ có engine đang chọn; ★ của engine khác ẩn) → trong engine, tách nhóm ngôn ngữ **chỉ khi > 1 ngôn ngữ**. Giữ thứ tự backend trả về (đã tuyển), không sắp lại. Giọng ★ chỉ hiện **1 lần** (ở nhóm ★), không lặp lại trong nhóm engine.
+
+**Quy tắc nhãn**
+
+| Phần | Hiển thị |
+|---|---|
+| `VN •` | bỏ khỏi tên → tiêu đề nhóm ngôn ngữ (chỉ khi > 1 ngôn ngữ); Cài đặt: cột phụ `VN` mờ |
+| tên | chữ chính, 1 dòng, cắt `…`, tooltip tên đủ |
+| `(VieNeu v3 — offline)` | badge engine ngắn `VieNeu` với chấm xanh = offline / `☁` = cần mạng; tên đầy đủ "VieNeu v3 — offline" ở tiêu đề nhóm + tooltip badge |
+| giới tính | ký hiệu ♂/♀ màu `--t3` trước tên (không chữ "Nam/Nữ" lặp mỗi dòng) |
+| ★ | ở nút đóng: sau tên, màu `--ac`; trong danh sách: cột phải |
+
+Tách nhãn bằng 1 hàm thuần `parseVoiceLabel(label) → { name, lang, engine, kind }` (có test); khi backend trả trường riêng (`name`, `lang`, `engine`) thì dùng thẳng, hàm parse chỉ là fallback.
+
+**Hành vi**
+- **Bấm dòng** = dùng giọng + đóng. **▶** = nghe mẫu, **không** đổi giọng, **không** đóng. **☆/★** = ghim, không đóng; dòng vừa ghim **ở yên chỗ cũ** tới lần mở sau (không nhảy dưới con trỏ).
+- **Nghe mẫu:** 1 mẫu phát 1 lúc; bấm ▶ khác/đóng ô/bấm ra ngoài → dừng. Đang phát: dòng nền `--ac-soft`, nút ■, sóng nhỏ + `0:02 / 0:05` + thanh tiến độ 2 px ở đáy dòng. Chưa có mẫu: thay ▶ bằng vòng quay + "đang tạo mẫu…" (`--warn-txt`), tạo xong **tự phát** nếu người dùng vẫn đang mở ô; lỗi → toast, ▶ trở lại. Mẫu chỉ tạo khi bấm (không tạo trước hàng loạt — tốn GPU).
+- **Chip vai** (`● Người dẫn`) ở dòng giọng đang dùng bởi vai **khác** → thấy ngay trùng giọng. Không chặn chọn trùng.
+- **Rỗng:** "Không có giọng "…"" + phạm vi đang lọc; nút **"Bỏ lọc ♂ Nam (N kết quả)"** chỉ hiện khi bỏ lọc có kết quả (đếm sẵn) + "Xoá tìm". Không bao giờ hiện khung trống trơn.
+- **Tìm:** bỏ dấu + chữ thường (`normalize("NFD")` bỏ dấu, `đ→d`), khớp **chuỗi con** trên tên + engine + ngôn ngữ; tô phần khớp. Có kết quả → dòng chọn = kết quả đầu. Lọc giới tính mặc định **Tất cả** (không tự lọc theo giới tính vai — tránh "mất giọng").
+- Không có giọng nào (engine chưa tải): nút đóng hiện id giọng hiện tại + mờ; mở ra = 1 dòng hướng dẫn "Tải model ở trên" (giữ hành vi `spp-engine-warn`).
+
+**Bàn phím** (ARIA `combobox` + `listbox`, `aria-activedescendant`; focus luôn ở ô tìm)
+
+| Phím | Việc |
+|---|---|
+| `Enter` / `Space` / `↓` trên nút đóng | mở, focus ô tìm, dòng chọn = giọng đang dùng (cuộn tới) |
+| `↑` `↓` · `PgUp` `PgDn` (8 dòng) | chuyển dòng, bỏ qua tiêu đề nhóm, xoay vòng |
+| `Home` `End` | đầu/cuối (chỉ khi ô tìm rỗng, còn lại để di chuyển con trỏ chữ) |
+| `Enter` | dùng giọng, đóng, focus về nút |
+| `Ctrl+Space` | nghe / dừng mẫu dòng đang chọn |
+| `Ctrl+S` | ghim / bỏ ghim ★ (chặn lan ra phím Lưu của app khi ô mở) |
+| `Alt+1/2/3` | lọc Tất cả / Nam / Nữ |
+| `Esc` | có chữ → xoá chữ; rỗng → đóng, giữ giọng cũ |
+| `Tab` / bấm ra ngoài | đóng, giữ giọng cũ, dừng mẫu |
+
+**Nơi lưu ★:** config toàn cục `favorite_voices: string[]` (id đầy đủ có tiền tố engine, vd `vietneu:adam`) — **không** theo dự án (★ là sở thích người dùng). Đọc/ghi qua lệnh config sẵn có, cập nhật lạc quan (UI đổi ngay, lỗi ghi → hoàn lại + toast). Id không còn tồn tại → bỏ qua khi hiển thị, không tự xoá khỏi config (model có thể tải lại).
+
+**Component đề xuất** — `src/components/ui/VoicePicker.tsx` (+ `.css`, `voicePickerModel.ts` thuần: parse nhãn, bỏ dấu, lọc, nhóm, điều hướng phím → test được bằng `node --test`)
+
+```ts
+export interface VoicePickerItem {
+  id: string;                 // "vietneu:adam"
+  name: string;               // "Adam bựa" (đã tách nhãn)
+  gender: "male" | "female";
+  lang?: string;              // "vi"
+  engineId: string;           // "vietneu"
+  engineLabel: string;        // "VieNeu v3"
+  kind: "offline" | "cloud";
+}
+export type VoicePreviewStatus = "loading" | "playing";
+export interface VoicePickerProps {
+  voices: ReadonlyArray<VoicePickerItem>;
+  value?: string;                                  // bỏ trống ở variant "inline" (Cài đặt)
+  onChange?: (id: string) => void;
+  favorites: ReadonlySet<string>;
+  onToggleFavorite: (id: string) => void;
+  preview: { id: string; status: VoicePreviewStatus; progress?: number } | null;
+  onPreview: (id: string) => void;                 // bấm ▶ (phía cha lo cache/tạo mẫu/phát)
+  onStopPreview: () => void;
+  usedBy?: ReadonlyMap<string, ReadonlyArray<{ name: string; color: string }>>; // giọng → vai khác
+  variant?: "popover" | "inline";                  // Studio | Cài đặt › Giọng đọc
+  onManage?: () => void;                           // "Quản lý ›" → Cài đặt › Giọng đọc
+  disabled?: boolean;
+  ariaLabel: string;
+}
+```
+
+Studio: `StudioVoiceStep` truyền `usedBy` tính từ `state.roles` (bỏ chính vai đó). Cài đặt: `variant="inline"`, không `value`/`usedBy`, hiện badge engine ở từng dòng ★. Trạng thái phát mẫu + `favorite_voices` do 1 hook `useVoicePreview()` / `useFavoriteVoices()` giữ ở cha, dùng chung 2 nơi.
+
+**Hiệu năng**
+- `VoiceRow` bọc `React.memo`; mỗi dòng nhận `isCurrent/isActive/isFavorite/previewStatus` dạng primitive → đổi dòng chọn hoặc phát mẫu chỉ render lại 2 dòng.
+- Khoá tìm (bỏ dấu, chữ thường) tính **1 lần** khi `voices` đổi (`useMemo`), không tính lại mỗi phím.
+- **> 100 giọng → ảo hoá**: dòng cao cố định 32 px ⇒ cửa sổ hoá tự viết (~40 dòng code, `scrollTop / 32`, overscan 6), không thêm thư viện. ≤ 100 giọng render thẳng.
+- Popover chỉ mount khi mở; nút đóng là component nhẹ riêng → 5 vai × 25 giọng không tạo 125 `<option>` như hiện nay.
+- `<audio>` mẫu: 1 phần tử dùng chung, dừng + giải phóng khi đóng ô.
+
 ---
 
 ## 5. MOCKUP & ẢNH
@@ -333,6 +431,8 @@ Nội dung khi mở từng bước:
 | `docs/ui-mockups/studio.html` | Studio 1920×1080: topbar chung, panel trái mới (bước Lồng tiếng đang mở, 2 vai), cột phụ đề có thống kê + chip lọc chất lượng, timeline minh hoạ (**không đổi**) |
 | `docs/ui-mockups/tai-video.html` | Tải video: ô nhập 3 link + nút chính, chip tuỳ chọn, bộ chọn playlist, 5 trạng thái mục, menu `⋯` mở |
 | `docs/ui-mockups/cai-dat.html` | Cài đặt › Dịch thuật: 5 nhà cung cấp, tự lưu, preset 1 chỗ, trạng thái thật |
+| `docs/ui-mockups/voice-picker.html` | Ô chọn giọng (§4.10): 8 ô — đóng, mở, hover/đang phát/chưa có mẫu, tìm + lọc, rỗng, lật lên trên, Cài đặt inline, bảng phím |
+| `docs/ui-mockups/shots/voice-picker-all.png` | Ảnh 1920×1080 của `voice-picker.html` |
 | `docs/ui-mockups/shots/after-*.png` | Ảnh mockup (Edge headless 1920×1080) |
 | `docs/ui-mockups/shots/compare-*.png` | **Trước | Sau** đặt cạnh nhau cho Studio, Tải video, Cài đặt |
 
