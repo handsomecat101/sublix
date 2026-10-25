@@ -7,12 +7,15 @@ import {
   PROCESS_FILTERS,
   buildFilterOptions,
   countProcessFilter,
+  dedupeHistoryIds,
   emptyStateHint,
   filterProcessTasks,
+  makeTaskRunId,
   matchesProcessFilter,
   processCategoryMeta,
   sanitizeLabel,
   splitProcessTasks,
+  upsertHistoryItem,
   type ProcessFilter,
 } from "../../src/views/processLogic.ts";
 import type { AppTaskItem } from "../../src/views/processTypes.ts";
@@ -240,4 +243,83 @@ test("emptyStateHint: mỗi bộ lọc có 1 câu hướng dẫn riêng, không 
     assert.ok(hint.includes("."), "câu hướng dẫn phải là câu hoàn chỉnh");
   }
   assert.equal(new Set(hints).size, hints.length, "mỗi nhóm phải có câu riêng");
+});
+
+/* ------------------------------------------------------------------ */
+/* TSK-FIX-BUG-R2-8-01 — id lần chạy + khử trùng lịch sử                 */
+/* ------------------------------------------------------------------ */
+
+test("makeTaskRunId: id DUY NHẤT theo lần chạy", () => {
+  const a = makeTaskRunId("dubbing", 1_700_000_000_000, "abc123");
+  const b = makeTaskRunId("dubbing", 1_700_000_000_001, "def456");
+  assert.equal(a, "dubbing_1700000000000_abc123");
+  assert.notEqual(a, b, "2 lần chạy khác mốc phải khác id");
+  // Không salt ⇒ vẫn duy nhất (random + mốc bắt đầu).
+  const c = makeTaskRunId("dubbing", 1_700_000_000_000);
+  assert.match(c, /^dubbing_1700000000000_[a-z0-9]+$/);
+  assert.notEqual(c, makeTaskRunId("dubbing", 1_700_000_000_000));
+  // Tiền tố rác được làm sạch (chỉ còn ký tự an toàn cho id).
+  const dirty = makeTaskRunId("lồng tiếng!", 1, "z");
+  assert.match(dirty, /^[a-z0-9_]+_1_z$/, "tiền tố phải được làm sạch: " + dirty);
+});
+
+test("dedupeHistoryIds: lịch sử cũ trùng id → giữ mục mới nhất, KHÔNG mất mục", () => {
+  const old = [
+    { id: "dubbing_active", stage: "Hoàn tất tạo giọng đọc TTS", completedAt: 100 },
+    { id: "dubbing_active", stage: "Hoàn tất toàn trình lồng tiếng", completedAt: 300 },
+    { id: "dubbing_active", stage: "Đã bóc tách & phân vai xong", completedAt: 200 },
+  ];
+  const out = dedupeHistoryIds(old);
+  assert.equal(out.length, 3, "không được mất mục nào");
+  assert.equal(new Set(out.map((i) => i.id)).size, 3, "id sau khử trùng phải duy nhất");
+  // Mục MỚI NHẤT (completedAt lớn nhất) giữ nguyên id.
+  const keeper = out.find((i) => i.stage === "Hoàn tất toàn trình lồng tiếng");
+  assert.equal(keeper?.id, "dubbing_active");
+  // 2 mục cũ được gắn hậu tố.
+  const suffixed = out.filter((i) => i.id !== "dubbing_active").map((i) => i.id).sort();
+  assert.deepEqual(suffixed, ["dubbing_active_2", "dubbing_active_3"]);
+  // Nội dung mục cũ vẫn còn nguyên.
+  assert.ok(out.some((i) => i.stage === "Hoàn tất tạo giọng đọc TTS"));
+});
+
+test("dedupeHistoryIds: không trùng id thì giữ nguyên, không thêm hậu tố", () => {
+  const items = [
+    { id: "a_1", stage: "x" },
+    { id: "a_2", stage: "y" },
+  ];
+  const out = dedupeHistoryIds(items);
+  assert.deepEqual(out.map((i) => i.id), ["a_1", "a_2"]);
+});
+
+test("upsertHistoryItem: 1 lần chạy = 1 mục (cùng id bị THAY, không thêm mục)", () => {
+  const first = { id: "dubbing_1_aaa", stage: "Đang chạy", percent: 10 };
+  const mid = { id: "dubbing_1_aaa", stage: "Đang dịch", percent: 60 };
+  const done = { id: "dubbing_1_aaa", stage: "Hoàn tất", percent: 100, completedAt: 5 };
+  let history = upsertHistoryItem([], first);
+  assert.equal(history.length, 1);
+  history = upsertHistoryItem(history, mid);
+  assert.equal(history.length, 1, "cập nhật tiến độ KHÔNG sinh mục mới");
+  assert.equal(history[0].stage, "Đang dịch");
+  history = upsertHistoryItem(history, done);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].stage, "Hoàn tất");
+  assert.equal(history[0].percent, 100);
+});
+
+test("upsertHistoryItem: mục khác id vẫn được giữ đầy đủ", () => {
+  const a = { id: "run_a", stage: "A" };
+  const b = { id: "run_b", stage: "B" };
+  const history = upsertHistoryItem(upsertHistoryItem([], a), b);
+  assert.equal(history.length, 2);
+  assert.equal(history[0].id, "run_b", "mục mới nhất lên đầu");
+  assert.equal(new Set(history.map((i) => i.id)).size, 2);
+});
+
+test("upsertHistoryItem: giới hạn số mục lịch sử", () => {
+  let history: { id: string; stage: string }[] = [];
+  for (let i = 0; i < 60; i++) {
+    history = upsertHistoryItem(history, { id: `run_${i}`, stage: `s${i}` }, 50);
+  }
+  assert.equal(history.length, 50, "lịch sử không được vượt quá giới hạn");
+  assert.equal(history[0].id, "run_59");
 });

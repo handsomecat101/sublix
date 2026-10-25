@@ -149,6 +149,8 @@ import {
 } from "../lib/timeline/clipboard";
 import { computeFollowScroll } from "../lib/timeline/autoFollow";
 import { TimecodeInput } from "./studio/TimecodeInput";
+// [TSK-FIX-BUG-R2-8-01] Sinh id task DUY NHẤT theo lần chạy (logic thuần, test được).
+import { makeTaskRunId } from "./processLogic";
 
 export interface StudioTaskUpdatePayload {
   id?: string;
@@ -784,12 +786,23 @@ export default function SublixStudioView({
       : (cachedProject?.fileName || "")
   );
 
+  // [TSK-FIX-BUG-R2-8-01] Id task DUY NHẤT theo lần chạy.
+  // Trước đây id là hằng "dubbing_active" ⇒ mọi lượt chạy ghi CÙNG 1 id vào lịch sử
+  // ⇒ React key trùng ở tab Tiến trình. Nay: lần chạy mới ⇒ id mới; các cập nhật
+  // tiến độ của CÙNG lượt ⇒ giữ nguyên id (1 mục lịch sử / lượt chạy).
+  const activeTaskRunIdRef = useRef<string | null>(null);
+
   // Helper đồng bộ tiến trình chi tiết sang SettingsView / Process Center
   const notifyTaskUpdate = (payload: Partial<StudioTaskUpdatePayload>) => {
     if (!onTaskUpdate) return;
     const currentName = fileName || (filePath ? filePath.split(/[\\/]/).pop() || "Video" : "Video");
+    // Lượt chạy MỚI = có `workflowType` + đang chạy (điểm bắt đầu 1 bước).
+    const isNewRun = payload.status === "running" && !!payload.workflowType;
+    if (!activeTaskRunIdRef.current || isNewRun) {
+      activeTaskRunIdRef.current = makeTaskRunId("dubbing", Date.now());
+    }
     onTaskUpdate({
-      id: "dubbing_active",
+      id: activeTaskRunIdRef.current,
       status: "running",
       fileName: currentName,
       targetTab: "studio",

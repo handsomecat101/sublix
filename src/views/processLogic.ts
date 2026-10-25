@@ -240,3 +240,69 @@ export function emptyStateHint(filter: ProcessFilter): string {
       return "Chưa có tác vụ nào được ghi nhận. Mọi tác vụ nền (phụ đề, dịch, lồng tiếng, tải video, tải mô hình) sẽ xuất hiện ở đây kèm tiến độ thời gian thực.";
   }
 }
+
+/* ============================================================================
+   TSK-FIX-BUG-R2-8-01 — id task DUY NHẤT theo lần chạy + khử trùng lịch sử.
+   Trước đây id task là hằng "dubbing_active" ⇒ mọi lượt chạy ghi CÙNG 1 id vào
+   lịch sử ⇒ React key trùng ở tab Tiến trình.
+   ========================================================================= */
+
+/** Sinh id DUY NHẤT cho 1 lượt chạy: `<prefix>_<mốc bắt đầu>_<ngẫu nhiên>`. */
+export function makeTaskRunId(prefix: string, startedAt: number, salt?: string): string {
+  const clean = (prefix || "task").replace(/[^a-zA-Z0-9]+/g, "_");
+  const rand = (salt ?? Math.random().toString(36).slice(2, 8)).replace(/[^a-zA-Z0-9]/g, "");
+  return `${clean}_${Math.trunc(startedAt)}_${rand || "0"}`;
+}
+
+/** Mốc ưu tiên để so sánh "mới hơn" (completedAt → startedAt → 0). */
+function historyStamp(item: { completedAt?: number; startedAt?: number }): number {
+  if (typeof item.completedAt === "number") return item.completedAt;
+  if (typeof item.startedAt === "number") return item.startedAt;
+  return 0;
+}
+
+/**
+ * Khử trùng id trong lịch sử (dữ liệu cũ đã lưu nhiều mục CÙNG id).
+ * Mục **mới nhất** giữ nguyên id; các mục cũ hơn gắn hậu tố `_2`, `_3`… ⇒ không mất mục.
+ */
+export function dedupeHistoryIds<T extends { id: string; completedAt?: number; startedAt?: number }>(
+  items: readonly T[],
+): T[] {
+  const canonical = new Map<string, number>();
+  items.forEach((item, i) => {
+    const prev = canonical.get(item.id);
+    if (prev === undefined) {
+      canonical.set(item.id, i);
+      return;
+    }
+    if (historyStamp(item) > historyStamp(items[prev])) canonical.set(item.id, i);
+  });
+  const used = new Set<string>();
+  const out: T[] = [];
+  items.forEach((item, i) => {
+    let id = item.id;
+    if (canonical.get(item.id) !== i) {
+      let n = 2;
+      while (used.has(`${item.id}_${n}`)) n++;
+      id = `${item.id}_${n}`;
+    }
+    while (used.has(id)) id = `${id}x`;
+    used.add(id);
+    out.push({ ...item, id } as T);
+  });
+  return out;
+}
+
+/**
+ * Thêm mục mới vào lịch sử: mục CÙNG id bị **thay** (gộp field, mục mới thắng)
+ * ⇒ 1 lượt chạy = 1 mục lịch sử ⇒ React key luôn duy nhất.
+ */
+export function upsertHistoryItem<T extends { id: string }>(
+  prev: readonly T[],
+  item: T,
+  limit = 50,
+): T[] {
+  const merged = prev.map((p) => (p.id === item.id ? ({ ...p, ...item } as T) : p));
+  const rest = merged.filter((p) => p.id !== item.id);
+  return dedupeHistoryIds([item, ...rest].slice(0, limit));
+}

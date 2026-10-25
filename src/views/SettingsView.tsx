@@ -36,6 +36,8 @@ import { ChangelogModal } from "./ChangelogModal";
 // TSK-UI-REDESIGN-R2-7C: modal ProcessCenter đã bỏ (TL-14 — chỉ còn 1 giao diện
 // "Tiến trình" là tab). Kiểu dữ liệu tác vụ nằm ở `processTypes.ts`.
 import type { AppTaskItem } from "./processTypes";
+// [TSK-FIX-BUG-R2-8-01] Logic thuần: id lần chạy duy nhất + khử trùng lịch sử.
+import { dedupeHistoryIds, makeTaskRunId, upsertHistoryItem } from "./processLogic";
 import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconClapper, IconMic, IconClock,
@@ -254,7 +256,7 @@ export default function SettingsView() {
       if (!saved) return [];
       const parsed: AppTaskItem[] = JSON.parse(saved);
       // Polish & sanitize lịch sử cũ (loại bỏ "0/2 câu thoại" hoặc hardcode)
-      return parsed.map((item) => {
+      const cleaned = parsed.map((item) => {
         let cleanDetail = item.detail;
         if (cleanDetail && (cleanDetail.includes("0/2 câu thoại") || cleanDetail.includes("0/0 câu thoại"))) {
           cleanDetail = "Đã hoàn tất phân tích & xử lý";
@@ -269,6 +271,10 @@ export default function SettingsView() {
           stage: cleanStage,
         };
       });
+      // [TSK-FIX-BUG-R2-8-01] Lịch sử cũ có nhiều mục CÙNG id (id từng là hằng
+      // "dubbing_active") ⇒ khử trùng lúc ĐỌC: giữ mục mới nhất, gắn hậu tố cho
+      // bản cũ ⇒ không mất mục nào và React key không trùng.
+      return dedupeHistoryIds(cleaned);
     } catch {
       return [];
     }
@@ -276,8 +282,9 @@ export default function SettingsView() {
 
   const saveToProcessHistory = (item: AppTaskItem) => {
     setProcessHistory((prev) => {
-      // Bỏ qua item trùng id và status trong 3 giây gần nhất
-      const next = [item, ...prev.filter((p) => !(p.id === item.id && p.completedAt && item.completedAt && Math.abs(p.completedAt - item.completedAt) < 3000)).slice(0, 49)];
+      // [TSK-FIX-BUG-R2-8-01] Mục CÙNG id bị THAY (gộp field, mục mới thắng) thay vì
+      // thêm mục mới ⇒ 1 lượt chạy = 1 mục lịch sử ⇒ React key luôn duy nhất.
+      const next = upsertHistoryItem(prev, item, 50);
       try {
         localStorage.setItem("sublix_process_history_v1", JSON.stringify(next));
       } catch (err) {
@@ -294,8 +301,19 @@ export default function SettingsView() {
     } catch {}
   };
 
+  // [TSK-FIX-BUG-R2-8-01] Id của lượt chạy hiện tại. Studio gửi id DUY NHẤT theo lần
+  // chạy; sự kiện `dubbing:progress` của backend dùng CHUNG id này ⇒ 1 lượt chạy
+  // chỉ ghi 1 mục lịch sử (trước đây id hằng "dubbing_active" ⇒ trùng React key).
+  const currentRunIdRef = useRef<string | null>(null);
+  // [TSK-FIX-BUG-R2-8-01] Id lần chạy của luồng "tạo phụ đề" (file_sub:progress).
+  const fileSubRunIdRef = useRef<string | null>(null);
+
   const handleStudioTaskUpdate = (task: any) => {
-    const taskId = "dubbing_active";
+    const taskId: string =
+      (typeof task?.id === "string" && task.id.trim()) ||
+      currentRunIdRef.current ||
+      makeTaskRunId("dubbing", Date.now());
+    currentRunIdRef.current = taskId;
     if (task.status === "idle") {
       setGlobalTasks((prev) => {
         if (!prev[taskId]) return prev;
@@ -331,6 +349,8 @@ export default function SettingsView() {
         delete next[taskId];
         return next;
       });
+      // Lượt chạy đã xong ⇒ lượt sau sẽ có id mới.
+      currentRunIdRef.current = null;
       return;
     }
 
@@ -359,6 +379,8 @@ export default function SettingsView() {
         delete next[taskId];
         return next;
       });
+      // Lượt chạy lỗi ⇒ lượt sau sẽ có id mới.
+      currentRunIdRef.current = null;
       return;
     }
 
@@ -528,7 +550,10 @@ export default function SettingsView() {
 
     const pFileSub = listen<FileSubProgress>("file_sub:progress", (e) => {
       const p = e.payload;
-      const taskId = "file_sub_active";
+      // [TSK-FIX-BUG-R2-8-01] Id lần chạy DUY NHẤT (trước: hằng "file_sub_active" ⇒ 2
+      // lượt tạo phụ đề ghi cùng id ⇒ React key trùng + upsert nuốt mất mục cũ).
+      const taskId = fileSubRunIdRef.current || makeTaskRunId("file_sub", Date.now());
+      fileSubRunIdRef.current = taskId;
       if (p.stage === "done") {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -548,6 +573,8 @@ export default function SettingsView() {
           delete next[taskId];
           return next;
         });
+        // Lượt tạo phụ đề kết thúc ⇒ lượt sau có id mới.
+        fileSubRunIdRef.current = null;
       } else if (p.stage === "error") {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -567,6 +594,8 @@ export default function SettingsView() {
           delete next[taskId];
           return next;
         });
+        // Lượt tạo phụ đề lỗi ⇒ lượt sau có id mới.
+        fileSubRunIdRef.current = null;
       } else {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -620,7 +649,11 @@ export default function SettingsView() {
 
     const pDubbing = listen<DubbingProgress>("dubbing:progress", (e) => {
       const p = e.payload;
-      const taskId = "dubbing_active";
+      // [TSK-FIX-BUG-R2-8-01] Tiến trình backend thuộc về lượt chạy hiện tại ⇒ dùng
+      // CHUNG id với Studio (trước đây là hằng "dubbing_active" ⇒ nhiều mục trùng id
+      // trong lịch sử ⇒ React key trùng ở tab Tiến trình).
+      const taskId = currentRunIdRef.current || makeTaskRunId("dubbing", Date.now());
+      currentRunIdRef.current = taskId;
       if (p.stage === "done" || p.percent >= 100) {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -644,6 +677,8 @@ export default function SettingsView() {
           }
           return prev;
         });
+        // Lượt chạy kết thúc ⇒ lượt sau sẽ có id mới.
+        currentRunIdRef.current = null;
       } else if (p.stage === "error") {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
@@ -660,6 +695,8 @@ export default function SettingsView() {
           }
           return prev;
         });
+        // Lượt chạy lỗi ⇒ lượt sau sẽ có id mới.
+        currentRunIdRef.current = null;
       } else {
         setGlobalTasks((prev) => {
           const existing = prev[taskId];
