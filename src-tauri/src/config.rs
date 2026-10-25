@@ -141,6 +141,13 @@ pub struct AppConfig {
     #[serde(default)]
     pub glossary_table: Option<crate::translate::glossary::Glossary>,
 
+    /// Danh sách id giọng đọc được ghim ★ (TSK-FEAT-VOICE-PICKER).
+    ///
+    /// Sở thích **NGƯỜI DÙNG** ⇒ lưu **toàn cục**, KHÔNG theo dự án.
+    /// Id đầy đủ có tiền tố engine, vd `vietneu:adam`.
+    #[serde(default)]
+    pub favorite_voices: Vec<String>,
+
     /// Mức độ suy luận cho LLM cloud: "auto" | "low" | "medium" | "high" | "max".
     ///
     /// "auto" = giữ hành vi đã tối ưu: MiniMax-M3.1-Flash → `low`, model khác → mặc định
@@ -272,6 +279,7 @@ impl Default for AppConfig {
             openrouter_model: default_openrouter_model(),
             glossary: Vec::new(),
             glossary_table: None,
+            favorite_voices: Vec::new(),
             llm_reasoning_effort: default_reasoning_effort(),
             theme: default_theme(),
         }

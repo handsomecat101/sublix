@@ -1,0 +1,486 @@
+/* Ô chọn giọng — VoicePicker (TSK-FEAT-VOICE-PICKER).
+   Bám sát thiết kế `docs/UI_REDESIGN_PLAN.md` §4.10 + mockup
+   `docs/ui-mockups/voice-picker.html`, dùng token theme của app. */
+
+.vp-root {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* ---------------- nút đóng ---------------- */
+.vp-trigger {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 9px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  color: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vp-trigger:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.vp-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vp-trigger.is-open {
+  border-color: var(--ac-br);
+  box-shadow: 0 0 0 3px var(--ac-soft);
+}
+
+.vp-trigger-gender {
+  color: var(--t3);
+  font-size: 14px;
+  line-height: 1;
+  width: 12px;
+  text-align: center;
+  flex: none;
+}
+
+.vp-trigger-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vp-trigger-fav {
+  color: var(--ac);
+  font-size: 11px;
+  flex: none;
+}
+
+.vp-trigger-spacer {
+  flex: 1;
+  min-width: 6px;
+}
+
+.vp-trigger-caret {
+  color: var(--t4);
+  font-size: 10px;
+  flex: none;
+}
+
+/* ---------------- badge engine ---------------- */
+.vp-eng {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  height: 16px;
+  line-height: 15px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--t3);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  flex: none;
+}
+
+.vp-eng.is-offline::before {
+  content: "●";
+  color: var(--ok);
+  font-size: 7px;
+  margin-right: 3px;
+  vertical-align: 1px;
+}
+
+.vp-eng.is-cloud::before {
+  content: "☁";
+  color: var(--t3);
+  font-size: 9px;
+  margin-right: 3px;
+  vertical-align: 1px;
+}
+
+/* ---------------- popover / khung ---------------- */
+.vp {
+  background: #1e1915;
+  border: 1px solid rgba(244, 236, 222, 0.13);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--t1);
+}
+
+.vp-pop {
+  position: fixed;
+  z-index: 60;
+}
+
+.vp-inline {
+  width: 100%;
+  box-shadow: none;
+  border-color: var(--line);
+  background: var(--bg-card);
+}
+
+/* Bản inline (Cài đặt): danh sách cuộn trong khung, KHÔNG kéo dài cả trang. */
+.vp-inline .vp-list {
+  max-height: 420px;
+  min-height: 160px;
+  overflow-y: auto;
+}
+
+/* ---------------- đầu popover: tìm + lọc ---------------- */
+.vp-head {
+  padding: 8px 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.vp-search {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  border: 1px solid var(--ac-br);
+  box-shadow: 0 0 0 3px var(--ac-soft);
+}
+
+.vp-search-ic {
+  color: var(--t4);
+  font-size: 12px;
+  flex: none;
+}
+
+.vp-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--t1);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.vp-search-input::placeholder {
+  color: var(--t4);
+}
+
+.vp-search-clear {
+  border: none;
+  background: none;
+  color: var(--t4);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.vp-filters {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vp-chip {
+  font-size: 11px;
+  padding: 1px 9px;
+  height: 22px;
+  line-height: 19px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--t3);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vp-chip.is-on {
+  color: var(--ac-txt);
+  border-color: var(--ac-br);
+  background: var(--ac-soft);
+}
+
+.vp-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--t4);
+}
+
+/* ---------------- danh sách ---------------- */
+.vp-list {
+  padding: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 120px;
+}
+
+.vp-list-inner {
+  position: relative;
+}
+
+.vp-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--t4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vp-group.is-sub {
+  padding-left: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.vp-group.is-fav {
+  color: var(--ac-txt);
+}
+
+.vp-group-count {
+  margin-left: auto;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.vp-row {
+  position: relative;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.vp-row:hover {
+  background: rgba(244, 236, 222, 0.075);
+}
+
+.vp-row.is-active {
+  background: var(--hover);
+  box-shadow: inset 2px 0 0 var(--ac);
+}
+
+.vp-row.is-playing {
+  background: var(--ac-soft);
+}
+
+.vp-row-check {
+  width: 12px;
+  color: var(--ac);
+  font-size: 11px;
+  text-align: center;
+  flex: none;
+}
+
+.vp-row-gender {
+  width: 14px;
+  color: var(--t3);
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+  flex: none;
+}
+
+.vp-row-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t2);
+}
+
+.vp-row.is-current .vp-row-name {
+  color: var(--ac-txt);
+  font-weight: 700;
+}
+
+.vp-row-name mark {
+  background: none;
+  color: var(--ac-txt);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--ac-br);
+  text-underline-offset: 2px;
+}
+
+.vp-row-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+
+.vp-row-used {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--t3);
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-soft);
+  white-space: nowrap;
+  flex: none;
+}
+
+.vp-row-used span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vp-row-used i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+
+.vp-row-gen {
+  font-size: 11px;
+  color: var(--warn-txt);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vp-spin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(232, 163, 61, 0.25);
+  border-top-color: var(--ac);
+  display: inline-block;
+  animation: vp-spin 0.8s linear infinite;
+}
+
+@keyframes vp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vp-icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: var(--t3);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  flex: none;
+}
+
+.vp-icon-btn:hover {
+  border-color: var(--line);
+  background: var(--bg-card);
+  color: var(--t1);
+}
+
+.vp-star {
+  font-size: 13px;
+  visibility: hidden;
+}
+
+.vp-row:hover .vp-star,
+.vp-star.is-on {
+  visibility: visible;
+}
+
+.vp-star.is-on {
+  color: var(--ac);
+}
+
+/* ---------------- rỗng ---------------- */
+.vp-empty {
+  padding: 26px 18px 22px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.vp-empty-icon {
+  font-size: 22px;
+  color: var(--t4);
+}
+
+.vp-empty-title {
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.vp-empty-desc {
+  font-size: 11.5px;
+  color: var(--t3);
+}
+
+.vp-btn {
+  margin-top: 4px;
+  border: 1px solid var(--ac-br);
+  background: var(--ac-soft);
+  color: var(--ac-txt);
+  border-radius: 7px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* ---------------- chân ---------------- */
+.vp-foot {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  color: var(--t4);
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.vp-kbd {
+  font-size: 9.5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 14px;
+}
+
+.vp-manage {
+  margin-left: auto;
+  font-size: 11px;
+  border: none;
+  background: none;
+  color: var(--ac-txt);
+  cursor: pointer;
+  padding: 0;
+}

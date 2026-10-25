@@ -3,6 +3,7 @@
 //! (chỉ hiện 4 ký tự cuối).
 
 import type { SettingsCtx } from "./types";
+import { VoiceListSection } from "./VoiceListSection";
 
 const ENGINE_META: Record<string, { name: string; desc: string }> = {
   kokoro: { name: "Kokoro 82M", desc: "Offline · 14 giọng · ONNX" },
@@ -126,6 +127,9 @@ export function TtsSection({ ctx }: { ctx: SettingsCtx }) {
         Key cloud lưu riêng trong `sublix-tts-keys.json`, không đi qua `config:updated`. Chỉ 4 ký tự cuối
         được hiện lại.
       </span>
+
+      {/* Ô chọn giọng dạng inline (TSK-FEAT-VOICE-PICKER): tìm, lọc, ★, nghe mẫu. */}
+      <VoiceListSection ctx={ctx} />
     </section>
   );
 }

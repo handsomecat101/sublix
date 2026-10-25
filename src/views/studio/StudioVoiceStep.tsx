@@ -1,11 +1,16 @@
-import { memo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { ContextMenu } from "../../components/ui/ContextMenu";
 import { Segmented } from "../../components/ui/Segmented";
+import { VoicePicker } from "../../components/voice/VoicePicker";
+import { voiceItemFromOption } from "../../components/voice/voicePickerModel";
+import type { VoicePickerItem } from "../../components/voice/voicePickerModel";
+import type { VoiceUsedBy } from "../../components/voice/VoicePickerRow";
 import {
   engineLabel,
   SPEAKER_COUNT_OPTIONS,
   type PanelEngine,
   type PanelRole,
+  type PanelVoiceOption,
   type StudioPipelineApi,
   type StudioPipelineState,
 } from "./studioPipelineTypes";
@@ -35,6 +40,90 @@ interface RoleMenuState {
   x: number;
   y: number;
 }
+
+/** Ô chọn giọng của 1 vai — tách riêng để mỗi vai có `usedBy` riêng (bỏ chính vai đó). */
+interface RoleVoicePickerProps {
+  role: PanelRole;
+  roles: PanelRole[];
+  voiceOptions: PanelVoiceOption[];
+  engines: PanelEngine[];
+  favoriteVoices: string[];
+  previewVoiceId: string | null;
+  previewVoiceStatus: "loading" | "playing" | null;
+  api: StudioPipelineApi;
+}
+
+function RoleVoicePickerInner({
+  role,
+  roles,
+  voiceOptions,
+  engines,
+  favoriteVoices,
+  previewVoiceId,
+  previewVoiceStatus,
+  api,
+}: RoleVoicePickerProps) {
+  const voices = useMemo<VoicePickerItem[]>(() => {
+    const engineById = new Map(engines.map((e) => [e.id, e]));
+    return voiceOptions.map((o) => {
+      const item = voiceItemFromOption(o.id, o.label, o.gender);
+      const engine = engineById.get(item.engineId);
+      return {
+        ...item,
+        engineLabel: engine ? engineLabel(engine) : item.engineLabel,
+        kind: engine ? engine.kind : item.kind,
+      };
+    });
+  }, [voiceOptions, engines]);
+
+  const usedBy = useMemo(() => {
+    const map = new Map<string, VoiceUsedBy[]>();
+    for (const r of roles) {
+      if (r.id === role.id) continue; // bỏ chính vai này
+      const list = map.get(r.voice) ?? [];
+      list.push({ name: r.name, color: r.color });
+      map.set(r.voice, list);
+    }
+    return map;
+  }, [roles, role.id]);
+
+  const favorites = useMemo(() => new Set(favoriteVoices), [favoriteVoices]);
+  const preview = useMemo(
+    () => (previewVoiceId ? { id: previewVoiceId, status: previewVoiceStatus ?? "playing" } : null),
+    [previewVoiceId, previewVoiceStatus],
+  );
+
+  const onChange = useCallback(
+    (id: string) => api.setRoleVoice(role.id, id),
+    [api, role.id],
+  );
+  const onToggleFavorite = useCallback(
+    (id: string) => api.toggleFavoriteVoice?.(id),
+    [api],
+  );
+  const onPreview = useCallback((id: string) => api.previewVoiceSample?.(id), [api]);
+  const onStopPreview = useCallback(() => api.stopVoicePreview?.(), [api]);
+  const onManage = useCallback(() => api.openSettings(), [api]);
+
+  return (
+    <VoicePicker
+      variant="popover"
+      voices={voices}
+      value={role.voice}
+      onChange={onChange}
+      favorites={favorites}
+      onToggleFavorite={onToggleFavorite}
+      preview={preview}
+      onPreview={onPreview}
+      onStopPreview={onStopPreview}
+      usedBy={usedBy}
+      onManage={onManage}
+      ariaLabel={`Giọng đọc cho vai ${role.name}`}
+    />
+  );
+}
+
+const RoleVoicePicker = memo(RoleVoicePickerInner);
 
 function StudioVoiceStepInner({ state, api }: StudioVoiceStepProps) {
   const [roleMenu, setRoleMenu] = useState<RoleMenuState | null>(null);
@@ -183,22 +272,16 @@ function StudioVoiceStepInner({ state, api }: StudioVoiceStepProps) {
               {role.gender === "male" ? "♂ Nam" : "♀ Nữ"}
             </button>
             <span className="spp-role-count">{role.count} câu</span>
-            <select
-              className="spp-role-voice"
-              value={role.voice}
-              onChange={(event) => api.setRoleVoice(role.id, event.target.value)}
-              title="Chọn giọng đọc cho vai này"
-            >
-              {state.voiceOptions.length === 0 ? (
-                <option value={role.voice}>{role.voice}</option>
-              ) : (
-                state.voiceOptions.map((voice) => (
-                  <option key={voice.id} value={voice.id}>
-                    {voice.label}
-                  </option>
-                ))
-              )}
-            </select>
+            <RoleVoicePicker
+              role={role}
+              roles={state.roles}
+              voiceOptions={state.voiceOptions}
+              engines={state.engines}
+              favoriteVoices={state.favoriteVoices ?? []}
+              previewVoiceId={state.previewVoiceId ?? null}
+              previewVoiceStatus={state.previewVoiceStatus ?? null}
+              api={api}
+            />
             <button
               type="button"
               className="spp-play-btn"

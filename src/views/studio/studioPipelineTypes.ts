@@ -198,6 +198,12 @@ export interface StudioPipelineState {
   glossarySuggesting: boolean;
   /** Ước tính giây cho lượt "đọc hiểu" của gợi ý (null = chưa chạy). */
   glossarySuggestEstimateSec: number | null;
+  /** Id giọng đọc được ghim ★ (toàn cục — lưu trong config). TUỲ CHỌN: file cha (mcode #4) chưa nối. */
+  favoriteVoices?: string[];
+  /** Id giọng đang nghe mẫu (null = không có). TUỲ CHỌN. */
+  previewVoiceId?: string | null;
+  /** Trạng thái nghe mẫu (null = không có). TUỲ CHỌN. */
+  previewVoiceStatus?: "loading" | "playing" | null;
 }
 
 /** Các hành động của panel — truyền từ file cha (state KHÔNG chuyển sang con). */
@@ -259,6 +265,12 @@ export interface StudioPipelineApi {
   onGlossarySave: (next: Glossary) => void;
   /** Chạy "Gợi ý từ kịch bản" (gợi ý, KHÔNG tự ghi). */
   onGlossarySuggest: () => Promise<GlossarySuggestion | null>;
+  /** Bật/tắt ghim ★ cho 1 giọng (lưu config toàn cục). TUỲ CHỌN: file cha chưa nối. */
+  toggleFavoriteVoice?: (voiceId: string) => void;
+  /** Nghe mẫu 1 giọng (KHÔNG đổi giọng của vai). TUỲ CHỌN. */
+  previewVoiceSample?: (voiceId: string) => void;
+  /** Dừng mẫu đang phát. TUỲ CHỌN. */
+  stopVoicePreview?: () => void;
 }
 
 /** Nhãn hiển thị của 5 bước trên rail. */

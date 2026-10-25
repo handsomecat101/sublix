@@ -701,3 +701,51 @@
 ---
 
 ---
+
+## ARCHIVED 2026-10-25 (Mavis/mcode prune: giu 8 tin gan nhat)
+
+### 2026-10-25 07:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-REFACTOR-GLOSSARY-300` — tách 2 file > 300 dòng, **chỉ di chuyển code, không đổi hành vi**; **chưa commit**).
+- **Tách:** `glossary.rs` 366 → **272** (+ file mới `glossary_prompt.rs` 111: `to_rules` / `hard_block` / `suggestion_from_reference`) · `contextual_run.rs` 336 → **165** (+ `contextual_chunk.rs` 134: gọi LLM theo lô; `contextual_verify.rs` 89: hậu kiểm + dịch lại 1 câu). Mọi file trong `translate/` giờ **< 300 dòng**.
+- **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
+
+---
+---
+---
+---
+
+---
+
+
+
+## ARCHIVED 2026-10-25 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 07:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-018-FIX-R2` — sửa lỗ hỗng reviewer phát hiện trong `proc_kill.rs`; **không commit**).
+- **Lỗ hỗng:** file `.pid` đang nừm **chung `%TEMP%` cho mối instance** (app PO + instance verify cùng `%TEMP%`, chỉ khác `%APPDATA%`) → instance B đọc PID server **đang sống** của instance A rồi giết — đúng loại BUG-003 ta đang chặn.
+- **Sửa:** file `.pid` giờ **2 số** `<server_pid> <owner_pid>` (PID app chủ). Ham thuan `pick_kill_target` nhân thêm `owner_alive` + `current_pid`: chỉ giết khi **owner đã chết** (server mồ côi) hoặc `owner_pid == PID` hiện tại; **owner còn sống (instance khác) → không giết**; file sai định dạng (chỉ 1 số) → owner không rõ → **không giết** (an toân) và ghi đè file mới sau khi spawn. Thêm `process_is_alive(pid)` (tasklist `/FI`; không xác định → coi như **còn sống** để an toân).
+- **Test:** thêm 4 test cho hành thuần `pick_kill_target`: **owner còn sống → không giết** · **owner đã chết → giết** · owner là chính app hiện tại → được thay thế · **file định dạng cũ (1 số) → không giết**; + test vòng `write/read_tracked_pid` ghiđợc PID app chủ. `cargo test --lib` **223 pass / 0 fail**, `cargo clippy --lib --tests` **không thêm cảnh báo mới** (1 cảnh báo trong file tôi sửa là `EnginePreference::from_str` cũ cũ).
+- **Phạm vi:** chỉ `src-tauri/src/proc_kill.rs` + `src-tauri/src/stt/whisper_server.rs` + `src-tauri/src/translate/server.rs` + 2 file test; không động `lib.rs`/`src/**`/module khác.
+
+---
+---
+---
+
+
+- **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
+- **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
+- **Ước tính thời gian:** `estimate.ts` có hệ số chậm khi bật ngữ cảnh (MiniMax ×1,6 theo bench) và `rateKey` thêm `:ctx`; STT giờ **phân biệt theo engine** — `parseRtfFromNote` đọc RTF thật từ `rtf_note` của catalog (vd "RTF 1,22 (EN) · 1,62 (ZH)"), không hard-code.
+- **Mục 2 (engine STT):** `src/views/studio/StudioSttEnginePicker.tsx` (mới) — dropdown lấy từ `stt_engines_status`, **gợi ý theo ngôn ngữ nguồn theo `languages` của catalog**, engine chưa tải → `ModelDownloadRow` (tiến trình `model:download-progress`, nút Hủy = `stt_model_cancel`), chọn → `stt_set_engine` (không nút Lưu). Khi engine ≠ Whisper, luồng "chỉ làm phụ đề" dùng `stt_transcribe` (sidecar tự trích 16 kHz mono bằng ffmpeg) thay cho `dubbing_analyze`.
+- **Verify:** `node --test scripts/timeline-tests/` **95/95 PASS** (12 case mới) · `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (repo chính hiện lỗi `ProcessCenterView.tsx` — file của worker khác) · GUI **6/6 PASS** trên instance riêng (release build, CDP 9226, **APPDATA riêng** để không đụng config của PO): dropdown 7 engine + "chưa tải", dòng RTF từ catalog, đổi engine gọi `stt_set_engine`, công tắc ngữ cảnh + gợi ý model local, cờ lưu theo provider.
+- **⚠️ Cần biết:** app của PO đang chạy bình thường; instance verify đã tắt, worktree tạm đã xoá. Đường `stt_transcribe` chỉ dùng cho luồng "chỉ làm phụ đề"; pipeline đầy đủ (phân vai + dịch) vẫn đi qua `dubbing_analyze` (Whisper) — cần mcode #3 thêm engine id vào `dubbing_analyze` để áp dụng rộng.
+
+---
+
+---
+
+---
+---
+---
+---
+
+---

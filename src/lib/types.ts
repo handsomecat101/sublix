@@ -166,3 +166,26 @@ export interface GlossarySuggestion {
   terms: GlossaryTerm[];
   pronouns: PronounEntry[];
 }
+
+/**
+ * Id giọng đọc được ghim ★ (TSK-FEAT-VOICE-PICKER).
+ *
+ * Lưu trong config toàn cục (favorite_voices) — sở thích của người dùng, KHÔNG theo dự án.
+ * Id đầy đủ có tiền tố engine — ví dụ `vietneu:adam`.
+ */
+export type FavoriteVoiceId = string;
+
+/**
+ * 1 giọng đọc trong ô chọn giọng (VoicePicker).
+ *
+ * Nguồn gốc: danh sách giọng backend trả về (dubbing_get_voices).
+ */
+export interface VoiceChoice {
+  id: FavoriteVoiceId;
+  name: string;
+  gender: "male" | "female";
+  lang?: string;
+  engineId: string;
+  engineLabel: string;
+  kind: "offline" | "cloud";
+}

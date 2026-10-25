@@ -1,5 +1,32 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 07:05 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-VOICE-PICKER` — ô chọn giọng theo thiết kế Opus §4.10; **chưa commit**).
+- **Mới:** `src/components/voice/VoicePicker.tsx` + `VoicePickerRow.tsx` + `voicePickerModel.ts` (logic thuần) + `voicePicker.css`; `scripts/voice-picker-tests/` (**18 test**). Tìm không dấu, lọc ♂/♀, nhóm ★ → engine → ngôn ngữ, tìm trong tên+engine+ngôn ngữ, gợi ý "Bỏ lọc ♂ Nam (N kết quả)", chip vai trùng giọng, bàn phím ↑↓/↵/Ctrl+Space/Ctrl+S/Alt+1-3/Esc, popover portal + lật lên khi sát đáy, ảo hoá khi > 100 giọng.
+- **Nối:** Studio `StudioVoiceStep.tsx` thay `<select>` bằng `<VoicePicker variant="popover">`; Cài đặt › Giọng đọc thêm `VoiceListSection.tsx` (variant inline) — ★ lưu qua `getConfig` → `mergeConfig` → `saveConfig` (không mất API key); `config.rs` +1 field `favorite_voices`.
+- **⚠️ CẦN NỐI (tôi KHÔNG sửa `SublixStudioView.tsx` — mcode #4 đang sửa):** trong `pipelineApiRef` thêm `toggleFavoriteVoice(voiceId)` (đọc config từ đĩa → gộp `favorite_voices` → save → set state), `previewVoiceSample(voiceId)` (tạo mẫu 1 lần rồi phát → set `previewVoiceId` + `previewVoiceStatus`), `stopVoicePreview()`; và truyền 3 field mới (`favoriteVoices`, `previewVoiceId`, `previewVoiceStatus`) vào `state` của panel. Tôi đã khai báo chúng là **optional** trong `studioPipelineTypes.ts` nên chưa nối cũng không lỗi tsc.
+- **Verify:** `cargo check --lib` OK · `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · `node --test` **250 test / 0 fail** (18 mới + 232 cũ) · ảnh thật: popover + danh sách inline trong app (Cài đặt › Giọng đọc, **92 giọng thật** từ backend).
+
+---
+
+### 2026-10-25 12:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FIX-SPEAKER-ROLES` — phân vai **thật** theo giọng + giới tính nghe từ F0; **chưa commit**).
+- **Đã làm:** sidecar mới `src-tauri/scripts/speaker_gender.py` (đo **F0 trung vị mỗi cụm** bằng tự tương quan, chỉ cần numpy) + module mới `dubbing/speaker_assign.rs` (ngưỡng **165/180 Hz**, **gộp cụm gần nhất theo F0 thay cho `% n`**) + `dubbing/mod.rs` sửa 3 vùng phân vai: giọng TTS mặc định theo giới tính **thật** (đánh dấu `(~)` khi mơ hồ), MiniMax **chỉ đặt tên + dịch** (giữ `speaker_id` theo giọng), cờ `diarization_engine="heuristic"` khi thiếu model.
+- **Đo thật** (`src-tauri/scripts/speaker_measure.py` — tái lập được; fixture 8 câu 4 nam + 4 nữ, Kokoro offline, F0 hạ về vùng người thật): **phân vai 88 % → 100 %** (sherpa ra 3–4 cụm, modulo gộp nhầm nam↔nữ) · **giới tính 50 % → 100 %** (mặc định cũ N=2 ⇒ tất cả nam).
+- **Verify:** `cargo test --lib` **275 pass / 0 fail** (8 test mới) · `cargo build --examples` OK · `cargo clippy --lib` không có cảnh báo mới trong file của tôi.
+- **⚠️ Cần biết:** model sherpa **đã có sẵn trong danh mục tải voice model** (`sherpa-diarization`, ~34 MB, CPU) nên không cần thêm UI; **không** đụng vùng voice sample (mcode #4 đang sửa) và **không** sửa `src/**`.
+
+---
+
+### 2026-10-25 12:43 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-VOICE-SAMPLE-CACHE` — cache mẫu nghe thử cho **mọi** engine; **chưa commit**).
+- **Mới:** `src-tauri/src/dubbing/voice_samples.rs` + `voice_samples/{store.rs,prepare.rs}` + `voice_samples_tests.rs` (mỗi file < 300 dòng). Cache theo `(engine, voice_id)`: ghi **atomic** (`.part` → rename), **khoá theo giọng**, xoá file hỏng (<2KB / header WAV sai / ffprobe lỗi). `dubbing/mod.rs` **chỉ +1 dòng** `pub mod voice_samples;` + 3 hàm cũ delegate; **không** đụng vùng diarization.
+- **Lệnh mới:** `voice_sample_status(engine) -> {ready,total}` · `voice_sample_ensure(voice_id,text)` (lazy: cache hit → tức thì, chưa có → tổng hợp 1 lần rồi lưu) · `voice_samples_prepare(engine?)` (nền, tuần tự, ưu tiên thấp, huỷ được, phát `voice:sample_progress`) · `voice_samples_prepare_cancel()`. Tự chạy nền 1 lần khi app rảnh, **không** chạy khi đang lồng tiếng/dịch (`file_sub::is_running()`). Cloud chỉ cache sau khi người dùng đã nghe 1 lần (không tự gọi API tốn tiền).
+- **Đo thật trên máy này:** **Kokoro** (diem_trinh) lan1=7.89s → lan2=76ms · **VieNeu** (Adam bựa) lan1=16.32s → lan2=81ms ⇒ lần sau phát tức thì, không còn gọi TTS mỗi lần bấm ▶.
+- **Verify:** `cargo test --lib` **267 PASS / 0 fail** (bản sao HEAD + file của tôi) + test riêng `voice_samples` **17/17** · `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** (117 module). Lưu ý: WDAC chặn build script mới (`os error 4551`, BUG-084) → đổi nội dung `build.rs` cho hash mới rồi chạy lại.
+
+---
+
 ### 2026-10-25 12:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-RELEASE-0.12.0` — nâng phiên bản 0.11.36 → **0.12.0** + changelog; **chưa commit**).
 - **Version:** `package.json` + `src-tauri/Cargo.toml` + `src-tauri/tauri.conf.json` (field version + **2 tiêu đề cửa sổ**) + `src-tauri/Cargo.lock` (dòng version gói `sublix`) → **6/6 nguồn = 0.12.0**.
@@ -9,11 +36,15 @@
 
 ---
 
+---
+
 ### 2026-10-25 12:20 - Opus (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-DESIGN-VOICE-PICKER` — chỉ thiết kế, không sửa `src/**`, **chưa commit**).
 - **File:** `docs/ui-mockups/voice-picker.html` (8 ô: đóng · mở · hover/đang phát/đang tạo mẫu · tìm+lọc · rỗng · lật lên trên · Cài đặt inline · bảng phím) + `docs/ui-mockups/shots/voice-picker-all.png` + `docs/UI_REDESIGN_PLAN.md` **§4.10** (§4.8 đã là Cài đặt nên không dùng số đó).
 - **Chốt:** nhãn → tên + badge engine (`parseVoiceLabel`); ★ = config toàn cục `favorite_voices: string[]`; ▶ trong danh sách = mẫu (không đổi giọng, tạo khi bấm, tự phát khi xong); chip vai = giọng đang dùng ở vai khác; phím `↑↓ Enter Esc Ctrl+Space Ctrl+S Alt+1/2/3`.
 - **Code tiếp (mcode):** `src/components/ui/VoicePicker.tsx` + `voicePickerModel.ts` thuần có test; props ở §4.10; ảo hoá tự viết khi > 100 giọng. Backend cần thêm: cache mẫu giọng + key config `favorite_voices`.
+
+---
 
 ---
 
@@ -26,6 +57,7 @@
 
 ---
 
+---
 
 ### 2026-10-25 11:30 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-STUDIO-GLOSSARY` — gắn bảng thuật ngữ + xưng hô vào bước "Dịch" của Studio; **chưa commit**).
@@ -37,6 +69,8 @@
 ---
 ---
 
+---
+
 ### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-DUBBING-STT-ENGINE` — pipeline lồng tiếng dùng engine STT đã chọn; **không commit**).
 - **Sửa:** module mới `src-tauri/src/dubbing/stt_select.rs` — `dubbing_analyze` đọc config `stt_asr_engine` (backend tự đọc → **không đổi tham số lệnh Tauri, không sửa `src/**`**); engine sherpa + model đã tải → nhận dạng bằng engine đó (SenseVoice/Paraformer/Parakeet), **chưa tải / lỗi → rơi về Whisper** kèm log `tracing` + event `dubbing:progress` để UI toast.
@@ -46,40 +80,4 @@
 ---
 ---
 
-### 2026-10-25 07:45 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-018-FIX-R2` — sửa lỗ hỗng reviewer phát hiện trong `proc_kill.rs`; **không commit**).
-- **Lỗ hỗng:** file `.pid` đang nừm **chung `%TEMP%` cho mối instance** (app PO + instance verify cùng `%TEMP%`, chỉ khác `%APPDATA%`) → instance B đọc PID server **đang sống** của instance A rồi giết — đúng loại BUG-003 ta đang chặn.
-- **Sửa:** file `.pid` giờ **2 số** `<server_pid> <owner_pid>` (PID app chủ). Ham thuan `pick_kill_target` nhân thêm `owner_alive` + `current_pid`: chỉ giết khi **owner đã chết** (server mồ côi) hoặc `owner_pid == PID` hiện tại; **owner còn sống (instance khác) → không giết**; file sai định dạng (chỉ 1 số) → owner không rõ → **không giết** (an toân) và ghi đè file mới sau khi spawn. Thêm `process_is_alive(pid)` (tasklist `/FI`; không xác định → coi như **còn sống** để an toân).
-- **Test:** thêm 4 test cho hành thuần `pick_kill_target`: **owner còn sống → không giết** · **owner đã chết → giết** · owner là chính app hiện tại → được thay thế · **file định dạng cũ (1 số) → không giết**; + test vòng `write/read_tracked_pid` ghiđợc PID app chủ. `cargo test --lib` **223 pass / 0 fail**, `cargo clippy --lib --tests` **không thêm cảnh báo mới** (1 cảnh báo trong file tôi sửa là `EnginePreference::from_str` cũ cũ).
-- **Phạm vi:** chỉ `src-tauri/src/proc_kill.rs` + `src-tauri/src/stt/whisper_server.rs` + `src-tauri/src/translate/server.rs` + 2 file test; không động `lib.rs`/`src/**`/module khác.
-
----
----
----
-
-### 2026-10-25 07:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
-- **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
-- **Ước tính thời gian:** `estimate.ts` có hệ số chậm khi bật ngữ cảnh (MiniMax ×1,6 theo bench) và `rateKey` thêm `:ctx`; STT giờ **phân biệt theo engine** — `parseRtfFromNote` đọc RTF thật từ `rtf_note` của catalog (vd "RTF 1,22 (EN) · 1,62 (ZH)"), không hard-code.
-- **Mục 2 (engine STT):** `src/views/studio/StudioSttEnginePicker.tsx` (mới) — dropdown lấy từ `stt_engines_status`, **gợi ý theo ngôn ngữ nguồn theo `languages` của catalog**, engine chưa tải → `ModelDownloadRow` (tiến trình `model:download-progress`, nút Hủy = `stt_model_cancel`), chọn → `stt_set_engine` (không nút Lưu). Khi engine ≠ Whisper, luồng "chỉ làm phụ đề" dùng `stt_transcribe` (sidecar tự trích 16 kHz mono bằng ffmpeg) thay cho `dubbing_analyze`.
-- **Verify:** `node --test scripts/timeline-tests/` **95/95 PASS** (12 case mới) · `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (repo chính hiện lỗi `ProcessCenterView.tsx` — file của worker khác) · GUI **6/6 PASS** trên instance riêng (release build, CDP 9226, **APPDATA riêng** để không đụng config của PO): dropdown 7 engine + "chưa tải", dòng RTF từ catalog, đổi engine gọi `stt_set_engine`, công tắc ngữ cảnh + gợi ý model local, cờ lưu theo provider.
-- **⚠️ Cần biết:** app của PO đang chạy bình thường; instance verify đã tắt, worktree tạm đã xoá. Đường `stt_transcribe` chỉ dùng cho luồng "chỉ làm phụ đề"; pipeline đầy đủ (phân vai + dịch) vẫn đi qua `dubbing_analyze` (Whisper) — cần mcode #3 thêm engine id vào `dubbing_analyze` để áp dụng rộng.
-
----
-
----
-
----
----
----
----
-
-### 2026-10-25 07:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-REFACTOR-GLOSSARY-300` — tách 2 file > 300 dòng, **chỉ di chuyển code, không đổi hành vi**; **chưa commit**).
-- **Tách:** `glossary.rs` 366 → **272** (+ file mới `glossary_prompt.rs` 111: `to_rules` / `hard_block` / `suggestion_from_reference`) · `contextual_run.rs` 336 → **165** (+ `contextual_chunk.rs` 134: gọi LLM theo lô; `contextual_verify.rs` 89: hậu kiểm + dịch lại 1 câu). Mọi file trong `translate/` giờ **< 300 dòng**.
-- **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
-
----
----
----
 ---

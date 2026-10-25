@@ -244,6 +244,13 @@ export interface AppConfig {
   ollama_model?: string;
   ytdlp_path?: string;
   glossary?: string[];
+  /**
+   * Id giọng đọc được ghim ★ (TSK-FEAT-VOICE-PICKER).
+   *
+   * Sở thích **người dùng** ⇒ lưu toàn cục, KHÔNG theo dự án.
+   * Id đầy đủ có tiền tố engine — "vietneu:adam".
+   */
+  favorite_voices?: string[];
 }
 
 export interface FileSubProgress {

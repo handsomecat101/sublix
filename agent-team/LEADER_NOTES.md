@@ -21,6 +21,7 @@
 |---|---|---|
 | **mcode** (MiniMax Code, M3.1-Flash) | Mặc định: code theo plan/spec, nghiên cứu, benchmark | Rất nhanh; tốt ở logic + test; yếu hơn ở hiệu năng React → người điều phối review phần đó. Có thể mở nhiều phiên (mcode #1/#2/#3) |
 | **CommandCode** (`commandcode`, deepseek-v4-flash) | Mặc định: tính năng vừa, UI theo plan, review checklist | Cần bật **yolo/permission bypass**, nếu không sẽ đứng xin phép từng lệnh (kể cả lệnh báo cáo Orca) |
+| **Gemini 3.8 Flash** (Antigravity CLI `agy`) | **Mọi việc nghiên cứu / search web** (so sánh model, benchmark công khai, nguồn) — PO chốt 2026-10-25 | Mở bằng `orca terminal split --command "agy"`; giao thủ công như mcode. Chỉ cho ghi file `docs/` mới |
 | **Claude Sonnet 5.5** | CHỈ việc khó thật (kiến trúc, bug khó mà thợ khác 2 lần không xong) | **Tốn usage — hạn chế tối đa** |
 | **Claude Opus 5.5** | CHỈ phần **thẩm mỹ / logic thiết kế giao diện** + duyệt UI cuối so với mockup | Thợ khác code theo thiết kế của Opus |
 
