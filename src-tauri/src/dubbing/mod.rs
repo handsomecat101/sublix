@@ -38,6 +38,11 @@ pub mod vi_normalize;
 // TSK-DUBBING-STT-ENGINE: chọn engine STT theo config `stt_asr_engine` cho
 // pipeline lồng tiếng (mặc định vẫn là whisper.cpp).
 pub mod stt_select;
+
+
+// TSK-FEAT-VOICE-SAMPLE-CACHE: cache mẫu nghe thử theo (engine, voice_id).
+pub mod voice_samples;
+
 pub mod ducking;
 
 #[cfg(test)]
@@ -1092,12 +1097,9 @@ pub fn synthesize_kokoro_batch(
 // ===========================================================================
 
 /// Folder that caches pre-generated audition samples for a model.
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: logic thật nằm ở module `voice_samples`.
 pub fn voice_samples_dir(model_id: &str) -> PathBuf {
-    crate::config::app_base_dir()
-        .join("models")
-        .join("voice")
-        .join(model_id)
-        .join("samples")
+    voice_samples::samples_dir_for_model(model_id)
 }
 
 /// Voice ids that already have a cached audition sample on disk.
@@ -1130,55 +1132,16 @@ pub fn list_voice_samples(model_id: &str) -> Vec<String> {
 /// Pre-generate the audition sample for every Kokoro voice (one-time) and
 /// cache it under `models/voice/kokoro-vi/samples/`. Emits
 /// `voice:sample_progress` after each voice so the UI can show progress.
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: logic thật nằm ở module `voice_samples`.
 pub fn generate_kokoro_samples(app: &AppHandle) -> Result<u32> {
-    if !kokoro_available() {
-        anyhow::bail!(
-            "Chưa tải model Kokoro-Vietnamese — vào panel 🎛 Chọn Giọng & Tải Model để tải trước."
-        );
-    }
-    let dir = voice_samples_dir("kokoro-vi");
-    fs::create_dir_all(&dir).with_context(|| format!("Tạo thư mục {}", dir.display()))?;
-    let voices = get_kokoro_voices();
-    let total = voices.len();
-    let phrase = "Xin chào! Tôi là giọng đọc tiếng Việt của Sublix, rất vui được gặp bạn.";
-    let mut generated = 0u32;
-    for (idx, preset) in voices.iter().enumerate() {
-        let voice_id = preset
-            .id
-            .strip_prefix(KOKORO_VOICE_PREFIX)
-            .unwrap_or(&preset.id)
-            .to_string();
-        let out = dir.join(format!("{voice_id}.wav"));
-        let mut error: Option<String> = None;
-        if !is_valid_audio(&out) {
-            match synthesize_kokoro(phrase, &voice_id, &out) {
-                Ok(()) => generated += 1,
-                Err(e) => error = Some(format!("{e:#}")),
-            }
-        }
-        let _ = app.emit(
-            "voice:sample_progress",
-            serde_json::json!({
-                "model_id": "kokoro-vi",
-                "voice_id": voice_id,
-                "index": idx + 1,
-                "total": total,
-                "done": error.is_none(),
-                "error": error,
-            }),
-        );
-    }
-    Ok(generated)
+    voice_samples::generate_kokoro_samples(app)
 }
 
 /// Cached audition sample as a data URI for instant playback (None when the
 /// sample has not been generated yet — callers fall back to live synthesis).
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: logic thật nằm ở module `voice_samples`.
 pub fn voice_sample_data(model_id: &str, voice_id: &str) -> Option<String> {
-    let clean = voice_id.trim_start_matches(KOKORO_VOICE_PREFIX);
-    let path = voice_samples_dir(model_id).join(format!("{clean}.wav"));
-    let bytes = fs::read(path).ok()?;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    Some(format!("data:audio/wav;base64,{b64}"))
+    voice_samples::sample_data_for_model(model_id, voice_id)
 }
 
 /// True when a produced audio file exists and FFmpeg can read a real duration.

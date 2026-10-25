@@ -396,6 +396,10 @@ pub fn run() {
             voice_sample_list,
             voice_sample_generate,
             voice_sample_data,
+            voice_sample_status,
+            voice_sample_ensure,
+            voice_samples_prepare,
+            voice_samples_prepare_cancel,
             tts_engines_status,
             tts_cloud_set_key,
             tts_cloud_test,
@@ -1799,6 +1803,50 @@ async fn voice_sample_generate(app: tauri::AppHandle, model_id: String) -> Resul
 #[tauri::command]
 fn voice_sample_data(model_id: String, voice_id: String) -> Option<String> {
     dubbing::voice_sample_data(&model_id, &voice_id)
+}
+
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: số mẫu nghe thử đã có / tổng số giọng của engine.
+/// Kèm mỗi lần gọi sẽ **tự** bắt đầu tạo mẫu nền 1 lần nếu app đang rảnh.
+#[tauri::command]
+fn voice_sample_status(app: tauri::AppHandle, engine: String) -> dubbing::voice_samples::VoiceSampleStatus {
+    let status = dubbing::voice_samples::status(&engine);
+    dubbing::voice_samples::maybe_auto_prepare(&app, &engine);
+    status
+}
+
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: lấy mẫu nghe thử — có cache thì trả ngay (tức thì),
+/// chưa có thì tổng hợp **1 lần** rồi lưu lại (lazy) cho các lần sau.
+#[tauri::command]
+async fn voice_sample_ensure(
+    app: tauri::AppHandle,
+    voice_id: String,
+    text: Option<String>,
+) -> Result<Option<String>, String> {
+    let engine = dubbing::voice_samples::engine_of_voice(&voice_id).to_string();
+    let result = tokio::task::spawn_blocking(move || {
+        dubbing::voice_samples::ensure_sample(&voice_id, text.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("{e:#}"));
+    // Vừa nghe 1 giọng → cơ hội tạo nền cho cả engine (nếu app rảnh).
+    if result.is_ok() {
+        dubbing::voice_samples::maybe_auto_prepare(&app, &engine);
+    }
+    result
+}
+
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: tạo mẫu nghe thử **nền** cho mọi giọng của engine
+/// (hoặc tất cả engine offline đã cài). Tuần tự, ưu tiên thấp, huỷ được.
+#[tauri::command]
+fn voice_samples_prepare(app: tauri::AppHandle, engine: Option<String>) -> Result<u32, String> {
+    dubbing::voice_samples::spawn_prepare(app, engine.as_deref()).map_err(|e| format!("{e:#}"))
+}
+
+/// TSK-FEAT-VOICE-SAMPLE-CACHE: huỷ lượt tạo mẫu nền đang chạy.
+#[tauri::command]
+fn voice_samples_prepare_cancel() {
+    dubbing::voice_samples::cancel_prepare();
 }
 
 #[tauri::command]

@@ -5303,19 +5303,21 @@ export default function SublixStudioView({
       const cleanVoice = spkVoice.replace(/^kokoro:/, "");
 
       if (isTauriEnv) {
-        // Nếu là Kokoro: Đọc trực tiếp từ 14 file mẫu .wav có sẵn trong repo
-        if (spkVoice.startsWith("kokoro:")) {
-          try {
-            dataUri = await sublix.voiceSampleData("kokoro-vi", cleanVoice);
-          } catch {
-            dataUri = null;
-          }
+        const samplePhrase = `Xin chào, tôi là ${spk.name}, đây là mẫu giọng đọc được gán cho nhân vật của tôi.`;
+        // TSK-FEAT-VOICE-SAMPLE-CACHE: mọi engine (Kokoro/VieNeu/ZeroTTS/cloud) đều
+        // dùng chung cache mẫu nghe thử — lần đầu tổng hợp 1 lần rồi lưu xuống
+        // đĩa, lần sau phát TỨC THÌ (không gọi lại TTS).
+        // Cache theo GIỌNG ⇒ dùng câu mẫu chung của backend, KHÔNG truyền câu có tên
+        // vai (nếu không, vai đầu tiên nghe sẽ "đóng băng" tên mình vào mẫu của giọng).
+        try {
+          dataUri = await sublix.voiceSampleEnsure(spkVoice);
+        } catch (e) {
+          console.warn("voice sample ensure failed:", e);
+          dataUri = null;
         }
-
-        // Nếu chưa có sample file hoặc là VietNeu/Edge: Gọi dubbingPreviewTts on-demand
+        // Không có mẫu (voice lạ / engine chưa cài) → tổng hợp trực tiếp như cũ.
         if (!dataUri) {
           try {
-            const samplePhrase = `Xin chào, tôi là ${spk.name}, đây là mẫu giọng đọc được gán cho nhân vật của tôi.`;
             dataUri = await sublix.dubbingPreviewTts(samplePhrase, spkVoice);
           } catch (e) {
             console.warn("Preview TTS invoke failed:", e);

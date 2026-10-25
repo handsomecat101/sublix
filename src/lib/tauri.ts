@@ -145,6 +145,13 @@ export interface ModelDownloadProgressState {
 /** @deprecated dùng `ModelDownloadProgressState`. */
 export type ModelDownloadPhase = ModelDownloadProgressState;
 
+/** TSK-FEAT-VOICE-SAMPLE-CACHE: số mẫu nghe thử đã có / tổng số giọng của engine. */
+export interface VoiceSampleStatus {
+  engine: string;
+  ready: number;
+  total: number;
+}
+
 /** TSK-FEAT-STT-ENGINES: một engine nhận dạng trong catalog. */
 export interface SttEngineStatus {
   id: string;
@@ -830,6 +837,33 @@ export const sublix = {
       url,
       browserCookies: browserCookies ?? null,
     });
+  },
+
+  // ── TSK-FEAT-VOICE-SAMPLE-CACHE ────────────────────────────────────────
+  /** Số mẫu nghe thử đã có / tổng số giọng của engine ("kokoro"|"vieneu"|"zerotts"|"cloud"). */
+  async voiceSampleStatus(engine: string): Promise<VoiceSampleStatus> {
+    return await invoke<VoiceSampleStatus>("voice_sample_status", { engine });
+  },
+
+  /**
+   * Lấy mẫu nghe thử: có cache thì trả ngay (tức thì), chưa có thì tổng hợp
+   * 1 lần rồi lưu lại cho các lần sau (lazy).
+   */
+  async voiceSampleEnsure(voiceId: string, text?: string): Promise<string | null> {
+    return await invoke<string | null>("voice_sample_ensure", {
+      voiceId,
+      text: text ?? null,
+    });
+  },
+
+  /** Tạo mẫu nghe thử nền cho mọi giọng của engine (hoặc mọi engine đã cài). */
+  async voiceSamplesPrepare(engine?: string): Promise<number> {
+    return await invoke<number>("voice_samples_prepare", { engine: engine ?? null });
+  },
+
+  /** Huỷ lượt tạo mẫu nền đang chạy. */
+  async voiceSamplesPrepareCancel(): Promise<void> {
+    return await invoke<void>("voice_samples_prepare_cancel");
   },
 };
 
