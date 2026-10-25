@@ -3,6 +3,7 @@
 //! nhà cung cấp/model; key đã lưu chỉ hiện 4 ký tự cuối và không bao giờ bị
 //! ghi đè bởi ô nhập rỗng.
 
+import { useEffect, useRef, useState } from "react";
 import type { SettingsCtx, TransProvider } from "./types";
 import { Segmented } from "../../components/ui/Segmented";
 import { REASONING_EFFORTS, REASONING_LABELS } from "./configMerge";
@@ -82,6 +83,24 @@ function KeyField({
 
 export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
   const { provider } = ctx;
+  // R2-8 mục 6: bỏ nút "Lưu cấu hình" (mockup chốt KHÔNG có nút Lưu) ⇒ thay
+  // bằng toast nhỏ "✓ Đã lưu" khi đổi nhà cung cấp/model (đã tự lưu).
+  const [savedToast, setSavedToast] = useState<boolean>(false);
+  const toastTimer = useRef<number | null>(null);
+
+  const markSaved = () => {
+    setSavedToast(true);
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setSavedToast(false), 2200);
+  };
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+
   const statusOf = (id: TransProvider): { text: string; cls: string } => {
     if (provider === id) return { text: "Đang dùng", cls: "ok" };
     switch (id) {
@@ -115,7 +134,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
               key={p.id}
               type="button"
               className={`st-prov${provider === p.id ? " on" : ""}`}
-              onClick={() => ctx.setProvider(p.id)}
+              onClick={() => {
+                ctx.setProvider(p.id);
+                markSaved();
+              }}
             >
               <b>{p.name}</b>
               <small>{p.sub}</small>
@@ -143,7 +165,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
                 className="settings-input st-mono"
                 value={ctx.ollamaModelList.some((m) => m.name === ctx.ollamaModel) ? ctx.ollamaModel : ""}
                 onChange={(e) => {
-                  if (e.target.value) ctx.setOllamaModel(e.target.value);
+                  if (e.target.value) {
+                    ctx.setOllamaModel(e.target.value);
+                    markSaved();
+                  }
                 }}
               >
                 <option value="">
@@ -178,7 +203,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
               <select
                 className="settings-input"
                 value={ctx.translationModel}
-                onChange={(e) => ctx.setTranslationModel(e.target.value)}
+                onChange={(e) => {
+                  ctx.setTranslationModel(e.target.value);
+                  markSaved();
+                }}
               >
                 {ctx.transModels.length ? (
                   ctx.transModels.map((m) => (
@@ -201,7 +229,7 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
                     className={`settings-engine-btn ${ctx.transEnginePref === k ? "active" : ""}`}
                     onClick={() => ctx.changeTransEngine(k)}
                   >
-                    {k === "auto" ? "⚙ AUTO" : k === "cpu" ? "💻 CPU" : "🎮 GPU (CUDA)"}
+                    {k === "auto" ? "⚙ Tự động" : k === "cpu" ? "💻 CPU" : "🎮 GPU (CUDA)"}
                   </button>
                 ))}
               </div>
@@ -252,7 +280,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
                     key={m.id}
                     type="button"
                     className={`st-chip${ctx.minimaxModel === m.id ? " on" : ""}`}
-                    onClick={() => ctx.chooseModel("minimax", m.id)}
+                    onClick={() => {
+                      ctx.chooseModel("minimax", m.id);
+                      markSaved();
+                    }}
                   >
                     {m.label}
                   </button>
@@ -279,7 +310,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
                     key={m.id}
                     type="button"
                     className={`st-chip${ctx.deepseekModel === m.id ? " on" : ""}`}
-                    onClick={() => ctx.chooseModel("deepseek", m.id)}
+                    onClick={() => {
+                      ctx.chooseModel("deepseek", m.id);
+                      markSaved();
+                    }}
                   >
                     {m.label}
                   </button>
@@ -306,7 +340,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
                     key={m.id}
                     type="button"
                     className={`st-chip${ctx.openrouterModel === m.id ? " on" : ""}`}
-                    onClick={() => ctx.chooseModel("openrouter", m.id)}
+                    onClick={() => {
+                      ctx.chooseModel("openrouter", m.id);
+                      markSaved();
+                    }}
                   >
                     {m.label}
                   </button>
@@ -344,10 +381,10 @@ export function TranslationSection({ ctx }: { ctx: SettingsCtx }) {
         <button type="button" className="settings-btn-secondary" disabled={ctx.providerTesting} onClick={ctx.testProvider}>
           {ctx.providerTesting ? "⏳ Đang dịch thử…" : "🧪 Dịch thử"}
         </button>
-        <button type="button" className="settings-btn-primary" onClick={ctx.saveProvider}>
-          💾 Lưu cấu hình
-        </button>
-        <span className="st-hint">Tự lưu khi đổi nhà cung cấp/model — nút Lưu chỉ để chắc chắn.</span>
+        {/* R2-8 mục 6: bỏ nút "Lưu cấu hình" (Zero-Button — mockup chốt KHÔNG có
+            nút Lưu) — thay bằng toast nhỏ "✓ Đã lưu" khi đổi provider/model. */}
+        <span className="st-hint">Tự lưu khi thay đổi.</span>
+        {savedToast ? <span className="st-saved-toast">✓ Đã lưu</span> : null}
       </div>
     </section>
   );

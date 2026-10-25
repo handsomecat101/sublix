@@ -1,0 +1,6 @@
+{
+  "name": "sublix-glossary-tests",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts"
+}

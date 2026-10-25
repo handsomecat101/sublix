@@ -111,7 +111,7 @@ function ModelDownloadRowInner({
         </button>
       ) : null}
       <button type="button" className="ui-mdl-btn is-danger"
-        onClick={() => onDelete?.(modelId)}>Xóa</button>
+        onClick={() => onDelete?.(modelId)}>Xoá</button>
     </>
   ) : (
     <button type="button" className="ui-mdl-btn is-primary"
@@ -124,7 +124,22 @@ function ModelDownloadRowInner({
         <div className="ui-mdl-title">
           <span className="ui-mdl-name">{name}</span>
           {langLabel ? <span className="ui-mdl-lang">{langLabel}</span> : null}
-          {selected ? <span className="ui-mdl-badge">Đang dùng</span> : null}
+          {/* R2-8 mục 2: "Đang dùng" CHỈ khi model đã tải thật; model đã chọn
+              mà chưa tải thì badge vàng "Đã chọn · cần tải" (--warn) — tránh 3
+              nguồn nói 3 điều (Đang dùng / Chưa tải / gợi ý dùng model khác). */}
+          {selected && downloaded ? <span className="ui-mdl-badge">Đang dùng</span> : null}
+          {selected && !downloaded ? (
+            <span
+              className="ui-mdl-badge"
+              style={{
+                color: "var(--warn-txt)",
+                background: "var(--warn-soft)",
+                borderColor: "var(--warn-br)",
+              }}
+            >
+              Đã chọn · cần tải
+            </span>
+          ) : null}
           {wordTimestamps ? <span className="ui-mdl-chip" title="Có timestamp từ">⏱</span> : null}
         </div>
         <div className="ui-mdl-size">{sizeNote}</div>

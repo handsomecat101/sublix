@@ -13,7 +13,6 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { ContextMenu, type ContextMenuItem } from "../../components/ui/ContextMenu";
 import { SplitButton } from "../../components/ui/SplitButton";
 import { IconCopy, IconFileText, IconMoreHorizontal, IconSearch, IconTrash } from "../../icons";
-import spotHistoryUrl from "../../assets/spot-history.jpg";
 import type { LiveStatus, LiveSubPreview } from "../live/liveTypes";
 import {
   buildCopyText,
@@ -338,7 +337,11 @@ function HistoryViewInner({
             })
           ) : (
             <div className="hv-empty">
-              <img className="hv-empty-img" src={spotHistoryUrl} alt="" />
+              {/* R2-8 mục 20: icon trạng thái rỗng dùng SVG mono 40px — ảnh JPG cũ
+                  nằm trong ô xám vuông, trông như ảnh lỗi. */}
+              <div className="hv-empty-icon">
+                <IconFileText size={40} />
+              </div>
               <p className="hv-empty-text">
                 {hasItems
                   ? "Không tìm thấy câu thoại nào khớp với từ khoá tìm kiếm."

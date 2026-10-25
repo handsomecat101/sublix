@@ -65,6 +65,15 @@ export function SttSection(props: SttSectionProps) {
   const selectedId = engines.find((e) => e.selected)?.id ?? "";
   const engineOptions = readyEngines.map((e) => ({ value: e.id, label: e.label || e.name }));
 
+  // R2-8 mục 7: engine server ĐANG chạy có khớp lựa chọn "Tăng tốc Whisper" không.
+  const runtimeEngineLabel = (props.runtimeEngine ?? "").toUpperCase();
+  const selectedEngineLabel =
+    props.sttEnginePref === "auto" ? "TỰ ĐỘNG" : props.sttEnginePref.toUpperCase();
+  const runtimeMismatch =
+    !!props.runtimeEngine &&
+    props.sttEnginePref !== "auto" &&
+    props.runtimeEngine.toLowerCase() !== props.sttEnginePref;
+
   async function setDefault(id: string) {
     if (!id || id === selectedId) return;
     setEngines((prev) => prev.map((e) => ({ ...e, selected: e.id === id })));
@@ -147,7 +156,7 @@ export function SttSection(props: SttSectionProps) {
         <label className="st-label">Tăng tốc Whisper (engine phần cứng)</label>
         <Segmented
           options={[
-            { value: "auto", label: "⚙ AUTO", disabled: !props.configReady },
+            { value: "auto", label: "⚙ Tự động", disabled: !props.configReady },
             { value: "cpu", label: "💻 CPU", disabled: !props.configReady },
             { value: "cuda", label: "🎮 GPU (CUDA)", disabled: !props.configReady },
           ]}
@@ -155,14 +164,19 @@ export function SttSection(props: SttSectionProps) {
           onChange={props.onSttEngineChange}
           ariaLabel="Engine phần cứng cho Whisper"
         />
-        <span className="st-hint">
+        {/* R2-8 mục 7: runtimeEngine (engine server ĐANG chạy) khác lựa chọn →
+            cảnh báo rõ, không để người dùng tin app đang chạy GPU khi máy
+            không có NVIDIA. "auto" thì không coi là lệch. */}
+        <span className={`st-hint${runtimeMismatch ? " is-warn" : ""}`}>
           {!props.configReady
             ? "⏳ Đang tải cấu hình…"
             : props.serverStarting
             ? "⏳ Đang nạp lại server…"
+            : runtimeMismatch
+            ? `⚠ Đang chạy ${runtimeEngineLabel} — khởi động lại server để áp dụng ${selectedEngineLabel}`
             : props.runtimeEngine
-            ? `Đang chạy: ${props.runtimeEngine.toUpperCase()}`
-            : "Chưa nạp server (tự nạp khi chạy phụ đề)."}
+            ? `Đang chạy: ${runtimeEngineLabel}`
+            : "Chưa nạp"}
         </span>
       </div>
 

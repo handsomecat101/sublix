@@ -749,3 +749,79 @@
 .pc-state-value {
   font-weight: 600;
 }
+
+/* R2-8 mục 17: khung 2 cột (bỏ cột trái "Tổng quan" — số đếm đã có ở chip + topbar).
+   R2-8 mục 16: thẻ lịch sử gọn (1 dòng tiêu đề + 1 dòng meta). */
+
+.pc-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 10px;
+}
+
+.pc-shell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pc-shell-side {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pc-shell-side .st-status {
+  position: sticky;
+  top: 0;
+}
+
+/* ---------- Thẻ lịch sử gọn (R2-8 mục 16) ---------- */
+.pc-history-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pc-history-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 10.5px;
+  color: var(--t3);
+}
+
+.pc-history-type {
+  font-weight: 600;
+  color: var(--t3);
+}
+
+.pc-output-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* ---------- Panel trạng thái rút gọn (fallback) ---------- */
+.pc-state-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--t1);
+}

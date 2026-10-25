@@ -699,9 +699,10 @@
 }
 
 /* === HARDWARE PRESET CARDS === */
+/* R2-8 mục 18: 4 preset trên 1 hàng (trước: lưới 3 + thẻ AMD mồ côi full-width). */
 .hardware-presets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin: 10px 0 14px;
 }
@@ -1175,9 +1176,50 @@
 .st-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .st-label { font-size: 11.5px; font-weight: 600; color: var(--t3); }
 .st-mono { font-family: var(--font-mono, Consolas, monospace); }
+/* R2-8 mục 5: style GỐC cho .settings-input — trước đây chỉ có rule
+   `.st-key-row .settings-input { flex… }` ⇒ ô nhập rơi về style native Windows
+   (nền trắng, viền xám, chữ đen mono) vỡ hẳn Cinema Dark. */
+.settings-input {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.settings-input:focus {
+  border-color: var(--ac-br);
+  box-shadow: 0 0 0 3px var(--ac-soft);
+  outline: 0;
+}
+.settings-input::placeholder { color: var(--t4); }
+/* R2-8 mục 19: Segmented trong Cài đặt không nên giãn hết 1200px (nút dài lố,
+   khó đọc) — giới hạn bề ngang + co lại theo nội dung. */
+.settings-section .ui-seg {
+  max-width: 560px;
+  width: auto;
+  display: inline-flex;
+}
 .st-key-row, .st-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .st-key-row .settings-input, .st-row .settings-input { flex: 1; min-width: 140px; }
 .st-btn-sm { padding: 4px 10px !important; font-size: 11px !important; }
+/* R2-8 mục 6: toast nhỏ "✓ Đã lưu" (thay nút Lưu cấu hình). */
+.st-saved-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ok-txt);
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-br);
+}
+/* R2-8 mục 7: cảnh báo runtime engine lệch với lựa chọn. */
+.st-hint.is-warn { color: var(--warn-txt); font-weight: 600; }
 .st-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .st-chip {
   padding: 3px 9px;
