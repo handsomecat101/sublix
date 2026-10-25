@@ -792,15 +792,40 @@ pub fn build_format_args(format: &str) -> Vec<String> {
     }
 }
 
-/// Get the designated internal downloads cache directory
+/// Tên thư mục tải về, nằm ngay trong thư mục Downloads của Windows.
+pub const DOWNLOADS_FOLDER_NAME: &str = "Sublix Downloads";
+
+/// Thư mục chứa video tải về + thành phẩm lồng tiếng.
+///
+/// PO (2026-10-25): phải là chỗ **dễ thấy** — `%USERPROFILE%\Downloads\Sublix Downloads`
+/// — không giấu trong `%APPDATA%`. Chỉ rơi về thư mục dữ liệu app khi Windows
+/// không cho biết thư mục Downloads hoặc không tạo được thư mục.
 pub fn get_downloads_dir(app: &AppHandle) -> PathBuf {
-    let dir = app
+    let fallback = || {
+        app.path()
+            .app_data_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("downloads")
+    };
+    let preferred = app
         .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("downloads");
+        .download_dir()
+        .ok()
+        .map(|d| downloads_dir_in(&d));
+    if let Some(dir) = preferred {
+        match fs::create_dir_all(&dir) {
+            Ok(()) => return dir,
+            Err(e) => warn!("Không tạo được {}: {e} — dùng thư mục dữ liệu app", dir.display()),
+        }
+    }
+    let dir = fallback();
     let _ = fs::create_dir_all(&dir);
     dir
+}
+
+/// `<thư mục Downloads>\Sublix Downloads` (tách riêng để test được).
+pub fn downloads_dir_in(user_downloads: &Path) -> PathBuf {
+    user_downloads.join(DOWNLOADS_FOLDER_NAME)
 }
 
 /// v0.9.2 (EOF bug): extract the JSON object from yt-dlp `--dump-json`
@@ -2598,6 +2623,15 @@ pub fn disk_free_bytes(_path: &Path) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_downloads_dir_is_visible_subfolder_of_windows_downloads() {
+        let user = Path::new(r"C:\Users\x\Downloads");
+        assert_eq!(
+            downloads_dir_in(user),
+            PathBuf::from(r"C:\Users\x\Downloads\Sublix Downloads")
+        );
+    }
 
     #[test]
     fn test_platform_detection() {
