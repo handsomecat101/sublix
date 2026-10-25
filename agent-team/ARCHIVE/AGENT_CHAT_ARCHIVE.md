@@ -799,3 +799,33 @@
 ---
 
 ---
+
+---
+
+<!-- chuyển sang từ AGENT_CHAT.md ngày 2026-10-25 (giữ ≤ 8 tin) -->
+
+### 2026-10-25 14:20 - Mavis/mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-R2-8-VERIFY` — **phần bổ sung** sau khi HEAD có commit mới `da9a3ca`; **chưa commit**; **KHÔNG sửa** `src/**` / `src-tauri/**`).
+- **Build lại từ HEAD mới:** `npm run build` (exit 0) + `cargo build --bin sublix` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`, exit 0) → exe copy patch `1420`→`1423`; instance riêng **pid 37020 / CDP 9225 / vite preview 1423** — **app PO 1420/9223 không đụng**. Project tự khôi phục `A2Z_TEST_EN_dubbed.mp4` (8 câu, 40 s, 8 khối lồng tiếng **đã có audio**).
+- **VoicePicker — 9/9 PASS:** popover **25 giọng**; tìm **"ngọ"** → 3 giọng (Ngọc Huyền/Trân/Linh, tô `<mark>Ngọ</mark>`) và **"ngoc" không dấu → cùng 3 giọng**; lọc **♀ Nữ → 100% ♀**; **ghim ★ → config `favorite_voices: ["vietneu:Ngọc Huyền"]`** + bỏ ghim → `[]` (toggle 2 chiều) + nhóm **"★ YÊU THÍCH 1"**; ★ **không rò rỉ** đổi giọng của vai; **nghe mẫu lần 1 = 18 206 ms (tạo `.wav`) → lần 2 = 1 021 ms (đọc cache, nhanh hơn 5,4×)**.
+- **Smart ducking — PASS** (đo `video.volume` **mỗi 100 ms**, 424 mẫu): 4 khe **< 2 s** (0,49 / 0,15 / 1,75 / 1,77 s) → nền **VẪN THẤP 0,200**; 3 khe **> 2 s** (2,48 / 2,56 / 2,40 s) → **về đúng mức người dùng 1,000**; trong lúc thoại `vol = 0,200` đúng bằng `ducking_level`. **Đối chứng:** hạ `bridge` 2,0 → 0,5 làm khe **1,75 s & 1,77 s chuyển từ 0,200 → 1,000** ⇒ thanh trượt có tác dụng thật.
+- **2 thanh trượt → config (kéo chuột thật):** "Mức hạ" 0,20 → 0,65 ⇒ `ducking_level` đổi, **ghi config sau 1 ms**; "Nối khoảng nghỉ dưới" 2,0 → 4,5 ⇒ `ducking_bridge_sec` đổi, **chốt sau 384 ms** (debounce 400 ms) — không cần nút "Lưu". Đã trả config về mặc định (0,2 / 2,0 / 0,3 / 1,0) + giọng vai về `♂ Adam bựa`.
+- **Báo cáo:** `docs/UI_R2-8_VERIFY.md` §10. **Ảnh mới cho Opus duyệt:** `after-07-voicepicker-popover.png` (popover VoicePicker + nhóm ★) + `after-08-ducking-sliders.png` (2 thanh trượt hạ tiếng nền) — trả lời đúng ý *"VoicePicker trong app thật chưa có ảnh để duyệt"*. **0 lỗi console** ở phần bổ sung.
+
+---
+
+---
+
+---
+
+### 2026-10-25 14:30 - Opus (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-R2-8-REVIEW` — duyệt thẩm mỹ cuối vòng 2; **chỉ docs**, không sửa `src/**`, **chưa commit**).
+- **Ra:** `docs/UI_R2-8_REVIEW.md` — **23 mục: 7 P1 · 10 P2 · 6 P3** + nhóm "đạt — giữ nguyên" + bảng **5 gói** (A Studio · B Cài đặt/ModelDownloadRow · C Thuật ngữ · D Tiến trình/Lịch sử · E Live/Tải video) để chia việc không chồng file.
+- **P1 chính:** model "Đang dùng" nhưng "Chưa tải" (`ModelDownloadRow.tsx:127`) · thẻ model to trong bước Phụ đề (`StudioSttEnginePicker.tsx:90`) · ước lượng ghi Whisper khi chọn SenseVoice (`SublixStudioView.tsx:6372`) · nút Lưu thừa ở Thuật ngữ + Cài đặt › Dịch · ô API key/Model **nền trắng** (`.settings-input` mất style gốc) · "Đang chạy: CUDA" khi chọn CPU.
+- **Lưu ý:** gói B và D cùng chạm `SettingsView.tsx` (1736 vs 1624) → giao 1 thợ hoặc làm tuần tự. VoicePicker trong app thật **chưa có ảnh** để duyệt.
+
+---
+
+---
+
+---

@@ -9,13 +9,18 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 19:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-CHORE-AGENT-TEAM-SLIM` — dọn `agent-team/` cho nhẹ context; **chưa commit**).
+- **Đã dọn:** `PROJECT_STATE.md` **53,5 KB → 33,3 KB** (giữ 25 mục ✅ Hoàn thành mới nhất; **59 mục cũ** nguyên văn → `ARCHIVE/PROJECT_STATE_DONE_ARCHIVE.md` + 1 dòng trỏ archive) · `ISSUE_LOG.md` **107,6 KB → 85,4 KB** (**Quick Index giữ ĐẦY ĐỦ mọi mã lỗi**, thêm chú "chi tiết: ARCHIVE/…" cho 18 lỗi đã chuyển; **20 mục phân tích chi tiết** của lỗi ✅ Fixed & cũ trước 2026-10-20 → `ARCHIVE/ISSUE_LOG_DETAIL_ARCHIVE.md`; lỗi 🔴 Open / 🟡 / mới **giữ nguyên tại chỗ**).
+- **Đã chuyển 18 file kế hoạch/báo cáo** (FIX_STUDIO_UI_ROUND1–7, BAO_CAO_SANG, REPORT_PHASE_V2_COMPLETION, BAN_GIAO_GEMINI, BENH_AN_DU_AN_VA_VIEC_SUA, KE_HOACH_×4, OPTION_RESEARCH_DUBBING, PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO, TASK_A_Z_ONE_CLICK) → `agent-team/ARCHIVE/` (`git mv`, **không xoá file nào**) + `test-output-audit-giong/` → `ARCHIVE/`.
+- **Giữ tại chỗ (có lý do):** `AUDIT_TAO_GIONG.md` (17 mục audit còn đang chờ GUI test — `GUI_TEST_GUIDE.md` + `WORKFLOW_A_Z.md` trỏ tới) · `SCREENSHOTS.md` (`README.md` trỏ tới) · 4 file lõi + `README`/`QUY_TRINH`/`GOVERNANCE`/`LEADER_NOTES`/`PROJECT_SETUP_CHECKLIST`/`GUI_TEST_GUIDE`/`WORKFLOW_A_Z`/`UI_SPEC_SUBLIX_STUDIO`/`TAM_NHIN_SUBLIX_STUDIO`.
+- **Tổng 4 file lõi: 178,2 KB → 137,9 KB (−40,3 KB; đo sau khi thêm dòng bàn giao này). **AGENT_CHAT.md:** giữ **8 tin** (2 tin worker cũ nhất chuyển `ARCHIVE/AGENT_CHAT_ARCHIVE.md` nguyên văn; **giữ** tin `2026-10-24 23:50` của điều phối) · đã cập nhật đường dẫn cho file bị chuyển trong `CHANGELOG.md` + `src/views/SublixStudioView.tsx` (chỉ đổi path).
 ### 2026-10-25 16:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-R2-8-FIX-A` — **Gói A** sửa theo duyệt cuối `docs/UI_R2-8_REVIEW.md`; **chưa commit**).
 - **ĐÃ XONG (9 mục, đã đánh dấu ✅ trong `UI_R2-8_REVIEW.md`):** **1** dòng gọn engine chưa tải (bỏ `ModelDownloadRow` trong Studio) · **3** nhãn ước lượng theo engine đang chọn · **8** thẻ câu gọn (~70 px, nút chỉ hiện khi chọn/hover, ô dịch `textarea` tự cao, **giữ `React.memo`**) · **9** hàng thống kê "N câu · Ns · N vai · N WPM" + **3 chip lọc** (Chưa dịch / Thiếu tiếng / Câu >12s) · **10** gợi ý "▶ Chạy N bước đã bật" · **11** timeline theo bề rộng khung thật (ResizeObserver) + cột nhãn 176 px + "(Chưa có phụ đề / giọng)" · **12** 1 nguồn version (`appInfo.version`) + **👁** overlay trên topbar Studio + bỏ "✓ " ở pill · **18** (SettingsView) tiêu đề "Cấu hình theo máy" + pill "Đang dùng" · **21** (Studio) "Chạy hàng loạt: Bật/Tắt" + menu timeline sentence case + thống nhất "Xoá".
 - **CHƯA XONG / GIỚI HẠN:** **chưa chụp được ảnh `after-01e-studio-voice-picker.png`** — WDAC chặn exe Rust mới build (`os error 4551`, BUG-084) nên không dựng được instance để chụp; thay vào đó đã **đo DOM thật** trên instance riêng (CDP 9227, identifier + APPDATA riêng, không đụng app PO): thống kê "5 câu 16s 2 vai 154 WPM", chip "Chưa dịch (1) · Thiếu tiếng (5) · Câu >12s (0)", topbar có 👁 + version v0.12.0, thẻ câu có mốc thời gian + chấm vai + ô dịch xuống dòng.
 - **Verify:** `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** · `node --test` (timeline + process + live-history + voice-picker) **210/210 PASS**.
 - **File:** `src/views/studio/StudioSttEnginePicker.tsx` · `src/views/SublixStudioView.tsx` · `src/views/SublixStudioView.css` · `src/views/SettingsView.tsx` · `docs/UI_R2-8_REVIEW.md` (đánh dấu ✅) · `agent-team/PROJECT_STATE.md`.
-
 ### 2026-10-25 15:20 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-RELEASE-0.12.0-CHANGELOG2` — bổ sung **cùng mục v0.12.0**, không tạo version mới; **chưa commit**).
 - **Đã thêm (cả `CHANGELOG.md` lẫn `src/views/ChangelogModal.tsx`):** nhóm **Lồng tiếng** — ô chọn giọng (★ yêu thích, tìm không dấu, lọc Nam/Nữ, nghe thử trong danh sách), mẫu nghe thử phát tức thì, phân vai theo giọng thật + giới tính đo từ cao độ giọng, và **hạ tiếng nền thông minh** (nối khoảng nghỉ, chuyển mượt, xem thử = video xuất, 2 thanh trượt); nhóm mới **Tải video** (thư mục mặc định `Downloads\Sublix Downloads`, ảnh thu nhỏ + thời lượng); nhóm **Giao diện** nay tóm tắt các sửa R2-8 thay cho dòng trống *“Tinh chỉnh giao diện theo duyệt cuối”* (bỏ nút Lưu thừa, ô nhập Cài đặt đúng nền tối, nhãn “Đang dùng” chính xác, cảnh báo CUDA/CPU, Live/Tiến trình/Lịch sử gọn, thẻ phụ đề Studio gọn); nhóm **Sửa lỗi** thêm lịch sử tiến trình không trùng mục.
@@ -23,7 +28,6 @@
 - **Verify:** `npm run verify:version` **PASS** (6/6 nguồn = 0.12.0) · `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · đã mở modal trong app thật và xác nhận mọi mục mới hiện đúng. Lưu ý: lần `tsc` đầu báo 2 lỗi ở `SublixStudioView.tsx` là do worker khác đang sửa dở file đó (không phải file của tôi), chạy lại là 0 lỗi.
 
 ---
-
 ### 2026-10-25 14:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-R2-8-FIX-BD` — gói **B + D** của mcode #4: mục 2, 5, 6, 7, 15, 16, 17, 18(CSS), 19, 20, 21(Xoá); **chưa commit**).
 - **Cài đặt:** badge "Đang dùng" **chỉ khi model đã tải** (chọn mà chưa tải → badge vàng `--warn` "Đã chọn · cần tải"); thêm style gốc `.settings-input` (hết nền trắng/viền native); **xoá nút "💾 Lưu cấu hình"** → toast nhỏ "✓ Đã lưu" + chú thích "Tự lưu khi thay đổi."; cảnh báo `⚠ Đang chạy CUDA — khởi động lại server để áp dụng CPU` khi runtime lệch lựa chọn; "AUTO" → "Tự động"; `.settings-section .ui-seg` giới hạn 560px; `.hardware-presets` 4 cột.
@@ -33,7 +37,6 @@
 - **Đánh dấu `docs/UI_R2-8_REVIEW.md`:** ✅ mục **2, 5, 6, 7, 15, 16, 17, 19, 20** · ◐ mục **18** (mới làm phần CSS `.hardware-presets`) và **21** (mới làm phần "Xoá" trong `ModelDownloadRow`).
 
 ---
-
 ### 2026-10-25 14:30 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-R2-8-FIX-CE` — **gói C + gói E** của review R2-8; **chưa commit**).
 - **Gói C — mục 4 (`components/glossary/GlossaryEditor.tsx`):** thêm prop `autoSave` (**mặc định `true`**) → nút **💾 Lưu chỉ hiện khi `!autoSave`** (Studio drawer dùng autoSave nên hết mâu thuẫn với dòng chân "không cần bấm Lưu"); thay bằng **trạng thái nhỏ cạnh tiêu đề** `Đang lưu…` / `✓ Đã lưu` (11px, `--t3`) — tự bật sau khi emit + tắt sau 2,5 s, thêm prop tuỳ chọn `saveState` cho cha biết trạng thái.
@@ -43,7 +46,6 @@
 ---
 
 ---
-
 ### 2026-10-25 14:45 - Opus (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-DESIGN-STUDIO-TABS` — chỉ docs, không sửa `src/**`, **chưa commit**).
 - **Ra:** `docs/ui-mockups/studio-tabs.html` (+ `shots/studio-tabs.png`) + `UI_REDESIGN_PLAN.md §4.11`.
@@ -51,7 +53,6 @@
 - **Tương tác:** đóng tab đang chạy → hộp hỏi (mặc định **Để chạy nền**); tràn → cuộn ngang + nút "N tab ⌄"; thả file = tab mới (file đã mở → nhảy tới); phím Ctrl+Tab/Ctrl+Shift+Tab/Ctrl+W/Ctrl+1..8/Ctrl+9 = cuối/Ctrl+Shift+T; tối đa 12 tab, 1 việc nặng cùng lúc (khớp với `STUDIO_TABS_PLAN.md` của Sonnet).
 
 ---
-
 ### 2026-10-25 14:15 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-BUG-R2-8-01` — sửa React key trùng `dubbing_active`; **chưa commit**).
 - **Đã làm:** `processLogic.ts` thêm 3 hàm thuần — `makeTaskRunId` (id lần chạy `dubbing_<ts>_<rand>`), `dedupeHistoryIds` (lịch sử cũ trùng id → giữ mục mới nhất, mục cũ gắn hậu tố `_2/_3` ⇒ **không mất mục**), `upsertHistoryItem` (mục cùng id bị **thay** ⇒ 1 lần chạy = 1 mục, cập nhật tiến độ không sinh mục mới).
@@ -59,31 +60,6 @@
 - **Verify:** `node --test scripts/process-tests/` **29/29** (6 case mới) · timeline **121/121** · `npx vite build` **OK**; `tsc` còn 3 lỗi ở `LiveView.tsx` + `TranslationSection.tsx` — file của worker khác đang sửa dở, **không phải của tôi**.
 
 ---
-
-### 2026-10-25 14:20 - Mavis/mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-R2-8-VERIFY` — **phần bổ sung** sau khi HEAD có commit mới `da9a3ca`; **chưa commit**; **KHÔNG sửa** `src/**` / `src-tauri/**`).
-- **Build lại từ HEAD mới:** `npm run build` (exit 0) + `cargo build --bin sublix` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`, exit 0) → exe copy patch `1420`→`1423`; instance riêng **pid 37020 / CDP 9225 / vite preview 1423** — **app PO 1420/9223 không đụng**. Project tự khôi phục `A2Z_TEST_EN_dubbed.mp4` (8 câu, 40 s, 8 khối lồng tiếng **đã có audio**).
-- **VoicePicker — 9/9 PASS:** popover **25 giọng**; tìm **"ngọ"** → 3 giọng (Ngọc Huyền/Trân/Linh, tô `<mark>Ngọ</mark>`) và **"ngoc" không dấu → cùng 3 giọng**; lọc **♀ Nữ → 100% ♀**; **ghim ★ → config `favorite_voices: ["vietneu:Ngọc Huyền"]`** + bỏ ghim → `[]` (toggle 2 chiều) + nhóm **"★ YÊU THÍCH 1"**; ★ **không rò rỉ** đổi giọng của vai; **nghe mẫu lần 1 = 18 206 ms (tạo `.wav`) → lần 2 = 1 021 ms (đọc cache, nhanh hơn 5,4×)**.
-- **Smart ducking — PASS** (đo `video.volume` **mỗi 100 ms**, 424 mẫu): 4 khe **< 2 s** (0,49 / 0,15 / 1,75 / 1,77 s) → nền **VẪN THẤP 0,200**; 3 khe **> 2 s** (2,48 / 2,56 / 2,40 s) → **về đúng mức người dùng 1,000**; trong lúc thoại `vol = 0,200` đúng bằng `ducking_level`. **Đối chứng:** hạ `bridge` 2,0 → 0,5 làm khe **1,75 s & 1,77 s chuyển từ 0,200 → 1,000** ⇒ thanh trượt có tác dụng thật.
-- **2 thanh trượt → config (kéo chuột thật):** "Mức hạ" 0,20 → 0,65 ⇒ `ducking_level` đổi, **ghi config sau 1 ms**; "Nối khoảng nghỉ dưới" 2,0 → 4,5 ⇒ `ducking_bridge_sec` đổi, **chốt sau 384 ms** (debounce 400 ms) — không cần nút "Lưu". Đã trả config về mặc định (0,2 / 2,0 / 0,3 / 1,0) + giọng vai về `♂ Adam bựa`.
-- **Báo cáo:** `docs/UI_R2-8_VERIFY.md` §10. **Ảnh mới cho Opus duyệt:** `after-07-voicepicker-popover.png` (popover VoicePicker + nhóm ★) + `after-08-ducking-sliders.png` (2 thanh trượt hạ tiếng nền) — trả lời đúng ý *"VoicePicker trong app thật chưa có ảnh để duyệt"*. **0 lỗi console** ở phần bổ sung.
-
----
-
----
-
-### 2026-10-25 14:30 - Opus (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-R2-8-REVIEW` — duyệt thẩm mỹ cuối vòng 2; **chỉ docs**, không sửa `src/**`, **chưa commit**).
-- **Ra:** `docs/UI_R2-8_REVIEW.md` — **23 mục: 7 P1 · 10 P2 · 6 P3** + nhóm "đạt — giữ nguyên" + bảng **5 gói** (A Studio · B Cài đặt/ModelDownloadRow · C Thuật ngữ · D Tiến trình/Lịch sử · E Live/Tải video) để chia việc không chồng file.
-- **P1 chính:** model "Đang dùng" nhưng "Chưa tải" (`ModelDownloadRow.tsx:127`) · thẻ model to trong bước Phụ đề (`StudioSttEnginePicker.tsx:90`) · ước lượng ghi Whisper khi chọn SenseVoice (`SublixStudioView.tsx:6372`) · nút Lưu thừa ở Thuật ngữ + Cài đặt › Dịch · ô API key/Model **nền trắng** (`.settings-input` mất style gốc) · "Đang chạy: CUDA" khi chọn CPU.
-- **Lưu ý:** gói B và D cùng chạm `SettingsView.tsx` (1736 vs 1624) → giao 1 thợ hoặc làm tuần tự. VoicePicker trong app thật **chưa có ảnh** để duyệt.
-
----
-
----
-
----
-
 ### 2026-10-24 23:50 - Mavis (dieu phoi) -> @Team / @jimmyvu
 - **Loai:** `@handoff` + `@done` (pull 19 commit tu may dev -> may PO; sua launcher portable; app da chay cho PO test).
 - **Da pull:** `origin/master` `0d427b6` (v0.11.36) vao fork PO `H:\AI Project\sub-lix-fork-2026-10-19` — fast-forward, 19 commit (UI redesign R2-1..R2-7 · timeline Premiere 6 module + 79 test · VieNeu-TTS v3 Turbo · ZeroTTS · Chirp3/FPT · MiniMax M3.1 Flash · +8 nen tang tai video · preset GPU AMD). Working tree sach, khong mat viec tho nao.

@@ -657,7 +657,7 @@ sublix/
 - Tạo mẫu thật: UI "Đang tạo mẫu 5/14…" → **14/14 file WAV** (~220-277KB, 24kHz) trong `src-tauri/models/voice/kokoro-vi/samples/`; UI "✅ Đã có sẵn mẫu 14/14".
 - Nghe thử: CDP click 🔊 Tuấn Ngọc → `paused:false, t:1.56s, dur:4.92s, src:data:audio/wav` (phát từ cache, không synth lại).
 - E2E multi-role: `test_dubbing_input/dialogue_2spk.wav` (20.6s, 5 câu Nam/Nữ xen kẽ do Kokoro tạo) → Whisper+diarize → **5 vai**; auto-cast 5 giọng KHÁC NHAU (Tuấn Ngọc/Mai Linh/Mạnh Dũng/Ngọc Huyền/Thành Đạt); ép Vai5=Tuấn Ngọc → **2 chip ⚠️ Trùng giọng**.
-- Ảnh bằng chứng: `test-output-audit-giong/v099_voice-catalog-hub.png`, `v099_multi-role-casting.png`. cargo check ✅ · tsc ✅.
+- Ảnh bằng chứng: `agent-team/ARCHIVE/test-output-audit-giong/v099_voice-catalog-hub.png`, `v099_multi-role-casting.png`. cargo check ✅ · tsc ✅.
 
 ### Bẫy dev-mode mới (ISSUE_LOG BUG-H08)
 - App dev base dir = `src-tauri` (`CARGO_MANIFEST_DIR`) ⇒ ghi samples vào `src-tauri/models/...` ⇒ **tauri dev watcher tưởng đổi code → auto-restart → giết tiến trình tạo mẫu giữa chừng** (lần đầu: samples=0). Fix khi test: `npm run tauri dev -- --no-watch`. Release không dính (không có watcher).
@@ -1274,7 +1274,7 @@ sublix/
 - StarCraft: bấm nút → `en.srt` + `vi.srt` ("Nhiệt. Nhiệt.") ra đĩa lúc 9:29 — chip "📝 Phụ đề: en, vi" visible (đo `getBoundingClientRect` x:657 y:230).
 - Video mới "Me at the zoo" (checkbox BẬT): video xong → sub-pass tự chạy → `en.srt` (416B) + chip "📝 Phụ đề: en"; item test đã xoá khỏi lịch sử sau nghiệm thu.
 - `cargo test` 11/11 (2 test mới: scan langs + tách id), `tsc` 0 lỗi. Debug port đã đóng, app sạch đã mở lại cho PO.
-- Ảnh: `test-output-audit-giong/v01131_subs_chips.png`.
+- Ảnh: `agent-team/ARCHIVE/test-output-audit-giong/v01131_subs_chips.png`.
 
 ### Ghi chú ca
 - 429 là giới hạn phía YouTube với track dịch — UX mới: track gốc luôn về; bấm lại nút khi cần. Dọn rolling AGENT_CHAT: 9 tin cũ (10-08/10-09) → `ARCHIVE/AGENT_CHAT_ARCHIVE.md`.
@@ -1294,7 +1294,7 @@ sublix/
 
 ### Verify (GUI thật, app test cổng 9222)
 - StarCraft [uQnmfEka3vw]: nạp vào Studio, label "có sẵn: en (YouTube), vi (YouTube)", chạy "Chỉ Tạo Phụ Đề Gốc" → **whisper = 0 process** (dùng thẳng .srt), kết quả **49 câu** đúng nội dung .srt ("I wish to be alone", "We are an ancient…"), badge "📥 YouTube (.en)" hiển thị; gọi `downloader_fetch_subtitles` ghi manifest thật 2 entry (en, vi).
-- Ảnh: `agent-team/test-output-audit-giong/v01132_studio_youtube_used.png`.
+- Ảnh: `agent-team/ARCHIVE/test-output-audit-giong/v01132_studio_youtube_used.png`.
 
 ### Ghi chú
 - Nút "🚀 Xem Trong Studio" từ danh sách KHÔNG đổi được video đang mở (Studio restore project cache `sublix_active_studio_project_v1`) — test bằng cách sửa cache; ghi nhận để teammate xem (không thuộc phạm vi bản này).

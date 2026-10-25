@@ -163,7 +163,7 @@
 - Label "có sẵn: en (YouTube), vi (YouTube)"; chạy "Chỉ Tạo Phụ Đề" → **0 tiến trình whisper** chạy; kết quả **49 câu** đúng nội dung .srt (vd "I wish to be alone", "We are an ancient…"); badge track **đỏ "📥 PHỤ ĐỀ YOUTUBE (.en)"** hiển thị; **0 badge từng câu** (đúng yêu cầu PO).
 - Ca ngược lại (AI tự tạo) — `dialogue_2spk.wav` không có .srt: chạy → Whisper nhận dạng **5 câu**, badge track **xanh "🎙 AI TỰ TẠO"** hiển thị.
 - Manifest thật: `sublix_subtitles.json` 2 entry (en, vi có source "youtube").
-- Ảnh: `agent-team/test-output-audit-giong/v01132b_track_badge_youtube.png` + `v01132b_track_badge_ai.png`; unit test mới (find_sibling_srt + crop_srt_to_window) pass; `tsc` 0 lỗi.
+- Ảnh: `agent-team/ARCHIVE/test-output-audit-giong/v01132b_track_badge_youtube.png` + `v01132b_track_badge_ai.png`; unit test mới (find_sibling_srt + crop_srt_to_window) pass; `tsc` 0 lỗi.
 
 ---
 
@@ -184,7 +184,7 @@
 **Bằng chứng E2E (chạy thật):**
 - StarCraft `[uQnmfEka3vw]`: bấm "📝 Tải phụ đề" → ra `en.srt` (11.555B) + `vi.srt` (16.415B — "Nhiệt. Nhiệt.") lúc 9:29; chip "📝 Phụ đề: en, vi" hiện trên card.
 - Video mới "Me at the zoo" (checkbox BẬT khi tải): video xong → sub-pass tự chạy → ra `en.srt` (416B) + chip "📝 Phụ đề: en".
-- Ảnh: `agent-team/test-output-audit-giong/v01131_subs_chips.png`; unit test mới pass (scan `.srt` + tách id); `tsc` 0 lỗi.
+- Ảnh: `agent-team/ARCHIVE/test-output-audit-giong/v01131_subs_chips.png`; unit test mới pass (scan `.srt` + tách id); `tsc` 0 lỗi.
 
 *(Ghi chú version: đội đã gọi các fix timeline 12/10 là "v0.11.30" trong tài liệu — bản này đánh số **v0.11.31** để không trùng; file version trong repo trước đó còn 0.11.29.)*
 
@@ -337,7 +337,7 @@
 
 **Bằng chứng (trung thực):**
 
-Mavis khng c GUI agent để mở app Sublix v chụp ảnh trực tiếp. Em dng ffmpeg/ffprobe CLI để verify pipeline `transcode_for_preview` (R4-01 + R6-01) hoạt động đng. Bo co đầy đủ + 2 ảnh PNG + 2 file MP4 tại `agent-team/test-output-audit-giong/REPORT_R6-04.md`.
+Mavis khng c GUI agent để mở app Sublix v chụp ảnh trực tiếp. Em dng ffmpeg/ffprobe CLI để verify pipeline `transcode_for_preview` (R4-01 + R6-01) hoạt động đng. Bo co đầy đủ + 2 ảnh PNG + 2 file MP4 tại `agent-team/ARCHIVE/test-output-audit-giong/REPORT_R6-04.md`.
 
 **Kết quả probe:**
 
@@ -352,7 +352,7 @@ Mavis khng c GUI agent để mở app Sublix v chụp ảnh trực tiếp. Em dn
 - Pipeline transcode work end-to-end (verified bằng testsrc: 60 frame → 60 frame Constrained Baseline, extract PNG 39 KB OK).
 - ❌ KHNG C ảnh chụp app Sublix thật v Mavis khng c GUI agent. PO cần mở app qua `Chay-Sublix.bat` để xc minh UX cuối.
 
-**File đ thm:** `agent-team/test-output-audit-giong/REPORT_R6-04.md`, `r6-01_multispeaker_frame.png`, `r6-01_preview_frame.png`, `r6-01_input_with_frame.mp4`, `r6-01_preview.mp4`.
+**File đ thm:** `agent-team/ARCHIVE/test-output-audit-giong/REPORT_R6-04.md`, `r6-01_multispeaker_frame.png`, `r6-01_preview_frame.png`, `r6-01_input_with_frame.mp4`, `r6-01_preview.mp4`.
 
 ---
 
@@ -557,7 +557,7 @@ L do giữ thay v xo:
 ## v0.11.11 — 2026-10-09
 ### Sublix Studio: A→Z 1-Click Đ C Sẵn (TASK_A_Z_ONE_CLICK S1)
 
-**Pht hiện khi điu tra TASK_A_Z_ONE_CLICK.md:**
+**Pht hiện khi điu tra agent-team/ARCHIVE/TASK_A_Z_ONE_CLICK.md:**
 Tnh năng "dn link → chuyển sang Studio với file đ chn" **đ c sẵn từ trước**, khng cần code thm. Flow đầy đủ:
 
 1. Tab Tải video: tải xong video → click **"✨ ĐƯA VÀO STUDIO LỒNG TIẾNG & SUB"** trong card video (line 1148) → gi `onNavigateToStudio(filePath)`.
@@ -577,7 +577,7 @@ Tnh năng "dn link → chuyển sang Studio với file đ chn" **đ c sẵn t�
 ## v0.11.10 — 2026-10-09
 ### Dubbing Export: Audio Track Tag `language=vie` (OPTION_RESEARCH R2)
 
-**Vấn đ (OPTION_RESEARCH_DUBBING.md R2):** MP4 output từ Dubbing thiếu metadata `language=vie` cho track audio → player (VLC, mpv) hiển thị "und" hoặc sai ngn ngữ; user c track Việt m app ni "unknown".
+**Vấn đ (agent-team/ARCHIVE/OPTION_RESEARCH_DUBBING.md R2):** MP4 output từ Dubbing thiếu metadata `language=vie` cho track audio → player (VLC, mpv) hiển thị "und" hoặc sai ngn ngữ; user c track Việt m app ni "unknown".
 
 **Fix v0.11.10:** Thm 2 dng vo ffmpeg remux command (`dubbing/mod.rs:2187-2192`):
 ```rust
@@ -781,7 +781,7 @@ Khi thả file `multi_speaker_scene.mp4` hoặc video tải từ web (VP9/AV1/HE
 
 **Cn lại (chưa lm trong ko ny):**
 - Ưu tin 2: nhng libmpv (đng hướng lu di) — phase sau
-- R4-02 đến R4-09 (xem `FIX_STUDIO_UI_ROUND4.md`) — fix turn tiếp
+- R4-02 đến R4-09 (xem `agent-team/ARCHIVE/FIX_STUDIO_UI_ROUND4.md`) — fix turn tiếp
 
 **File đ đổi:** `src-tauri/src/lib.rs`, `src/lib/tauri.ts`, `src/views/SublixStudioView.tsx`, `package.json`, `src-tauri/Cargo.toml`.
 

@@ -17,7 +17,7 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    let out_dir = Path::new(r"H:\AI Project\sublix\agent-team\test-output-audit-giong");
+    let out_dir = Path::new(r"H:\AI Project\sublix\agent-team\ARCHIVE\test-output-audit-giong");
     let _ = fs::create_dir_all(out_dir);
 
     println!("📁 Video đầu vào: {}", input_video);

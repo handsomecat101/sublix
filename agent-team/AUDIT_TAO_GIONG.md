@@ -10,7 +10,7 @@
 
 1. **Mở app thật:** chạy `Chay-Sublix.bat` (dev mode) kèm `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`, điều khiển bằng `agent-browser` như người thật (cách làm: `AGENT_CHAT.md` tin 2026-10-06 08:55).
 2. **Làm đúng luồng người dùng** của tính năng đó (bấm đủ các nút, không gọi thẳng code/test CLI thay thế — CLI chỉ là bổ sung).
-3. **Chụp ảnh màn hình** từng bước then chốt + **lưu lại file đầu ra thật** (âm thanh/video) vào thư mục `test-output-audit-giong/`.
+3. **Chụp ảnh màn hình** từng bước then chốt + **lưu lại file đầu ra thật** (âm thanh/video) vào thư mục `ARCHIVE/test-output-audit-giong/`.
 4. **Điền 1 dòng vào BẢNG KẾT QUẢ** bên dưới với 1 trong 4 trạng thái:
    - 🟢 **CHẠY THẬT** — bấm được, ra kết quả đúng như quảng cáo (kèm bằng chứng)
    - 🟡 **CHẠY NHƯNG YẾU** — có chạy nhưng kết quả kém (ghi rõ kém chỗ nào: giọng robot, sai vai, lệch thời lượng...)
@@ -44,7 +44,7 @@
 | 11 | **Clone giọng diễn viên — F5-TTS Vietnamese** (SPEC `SPEC_AI_DUBBING_AND_LLM.md` Mục 4) | Trong app có chỗ nhận **file giọng mẫu 5-10s** không? Bấm thử với file mẫu → có file giọng ra không? | Ghi rõ: "Không có trong code — chỉ có trong SPEC Mục 4" |
 | 12 | **Viterbox (Chatterbox tiếng Việt)** (SPEC Mục 4) | Tương tự #11 | Ghi rõ nơi quảng cáo |
 | 13 | **Kokoro-Vietnamese ONNX (giọng nhẹ CPU)** (SPEC Mục 4 / Milestone 6) | Tương tự #11 | Ghi rõ nơi quảng cáo |
-| 14 | **"Multi-Speaker Voice Clone"** (mô tả bước 4 trong sơ đồ `KE_HOACH_ALL_IN_ONE_PIPELINE.md`) | Thực chất hiện tại là gì — chỉ là Edge-TTS đọc thay, hay có clone thật? | Ghi rõ: quảng cáo nói "clone" nhưng hiện là "đọc thay bằng giọng có sẵn" |
+| 14 | **"Multi-Speaker Voice Clone"** (mô tả bước 4 trong sơ đồ `ARCHIVE/KE_HOACH_ALL_IN_ONE_PIPELINE.md`) | Thực chất hiện tại là gì — chỉ là Edge-TTS đọc thay, hay có clone thật? | Ghi rõ: quảng cáo nói "clone" nhưng hiện là "đọc thay bằng giọng có sẵn" |
 | 15 | **Phân vai "AI Diarization"** (quảng cáo trong UI/Changelog) | Phân vai thực chất bằng AI nhận diện giọng (Sherpa/Pyannote) hay chỉ bằng **đoán khoảng nghỉ/dấu câu**? (xem `dubbing/mod.rs` phần `is_speaker_change`) | Ghi rõ cơ chế thật để sửa lại lời quảng cáo cho trung thực |
 
 ## 📤 C. ĐẦU RA & CÂU NỐI
@@ -87,9 +87,9 @@
 1. **Mục 🟠 "trên giấy":** CHỈ ghi nhận, **KHÔNG tự ý code làm mới** (trừ khi PO bảo). Ghi rõ "lời quảng cáo nằm ở đâu" để PO quyết: làm thật (thêm task riêng) hay **gỡ/sửa lời quảng cáo** cho trung thực.
 2. **Mục 🔴 "hỏng":** ghi vào `ISSUE_LOG.md` (mã `BUG-0xx` tiếp theo) kèm cách tái hiện 2-3 dòng.
 3. **Mục 🟡 "yếu":** ghi rõ yếu điểm + đề xuất 1 câu.
-4. Báo `@done` trên `AGENT_CHAT.md`: bảng đã điền + thư mục `test-output-audit-giong/` + 3-5 dòng tóm tắt cho PO. **Thiếu bảng hoặc thiếu bằng chứng = chưa xong, sẽ bị trả về.**
+4. Báo `@done` trên `AGENT_CHAT.md`: bảng đã điền + thư mục `ARCHIVE/test-output-audit-giong/` + 3-5 dòng tóm tắt cho PO. **Thiếu bảng hoặc thiếu bằng chứng = chưa xong, sẽ bị trả về.**
 
-*(Tài liệu này là yêu cầu kiểm tra — không phải lệnh sửa code. Chi tiết tính năng xem `docs/SPEC_AI_DUBBING_AND_LLM.md` và `KE_HOACH_ALL_IN_ONE_PIPELINE.md`.)*
+*(Tài liệu này là yêu cầu kiểm tra — không phải lệnh sửa code. Chi tiết tính năng xem `docs/SPEC_AI_DUBBING_AND_LLM.md` và `ARCHIVE/KE_HOACH_ALL_IN_ONE_PIPELINE.md`.)*
 
 ---
 
@@ -107,7 +107,7 @@
 
 ## 2. ⚠️ LUẬT KIỂM TRA (ÁP DỤNG CHO TỪNG MỤC CODE — KHÔNG NGOẠI LỆ)
 
-- Code xong 1 mục → **NGAY LẬP TỨC** mở app thật (`Chay-Sublix.bat` + `agent-browser` cổng 9222) bấm chuột như người thật → **nghe file âm thanh/video đầu ra thật** → chụp ảnh + lưu bằng chứng vào `test-output-audit-giong/`.
+- Code xong 1 mục → **NGAY LẬP TỨC** mở app thật (`Chay-Sublix.bat` + `agent-browser` cổng 9222) bấm chuột như người thật → **nghe file âm thanh/video đầu ra thật** → chụp ảnh + lưu bằng chứng vào `ARCHIVE/test-output-audit-giong/`.
 - **KHÔNG** làm 3 tiếng rồi mới test. **Làm tới đâu — test tới đó.** Báo `@done` từng lô nhỏ **1–3 mục/lô** kèm bằng chứng đầy đủ.
 - TUYỆT ĐỐI không viết "đạt / hoàn thành / verify OK" khi chưa có **file âm thanh/video thật nghe được** (mở bằng VLC / Windows Media) và ảnh chụp màn hình tương ứng.
 - Báo cáo thiếu bằng chứng = **TRẢ VỀ**, không bàn giao tiếp.
