@@ -1,0 +1,251 @@
+/* ============================================================================
+   TSK-TABS-P1 — thanh tab Studio (Cinema Dark).
+   Bám đúng `docs/ui-mockups/studio-tabs.html` + UI_REDESIGN_PLAN §4.11:
+   thanh 34 px, tab 30 px (200 px → co 120 → tối đa 220), chữ 12 px/600,
+   tab đang mở: nền --bg-side + gạch --ac 2 px trên đỉnh.
+   ========================================================================== */
+
+.sts-strip {
+  height: 34px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0 8px;
+  background: #0f0d0b;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  flex: none;
+}
+
+.sts-tabs-scroll {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1 1 auto;
+  scrollbar-width: none;
+}
+.sts-tabs-scroll::-webkit-scrollbar { height: 0; }
+
+.sts-tab {
+  height: 30px;
+  flex: 0 1 200px;
+  min-width: 120px;
+  max-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px 8px 0 0;
+  color: var(--t3);
+  font-size: 12px;
+  font-weight: 600;
+  position: relative;
+  border: 1px solid transparent;
+  border-bottom: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+}
+.sts-tab + .sts-tab::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  height: 14px;
+  width: 1px;
+  background: var(--line);
+}
+.sts-tab:hover { background: var(--hover); color: var(--t1); }
+.sts-tab.on {
+  background: var(--bg-side);
+  border-color: var(--line);
+  color: var(--t1);
+}
+.sts-tab.on::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 2px;
+  background: var(--ac);
+  border-radius: 2px 2px 0 0;
+}
+.sts-tab.on::after,
+.sts-tab.on + .sts-tab::after { display: none; }
+
+.sts-tab-ic {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+/* Vòng tiến độ (conic) — đọc được ở mọi bề rộng tab. */
+.sts-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ac) calc(var(--p, 0) * 1%), rgba(255, 255, 255, 0.12) 0);
+  -webkit-mask: radial-gradient(circle at center, transparent 4px, #000 4.5px);
+  mask: radial-gradient(circle at center, transparent 4px, #000 4.5px);
+}
+.sts-ring.q {
+  background: none;
+  border: 1.5px dashed var(--t4);
+  -webkit-mask: none;
+  mask: none;
+  box-sizing: border-box;
+}
+.sts-ic-idle::before {
+  content: "";
+  width: 12px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1.5px solid var(--t4);
+}
+.sts-ic-err {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dang);
+  color: #1a0806;
+  font-size: 10px;
+  font-weight: 900;
+}
+.sts-ic-err::before { content: "!"; }
+.sts-ic-done::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+
+.sts-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sts-tab-pct {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--t2);
+  flex: none;
+}
+.sts-tab-x {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  opacity: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+}
+.sts-tab:hover .sts-tab-x,
+.sts-tab.on .sts-tab-x { opacity: 1; }
+.sts-tab-x:hover { background: var(--hover); color: var(--t1); }
+
+.sts-add {
+  width: 28px;
+  height: 26px;
+  margin: 0 0 2px 4px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--t3);
+  font-size: 15px;
+  flex: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.sts-add:hover { background: var(--hover); color: var(--t1); }
+
+/* Ô "việc nền" (P1: chỉ đếm) */
+.sts-busy-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  margin: 0 0 2px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  color: var(--t2);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--bg-card);
+}
+.sts-busy-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ac);
+}
+
+/* Hộp thoại xác nhận (đóng tab có việc / đạt trần) */
+.sts-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+.sts-dialog {
+  width: min(420px, calc(100vw - 48px));
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  padding: 16px 18px;
+}
+.sts-dialog h3 {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--t1);
+}
+.sts-dialog p {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--t3);
+  line-height: 1.5;
+}
+.sts-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.sts-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-inset);
+  color: var(--t2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sts-btn:hover { color: var(--t1); background: var(--hover); }
+.sts-btn.is-danger {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+}
+.sts-btn.is-danger:hover { background: rgba(239, 68, 68, 0.18); }

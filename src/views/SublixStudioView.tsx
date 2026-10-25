@@ -185,9 +185,52 @@ export interface SublixStudioViewProps {
   onThemeChange?: (theme: string) => void;
   initialFilePath?: string;
   isActive?: boolean;
-  fileNonce?: number;
+  /**
+   * [TSK-TABS-P1] Id tab (host quản lý danh sách tab). Mỗi tab = 1 instance
+   * `SublixStudioView` riêng, vẫn mounted khi ẩn (việc đang chạy không mất).
+   */
+  tabId?: string;
+  /**
+   * [TSK-TABS-P1] Yêu cầu mở video — host quyết định: nhảy tới tab đã có cùng
+   * path / tái dùng tab trống / tạo tab mới (trần 6).
+   */
+  onRequestOpenVideo?: (path: string) => void;
+  /** [TSK-TABS-P1] Nội dung render NGAY DƯỚI `MasterTopbar` (ô thanh tab). */
+  belowTopbar?: React.ReactNode;
+  /** [TSK-TABS-P1] Báo trạng thái nhẹ cho host (đã throttle ≥250 ms ở phía gọi). */
+  onStatus?: (tabId: string, status: StudioTabStatus) => void;
+  /**
+   * [TSK-TABS-P1] Host yêu cầu nạp video vào tab này (tab trống được lấp đầy).
+   * `nonce` tăng mỗi lần yêu cầu ⇒ instance nạp đúng 1 lần.
+   */
+  loadRequest?: { path: string; nonce: number } | null;
+  /**
+   * [TSK-TABS-P1] Host yêu cầu **DỪNG** việc của tab này (khi đóng tab đang chạy).
+   * `nonce` tăng mỗi lần yêu cầu ⇒ dừng đúng 1 lần.
+   */
+  cancelRequest?: number;
+  /**
+   * [TSK-TABS-P1] Tab này sở hữu cache dự án v1 (khôi phục khi mở app + autosave).
+   * Mặc định `true` (1 instance như cũ); host chỉ bật cho tab đầu tiên. P3 thay bằng
+   * `sessionStore` theo từng tab.
+   */
+  useProjectCache?: boolean;
   onTaskUpdate?: (task: StudioTaskUpdatePayload) => void;
   onClearPendingFile?: () => void;
+}
+
+/** [TSK-TABS-P1] Trạng thái nhẹ mà instance báo lên host (không phải state phát). */
+export interface StudioTabStatus {
+  /** Trạng thái việc: idle / running / queued / error / done. */
+  busy: "idle" | "running" | "queued" | "error" | "done";
+  /** % của bước đang chạy (0..100). */
+  percent: number;
+  /** Có thay đổi chưa lưu. */
+  dirty: boolean;
+  /** Tên hiển thị trên tab. */
+  title: string;
+  /** Đường dẫn video đang mở ("" = tab trống) — host dùng để nhảy tab cùng path / tái dùng tab trống. */
+  path: string;
 }
 
 export interface SpeakerItem {
@@ -783,7 +826,13 @@ export default function SublixStudioView({
   onThemeChange,
   initialFilePath,
   isActive = true,
-  fileNonce,
+  tabId,
+  onRequestOpenVideo,
+  belowTopbar,
+  onStatus,
+  loadRequest,
+  cancelRequest,
+  useProjectCache = true,
   onTaskUpdate,
   onClearPendingFile,
 }: SublixStudioViewProps) {
@@ -804,7 +853,9 @@ export default function SublixStudioView({
   };
   // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
   const [cachedProject] = useState<SavedStudioProject | null>(() => {
-    if (initialFilePath) return null;
+    // [TSK-TABS-P1] Tab mới (không sở hữu cache) KHÔNG khôi phục dự án cũ — nếu không
+    // mọi tab "＋" sẽ hiện lại cùng một video.
+    if (initialFilePath || !useProjectCache) return null;
     try {
       const raw = localStorage.getItem(STUDIO_PROJECT_CACHE_KEY);
       return raw ? JSON.parse(raw) : null;
@@ -1246,6 +1297,8 @@ export default function SublixStudioView({
 
   // ROUND-25: Tự động đóng Context Menu khi click ngoài hoặc bấm Escape
   useEffect(() => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới đóng menu timeline.
+    if (!isActive) return;
     if (!timelineContextMenu) return;
     const handleCloseCtx = () => setTimelineContextMenu(null);
     const handleKeyClose = (e: KeyboardEvent) => {
@@ -1345,31 +1398,56 @@ export default function SublixStudioView({
     });
   }, []);
 
-  // C3 & R2-07: Sync initialFilePath & fileNonce prop changes (chỉ cập nhật khi initialFilePath thực sự đổi hoặc có nonce mới)
-  const lastLoadedNonceRef = useRef<number | undefined>(undefined);
+  // [TSK-TABS-P1] Instance chỉ nhận `initialFilePath` **một lần lúc mount** (cơ chế
+  // `fileNonce` đã bị gỡ — việc mở video giờ do host quản lý qua `loadRequest`).
   const lastLoadedInitialPathRef = useRef<string | undefined>(initialFilePath || undefined);
   useEffect(() => {
     if (initialFilePath) {
-      const isNewNonce = fileNonce !== undefined && fileNonce !== lastLoadedNonceRef.current;
       const isNewInitialPath = initialFilePath !== lastLoadedInitialPathRef.current;
-      if (isNewInitialPath || isNewNonce) {
-        lastLoadedNonceRef.current = fileNonce;
+      if (isNewInitialPath) {
         lastLoadedInitialPathRef.current = initialFilePath;
         handleLoadNewVideoFile(initialFilePath);
       }
     }
-  }, [initialFilePath, fileNonce]);
+  }, [initialFilePath]);
+
+  // [TSK-TABS-P1] Host yêu cầu nạp video vào tab này (tab trống được lấp đầy).
+  const lastLoadRequestNonceRef = useRef<number>(-1);
+  useEffect(() => {
+    if (!loadRequest || !loadRequest.path) return;
+    if (loadRequest.nonce === lastLoadRequestNonceRef.current) return;
+    lastLoadRequestNonceRef.current = loadRequest.nonce;
+    handleLoadNewVideoFile(loadRequest.path);
+  }, [loadRequest]);
+
+  // [TSK-TABS-P1] Host yêu cầu DỪNG việc (đóng tab đang chạy việc).
+  const lastCancelRequestRef = useRef<number>(-1);
+  useEffect(() => {
+    if (cancelRequest === undefined) return;
+    if (cancelRequest === lastCancelRequestRef.current) return;
+    lastCancelRequestRef.current = cancelRequest;
+    void handleCancelAnalysis();
+  }, [cancelRequest]);
 
   // Tự động tạm dừng phát video khi người dùng chuyển sang tab khác
+  // [TSK-TABS-P1] Ngoài pause, tab KHÔNG ACTIVE còn NHẢ hẳn <video> (src rỗng) để
+  // giải phóng decoder + buffer (30–150 MB/tab); nhớ currentTime để nạp lại khi quay về.
+  const releasedVideoTimeRef = useRef(0);
   useEffect(() => {
-    if (!isActive && videoRef.current && !videoRef.current.paused) {
-      videoRef.current.pause();
-      setIsPlaying(false);
+    const v = videoRef.current;
+    if (!isActive && v) {
+      if (!v.paused) {
+        v.pause();
+        setIsPlaying(false);
+      }
+      if (v.currentTime > 0) releasedVideoTimeRef.current = v.currentTime;
     }
   }, [isActive]);
 
   // Tự động lưu trạng thái dự án Studio vào localStorage (Tối ưu nhẹ, không lưu base64 ảnh để tránh tràn bộ nhớ và treo máy)
   useEffect(() => {
+    // [TSK-TABS-P1] Chỉ tab sở hữu cache v1 được ghi (các tab khác ghi đè sẽ lẫn dự án).
+    if (!useProjectCache) return;
     if (!filePath || segments.length === 0) return;
     const timer = window.setTimeout(() => {
       try {
@@ -1393,7 +1471,36 @@ export default function SublixStudioView({
       }
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
+  }, [useProjectCache, filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
+
+  // [TSK-TABS-P1] Báo trạng thái NHẸ lên host (chỉ số liệu, throttle ≥250 ms).
+  // Không truyền state phát (segments/timeline) xuống ⇒ đổi tab khác KHÔNG làm
+  // timeline render lại.
+  const statusSentAtRef = useRef(0);
+  const statusTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!onStatus) return;
+    const payload: StudioTabStatus = {
+      busy: isAnalyzing ? "running" : "idle",
+      percent: Math.max(0, Math.min(100, Math.round(analyzeProgress))),
+      dirty: false, // Studio tự autosave vào cache ⇒ không cần cờ "chưa lưu"
+      title: fileName || filePath.split(/[\\/]/).pop() || "Video mới",
+      path: filePath,
+    };
+    const wait = Math.max(0, 250 - (Date.now() - statusSentAtRef.current));
+    if (statusTimerRef.current !== null) window.clearTimeout(statusTimerRef.current);
+    statusTimerRef.current = window.setTimeout(() => {
+      statusSentAtRef.current = Date.now();
+      statusTimerRef.current = null;
+      onStatus(tabId ?? "", payload);
+    }, wait);
+    return () => {
+      if (statusTimerRef.current !== null) {
+        window.clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = null;
+      }
+    };
+  }, [onStatus, tabId, isAnalyzing, analyzeProgress, fileName, filePath]);
 
   // R5-01: cleanup loadedMetadataTimer khi component unmount hoặc đổi file
   // (tránh setState sau khi component đã unmount → React warning).
@@ -1404,7 +1511,7 @@ export default function SublixStudioView({
         loadedMetadataTimerRef.current = null;
       }
     };
-  }, [initialFilePath, fileNonce]);
+  }, [initialFilePath]);
 
   // R5-03: cleanup preview file cũ khi user đổi video (setFilePath với file mới)
   // hoặc clear file (setFilePath("")). Dùng ref để track file trước đó → gọi
@@ -1425,12 +1532,15 @@ export default function SublixStudioView({
 
   // Dọn dẹp cache preview chỉ khi tắt trình duyệt / thoát ứng dụng hoàn toàn (beforeunload)
   useEffect(() => {
+    // [TSK-TABS-P1] Nhiều instance mounted ⇒ chỉ instance ĐANG HOẠT ĐỘNG dọn
+    // preview khi đóng app (dọn 1 lần là đủ).
+    if (!isActive) return;
     const onBeforeUnload = () => {
       void sublix.cleanupAllPreviews().catch(() => {});
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  }, [isActive]);
 
   // Tự động trích xuất sóng âm audio peaks và thumbnails khi nạp video vào timeline
   const previewExtractedPathRef = useRef<string | null>(null);
@@ -1481,6 +1591,9 @@ export default function SublixStudioView({
 
   // M1: Native Tauri Drag & Drop for Windows WebView2
   useEffect(() => {
+    // [TSK-TABS-P1] Nhiều instance cùng mounted ⇒ chỉ instance ĐANG HOẠT ĐỘNG được
+    // nhận kéo-thả file (nếu không, mọi tab đều cố nạp video thả vào).
+    if (!isActive) return;
     const pDragDrop = (async () => {
       try {
         const webview = getCurrentWebview();
@@ -1494,7 +1607,12 @@ export default function SublixStudioView({
               const p = droppedPaths[0];
               lastLoadedInitialPathRef.current = p;
               onClearPendingFile?.();
-              handleLoadNewVideoFile(p);
+              // [TSK-TABS-P1] Mở video từ mọi nguồn đi qua host (tab mới / nhảy tab).
+              if (onRequestOpenVideo) {
+                onRequestOpenVideo(p);
+              } else {
+                handleLoadNewVideoFile(p);
+              }
               showToast(`Đã nạp video: ${p.split(/[\\/]/).pop()}`);
             } else {
               // R4-09: kéo thả nhưng không có path → báo user (không ngậm tăm)
@@ -1527,7 +1645,8 @@ export default function SublixStudioView({
         console.warn("Failed unregister drag-drop:", err);
       });
     };
-  }, []);
+    // [TSK-TABS-P1] isActive trong deps ⇒ chuyển tab là đăng ký/huỷ kéo-thả.
+  }, [isActive, onRequestOpenVideo]);
 
   // Save config on provider change
   const handleSaveProviderConfig = async (overrideProvider?: string) => {
@@ -1572,6 +1691,16 @@ export default function SublixStudioView({
         setMediaDuration(dur);
       }
       setVideoPlayError(false);
+      // [TSK-TABS-P1] Quay lại tab ⇒ nạp lại <video> và nhảy về vị trí đã xem.
+      const resumeAt = releasedVideoTimeRef.current;
+      if (resumeAt > 0 && Number.isFinite(resumeAt)) {
+        try {
+          videoRef.current.currentTime = Math.min(resumeAt, Math.max(0, (dur || resumeAt) - 0.1));
+          releasedVideoTimeRef.current = 0;
+        } catch {
+          /* bỏ qua: một số codec chưa sẵn sàng seek */
+        }
+      }
       // R4-04: Re-apply playbackRate khi metadata load — trnh bug "đổi video khi
       // đang 1.5x → element reset v 1x nhưng UI vẫn ku 1.5x (ni dối)".
       // [TSK-TIMELINE-INTEGRATE-MODULES] dùng getEffectiveRate() để không đè rate của shuttle.
@@ -2555,9 +2684,8 @@ export default function SublixStudioView({
         console.warn("Video reset error:", e);
       }
     }
-    try {
-      localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
-    } catch {}
+    // [TSK-TABS-P1] KHÔNG xoá cache ở đây nữa — cache nay thuộc TỪNG TAB
+    // (host quản lý), xoá ở đây sẽ xoá nhầm dự án của tab khác.
     handleSeek(0);
   };
 
@@ -2588,9 +2716,7 @@ export default function SublixStudioView({
         console.warn("Video clear error:", e);
       }
     }
-    try {
-      localStorage.removeItem(STUDIO_PROJECT_CACHE_KEY);
-    } catch {}
+    // [TSK-TABS-P1] KHÔNG xoá cache ở đây nữa — cache thuộc TỪNG TAB (host quản lý).
     lastLoadedInitialPathRef.current = "";
     onClearPendingFile?.();
     showToast("Đã đóng video hiện tại");
@@ -2941,6 +3067,8 @@ export default function SublixStudioView({
 
   // ROUND-11 & ROUND-12: Marquee Box Selection kéo chuột trái trên Timeline (Tách riêng biệt hoàn toàn với Tua Timeline)
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới bắt đầu thao tác kéo trên timeline.
+    if (!isActive) return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
 
@@ -3433,6 +3561,8 @@ export default function SublixStudioView({
 
   // Premiere-style Timeline Vertical Resizer (Kéo mở rộng chiều cao)
   const handleTimelineResizeStart = (e: React.MouseEvent) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới kéo/thu cột.
+    if (!isActive) return;
     e.preventDefault();
     setIsResizingTimeline(true);
     const startY = e.clientY;
@@ -3677,6 +3807,8 @@ export default function SublixStudioView({
 
   // Dragging Range Handles on Ruler
   const startDraggingRangeHandle = (e: React.MouseEvent | React.PointerEvent, handle: "in" | "out") => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới kéo điểm In/Out.
+    if (!isActive) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -4240,6 +4372,8 @@ export default function SublixStudioView({
   };
 
   const startScrubbing = (clientX: number) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới tua timeline.
+    if (!isActive) return;
     setIsDraggingPlayhead(true);
     isDraggingPlayheadRef.current = true;
     updatePlayheadFromClientX(clientX, false);
@@ -4291,6 +4425,8 @@ export default function SublixStudioView({
   };
 
   const handleRulerMouseDown = (e: React.MouseEvent | React.PointerEvent) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới kéo trên thước thời gian.
+    if (!isActive) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -5582,6 +5718,8 @@ export default function SublixStudioView({
 
   // RESIZABLE SIDEBAR HANDLERS (Left & Right Splitters)
   const handleMouseDownLeftSplitter = (e: React.MouseEvent) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới kéo mép cột trái.
+    if (!isActive) return;
     e.preventDefault();
     setIsDraggingLeft(true);
     const startX = e.clientX;
@@ -5617,6 +5755,8 @@ export default function SublixStudioView({
   };
 
   const handleMouseDownRightSplitter = (e: React.MouseEvent) => {
+    // [TSK-TABS-P1] Chỉ instance ĐANG HOẠT ĐỘNG mới kéo mép cột phải.
+    if (!isActive) return;
     e.preventDefault();
     setIsDraggingRight(true);
     const startX = e.clientX;
@@ -7334,7 +7474,7 @@ export default function SublixStudioView({
   const pipelineApi = pipelineApiRef.current;
 
   return (
-    <div className="sublix-studio-container" data-theme={currentTheme}>
+    <div className="sublix-studio-container" data-theme={currentTheme} data-tab-id={tabId}>
       {/* ====================================================================
           P1 — TOPBAR
           ==================================================================== */}
@@ -7448,6 +7588,9 @@ export default function SublixStudioView({
           ))}
         </div>
       </MasterTopbar>
+
+      {/* [TSK-TABS-P1] Ô render NGAY DƯỚI topbar (dùng cho thanh tab của host). */}
+      {belowTopbar}
 
       {/* ====================================================================
           WORKSPACE — 3 COLUMNS (P2, P3, P4)
@@ -7876,8 +8019,10 @@ export default function SublixStudioView({
                 <video
                   ref={videoRef}
                   className="studio-video-player-element"
-                  src={getVideoSrc(transcodedPath ?? filePath)}
-                  key={transcodedPath ?? filePath}
+                  // [TSK-TABS-P1] Tab không active ⇒ nhả <video> (src rỗng) để giải
+                  // phóng decoder + buffer; quay lại tab thì nạp lại (key đổi).
+                  src={isActive ? getVideoSrc(transcodedPath ?? filePath) : undefined}
+                  key={isActive ? (transcodedPath ?? filePath) : "released"}
                   onLoadedMetadata={handleLoadedMetadata}
                   onTimeUpdate={handleTimeUpdate}
                   onPlay={() => {

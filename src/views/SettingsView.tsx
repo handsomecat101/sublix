@@ -24,7 +24,8 @@ import {
 import { version as APP_VERSION_PKG } from "../../package.json";
 import FileSubView from "./FileSubView";
 import DubbingStudioView from "./DubbingStudioView";
-import SublixStudioView from "./SublixStudioView";
+// [TSK-TABS-P1] Host tab Studio (mount-all) — thay cho 1 instance `<SublixStudioView>`.
+import StudioTabsHost from "./studio/StudioTabsHost";
 import DownloaderView from "./DownloaderView";
 import { StudioShell } from "./StudioShell";
 // TSK-UI-REDESIGN-R2-7B: tab Live + Lịch sử tách riêng (UI_REDESIGN_PLAN §4.5/§4.6).
@@ -151,14 +152,19 @@ export default function SettingsView() {
   const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
   const [pendingStudioPath, setPendingStudioPath] = useState<string>("");
-  const [studioFileNonce, setStudioFileNonce] = useState<number>(0);
+  // [TSK-TABS-P1] Yêu cầu mở video cho host (tab mới / nhảy tab cùng path).
+  const [studioOpenRequest, setStudioOpenRequest] = useState<{ path: string; nonce: number } | null>(null);
+  const studioOpenNonceRef = useRef(0);
 
   const handleRouteToStudio = (path: string) => {
     const safe = path ? path.replace(/\//g, "\\").trim() : "";
     setPendingDubbingPath(safe);
     setPendingStudioPath(safe);
     setPendingFileSubPath(safe);
-    setStudioFileNonce((prev) => prev + 1);
+    // [TSK-TABS-P1] Mọi nguồn mở video (Tải video, Lịch sử, tab Tiến trình) đi qua
+    // host ⇒ tab mới / nhảy tab đã có cùng path (không ghi đè dự án đang mở).
+    studioOpenNonceRef.current += 1;
+    setStudioOpenRequest({ path: safe, nonce: studioOpenNonceRef.current });
     setActiveTab("studio");
   };
 
@@ -1604,20 +1610,15 @@ export default function SettingsView() {
           display: activeTab === "studio" ? "flex" : "none",
         }}
       >
-        <SublixStudioView
-          initialFilePath={pendingStudioPath || pendingDubbingPath}
-          fileNonce={studioFileNonce}
-          isActive={activeTab === "studio"}
-          // [UI_R2-8_REVIEW mục 12] 1 nguồn version cho mọi tab (backend `appInfo.version`).
+        <StudioTabsHost
+          openRequest={studioOpenRequest}
+          initialPath={pendingStudioPath || pendingDubbingPath || undefined}
+          isVisible={activeTab === "studio"}
           appVersion={appInfo?.version}
           onNavigateTab={(t) => setActiveTab(t)}
           currentTheme={theme}
           onThemeChange={handleThemeChange}
           onTaskUpdate={handleStudioTaskUpdate}
-          onClearPendingFile={() => {
-            setPendingStudioPath("");
-            setPendingDubbingPath("");
-          }}
         />
       </div>
             {/* RIGHT MAIN WORKSPACE */}
