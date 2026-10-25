@@ -1,3 +1,12 @@
+# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
+
+> **⚠️ QUY TẮC CHỐNG PHÌNH TO & TRÙNG LẶP (BẮT BUỘC CHO MỌI AGENT):**
+> 1. **Ngắn gọn tuyệt đối:** Mỗi tin nhắn chỉ từ **3 – 7 dòng** (dạng bullet).
+> 2. **KHÔNG lặp lại nội dung file khác:** Nếu fix bug kỹ thuật, chỉ ghi mã lỗi: *"Đã fix `BUG-003` (chi tiết xem `ISSUE_LOG.md`)"*.
+> 3. **Cửa sổ trượt (Rolling Window):** File này chỉ giữ **tối đa 5 – 8 tin nhắn gần nhất**. Khi vượt quá 8 tin nhắn, Agent cập nhật có trách nhiệm **CHUYỂN** các tin cũ ở đáy sang `ARCHIVE/AGENT_CHAT_ARCHIVE.md` rồi xóa khỏi đây (tiết kiệm token cho mọi agent về sau).
+> 4. **Không đọc `ARCHIVE/` khi bắt đầu phiên** — chỉ mở khi cần tra cứu lịch sử.
+
+
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
 ### 2026-10-25 16:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
@@ -72,3 +81,13 @@
 ---
 
 ---
+
+---
+
+### 2026-10-24 23:50 - Mavis (dieu phoi) -> @Team / @jimmyvu
+- **Loai:** `@handoff` + `@done` (pull 19 commit tu may dev -> may PO; sua launcher portable; app da chay cho PO test).
+- **Da pull:** `origin/master` `0d427b6` (v0.11.36) vao fork PO `H:\AI Project\sub-lix-fork-2026-10-19` — fast-forward, 19 commit (UI redesign R2-1..R2-7 · timeline Premiere 6 module + 79 test · VieNeu-TTS v3 Turbo · ZeroTTS · Chirp3/FPT · MiniMax M3.1 Flash · +8 nen tang tai video · preset GPU AMD). Working tree sach, khong mat viec tho nao.
+- **Sua launcher (quan trong cho may khac):** `Chay-Sublix.bat` da bi may dev commit cung `PROJECT_DIR=C:\AI Project\Sublix` → **tren may PO launcher hong** (path khong ton tai). Da sua thanh **portable**: giu `C:\AI Project\Sublix` lam mac dinh, neu khong co `package.json` thi fallback ve `%~dp0` (thu muc chua file .bat) → **chay duoc tren CA HAI may ma khong can sua lai**. `CARGO_TARGET_DIR` cung doi thanh `if not defined` de tach build rieng duoc.
+- **Verify tren may PO (app that, PID 43228, CDP 9223):** `cargo build` exit 0 (2m04s) · `npm run verify:version` PASS 6/6 (0.11.36) · `node --test` timeline **91/91** + settings **12/12** · GUI render OK, **2 track PHU DE / TIENG LONG van thang hang** (khong hoi quy sau redesign) · ban dich tieng Viet dung · uoc tinh thoi gian tung buoc hien dung.
+- **Con no (chuyen giao):** backend `translate_options_get/set` **chua co** → UI buoc Dich dang o trang thai fallback chi doc. `src/lib/tauri.ts` can wrapper chinh thuc thi bo cast `translateApi` trong `src/views/studio/translateOptions.ts`. R2-8 (kiem Luu/key tren app that) chua lam.
+- **Ban goc `H:\AI Project\sublix` van dung yen** o `51f73fe` (2 file dirty cua tho khac, khong dung) — PO test bang **fork**; muon dong bo thi merge nhanh `fix/voice-timeline-mojibake` (da bang `master`).
