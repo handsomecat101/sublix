@@ -207,34 +207,89 @@ export function serializeMarkers(markers: readonly TimelineMarker[]): string {
  */
 export function deserializeMarkers(json: string): TimelineMarker[] {
   if (typeof json !== "string" || json.trim().length === 0) return [];
-
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    return normalizeMarkers(JSON.parse(json));
   } catch {
     return [];
   }
+}
 
-  // Chấp nhận cả dạng mảng trần lẫn dạng { version, markers }.
-  let rawList: unknown[] | null = null;
-  if (Array.isArray(parsed)) {
-    rawList = parsed;
-  } else if (typeof parsed === "object" && parsed !== null) {
-    const container = parsed as { markers?: unknown };
-    if (Array.isArray(container.markers)) rawList = container.markers;
-  }
-  if (rawList === null) return [];
+/**
+ * Màu mặc định của marker (khi dữ liệu cũ không có `color`).
+ */
+export const DEFAULT_MARKER_COLOR = "#38bdf8";
 
-  const result: TimelineMarker[] = [];
-  for (const raw of rawList) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const item = raw as { id?: unknown; time?: unknown; name?: unknown; color?: unknown };
-    if (typeof item.id !== "string" || item.id.length === 0) continue;
-    if (typeof item.time !== "number" || !Number.isFinite(item.time) || item.time < 0) continue;
-    const marker: TimelineMarker = { id: item.id, time: item.time };
-    if (typeof item.name === "string") marker.name = item.name;
-    if (typeof item.color === "string") marker.color = item.color;
-    result.push(marker);
+/**
+ * Bóc ra mảng marker từ nhiều dạng lưu trữ khác nhau:
+ * - mảng trực tiếp: `[12.5, 30]`
+ * - mảng object: `[{ id, time, color }]`
+ * - bọc: `{ version: 1, markers: [...] }` hoặc `{ items: [...] }`
+ */
+function extractMarkerList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    const obj = raw as { markers?: unknown; items?: unknown };
+    if (Array.isArray(obj.markers)) return obj.markers;
+    if (Array.isArray(obj.items)) return obj.items;
   }
-  return sortMarkers(result);
+  return [];
+}
+
+/**
+ * Chuẩn hoá danh sách marker đọc từ project cache.
+ *
+ * Project CŨ có thể lưu marker theo các dạng khác nhau:
+ * - số giây thuần: `[12.5, 30]` (bản `bookmarks` cũ)
+ * - object thiếu `id`: `[{ time: 12.5 }]`
+ * - object thiếu `color`: `[{ id: "m1", time: 12.5 }]`
+ * - `time` là chuỗi: `[{ time: "12.5" }]`
+ * - key thời gian khác: `{ seconds }` / `{ start }` / `{ position }`
+ *
+ * Luôn trả về mảng marker hợp lệ (id + time + color), đã sắp xếp theo thời gian.
+ *
+ * @param raw Dữ liệu thô đọc từ cache.
+ */
+export function normalizeMarkers(raw: unknown): TimelineMarker[] {
+  const list = extractMarkerList(raw);
+  const out: TimelineMarker[] = [];
+  const usedIds = new Set<string>();
+  let auto = 0;
+
+  for (const item of list) {
+    // Dạng cũ: số giây thuần.
+    if (typeof item === "number") {
+      if (!Number.isFinite(item) || item < 0) continue;
+      auto += 1;
+      out.push({ id: `m${auto}`, time: item, color: DEFAULT_MARKER_COLOR });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+
+    const obj = item as Record<string, unknown>;
+    const rawTime = obj.time ?? obj.seconds ?? obj.start ?? obj.position ?? obj.at;
+    const time = typeof rawTime === "string" ? Number(rawTime.replace(",", ".")) : rawTime;
+    if (typeof time !== "number" || !Number.isFinite(time) || time < 0) continue;
+
+    let id = typeof obj.id === "string" && obj.id.trim().length > 0 ? obj.id.trim() : "";
+    if (!id || usedIds.has(id)) {
+      do {
+        auto += 1;
+        id = `m${auto}`;
+      } while (usedIds.has(id));
+    }
+    usedIds.add(id);
+
+    const marker: TimelineMarker = {
+      id,
+      time,
+      color:
+        typeof obj.color === "string" && obj.color.trim().length > 0
+          ? obj.color
+          : DEFAULT_MARKER_COLOR,
+    };
+    if (typeof obj.name === "string" && obj.name.length > 0) marker.name = obj.name;
+    out.push(marker);
+  }
+
+  return sortMarkers(out);
 }

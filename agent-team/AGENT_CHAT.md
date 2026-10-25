@@ -1,19 +1,55 @@
-# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
-
-> **⚠️ QUY TẮC CHỐNG PHÌNH TO & TRÙNG LẶP (BẮT BUỘC CHO MỌI AGENT):**
-> 1. **Ngắn gọn tuyệt đối:** Mỗi tin nhắn chỉ từ **3 – 7 dòng** (dạng bullet).
-> 2. **KHÔNG lặp lại nội dung file khác:** Nếu fix bug kỹ thuật, chỉ ghi mã lỗi: *"Đã fix `BUG-003` (chi tiết xem `ISSUE_LOG.md`)"*.
-> 3. **Cửa sổ trượt (Rolling Window):** File này chỉ giữ **tối đa 5 – 8 tin nhắn gần nhất**. Khi vượt quá 8 tin nhắn, Agent cập nhật có trách nhiệm **CHUYỂN** các tin cũ ở đáy sang `ARCHIVE/AGENT_CHAT_ARCHIVE.md` rồi xóa khỏi đây (tiết kiệm token cho mọi agent về sau).
-> 4. **Không đọc `ARCHIVE/` khi bắt đầu phiên** — chỉ mở khi cần tra cứu lịch sử.
-
-
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
+
+
+### 2026-10-25 07:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
+- **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
+- **Ước tính thời gian:** `estimate.ts` có hệ số chậm khi bật ngữ cảnh (MiniMax ×1,6 theo bench) và `rateKey` thêm `:ctx`; STT giờ **phân biệt theo engine** — `parseRtfFromNote` đọc RTF thật từ `rtf_note` của catalog (vd "RTF 1,22 (EN) · 1,62 (ZH)"), không hard-code.
+- **Mục 2 (engine STT):** `src/views/studio/StudioSttEnginePicker.tsx` (mới) — dropdown lấy từ `stt_engines_status`, **gợi ý theo ngôn ngữ nguồn theo `languages` của catalog**, engine chưa tải → `ModelDownloadRow` (tiến trình `model:download-progress`, nút Hủy = `stt_model_cancel`), chọn → `stt_set_engine` (không nút Lưu). Khi engine ≠ Whisper, luồng "chỉ làm phụ đề" dùng `stt_transcribe` (sidecar tự trích 16 kHz mono bằng ffmpeg) thay cho `dubbing_analyze`.
+- **Verify:** `node --test scripts/timeline-tests/` **95/95 PASS** (12 case mới) · `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (repo chính hiện lỗi `ProcessCenterView.tsx` — file của worker khác) · GUI **6/6 PASS** trên instance riêng (release build, CDP 9226, **APPDATA riêng** để không đụng config của PO): dropdown 7 engine + "chưa tải", dòng RTF từ catalog, đổi engine gọi `stt_set_engine`, công tắc ngữ cảnh + gợi ý model local, cờ lưu theo provider.
+- **⚠️ Cần biết:** app của PO đang chạy bình thường; instance verify đã tắt, worktree tạm đã xoá. Đường `stt_transcribe` chỉ dùng cho luồng "chỉ làm phụ đề"; pipeline đầy đủ (phân vai + dịch) vẫn đi qua `dubbing_analyze` (Whisper) — cần mcode #3 thêm engine id vào `dubbing_analyze` để áp dụng rộng.
+
+---
+
+---
+
+---
+---
+
+### 2026-10-25 07:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-REFACTOR-GLOSSARY-300` — tách 2 file > 300 dòng, **chỉ di chuyển code, không đổi hành vi**; **chưa commit**).
+- **Tách:** `glossary.rs` 366 → **272** (+ file mới `glossary_prompt.rs` 111: `to_rules` / `hard_block` / `suggestion_from_reference`) · `contextual_run.rs` 336 → **165** (+ `contextual_chunk.rs` 134: gọi LLM theo lô; `contextual_verify.rs` 89: hậu kiểm + dịch lại 1 câu). Mọi file trong `translate/` giờ **< 300 dòng**.
+- **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
+
+---
+---
+
+### 2026-10-25 07:20 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-018-FIX` — sửa BUG-002/003/010 (tiến trình ma, kill theo tên, command sync chặn luồng chính); **không commit**).
+- **BUG-003 (kill theo tên):** bỏ hoàn toàn `taskkill /IM whisper-server.exe|llama-server.exe /F` — thay bằng module mới `src-tauri/src/proc_kill.rs`: chỉ kết thến **PID con mình vừa spawn** (giữ handle `Child`) hoặc PID **ta đã ghi nhò** trong file `.pid`, và **kiểm tra tên tiến trình** trước khi giết (PID có thể bệ hệ được cấp lại cho tiến trình khác) → không bao giờ giết app/instance khác.
+- **BUG-002 (tiến trình ma):** thêm `stop_server()` idempotent (và `try_lock` + **timeout 3 s**, log `tracing`) cho cá 2 server; `RunEvent::Exit` **và** `ExitRequested` đều gọi `whisper_server::stop_server()` + `translate::server::stop_server()` ngoài `downloader::shutdown_all_jobs()`.
+- **BUG-010 (command sync chặn luồng chính):** `transcribe_test` · `translate_test` · `test_audio` · `scan_audio_levels` → **`async` + `tauri::async_runtime::spawn_blocking`** cho phần nặng; **giữ nguyên tên lệnh, tham số và kiểu trả về** ⇒ frontend không phải sửa.
+- **Test:** `proc_kill.rs` 6 test cho hàm thuần `pick_kill_target` + file test mới `stt/whisper_server_tests.rs` (3) và `translate/server_tests.rs` (3) — gời chố hội quy: mã nguồn cần có `"/IM"` trong mã nguồn. `cargo test --lib` **218 pass / 0 fail**, `cargo clippy --lib` **không thêm cảnh báo mới** (4 cảnh báo trong file tôi sửa đều là cãnh cũ).
+- **Cớn lại:** đã xoá `taskkill /IM` khối toàn `src-tauri/src/`; server cũ vẫn sống cổa đểu để đổng PID nén — nến uyê hiệm.
+
+---
+---
+
+### 2026-10-25 07:20 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-REDO-RIPPLE` — Redo + Ripple delete + marker định dạng cũ; **chưa commit**).
+- **1) REDO:** module thuần `src/lib/timeline/history.ts` (past/future, giới hạn 20, push xoá future, undo/redo trả snapshot) áp cho **cả 3 lớp** (phụ đề / bản dịch / audio); phím **Ctrl+Shift+Z** và **Ctrl+Y**; nút **↷** cạnh ↶ trên MasterTopbar (disabled khi rỗng, tooltip phím tắt, chuột phải chọn lớp làm lại).
+- **2) RIPPLE DELETE:** module thuần `src/lib/timeline/ripple.ts` — xoá câu/khối đang chọn (kể cả multi-select Ctrl+click) và dồn câu phía sau sang trái đúng bằng khoảng bị xoá (câu chọn nhiều → tính theo **khoảng hợp nhất**, không chồng nhau/không liền); **tôn trọng khoá track** (track khoá → không dồn + toast). Phím **Shift+Delete** + mục **"Xoá và dồn khoảng trống"** trong menu chuột phải.
+- **3) MARKER ĐỊNH DẠNG CŨ:** `normalizeMarkers(raw)` trong `markers.ts` chịu được số giây thuần (`[12.5, 30]`), object thiếu `id`, thiếu `color`, `time` dạng chuỗi, key khác (`seconds`/`start`/`position`), bọc `{version, markers}`; dùng khi nạp project cache → **marker cũ không còn "mất tăm"**.
+- **Verify:** `node --test scripts/timeline-tests/` **107/107 PASS** (18 case mới) · `tsc` 0 lỗi · `npm run build` OK · GUI instance riêng (release build `npx tauri build --no-bundle` — **không** `cargo build --release`, CDP 9227, APPDATA riêng) **5/5 PASS**: marker cũ hiện đủ 3 vạch, nút ↷ disabled khi rỗng, Shift+Delete dồn câu sau 117,19px → 58,59px, Ctrl+Z rồi Ctrl+Shift+Z khôi phục đúng, menu chuột phải có mục ripple.
+- **⚠️ Lưu ý:** đường `undoStack` (general) giữ nguyên như cũ; redo lấy từ `future` của từng lớp. Instance verify đã tắt, app PO (1420) không bị đụng; chưa commit.
+---
 
 ### 2026-10-25 07:02 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-EXAMPLES` — 3 example Rust không build được từ commit `c9ccaad`; **chưa commit**).
 - **Fix:** `analyze_and_create_project` đã đổi **5 → 7 tham số** (`start_offset_sec` + `expected_speakers`) ⇒ thêm 2 `None` vào `test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` (giống hệt lệnh Tauri `dubbing_analyze` khi UI không gửi 2 tuỳ chọn này). **Không** đụng `src-tauri/src/**` hay `src/**`.
 - **Verify:** `cargo build --examples` **exit 0** — 7/7 example ra `.exe` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`), build lại là no-op ⇒ đã xoá đúng lỗi mà mcode #2 báo trong AGENT_CHAT. *(Verify lần 2 trên **bản sao HEAD + 3 file của tôi** — repo chính đang tạm **đỏ** vì worker khác sửa dở `src-tauri/src/**` (`proc_kill` chưa khai báo trong `lib.rs`), **không** phải lỗi của task này.)*
 
+---
 ---
 
 ### 2026-10-25 06:55 - mcode #2 (Orca worker) -> @Team / @jimmyvu
@@ -29,6 +65,7 @@
 ---
 
 ---
+---
 
 ### 2026-10-25 06:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7C` — R2-7C: UI tab **Tiến trình**, **chưa commit**).
@@ -43,19 +80,6 @@
 ---
 
 ---
-
-### 2026-10-25 07:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-STUDIO-WIRE-CTX-STT` — gắn dịch theo ngữ cảnh + engine STT vào Studio; **chưa commit**).
-- **Mục 1 (đã SỬA theo đo thật §4.4):** KHÔNG thay hết — thêm công tắc **"Dịch theo ngữ cảnh"** (Segmented Tắt/Bật, lưu localStorage **theo provider**; mặc định BẬT openrouter/deepseek, TẮT ollama/gguf/minimax; bật với model local → hiện dòng *"Model nhỏ trên máy dịch kém hơn ở chế độ này"*). Khi bật: gọi `translate_script_contextual` + nghe `translate:progress` (hiện "Đọc hiểu kịch bản…" rồi "Đang dịch 120/480 câu"); lỗi → tự rơi về dịch theo lô, không crash.
-- **Ước tính thời gian:** `estimate.ts` có hệ số chậm khi bật ngữ cảnh (MiniMax ×1,6 theo bench) và `rateKey` thêm `:ctx`; STT giờ **phân biệt theo engine** — `parseRtfFromNote` đọc RTF thật từ `rtf_note` của catalog (vd "RTF 1,22 (EN) · 1,62 (ZH)"), không hard-code.
-- **Mục 2 (engine STT):** `src/views/studio/StudioSttEnginePicker.tsx` (mới) — dropdown lấy từ `stt_engines_status`, **gợi ý theo ngôn ngữ nguồn theo `languages` của catalog**, engine chưa tải → `ModelDownloadRow` (tiến trình `model:download-progress`, nút Hủy = `stt_model_cancel`), chọn → `stt_set_engine` (không nút Lưu). Khi engine ≠ Whisper, luồng "chỉ làm phụ đề" dùng `stt_transcribe` (sidecar tự trích 16 kHz mono bằng ffmpeg) thay cho `dubbing_analyze`.
-- **Verify:** `node --test scripts/timeline-tests/` **95/95 PASS** (12 case mới) · `tsc` 0 lỗi + `npm run build` OK trên **bản sao HEAD + file của tôi** (repo chính hiện lỗi `ProcessCenterView.tsx` — file của worker khác) · GUI **6/6 PASS** trên instance riêng (release build, CDP 9226, **APPDATA riêng** để không đụng config của PO): dropdown 7 engine + "chưa tải", dòng RTF từ catalog, đổi engine gọi `stt_set_engine`, công tắc ngữ cảnh + gợi ý model local, cờ lưu theo provider.
-- **⚠️ Cần biết:** app của PO đang chạy bình thường; instance verify đã tắt, worktree tạm đã xoá. Đường `stt_transcribe` chỉ dùng cho luồng "chỉ làm phụ đề"; pipeline đầy đủ (phân vai + dịch) vẫn đi qua `dubbing_analyze` (Whisper) — cần mcode #3 thêm engine id vào `dubbing_analyze` để áp dụng rộng.
-
----
-
----
-
 ---
 
 ### 2026-10-25 06:50 - mcode #3 (Orca worker) -> @Team / @jimmyvu
@@ -66,45 +90,6 @@
 - **Verify:** `cargo test --lib` **203 pass / 0 fail** (6 test mới đều ok; `reup_tests::section_arg_builds_and_validates` cũ vẫn ok).
 
 ---
-
----
-
----
-
-### 2026-10-25 06:35 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-REDESIGN-R2-7B` — R2-7B: UI tab **Live** + **Lịch sử**, **chưa commit**).
-- **Mới:** `src/views/live/{LiveView.tsx/.css, liveLogic.ts, liveTypes.ts}` + `src/views/history/{HistoryView.tsx/.css, historyLogic.ts}` — `SettingsView.tsx` **2823 → 2244 dòng** (−579). Logic thuần tách riêng (map select gộp, lọc lịch sử, định dạng SRT/TXT) → test `node --test scripts/live-history-tests/` **40/40 PASS**.
-- **Live:** 1 select "Phụ đề hiển thị" (gộp chế độ xuất + ngôn ngữ đích; chọn "Gốc" **giữ** ngôn ngữ đích đã chọn) · ↻ quét âm thanh cạnh select thiết bị · "⚙ Nâng cao" gấp (chunk + Smart VAD) · **1 nút chính** Bắt đầu/Dừng Live (bỏ nút Mở Overlay — dùng 👁 topbar) · cột phải "Luồng thoại" giữ nguyên.
-- **Lịch sử:** 2 cột (bỏ cột trái 300px) · ô tìm + `Sao chép tất cả` + split `Xuất .SRT▾` (menu SRT/TXT) + menu `⋯`→"Xoá toàn bộ lịch sử" **có hộp xác nhận** (nút nguy hiểm hết nổi bật nhất màn hình).
-- **Bonus — fix `BUG-033`** (đang 🔴 Open): hotkey `Ctrl+Shift+L` đọc closure cũ → nay handler trong keydown đi qua `latestRef` (đổi model/ngôn ngữ rồi bấm tắt sẽ ăn đúng). Chi tiết: `ISSUE_LOG.md`.
-- **Verify:** `tsc` 0 lỗi (repo, trước khi worker glossary tạo file mới) · `npm run build` OK · `live-history-tests` 40/40 + `settings-tests` 21/21 · ảnh thật Edge headless 1920×1080 (app chạy thật + backend giả) tab Live + Lịch sử render đúng. **Cảnh báo:** `timeline-tests` 89/91 — 2 fail do `src/lib/timeline/estimate.ts` đang sửa dở của worker khác (tại HEAD: 91/91 PASS), không liên quan task này.
-
----
-
----
-
----
-
-### 2026-10-25 06:35 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-REFACTOR-SPLIT-300` — tách 4 module Rust > 300 dòng, **chỉ di chuyển code, không đổi hành vi, chưa commit**).
-- **Tách:** `model_download.rs` 774 → `model_download/{mod,progress,http,sha256}.rs` · `stt/stt_catalog.rs` 514 → `stt/stt_catalog/{mod,catalog_types,catalog_data,catalog_data_parakeet}.rs` · `stt/sherpa_asr.rs` 368 → `stt/sherpa_asr/{mod,sherpa_sidecar}.rs` · `translate/bench.rs` 338 → `translate/bench/{mod,score,dataset,bench_tests}.rs`. **File lớn nhất: 271 dòng** (tất cả 14 file đều < 300).
-- **API không đổi:** để so tổt **mới `pub` có trong HEAD đều có trong module mới** (kiểm tự động trước); đễt tên `pub use` để `crate::stt::stt_catalog::SttEngineSpec`, `crate::stt::sherpa_asr::transcribe`, `crate::model_download::EVENT` … vẫn giở nguyên. Đổi tên lệnh `in_progress_slot` → `pub(crate)` + `download_one` → `pub(super)` để module con dùng được.
-- **Verify:** `cargo test --lib` **197 pass / 0 fail** · `cargo build --example bench_translate` **OK** · `cargo clippy --lib`: 6 cảnh báo nừm trong 4 module đãu tách — để **là code di chuyển nguyên văn** (không phải cảnh báo mới) · không sửa `src/**`.
-- **Lưu ý:** đãnh có bố module Rust > 300 dòng khác vẫn còn tách: `dubbing/mod.rs` 4578 · `downloader/mod.rs` 2951 · `translate/server.rs` 1991 · `lib.rs` 1986 · `file_sub.rs` 905 · `stt/whisper_local.rs` 802 · `translate/mod.rs` 754.
-
----
-
----
-
----
-
-### 2026-10-25 03:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-SETTINGS-MODELS` — **chỉ FRONTEND**, chưa commit).
-- **Mới:** `src/views/settings/SttSection.tsx` — danh sách engine từ `stt_engines_status` (catalog thật, **0 hard-code**), mỗi engine 1 `ModelDownloadRow` (Tải/Huỷ/Xoá + %/MB/s/ETA qua `model:download-progress`), Segmented **Engine mặc định** (chỉ engine đã tải → `stt_set_engine`), giữ **Tăng tốc Whisper (AUTO/CPU/CUDA)** + **Kiểm thử nhanh** cũ; bỏ danh sách Whisper trùng (catalog đã có whisper-base/turbo).
-- **TTS:** backend chỉ phát `tts:deps_progress` (log pip, **không %**) → nút hiện "⏳ Đang cài…" + dòng log cuối, **không bịa %**, hành vi cũ giữ nguyên.
-- **Logic thuần:** `modelUtils.ts` (`formatBytesVi`/`formatSpeedVi`/`formatEtaVi`/`progressPct`/`sortSttEngines`/`engineSummary`/`recommendSttEngine`) + `scripts/settings-tests/modelUtils.test.ts` (9 case) + `package.json`/`index.ts` để `node --test scripts/settings-tests/` chạy được (Node 24 không quét dir — cùng mẹo `timeline-tests`).
-- **Verify:** `node --test scripts/settings-tests/` **21/21 PASS** (12 cũ + 9 mới), `tsc` 0 lỗi, `npm run build` OK trên **bản sao HEAD + file của tôi**; ảnh frontend-only (Edge headless + stub Tauri, 4 engine gồm 1 đang tải/2 đã tải): `%TEMP%\sublix-verify-settings\settings-stt.jpg` · `settings-stt-tools.jpg` · `settings-tts2.jpg`.
-- **Cần biết:** `ModelDownloadRow` lấy % từ **event** nên ảnh tĩnh chỉ hiện trạng thái (Chưa tải/Xong) — muốn thấy thanh tiến trình phải chạy app thật (để R2-8).
 
 ---
 

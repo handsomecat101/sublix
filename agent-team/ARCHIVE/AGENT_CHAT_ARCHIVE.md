@@ -624,3 +624,33 @@
 
 ---
 
+
+
+## ARCHIVED 2026-10-25 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 06:35 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-REFACTOR-SPLIT-300` — tách 4 module Rust > 300 dòng, **chỉ di chuyển code, không đổi hành vi, chưa commit**).
+- **Tách:** `model_download.rs` 774 → `model_download/{mod,progress,http,sha256}.rs` · `stt/stt_catalog.rs` 514 → `stt/stt_catalog/{mod,catalog_types,catalog_data,catalog_data_parakeet}.rs` · `stt/sherpa_asr.rs` 368 → `stt/sherpa_asr/{mod,sherpa_sidecar}.rs` · `translate/bench.rs` 338 → `translate/bench/{mod,score,dataset,bench_tests}.rs`. **File lớn nhất: 271 dòng** (tất cả 14 file đều < 300).
+- **API không đổi:** để so tổt **mới `pub` có trong HEAD đều có trong module mới** (kiểm tự động trước); đễt tên `pub use` để `crate::stt::stt_catalog::SttEngineSpec`, `crate::stt::sherpa_asr::transcribe`, `crate::model_download::EVENT` … vẫn giở nguyên. Đổi tên lệnh `in_progress_slot` → `pub(crate)` + `download_one` → `pub(super)` để module con dùng được.
+- **Verify:** `cargo test --lib` **197 pass / 0 fail** · `cargo build --example bench_translate` **OK** · `cargo clippy --lib`: 6 cảnh báo nừm trong 4 module đãu tách — để **là code di chuyển nguyên văn** (không phải cảnh báo mới) · không sửa `src/**`.
+- **Lưu ý:** đãnh có bố module Rust > 300 dòng khác vẫn còn tách: `dubbing/mod.rs` 4578 · `downloader/mod.rs` 2951 · `translate/server.rs` 1991 · `lib.rs` 1986 · `file_sub.rs` 905 · `stt/whisper_local.rs` 802 · `translate/mod.rs` 754.
+
+---
+
+---
+
+---
+
+### 2026-10-25 03:10 - CommandCode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-SETTINGS-MODELS` — **chỉ FRONTEND**, chưa commit).
+- **Mới:** `src/views/settings/SttSection.tsx` — danh sách engine từ `stt_engines_status` (catalog thật, **0 hard-code**), mỗi engine 1 `ModelDownloadRow` (Tải/Huỷ/Xoá + %/MB/s/ETA qua `model:download-progress`), Segmented **Engine mặc định** (chỉ engine đã tải → `stt_set_engine`), giữ **Tăng tốc Whisper (AUTO/CPU/CUDA)** + **Kiểm thử nhanh** cũ; bỏ danh sách Whisper trùng (catalog đã có whisper-base/turbo).
+- **TTS:** backend chỉ phát `tts:deps_progress` (log pip, **không %**) → nút hiện "⏳ Đang cài…" + dòng log cuối, **không bịa %**, hành vi cũ giữ nguyên.
+- **Logic thuần:** `modelUtils.ts` (`formatBytesVi`/`formatSpeedVi`/`formatEtaVi`/`progressPct`/`sortSttEngines`/`engineSummary`/`recommendSttEngine`) + `scripts/settings-tests/modelUtils.test.ts` (9 case) + `package.json`/`index.ts` để `node --test scripts/settings-tests/` chạy được (Node 24 không quét dir — cùng mẹo `timeline-tests`).
+- **Verify:** `node --test scripts/settings-tests/` **21/21 PASS** (12 cũ + 9 mới), `tsc` 0 lỗi, `npm run build` OK trên **bản sao HEAD + file của tôi**; ảnh frontend-only (Edge headless + stub Tauri, 4 engine gồm 1 đang tải/2 đã tải): `%TEMP%\sublix-verify-settings\settings-stt.jpg` · `settings-stt-tools.jpg` · `settings-tts2.jpg`.
+- **Cần biết:** `ModelDownloadRow` lấy % từ **event** nên ảnh tĩnh chỉ hiện trạng thái (Chưa tải/Xong) — muốn thấy thanh tiến trình phải chạy app thật (để R2-8).
+
+---
+
+---
+
+---

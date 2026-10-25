@@ -94,12 +94,25 @@ import {
 import {
   findNextMarker,
   findPrevMarker,
+  normalizeMarkers,
   toggleMarker,
   type TimelineMarker,
 } from "../lib/timeline/markers";
+// [TSK-TIMELINE-REDO-RIPPLE] Lịch sử undo/redo + ripple delete (module thuần, có test).
+import {
+  canRedo,
+  canUndo,
+  createHistory,
+  pushHistory,
+  redoHistory,
+  undoHistory,
+  type History,
+} from "../lib/timeline/history";
+import { rippleDelete } from "../lib/timeline/ripple";
 import {
   blockedTracks,
   createTrackLockState,
+  describeTrackKey,
   editBlockedReason,
   isEditBlocked,
   isTrackLocked,
@@ -723,10 +736,17 @@ export default function SublixStudioView({
   );
 
   // Undo history stacks: General, Subtitles, Translations, Audio/Speakers
+  // [TSK-TIMELINE-REDO-RIPPLE] 3 lớp hoàn tác dùng module `history.ts` (past + future) → có REDO.
   const [undoStack, setUndoStack] = useState<SubtitleItem[][]>([]);
-  const [undoSubtitleStack, setUndoSubtitleStack] = useState<SubtitleItem[][]>([]);
-  const [undoTranslationStack, setUndoTranslationStack] = useState<Array<{ id: number; translated: string }[]>>([]);
-  const [undoAudioStack, setUndoAudioStack] = useState<SpeakerItem[][]>([]);
+  const [subtitleHistory, setSubtitleHistory] = useState<History<SubtitleItem[]>>(() =>
+    createHistory<SubtitleItem[]>(),
+  );
+  const [translationHistory, setTranslationHistory] = useState<
+    History<Array<{ id: number; translated: string }>>
+  >(() => createHistory<Array<{ id: number; translated: string }>>());
+  const [audioHistory, setAudioHistory] = useState<History<SpeakerItem[]>>(() =>
+    createHistory<SpeakerItem[]>(),
+  );
 
   // R2-3: accordion 1-bước-mở nằm trong `pipelineOpenStep` (panel mới).
 
@@ -1109,7 +1129,11 @@ export default function SublixStudioView({
 
   // [TSK-TIMELINE-INTEGRATE-MODULES] Marker (thay `bookmarks: number[]` cũ):
   // có id/tên/màu, gộp trùng (<0.05s), tìm marker trước/sau, lưu theo project.
-  const [markers, setMarkers] = useState<TimelineMarker[]>(cachedProject?.markers || []);
+  // [TSK-TIMELINE-REDO-RIPPLE] `normalizeMarkers` đọc được project CŨ (số giây thuần,
+  // thiếu id / thiếu color, time dạng chuỗi) → marker cũ không bị "mất tăm".
+  const [markers, setMarkers] = useState<TimelineMarker[]>(() =>
+    normalizeMarkers(cachedProject?.markers),
+  );
   const markersRef = useRef<TimelineMarker[]>(markers);
   markersRef.current = markers;
 
@@ -1737,12 +1761,14 @@ export default function SublixStudioView({
   // Real Undo Stack Handlers (General + Layer-specific)
   const undoStackRef = useRef<SubtitleItem[][]>(undoStack);
   undoStackRef.current = undoStack;
-  const undoSubtitleStackRef = useRef<SubtitleItem[][]>(undoSubtitleStack);
-  undoSubtitleStackRef.current = undoSubtitleStack;
-  const undoTranslationStackRef = useRef<Array<{ id: number; translated: string }[]>>(undoTranslationStack);
-  undoTranslationStackRef.current = undoTranslationStack;
-  const undoAudioStackRef = useRef<SpeakerItem[][]>(undoAudioStack);
-  undoAudioStackRef.current = undoAudioStack;
+  const subtitleHistoryRef = useRef<History<SubtitleItem[]>>(subtitleHistory);
+  subtitleHistoryRef.current = subtitleHistory;
+  const translationHistoryRef = useRef<History<Array<{ id: number; translated: string }>>>(
+    translationHistory,
+  );
+  translationHistoryRef.current = translationHistory;
+  const audioHistoryRef = useRef<History<SpeakerItem[]>>(audioHistory);
+  audioHistoryRef.current = audioHistory;
 
   const segmentsRef = useRef<SubtitleItem[]>(segments);
   segmentsRef.current = segments;
@@ -1752,7 +1778,7 @@ export default function SublixStudioView({
   selectedSegIdRef.current = selectedSegId;
 
   const saveSubtitleUndo = () => {
-    setUndoSubtitleStack((prev) => [...prev.slice(-19), segmentsRef.current]);
+    setSubtitleHistory((prev) => pushHistory(prev, segmentsRef.current));
     setUndoStack((prev) => [...prev.slice(-19), segmentsRef.current]);
   };
 
@@ -1771,19 +1797,21 @@ export default function SublixStudioView({
     const changed = JSON.stringify(before) !== JSON.stringify(after);
     if (changed) {
       // Push `before` (snapshot TRƯỚC khi user sửa) thay v `after` → bấm ↶ khi phục đng.
-      setUndoTranslationStack((prev) => [...prev.slice(-19), before]);
+      setTranslationHistory((prev) => pushHistory(prev, before));
     }
   };
 
   const saveTranslationUndo = () => {
-    setUndoTranslationStack((prev) => [
-      ...prev.slice(-19),
-      segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })),
-    ]);
+    setTranslationHistory((prev) =>
+      pushHistory(
+        prev,
+        segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })),
+      ),
+    );
   };
 
   const saveAudioUndo = () => {
-    setUndoAudioStack((prev) => [...prev.slice(-19), speakersRef.current]);
+    setAudioHistory((prev) => pushHistory(prev, speakersRef.current));
   };
 
   // R4-05: chỉ save undo khi nội dung THẬT SỰ thay đổi.
@@ -1797,13 +1825,15 @@ export default function SublixStudioView({
   };
 
   const handleUndoSubtitles = () => {
-    const stack = undoSubtitleStackRef.current;
-    if (stack.length === 0) {
+    const history = subtitleHistoryRef.current;
+    if (!canUndo(history)) {
       showToast("ℹ Không có thao tác phụ đề nào để hoàn tác");
       return;
     }
-    const previous = stack[stack.length - 1];
-    setUndoSubtitleStack((prev) => prev.slice(0, -1));
+    const step = undoHistory(history, segmentsRef.current);
+    const previous = step.snapshot;
+    if (!previous) return;
+    setSubtitleHistory(step.history);
     setUndoStack((prev) => prev.slice(0, -1));
     setSegments((curr) => {
       // R3-10: Restore timing/structure while preserving current translated text
@@ -1819,13 +1849,15 @@ export default function SublixStudioView({
   };
 
   const handleUndoTranslation = () => {
-    const stack = undoTranslationStackRef.current;
-    if (stack.length === 0) {
+    const history = translationHistoryRef.current;
+    if (!canUndo(history)) {
       showToast("ℹ Không có thao tác dịch nào để hoàn tác");
       return;
     }
-    const previous = stack[stack.length - 1];
-    setUndoTranslationStack((prev) => prev.slice(0, -1));
+    const step = undoHistory(history, segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })));
+    const previous = step.snapshot;
+    if (!previous) return;
+    setTranslationHistory(step.history);
     setSegments((curr) =>
       curr.map((s) => {
         const match = previous.find((p) => p.id === s.id);
@@ -1836,15 +1868,99 @@ export default function SublixStudioView({
   };
 
   const handleUndoAudio = () => {
-    const stack = undoAudioStackRef.current;
-    if (stack.length === 0) {
+    const history = audioHistoryRef.current;
+    if (!canUndo(history)) {
       showToast("ℹ Không có thao tác giọng đọc nào để hoàn tác");
       return;
     }
-    const previous = stack[stack.length - 1];
-    setUndoAudioStack((prev) => prev.slice(0, -1));
+    const step = undoHistory(history, speakersRef.current);
+    const previous = step.snapshot;
+    if (!previous) return;
+    setAudioHistory(step.history);
     setSpeakers(previous);
     showToast("↶ Đã hoàn tác phân vai / giọng đọc nhân vật");
+  };
+
+  // ── [TSK-TIMELINE-REDO-RIPPLE] REDO (Ctrl+Shift+Z / Ctrl+Y) ───────────────
+  const handleRedoSubtitles = () => {
+    const history = subtitleHistoryRef.current;
+    if (!canRedo(history)) {
+      showToast("ℹ Không có thao tác phụ đề nào để làm lại");
+      return;
+    }
+    const step = redoHistory(history, segmentsRef.current);
+    const next = step.snapshot;
+    if (!next) return;
+    setSubtitleHistory(step.history);
+    setUndoStack((prev) => [...prev.slice(-19), segmentsRef.current]);
+    setSegments(next);
+    showToast("↷ Đã làm lại thay đổi phụ đề");
+  };
+
+  const handleRedoTranslation = () => {
+    const history = translationHistoryRef.current;
+    if (!canRedo(history)) {
+      showToast("ℹ Không có thao tác dịch nào để làm lại");
+      return;
+    }
+    const step = redoHistory(history, segmentsRef.current.map((s) => ({ id: s.id, translated: s.translated })));
+    const next = step.snapshot;
+    if (!next) return;
+    setTranslationHistory(step.history);
+    setSegments((curr) =>
+      curr.map((s) => {
+        const match = next.find((p) => p.id === s.id);
+        return match ? { ...s, translated: match.translated } : s;
+      })
+    );
+    showToast("↷ Đã làm lại nội dung bản dịch");
+  };
+
+  const handleRedoAudio = () => {
+    const history = audioHistoryRef.current;
+    if (!canRedo(history)) {
+      showToast("ℹ Không có thao tác giọng đọc nào để làm lại");
+      return;
+    }
+    const step = redoHistory(history, speakersRef.current);
+    const next = step.snapshot;
+    if (!next) return;
+    setAudioHistory(step.history);
+    setSpeakers(next);
+    showToast("↷ Đã làm lại phân vai / giọng đọc nhân vật");
+  };
+
+  // ── [TSK-TIMELINE-REDO-RIPPLE] RIPPLE DELETE (xoá + dồn khoảng trống) ───
+  const handleRippleDelete = () => {
+    const selected = selectedSegIdsRef.current;
+    const ids =
+      selected.length > 0
+        ? selected
+        : selectedSegIdRef.current > 0
+        ? [selectedSegIdRef.current]
+        : [];
+    if (ids.length === 0) {
+      showToast("⚠ Chưa chọn câu nào để xoá");
+      return;
+    }
+    const result = rippleDelete({
+      segments: segmentsRef.current,
+      selectedIds: ids,
+      lockedTracks: trackLocksRef.current.lockedTracks as string[],
+      trackKeyOf: () => "subtitles",
+    });
+    if (result.blockedTrack) {
+      showToast(
+        `🔒 Track ${describeTrackKey(result.blockedTrack as TrackKey)} đang khoá — không xoá/dồn được.`,
+      );
+      return;
+    }
+    saveUndoHistory();
+    setSegments(result.segments);
+    clearSegmentSelection();
+    showToast(
+      `🗑 Đã xoá ${result.removedIds.length} câu và dồn ${result.shiftedCount} câu (${result.removedDuration.toFixed(1)}s) — Ctrl+Z để hoàn tác`,
+    );
   };
 
   // 1-Click: Gộp nhanh toàn bộ về 2 vai chính (Vai 1 và Vai 2)
@@ -2186,9 +2302,9 @@ export default function SublixStudioView({
     setFilmstripThumbs([]);
     setVideoPlayError(false);
     setUndoStack([]);
-    setUndoSubtitleStack([]);
-    setUndoTranslationStack([]);
-    setUndoAudioStack([]);
+    setSubtitleHistory(createHistory<SubtitleItem[]>());
+    setTranslationHistory(createHistory<Array<{ id: number; translated: string }>>());
+    setAudioHistory(createHistory<SpeakerItem[]>());
     if (videoRef.current) {
       try {
         videoRef.current.pause();
@@ -2217,9 +2333,9 @@ export default function SublixStudioView({
     setAudioPeaks([]);
     setFilmstripThumbs([]);
     setUndoStack([]);
-    setUndoSubtitleStack([]);
-    setUndoTranslationStack([]);
-    setUndoAudioStack([]);
+    setSubtitleHistory(createHistory<SubtitleItem[]>());
+    setTranslationHistory(createHistory<Array<{ id: number; translated: string }>>());
+    setAudioHistory(createHistory<SpeakerItem[]>());
     setTranscodedPath(null);
     setVideoPlayError(false);
     if (videoRef.current) {
@@ -3571,6 +3687,13 @@ export default function SublixStudioView({
         return;
       }
 
+      // [TSK-TIMELINE-REDO-RIPPLE] Shift+Delete = RIPPLE DELETE (xoá + dồn khoảng trống)
+      if (e.key === "Delete" && e.shiftKey) {
+        e.preventDefault();
+        handleRippleDelete();
+        return;
+      }
+
       // Delete / Backspace: Xóa phân đoạn / item câu thoại đang chọn (multi-select → xóa TẤT CẢ khối đã chọn)
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedSegIdsRef.current.length > 1) {
@@ -3611,6 +3734,16 @@ export default function SublixStudioView({
         e.preventDefault();
         setTimelineToolMode("range");
         showToast("🎯 Chế độ Khoanh vùng In/Out (Phím R)");
+        return;
+      }
+
+      // [TSK-TIMELINE-REDO-RIPPLE] Redo: Ctrl+Shift+Z hoặc Ctrl+Y (kiểm TRƯỚC Ctrl+Z)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ((e.shiftKey && (e.key === "z" || e.key === "Z")) || e.key === "y" || e.key === "Y")
+      ) {
+        e.preventDefault();
+        handleRedoSubtitles();
         return;
       }
 
@@ -6470,6 +6603,16 @@ export default function SublixStudioView({
             { id: "subtitles", label: "Phụ đề", onUndo: handleUndoSubtitles },
           ],
         }}
+        // [TSK-TIMELINE-REDO-RIPPLE] Nút ↷ (Redo) — Ctrl+Shift+Z / Ctrl+Y, chuột phải chọn lớp.
+        redo={{
+          onRedo: handleRedoSubtitles,
+          disabled: !canRedo(subtitleHistory),
+          layers: [
+            { id: "audio", label: "Audio", onRedo: handleRedoAudio },
+            { id: "translation", label: "Bản dịch", onRedo: handleRedoTranslation },
+            { id: "subtitles", label: "Phụ đề", onRedo: handleRedoSubtitles },
+          ],
+        }}
         primary={{
           label: "Xuất video",
           icon: <IconClapper size={13} />,
@@ -9206,6 +9349,25 @@ export default function SublixStudioView({
               </button>
 
               <div className="timeline-ctx-divider" />
+
+              {/* [TSK-TIMELINE-REDO-RIPPLE] Ripple delete: xoá câu đang chọn + dồn câu phía sau sang trái. */}
+              <button
+                type="button"
+                className={`timeline-ctx-item ${selectedSegIdsRef.current.length === 0 && selectedSegIdRef.current <= 0 ? "disabled" : ""}`}
+                onClick={() => {
+                  setTimelineContextMenu(null);
+                  handleRippleDelete();
+                }}
+              >
+                <span className="timeline-ctx-icon">🧹</span>
+                <div className="timeline-ctx-text">
+                  <span className="timeline-ctx-main-text">Xoá và dồn khoảng trống</span>
+                  <span className="timeline-ctx-desc-text">
+                    Xoá câu đang chọn, dồn các câu phía sau sang trái (Ripple delete)
+                  </span>
+                </div>
+                <span className="timeline-ctx-shortcut">Shift+Del</span>
+              </button>
 
               {/* Tạo Phụ Đề Cho Toàn Bộ Video */}
               <button

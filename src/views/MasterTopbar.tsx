@@ -35,6 +35,13 @@ export interface MasterTopbarUndoLayer {
   onUndo: () => void;
 }
 
+/** Một lớp làm lại (Redo). */
+export interface MasterTopbarRedoLayer {
+  id: string;
+  label: string;
+  onRedo: () => void;
+}
+
 /** Props của `MasterTopbar`. */
 export interface MasterTopbarProps {
   /** Phiên bản app (hiện ở logo). */
@@ -53,6 +60,8 @@ export interface MasterTopbarProps {
   overlay?: { onClick: () => void; title?: string };
   /** Nút hoàn tác + các lớp hoàn tác (menu chuột phải). */
   undo?: { onUndo: () => void; layers: MasterTopbarUndoLayer[] };
+  /** Nút làm lại (Redo) + các lớp (menu chuột phải). */
+  redo?: { onRedo: () => void; layers: MasterTopbarRedoLayer[]; disabled?: boolean };
   /** Vùng ngữ cảnh giữa (vd chip tên file + nút Mở video của Studio). */
   children?: ReactNode;
   /** Nút chính (chỉ Studio có: Xuất video). */
@@ -68,16 +77,26 @@ function MasterTopbarInner({
   onStatusClick,
   overlay,
   undo,
+  redo,
   children,
   primary,
 }: MasterTopbarProps) {
   const [undoMenu, setUndoMenu] = useState<{ x: number; y: number } | null>(null);
+  const [redoMenu, setRedoMenu] = useState<{ x: number; y: number } | null>(null);
 
   const undoItems: ContextMenuItem[] = undo
     ? undo.layers.map((layer) => ({
         id: layer.id,
         label: `↶ ${layer.label}`,
         onSelect: layer.onUndo,
+      }))
+    : [];
+
+  const redoItems: ContextMenuItem[] = redo
+    ? redo.layers.map((layer) => ({
+        id: layer.id,
+        label: `↷ ${layer.label}`,
+        onSelect: layer.onRedo,
       }))
     : [];
 
@@ -136,6 +155,22 @@ function MasterTopbarInner({
           </button>
         ) : null}
 
+        {redo ? (
+          <button
+            type="button"
+            className="master-icon-btn"
+            disabled={redo.disabled === true}
+            title="Làm lại (Ctrl+Shift+Z hoặc Ctrl+Y) — chuột phải: chọn lớp làm lại"
+            onClick={redo.onRedo}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setRedoMenu({ x: event.clientX, y: event.clientY });
+            }}
+          >
+            ↷
+          </button>
+        ) : null}
+
         {overlay ? (
           <button
             type="button"
@@ -166,6 +201,15 @@ function MasterTopbarInner({
           y={undoMenu.y}
           items={undoItems}
           onClose={() => setUndoMenu(null)}
+        />
+      ) : null}
+
+      {redoMenu && redoItems.length > 0 ? (
+        <ContextMenu
+          x={redoMenu.x}
+          y={redoMenu.y}
+          items={redoItems}
+          onClose={() => setRedoMenu(null)}
         />
       ) : null}
     </header>

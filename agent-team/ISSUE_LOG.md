@@ -41,15 +41,15 @@
 | ID | Lỗi / Triệu chứng ngắn | File liên quan | Quy tắc tránh lặp lại (1 câu) | Status |
 |----|------------------------|----------------|-------------------------------|--------|
 | `BUG-001` | Đường dẫn model/binary nướng cứng lúc compile — app chỉ chạy được trên máy build | `translate/mod.rs`, `stt/whisper_local.rs`, `lib.rs` | Không dùng `CARGO_MANIFEST_DIR` cho tài nguyên runtime — resolve theo `current_exe()`/`app_data_dir` | ✅ Fixed |
-| `BUG-002` | Tắt app không kill whisper-server/llama-server → tiến trình ma giữ RAM/VRAM/cổng | `stt/whisper_server.rs`, `translate/server.rs` | Tiến trình con phải trong Job Object kill-on-close hoặc kill ở `RunEvent::Exit` | 🔴 Open |
-| `BUG-003` | `taskkill /IM /F` giết bừa tiến trình trùng tên; port cố định → 2 app giết nhau | `stt/whisper_server.rs`, `translate/server.rs` | Chỉ kill PID mình spawn + thêm single-instance guard | 🔴 Open |
+| `BUG-002` | Tắt app không kill whisper-server/llama-server → tiến trình ma giữ RAM/VRAM/cổng | `stt/whisper_server.rs`, `translate/server.rs` | Tiến trình con phải trong Job Object kill-on-close hoặc kill ở `RunEvent::Exit` | ✅ Fixed (task `TSK-018-FIX`) |
+| `BUG-003` | `taskkill /IM /F` giết bừa tiến trình trùng tên; port cố định → 2 app giết nhau | `stt/whisper_server.rs`, `translate/server.rs` | Chỉ kill PID mình spawn + thêm single-instance guard | ✅ Fixed (task `TSK-018-FIX`) |
 | `BUG-004` | Dịch offline hỏng trên cài đặt mới: `ensure_binary()` không ai gọi → thiếu `llama-server.exe` | `translate/mod.rs`, `translate/server.rs` | Hàm cài đặt tài nguyên bắt buộc phải có caller trong luồng onboarding | 🔴 Open |
 | `BUG-005` | Xuất lồng tiếng fail mọi phim >32 câu (`amix` tối đa 32 input) | `dubbing/mod.rs` | Dựng filter ghép nhóm chunk hoặc dùng filter script | ✅ Fixed |
 | `BUG-006` | `overflow: hidden` toàn cục: onboarding không cuộn được, phụ đề overlay bị cắt cụt | `App.css`, `views/OverlayView.css`, `tauri.conf.json` | Chỉ chặn cuộn ở cửa sổ overlay, không chặn ở `html/body` | ✅ Fixed |
 | `BUG-007` | Lọt nghe sự kiện Tauri (`listen().then` cleanup trễ) → nhân đôi dữ liệu, tải model 2 lần | `views/*.tsx` | Cleanup phải hủy chính promise `listen()`: `p.then(u => u())` | ✅ Fixed |
 | `BUG-008` | Xuất SRT từ lịch sử bịa timestamp 3s/đoạn → lệch sync hoàn toàn với video | `views/SettingsView.tsx` | Dùng timestamp thật từ event (`audio/live.rs`), không tự bịa giờ | ✅ Fixed |
 | `BUG-009` | Đổi tab khi đang tạo phụ đề → mất kết quả im lặng (file vẫn được ghi) | `views/SettingsView.tsx`, `views/FileSubView.tsx` | State của job đang chạy phải sống ở cấp cha hoặc store | 🔴 Open |
-| `BUG-010` | Lệnh sync chặn main thread 60–90s → UI đơ cứng (test dịch, test STT, quét thiết bị) | `src-tauri/src/lib.rs` | Tauri command nặng phải `async` + `spawn_blocking` | 🔴 Open |
+| `BUG-010` | Lệnh sync chặn main thread 60–90s → UI đơ cứng (test dịch, test STT, quét thiết bị) | `src-tauri/src/lib.rs` | Tauri command nặng phải `async` + `spawn_blocking` | ✅ Fixed (task `TSK-018-FIX`) |
 | `BUG-011` | Bấm Start Live 2 lần → báo lỗi giả "already running" dù lần đầu thành công | `views/SettingsView.tsx` | Nút async phải khóa ngay trong handler bằng cờ `starting` đồng bộ | 🔴 Open |
 | `BUG-012` | Tải model không kiểm tra đủ byte, không resume → file thiếu được nhận là "tải thành công" | `stt/whisper_local.rs`, `translate/mod.rs` | Trước khi rename phải verify `downloaded == total`; timeout riêng connect/read | 🔴 Open |
 | `BUG-013` | Config hỏng → reset mặc định, lần lưu sau ghi đè mất API key; ghi file không atomic | `config.rs`, `lib.rs` | Ghi temp + rename; file hỏng thì backup `.bak`, không ghi đè im lặng | ✅ Fixed |

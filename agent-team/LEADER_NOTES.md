@@ -56,6 +56,7 @@
 
 - **Smart App Control** (BUG-H09) chặn exe/dll vừa build hoặc exe copy đã patch → popup liên tục + verify GUI instance riêng thất bại. Giảm: mọi thợ dùng **chung** `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`. Tắt SAC là **đường một chiều** — chỉ PO quyết.
 - **App dev của PO** chạy bằng `Chay-Sublix.bat` (Vite 1420, CDP 9223, HMR nạp code thợ đang sửa → có thể hiện lỗi tạm). Thợ **không được** `taskkill` theo tên / tắt app PO; verify trên instance riêng (CDP 9224+, Vite 1422+), chỉ tắt PID mình tạo. Nếu lỡ tắt: chạy lại `Chay-Sublix.bat` (Start-Process cửa sổ riêng).
+- Lỗi `E0786 found invalid metadata files for crate sublix_lib` khi verify = nhiều thợ cùng build vào target chung một lúc (không phải lỗi code) → chạy lại sau. Script verify phải **chặn commit khi exit code ≠ 0** (đã lỡ commit 1 lần trước khi build lại pass).
 - `cargo.exe` chạy lâu = app dev của PO (`cargo run`), không phải build của thợ — đừng chờ nó.
 - API key (MiniMax `sk-cp-`, OpenRouter) nằm trong `%APPDATA%\com.sublix.desktop\sublix-config.json` (key TTS cloud ở `sublix-tts-keys.json`) — **không in ra** log/terminal/báo cáo. Màn hình Cài đặt cũ giữ state key rỗng → bấm Lưu có thể xoá key (đang sửa bằng `translate_options_set` + `configMerge`).
 - Không tạo thư mục trong repo khi verify (đã có sự cố thư mục `%D%` chứa junction trỏ node_modules thật).

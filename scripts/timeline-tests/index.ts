@@ -22,3 +22,5 @@ import "./trackLock.test.ts";
 import "./clipboard.test.ts";
 import "./autoFollow.test.ts";
 import "./estimate.test.ts";
+import "./history.test.ts";
+import "./ripple.test.ts";
