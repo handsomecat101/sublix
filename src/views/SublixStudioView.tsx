@@ -153,6 +153,7 @@ import { TimecodeInput } from "./studio/TimecodeInput";
 import { makeTaskRunId } from "./processLogic";
 import { jobQueue, JobCancelledError, type JobKind } from "../lib/studio/jobQueue";
 import { isForeignRun } from "../lib/studio/runRouting";
+import { saveSessionTab, type PersistedTab } from "../lib/studio/sessionStore";
 // [TSK-TABS-3.5] Chặn kết quả của video cũ ghi đè video mới (logic thuần, test được).
 import { projectDisplayName, staleProjectNotice } from "../lib/studio/resultGuard";
 
@@ -218,11 +219,10 @@ export interface SublixStudioViewProps {
    */
   cancelRequest?: number;
   /**
-   * [TSK-TABS-P1] Tab này sở hữu cache dự án v1 (khôi phục khi mở app + autosave).
-   * Mặc định `true` (1 instance như cũ); host chỉ bật cho tab đầu tiên. P3 thay bằng
-   * `sessionStore` theo từng tab.
+   * [TSK-TABS-P3] Dữ liệu tab khôi phục từ `sessionStore` (chỉ đọc LÚC MOUNT).
+   * Instance tự lưu tab của mình qua `saveSessionTab` (debounce ~1,2 s).
    */
-  useProjectCache?: boolean;
+  restoredTab?: PersistedTab | null;
   onTaskUpdate?: (task: StudioTaskUpdatePayload) => void;
   onClearPendingFile?: () => void;
 }
@@ -810,23 +810,6 @@ const StudioTimelineMarkerLines = memo(function StudioTimelineMarkerLines({
 export type TtsEngineKey = "kokoro" | "vieneu" | "zerotts" | "gcloud" | "fptai";
 
 
-const STUDIO_PROJECT_CACHE_KEY = "sublix_active_studio_project_v1";
-
-interface SavedStudioProject {
-  filePath: string;
-  fileName: string;
-  mediaDuration: number;
-  segments: SubtitleItem[];
-  speakers: SpeakerItem[];
-  audioPeaks: number[];
-  filmstripThumbs: Array<{ time_sec: number; data_uri: string }>;
-  currentTime: number;
-  sttLang?: string;
-  targetLang?: string;
-  /** [TSK-TIMELINE-INTEGRATE-MODULES] Marker trên timeline (lưu cùng project cache). */
-  markers?: TimelineMarker[];
-}
-
 // [TSK-TABS-P2] Hàm huỷ backend của hàng đợi — đặt 1 LẦN khi nạp module. Chỉ job
 // `running` mới gọi tới đây (job `queued` chỉ bị bỏ khỏi hàng, không có gì để huỷ).
 jobQueue.setCancelHandler(async () => {
@@ -857,7 +840,7 @@ export default function SublixStudioView({
   onStatus,
   loadRequest,
   cancelRequest,
-  useProjectCache = true,
+  restoredTab = null,
   onTaskUpdate,
   onClearPendingFile,
 }: SublixStudioViewProps) {
@@ -877,17 +860,25 @@ export default function SublixStudioView({
     }
   };
   // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
-  const [cachedProject] = useState<SavedStudioProject | null>(() => {
-    // [TSK-TABS-P1] Tab mới (không sở hữu cache) KHÔNG khôi phục dự án cũ — nếu không
-    // mọi tab "＋" sẽ hiện lại cùng một video.
-    if (initialFilePath || !useProjectCache) return null;
-    try {
-      const raw = localStorage.getItem(STUDIO_PROJECT_CACHE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+  // [TSK-TABS-P3] Dữ liệu khôi phục theo TỪNG TAB (host đọc `sessionStore` rồi truyền
+  // xuống); không còn đọc khoá v1 — host đã migrate một lần.
+  const [cachedProject] = useState(() => {
+    if (initialFilePath || !restoredTab) return null;
+    return {
+      filePath: restoredTab.filePath,
+      fileName: restoredTab.fileName,
+      mediaDuration: restoredTab.mediaDuration,
+      segments: restoredTab.segments as SubtitleItem[],
+      speakers: restoredTab.speakers.map((s) => ({ ...s, sampleAudio: null })) as SpeakerItem[],
+      markers: restoredTab.markers,
+      sttLang: restoredTab.sttLang,
+      targetLang: restoredTab.targetLang,
+      hadAudio: restoredTab.hadAudio === true,
+    };
   });
+  /** Tab khôi phục từng có tiếng lồng (đã mất) và chưa tạo lại ⇒ nhắc 1 lần + giữ cờ khi lưu. */
+  const lostAudioRef = useRef<boolean>(cachedProject?.hadAudio === true);
+  const lostAudioToastedRef = useRef<boolean>(false);
 
   // Navigation & Project Meta
   const [filePath, setFilePath] = useState<string>(
@@ -1213,12 +1204,9 @@ export default function SublixStudioView({
   const heavyImplsRef = useRef<HeavyImpls | null>(null);
 
   // R2-03 & R2-D: Real audio peaks and filmstrip video thumbnails
-  const [audioPeaks, setAudioPeaks] = useState<number[]>(
-    cachedProject?.audioPeaks || []
-  );
-  const [filmstripThumbs, setFilmstripThumbs] = useState<Array<{ time_sec: number; data_uri: string }>>(
-    cachedProject?.filmstripThumbs || []
-  );
+  // [TSK-TABS-P3] Không lưu peaks/thumbs trong phiên — trích lại khi tab được chọn.
+  const [audioPeaks, setAudioPeaks] = useState<number[]>([]);
+  const [filmstripThumbs, setFilmstripThumbs] = useState<Array<{ time_sec: number; data_uri: string }>>([]);
   const [isPreviewExtracting, setIsPreviewExtracting] = useState<boolean>(false);
 
   // Preview TTS, Progressive Simulation & Export
@@ -1481,33 +1469,36 @@ export default function SublixStudioView({
   }, [isActive]);
 
   // Tự động lưu trạng thái dự án Studio vào localStorage (Tối ưu nhẹ, không lưu base64 ảnh để tránh tràn bộ nhớ và treo máy)
+  // [TSK-TABS-P3] Mỗi tab tự lưu qua `sessionStore` (khoá riêng từng tab; tự bỏ
+  // audioUrl/sampleAudio; quota đầy không crash). Manifest (thứ tự/tab chọn) do host ghi.
   useEffect(() => {
-    // [TSK-TABS-P1] Chỉ tab sở hữu cache v1 được ghi (các tab khác ghi đè sẽ lẫn dự án).
-    if (!useProjectCache) return;
-    if (!filePath || segments.length === 0) return;
+    if (!filePath || !tabId) return;
+    if (segments.some((s) => s.hasAudio)) lostAudioRef.current = false;
     const timer = window.setTimeout(() => {
-      try {
-        const payload: SavedStudioProject = {
-          filePath,
-          fileName,
-          mediaDuration,
-          segments,
-          speakers,
-          audioPeaks: audioPeaks.slice(0, 300), // Lưu nhẹ tối đa 300 điểm peaks
-          filmstripThumbs: [], // Tuyệt đối không lưu hàng chục ảnh Base64 vào localStorage tránh lag treo WebView2
-          currentTime: 0,
-          sttLang,
-          targetLang,
-          // [TSK-TIMELINE-INTEGRATE-MODULES] Lưu marker cùng project cache.
-          markers,
-        };
-        localStorage.setItem(STUDIO_PROJECT_CACHE_KEY, JSON.stringify(payload));
-      } catch (err) {
-        console.warn("Studio auto-save to localStorage failed:", err);
-      }
+      const res = saveSessionTab(localStorage, {
+        tabId,
+        filePath,
+        fileName,
+        mediaDuration,
+        segments,
+        speakers,
+        markers,
+        sttLang,
+        targetLang,
+        currentTime: 0,
+        hadAudio: lostAudioRef.current,
+      });
+      if (!res.ok) console.warn("Studio auto-save (sessionStore) thất bại:", res.error);
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [useProjectCache, filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
+  }, [tabId, filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
+
+  // [TSK-TABS-P3] Tab khôi phục từng có tiếng lồng: nhắc 1 lần khi tab được xem lần đầu.
+  useEffect(() => {
+    if (!isActive || !lostAudioRef.current || lostAudioToastedRef.current) return;
+    lostAudioToastedRef.current = true;
+    showToast("🔁 Cần tạo lại giọng — tiếng lồng đã tạo không được giữ sau khi tắt app");
+  }, [isActive]);
 
   // [TSK-TABS-P1] Báo trạng thái NHẸ lên host (chỉ số liệu, throttle ≥250 ms).
   // Không truyền state phát (segments/timeline) xuống ⇒ đổi tab khác KHÔNG làm
@@ -1587,6 +1578,9 @@ export default function SublixStudioView({
       setFilmstripThumbs([]);
       return;
     }
+    // [TSK-TABS-P3] Tab khôi phục nạp LƯỜI: tab nền chưa trích sóng âm/ảnh phim
+    // (ffmpeg) cho tới khi được chọn lần đầu.
+    if (!isActive) return;
 
     if (previewExtractedPathRef.current === filePath && (filmstripThumbs.length > 0 || mediaDuration <= 0)) {
       return;
@@ -1623,7 +1617,7 @@ export default function SublixStudioView({
     return () => {
       isCancelled = true;
     };
-  }, [filePath, mediaDuration]);
+  }, [filePath, mediaDuration, isActive]);
 
   // M1: Native Tauri Drag & Drop for Windows WebView2
   useEffect(() => {

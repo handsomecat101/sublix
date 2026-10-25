@@ -13,6 +13,14 @@ import SublixStudioView, {
 import { StudioTabStripConnected, StudioTabsContext } from "./StudioTabStrip";
 import { jobQueue } from "../../lib/studio/jobQueue";
 import {
+  loadSession,
+  migrateLegacySession,
+  removeSessionTab,
+  writeSessionManifest,
+  type PersistedTab,
+} from "../../lib/studio/sessionStore";
+import { resolveTabShortcut } from "../../lib/studio/tabShortcuts";
+import {
   MAX_STUDIO_TABS,
   addTab,
   closeTab,
@@ -60,7 +68,96 @@ function nextTabId(): string {
  */
 const MemoStudio = memo(SublixStudioView);
 
+/** Phiên lúc khởi động. */
+interface BootState {
+  tabs: HostTab[];
+  activeId: string | null;
+}
+
+function storageOrNull(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * [TSK-TABS-P3] Dựng danh sách tab lúc mở app: migrate v1 → đọc phiên v2 → (nếu có
+ * video mở sẵn từ ngoài) nhảy/ thêm tab đó. Việc đang chạy lúc tắt app KHÔNG khôi phục
+ * (instance mới luôn `idle`). Không có gì khôi phục được ⇒ 1 tab trống.
+ */
+function bootSession(initialPath?: string): BootState {
+  const tabs: HostTab[] = [];
+  let activeId: string | null = null;
+  const storage = storageOrNull();
+  if (storage) {
+    try {
+      migrateLegacySession(storage, { tabId: nextTabId() });
+      const loaded = loadSession(storage);
+      for (const saved of loaded.tabs.slice(0, MAX_STUDIO_TABS)) {
+        tabs.push({
+          id: saved.tabId,
+          path: saved.filePath,
+          // Rỗng: video do `restored` quyết định (không kích hoạt "nạp video mới").
+          initialPath: "",
+          title: saved.fileName || titleFromPath(saved.filePath),
+          busy: "idle",
+          percent: 0,
+          dirty: false,
+          loadNonce: 0,
+          cancelNonce: 0,
+          restored: saved,
+        });
+      }
+      activeId = tabs.some((t) => t.id === loaded.manifest.activeTabId)
+        ? loaded.manifest.activeTabId
+        : (tabs[0]?.id ?? null);
+    } catch {
+      /* phiên hỏng ⇒ bỏ, mở tab trống */
+    }
+  }
+  if (initialPath) {
+    const wanted = tabs.find((t) => t.path.toLowerCase() === initialPath.toLowerCase());
+    if (wanted) {
+      activeId = wanted.id;
+    } else if (tabs.length < MAX_STUDIO_TABS) {
+      const id = nextTabId();
+      tabs.push({
+        id,
+        path: initialPath,
+        initialPath,
+        title: titleFromPath(initialPath),
+        busy: "idle",
+        percent: 0,
+        dirty: false,
+        loadNonce: 0,
+        cancelNonce: 0,
+      });
+      activeId = id;
+    }
+  }
+  if (tabs.length === 0) {
+    const id = nextTabId();
+    tabs.push({
+      id,
+      path: "",
+      initialPath: "",
+      title: "Video mới",
+      busy: "idle",
+      percent: 0,
+      dirty: false,
+      loadNonce: 0,
+      cancelNonce: 0,
+    });
+    activeId = id;
+  }
+  return { tabs, activeId };
+}
+
 interface HostTab extends StudioTab {
+  /** Dữ liệu khôi phục từ phiên (chỉ truyền cho instance LÚC MOUNT). */
+  restored?: PersistedTab | null;
   /** Video truyền cho instance LÚC MOUNT (không đổi theo `path` — tránh nạp lại video). */
   initialPath: string;
   /** Nonce yêu cầu nạp video (tab trống được lấp đầy). */
@@ -86,22 +183,11 @@ function StudioTabsHostInner({
   onTaskUpdate,
   isVisible = true,
 }: StudioTabsHostProps) {
-  // Tab đầu tiên luôn tồn tại (có thể TRỐNG) ⇒ Studio luôn có 1 instance để mở video.
-  const [initialTabId] = useState(() => nextTabId());
-  const [tabs, setTabs] = useState<HostTab[]>(() => [
-    {
-      id: initialTabId,
-      path: initialPath ?? "",
-      initialPath: initialPath ?? "",
-      title: initialPath ? titleFromPath(initialPath) : "Video mới",
-      busy: "idle",
-      percent: 0,
-      dirty: false,
-      loadNonce: 0,
-      cancelNonce: 0,
-    },
-  ]);
-  const [activeId, setActiveId] = useState<string | null>(initialTabId);
+  // [TSK-TABS-P3] Khởi động: migrate khoá v1 (một lần) rồi khôi phục phiên v2. Hàm
+  // idempotent (StrictMode gọi 2 lần vẫn ra cùng phiên). Luôn có ≥ 1 tab (có thể TRỐNG).
+  const [boot] = useState(() => bootSession(initialPath));
+  const [tabs, setTabs] = useState<HostTab[]>(boot.tabs);
+  const [activeId, setActiveId] = useState<string | null>(boot.activeId);
   const [dialog, setDialog] = useState<CloseDialog | null>(null);
   /** Đường dẫn đang chờ mở (khi đạt trần → hỏi đóng tab cũ). */
   const pendingPathRef = useRef<string | null>(null);
@@ -221,6 +307,9 @@ function StudioTabsHostInner({
     const next = closeTab(state, id);
     setActiveId(next.activeId);
     setTabs((prev) => prev.filter((tab) => tab.id !== id));
+    // [TSK-TABS-P3] Tab đã đóng ⇒ xoá khoá phiên của nó (không khôi phục lại lần sau).
+    const storage = storageOrNull();
+    if (storage) removeSessionTab(storage, id);
   }, []);
   applyCloseTabRef.current = applyCloseTab;
 
@@ -319,6 +408,66 @@ function StudioTabsHostInner({
     onSummary?.({ running: runningCount, tabs: tabs.length });
   }, [onSummary, runningCount, tabs.length]);
 
+  /**
+   * [TSK-TABS-P3] Ghi manifest phiên `{activeTabId, order}` (debounce ~0,4 s). Chỉ liệt
+   * kê tab ĐÃ CÓ VIDEO; dữ liệu từng tab do chính instance của nó ghi.
+   */
+  useEffect(() => {
+    const storage = storageOrNull();
+    if (!storage) return;
+    const timer = window.setTimeout(() => {
+      const order = tabs.filter((tab) => tab.path).map((tab) => tab.id);
+      const activeTabId = activeId && order.includes(activeId) ? activeId : (order[0] ?? null);
+      writeSessionManifest(storage, { activeTabId, order });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [tabs, activeId]);
+
+  /**
+   * [TSK-TABS-P4] Phím tắt thanh tab (capture, chỉ khi tab Studio đang hiển thị).
+   * `preventDefault` cho MỌI kết quả khác null — và riêng Ctrl+W luôn chặn kể cả khi
+   * không có hành động (nếu không WebView2 tự đóng cửa sổ app). Dừng lan truyền để
+   * phím timeline (Ctrl+số, Tab…) không chạy theo.
+   */
+  useEffect(() => {
+    if (!isVisible) return;
+    const onKeyDown = (ev: KeyboardEvent) => {
+      const cur = stateRef.current;
+      const activeIndex = cur.tabs.findIndex((tab) => tab.id === cur.activeId);
+      const target = ev.target as HTMLElement | null;
+      const isEditableTarget =
+        !!target &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      const action = resolveTabShortcut(ev, { tabCount: cur.tabs.length, activeIndex, isEditableTarget });
+      const isCtrlW =
+        ev.ctrlKey && !ev.shiftKey && !ev.altKey && !ev.metaKey && (ev.code === "KeyW" || ev.key.toLowerCase() === "w");
+      if (isCtrlW) ev.preventDefault();
+      if (!action) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      switch (action.type) {
+        case "next":
+        case "prev": {
+          const count = cur.tabs.length;
+          const nextIdx = (((activeIndex < 0 ? 0 : activeIndex) + (action.type === "next" ? 1 : -1)) % count + count) % count;
+          setActiveId(cur.tabs[nextIdx].id);
+          break;
+        }
+        case "goto":
+          if (cur.tabs[action.index]) setActiveId(cur.tabs[action.index].id);
+          break;
+        case "close":
+          if (cur.activeId) requestCloseTab(cur.activeId);
+          break;
+        case "new":
+          openEmptyTab();
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [isVisible, requestCloseTab, openEmptyTab]);
+
   const strip = useMemo(() => <StudioTabStripConnected />, []);
 
   /** Context cho thanh tab (chỉ thanh tab là consumer ⇒ timeline khỏi render lại). */
@@ -350,7 +499,7 @@ function StudioTabsHostInner({
               initialFilePath={tab.initialPath}
               loadRequest={tab.loadNonce > 0 ? { path: tab.path, nonce: tab.loadNonce } : null}
               cancelRequest={tab.cancelNonce > 0 ? tab.cancelNonce : undefined}
-              useProjectCache={tab.id === initialTabId}
+              restoredTab={tab.restored ?? null}
               onRequestOpenVideo={openVideo}
               onStatus={handleStatus}
               belowTopbar={active ? strip : undefined}

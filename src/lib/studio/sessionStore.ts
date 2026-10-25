@@ -77,6 +77,8 @@ export interface PersistedTab {
   sttLang?: string;
   targetLang?: string;
   currentTime: number;
+  /** true = tab từng có tiếng lồng (đã bị bỏ khi lưu) ⇒ UI nhắc 'Cần tạo lại giọng'. */
+  hadAudio?: boolean;
 }
 
 /** Dữ liệu 1 tab lúc **ghi** (còn `audioUrl` / `sampleAudio` — sẽ được bỏ khi lưu). */
@@ -91,6 +93,8 @@ export interface SessionTabInput {
   sttLang?: string;
   targetLang?: string;
   currentTime: number;
+  /** Tab đã khôi phục mà chưa tạo lại giọng — giữ cờ qua các lần lưu. */
+  hadAudio?: boolean;
 }
 
 /** Manifest của phiên. */
@@ -247,6 +251,9 @@ export function stripSpeaker(speaker: SpeakerItem): PersistedSpeaker {
 
 /** Chuyển dữ liệu tab (dạng đầy đủ) → dạng đã bỏ dữ liệu nặng (dạng lưu). */
 export function toPersistedTab(input: SessionTabInput | PersistedTab): PersistedTab {
+  const hadAudio =
+    input.hadAudio === true ||
+    (input.segments ?? []).some((s) => !!(s as { audioUrl?: string }).audioUrl || s.hasAudio === true);
   return {
     tabId: input.tabId,
     filePath: input.filePath,
@@ -258,6 +265,7 @@ export function toPersistedTab(input: SessionTabInput | PersistedTab): Persisted
     sttLang: input.sttLang,
     targetLang: input.targetLang,
     currentTime: num(input.currentTime),
+    ...(hadAudio ? { hadAudio: true } : {}),
   };
 }
 
@@ -295,6 +303,7 @@ function normalizePersistedTab(raw: unknown, tabId: string): PersistedTab | null
     sttLang: typeof raw.sttLang === "string" ? raw.sttLang : undefined,
     targetLang: typeof raw.targetLang === "string" ? raw.targetLang : undefined,
     currentTime: num(raw.currentTime),
+    ...(raw.hadAudio === true ? { hadAudio: true } : {}),
   };
 }
 

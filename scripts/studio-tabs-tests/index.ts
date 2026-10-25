@@ -13,3 +13,4 @@ import "./jobQueue.test.ts";
 import "./sessionStore.test.ts";
 import "./tabShortcuts.test.ts";
 import "./runRouting.test.ts";
+import "./sessionRestore.test.ts";
