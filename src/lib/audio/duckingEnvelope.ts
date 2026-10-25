@@ -30,6 +30,30 @@ export const DEFAULT_DUCKING: DuckingParams = {
   minVoiceSec: 0.15,
 };
 
+/** Phần AppConfig liên quan (cấu trúc, không import tauri.ts để module này thuần). */
+export interface DuckingConfigFields {
+  ducking_level?: number | null;
+  ducking_bridge_sec?: number | null;
+  ducking_attack_sec?: number | null;
+  ducking_release_sec?: number | null;
+}
+
+function inRange(v: number | null | undefined, lo: number, hi: number, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : fallback;
+}
+
+/** Tham số hiệu lực từ config; thiếu/ngoài miền → mặc định §2 (cùng miền hợp lệ với Rust `params_from_config`). */
+export function duckingParamsFromConfig(cfg: DuckingConfigFields | null | undefined): DuckingParams {
+  const d = DEFAULT_DUCKING;
+  return {
+    duckLevel: inRange(cfg?.ducking_level, 0, 1, d.duckLevel),
+    bridgeGapSec: inRange(cfg?.ducking_bridge_sec, 0, 10, d.bridgeGapSec),
+    attackSec: inRange(cfg?.ducking_attack_sec, 0, 5, d.attackSec),
+    releaseSec: inRange(cfg?.ducking_release_sec, 0, 10, d.releaseSec),
+    minVoiceSec: d.minVoiceSec,
+  };
+}
+
 /** Điểm gãy: gain tuyến tính tại thời điểm t (giây); giữa 2 điểm nội suy trong miền dB. */
 export interface Breakpoint {
   t: number;

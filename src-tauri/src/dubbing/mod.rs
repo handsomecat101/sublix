@@ -48,6 +48,7 @@ pub mod voice_samples;
 
 // TSK-FEAT-SMART-DUCKING: đường âm lượng nền theo thoại (docs/DUCKING_SPEC.md).
 pub mod ducking;
+pub mod ducking_export;
 
 #[cfg(test)]
 #[path = "tts_real_tests.rs"]
@@ -3667,13 +3668,36 @@ pub fn export_dubbed_video(
     }
 
     let has_speech = speech_track_opt.is_some();
+    // Smart Ducking (DUCKING_SPEC §4.2): nền gốc hạ theo ĐƯỜNG ÂM LƯỢNG dựng từ clip lồng tiếng thật
+    // (cùng điểm gãy với Studio xem thử) thay vì hạ cố định cả video. vocal_isolation (có nền Demucs) giữ nguyên.
+    let duck_bgm_chain = if speech_input_idx.is_some() && bgm_input_idx.is_none() {
+        let cfg = match app {
+            Some(a) => crate::config::AppConfig::load(a),
+            None => crate::config::AppConfig::load_or_default(),
+        };
+        let params = ducking_export::params_from_config(&cfg, project.bgm_volume);
+        let voice = ducking_export::voice_intervals(&speech_inputs, |p| {
+            ducking_export::wav_duration(p).or_else(|| get_audio_duration(p).ok())
+        });
+        let points = ducking_export::envelope_for_export(&voice, project.media_duration_sec, &params);
+        info!(
+            "🎚️ Smart Ducking: {} đoạn thoại → {} điểm gãy (mức {:.2}, nối < {:.1}s)",
+            voice.len(),
+            points.len(),
+            params.duck_level,
+            params.bridge_gap_sec
+        );
+        Some(ducking_export::bgm_chain(&points))
+    } else {
+        None
+    };
     let mix_filter = match (speech_input_idx, bgm_input_idx) {
         (Some(s_idx), Some(b_idx)) => {
             format!("[{b_idx}:a]volume=1.0[bgm];[bgm][{s_idx}:a]amix=inputs=2:duration=first:normalize=0[final_audio]")
         }
         (Some(s_idx), None) => {
-            let bgm_vol = project.bgm_volume;
-            format!("[0:a]volume={bgm_vol}[bgm];[bgm][{s_idx}:a]amix=inputs=2:duration=first:normalize=0[final_audio]")
+            let chain = duck_bgm_chain.as_deref().unwrap_or("[0:a]anull[bgm]");
+            format!("{chain};[bgm][{s_idx}:a]amix=inputs=2:duration=first:normalize=0[final_audio]")
         }
         (None, Some(b_idx)) => {
             format!("[{b_idx}:a]volume=1.0[final_audio]")
@@ -3685,8 +3709,14 @@ pub fn export_dubbed_video(
 
     // BUG-H12: `-filter_complex_script` đã bị FFMPEG 8+ gỡ bỏ (ffmpeg 9 chỉ còn
     // `-filter_complex`). Truyền graph trực tiếp qua argv — Rust không qua shell
-    // nên không lỗi quoting; độ dài graph << 32KB (mỗi chunk ≤ 28 input).
-    remux.arg("-filter_complex").arg(&mix_filter);
+    // nên không lỗi quoting. Đường ducking của video dài có thể vượt giới hạn dòng
+    // lệnh Windows (~32K) → graph quá ngưỡng ghi ra file, đọc bằng `-/filter_complex <file>` (FFmpeg ≥ 7).
+    let mix_filter_file = temp_dir.join("mix_filter.txt");
+    if mix_filter.len() > ducking_export::FILTER_FILE_THRESHOLD && fs::write(&mix_filter_file, &mix_filter).is_ok() {
+        remux.arg("-/filter_complex").arg(&mix_filter_file);
+    } else {
+        remux.arg("-filter_complex").arg(&mix_filter);
+    }
 
     // Video mapping & encoding
     if sub_mode == "hardsub" && srt_path_opt.is_some() {

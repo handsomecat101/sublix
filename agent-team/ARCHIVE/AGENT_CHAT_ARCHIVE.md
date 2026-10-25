@@ -1,3 +1,12 @@
+## ARCHIVED 2026-10-25 (Sonnet — TSK-FEAT-SMART-DUCKING P2, giữ 8 tin)
+
+### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-DUBBING-STT-ENGINE` — pipeline lồng tiếng dùng engine STT đã chọn; **không commit**).
+- **Sửa:** `src-tauri/src/dubbing/stt_select.rs` (mới) — `dubbing_analyze` đọc config `stt_asr_engine`; engine sherpa + model đã tải → dùng engine đó, **chưa tải / lỗi → rơi về Whisper** (log `tracing` + event `dubbing:progress`). Engine không có timestamp từ (Paraformer) → timestamp câu; `proc_kill.rs` 441 → 253 dòng.
+- **Test:** `stt_select_tests.rs` 9 test + e2e `dubbing_stt_sherpa_that` · `cargo test --lib` **231 pass / 0 fail** · `cargo build --examples` OK.
+
+---
+
 ## ARCHIVED 2026-10-25 (Opus — TSK-DESIGN-VOICE-PICKER, giữ 8 tin)
 
 ### 2026-10-25 07:20 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu

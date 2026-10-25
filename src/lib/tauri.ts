@@ -251,6 +251,14 @@ export interface AppConfig {
    * Id đầy đủ có tiền tố engine — "vietneu:adam".
    */
   favorite_voices?: string[];
+  /** Smart Ducking (docs/DUCKING_SPEC.md §2). `null`/thiếu = chưa đặt → mặc định 0.20 (hoặc bgm_volume dự án cũ khi xuất). */
+  ducking_level?: number | null;
+  /** Hai câu cách nhau < giá trị này (giây) → 1 khối, nền giữ thấp suốt. Mặc định 2.0. */
+  ducking_bridge_sec?: number;
+  /** Thời gian hạ nền trước câu đầu khối (giây). Mặc định 0.30. */
+  ducking_attack_sec?: number;
+  /** Thời gian trả nền sau câu cuối khối (giây). Mặc định 1.00. */
+  ducking_release_sec?: number;
 }
 
 export interface FileSubProgress {

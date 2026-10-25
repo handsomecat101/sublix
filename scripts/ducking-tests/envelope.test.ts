@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import {
   buildDuckingEnvelope,
   gainAt,
+  duckingParamsFromConfig,
   DEFAULT_DUCKING,
   type DuckingParams,
 } from "../../src/lib/audio/duckingEnvelope.ts";
@@ -80,6 +81,17 @@ test("gainAt: nội suy trong miền dB, giữ giá trị đầu/cuối ngoài �
   assert.equal(gainAt(pts, 99), 0.1);
   assert.ok(Math.abs(gainAt(pts, 5) - Math.sqrt(0.1)) < 1e-9); // −10 dB giữa đoạn 0→−20 dB
   assert.equal(gainAt([], 3), 1);
+});
+
+test("duckingParamsFromConfig: thiếu → mặc định, ngoài miền → mặc định, hợp lệ → giữ", () => {
+  assert.deepEqual(duckingParamsFromConfig(undefined), DEFAULT_DUCKING);
+  assert.deepEqual(duckingParamsFromConfig({ ducking_level: null }), DEFAULT_DUCKING);
+  assert.deepEqual(
+    duckingParamsFromConfig({ ducking_level: NaN, ducking_bridge_sec: -1, ducking_attack_sec: 99, ducking_release_sec: Infinity }),
+    DEFAULT_DUCKING,
+  );
+  const p = duckingParamsFromConfig({ ducking_level: 0.1, ducking_bridge_sec: 4, ducking_attack_sec: 0.5, ducking_release_sec: 2 });
+  assert.deepEqual(p, { duckLevel: 0.1, bridgeGapSec: 4, attackSec: 0.5, releaseSec: 2, minVoiceSec: 0.15 });
 });
 
 test("tham số xấu: NaN/âm/duration 0 không văng lỗi, trả [(0,1)]", () => {

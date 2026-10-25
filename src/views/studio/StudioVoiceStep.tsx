@@ -298,6 +298,45 @@ function StudioVoiceStepInner({ state, api }: StudioVoiceStepProps) {
         </button>
       </div>
 
+      {state.duckingLevel !== undefined && state.duckingBridgeSec !== undefined ? (
+        <div className="spp-field">
+          <div className="spp-label-row">
+            <span className="spp-label">Hạ tiếng nền khi có thoại</span>
+            <span className="spp-hint">xem thử = video xuất ra</span>
+          </div>
+          <label className="spp-slider-row">
+            <span className="spp-slider-name">Mức hạ</span>
+            <input
+              type="range"
+              className="spp-slider"
+              min={0.05}
+              max={1}
+              step={0.05}
+              value={state.duckingLevel}
+              onChange={(event) => api.setDuckingLevel?.(Number(event.target.value))}
+              aria-label="Mức hạ tiếng nền"
+              title="Âm lượng nền khi có thoại (100% = không hạ)"
+            />
+            <span className="spp-slider-value">{Math.round(state.duckingLevel * 100)}%</span>
+          </label>
+          <label className="spp-slider-row">
+            <span className="spp-slider-name">Nối khoảng nghỉ dưới</span>
+            <input
+              type="range"
+              className="spp-slider"
+              min={0.5}
+              max={10}
+              step={0.5}
+              value={state.duckingBridgeSec}
+              onChange={(event) => api.setDuckingBridgeSec?.(Number(event.target.value))}
+              aria-label="Nối khoảng nghỉ dưới số giây"
+              title="Hai câu cách nhau ít hơn số giây này thì nền giữ thấp suốt (kéo tối đa ≈ hạ cả video)"
+            />
+            <span className="spp-slider-value">{state.duckingBridgeSec.toFixed(1)} giây</span>
+          </label>
+        </div>
+      ) : null}
+
       {roleMenu ? (
         <ContextMenu
           x={roleMenu.x}

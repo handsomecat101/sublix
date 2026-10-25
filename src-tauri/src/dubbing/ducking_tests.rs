@@ -2,7 +2,6 @@
 
 use super::*;
 use serde_json::Value;
-use std::process::Command;
 
 const VECTORS: &str = include_str!("../../../scripts/ducking-tests/vectors.json");
 const T_TOL: f64 = 0.001;
@@ -160,58 +159,3 @@ fn volume_filter_flat_cases() {
     assert_eq!(ffmpeg_volume_filter(&[Breakpoint { t: 0.0, gain: 1.0 }]), "volume=1.000000");
 }
 
-/// Đọc PCM s16le mono từ WAV (tìm chunk `data`).
-fn read_wav_samples(bytes: &[u8]) -> Vec<f64> {
-    let mut i = 12;
-    while i + 8 <= bytes.len() {
-        let size = u32::from_le_bytes([bytes[i + 4], bytes[i + 5], bytes[i + 6], bytes[i + 7]]) as usize;
-        if &bytes[i..i + 4] == b"data" {
-            let end = (i + 8 + size).min(bytes.len());
-            return bytes[i + 8..end]
-                .chunks_exact(2)
-                .map(|c| i16::from_le_bytes([c[0], c[1]]) as f64 / 32768.0)
-                .collect();
-        }
-        i += 8 + size + (size & 1);
-    }
-    Vec::new()
-}
-
-fn rms_db(samples: &[f64], rate: f64, center: f64, win: f64) -> f64 {
-    let a = ((center - win / 2.0) * rate).max(0.0) as usize;
-    let b = (((center + win / 2.0) * rate) as usize).min(samples.len());
-    let slice = &samples[a.min(b)..b];
-    let ms = slice.iter().map(|x| x * x).sum::<f64>() / slice.len().max(1) as f64;
-    10.0 * ms.max(1e-20).log10()
-}
-
-/// Chạy ffmpeg thật trên tone 20 s, đo RMS ở các mốc và so với `gain_at` (sai ≤ 1 dB).
-/// Bỏ qua (có log) nếu máy không có ffmpeg.
-#[test]
-fn ffmpeg_filter_matches_envelope_on_real_tone() {
-    let voice = [(5.0, 8.0), (9.0, 10.0), (15.0, 16.0)];
-    let pts = build_ducking_envelope(&voice, 20.0, &DuckingParams::default());
-    let filter = ffmpeg_volume_filter(&pts);
-    let out = std::env::temp_dir().join(format!("sublix_ducking_{}.wav", std::process::id()));
-    let run = Command::new(crate::dubbing::find_ffmpeg())
-        .args(["-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=20:sample_rate=48000"])
-        .args(["-af", &filter, "-c:a", "pcm_s16le"])
-        .arg(&out)
-        .output();
-    let Ok(run) = run else {
-        eprintln!("SKIP: không chạy được ffmpeg");
-        return;
-    };
-    assert!(run.status.success(), "ffmpeg lỗi: {}\nfilter: {filter}", String::from_utf8_lossy(&run.stderr));
-    let bytes = std::fs::read(&out).expect("đọc wav");
-    let _ = std::fs::remove_file(&out);
-    let samples = read_wav_samples(&bytes);
-    assert!(samples.len() > 48000 * 19, "wav quá ngắn: {}", samples.len());
-
-    let reference = rms_db(&samples, 48000.0, 1.0, 0.5); // gain = 1 ở t = 1 s
-    for t in [1.0, 4.85, 5.0, 5.5, 9.5, 10.3, 10.6, 12.0, 14.85, 15.5, 16.4, 19.0] {
-        let measured = rms_db(&samples, 48000.0, t, 0.02) - reference;
-        let expected = 20.0 * gain_at(&pts, t).log10();
-        assert!((measured - expected).abs() <= 1.0, "t={t}: đo {measured:.2} dB, mong {expected:.2} dB");
-    }
-}

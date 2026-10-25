@@ -204,8 +204,8 @@ pub fn gain_at(points: &[Breakpoint], t: f64) -> f64 {
 /// `dB(t) = v0 + Σ cᵢ·max(0, t − tᵢ)` — phẳng, không lồng `if`, độ dài tuyến tính theo số
 /// điểm gãy nên dùng được cho mọi cỡ (lý do chọn: xem DUCKING_SPEC §6). Gói trong
 /// `asetnsamples` để gain cập nhật mỗi 512 mẫu (~10 ms) thay vì mỗi frame codec (~21 ms).
-/// Khi dùng trong `-filter_complex` cho video dài hàng trăm khối, nên truyền qua
-/// `-filter_complex_script` để khỏi vượt giới hạn dòng lệnh Windows.
+/// Khi graph quá dài (video hàng trăm khối), ghi ra file và đọc bằng `-/filter_complex <file>`
+/// (FFmpeg ≥ 7, BUG-H12) để khỏi vượt giới hạn dòng lệnh Windows — xem `ducking_export`.
 pub fn ffmpeg_volume_filter(points: &[Breakpoint]) -> String {
     let Some(first) = points.first() else {
         return "volume=1.000000".to_string();
@@ -220,19 +220,38 @@ pub fn ffmpeg_volume_filter(points: &[Breakpoint]) -> String {
             _ => 0.0,
         }
     };
-    let mut expr = format!("({:.6})", db[0]);
+    let mut terms = vec![format!("({:.6})", db[0])];
     let mut prev = 0.0;
     for (i, p) in points.iter().enumerate() {
         let m = slope(i);
         let c = m - prev;
         prev = m;
         if c.abs() > 1e-9 {
-            let _ = write!(expr, "+({:.6})*max(0,t-{:.6})", c, p.t);
+            let mut term = String::new();
+            let _ = write!(term, "({:.6})*max(0,t-{:.6})", c, p.t);
+            terms.push(term);
         }
     }
-    format!("asetnsamples=n=512:p=0,volume=eval=frame:volume='pow(10,({})/20)'", expr)
+    format!("asetnsamples=n=512:p=0,volume=eval=frame:volume='pow(10,({})/20)'", sum_tree(&terms))
+}
+
+/// FFmpeg không parse được chuỗi `a+b+c+…` dài hơn ~100 số hạng ("Missing ')' or too many args")
+/// → gom thành cây cân bằng, mỗi nút tối đa `MAX_FAN` số hạng.
+const MAX_FAN: usize = 16;
+
+fn sum_tree(terms: &[String]) -> String {
+    if terms.len() <= MAX_FAN {
+        return terms.join("+");
+    }
+    let chunk = terms.len().div_ceil(MAX_FAN);
+    let parts: Vec<String> = terms.chunks(chunk).map(|c| format!("({})", sum_tree(c))).collect();
+    parts.join("+")
 }
 
 #[cfg(test)]
 #[path = "ducking_tests.rs"]
 mod ducking_tests;
+
+#[cfg(test)]
+#[path = "ducking_ffmpeg_tests.rs"]
+mod ducking_ffmpeg_tests;

@@ -29,6 +29,14 @@ import {
   normalizeGlossary,
   stripBlankRows,
 } from "../lib/timeline/glossary";
+// [TSK-FEAT-SMART-DUCKING] Đường âm lượng nền theo thoại (cùng thuật toán với video xuất ra).
+import {
+  buildDuckingEnvelope,
+  duckingParamsFromConfig,
+  gainAt,
+  type DuckingParams,
+} from "../lib/audio/duckingEnvelope";
+import { mergeConfig } from "./settings/configMerge";
 import { version as APP_VERSION_PKG } from "../../package.json";
 // R2-3: panel quy trình 5 bước (tách riêng để file này không phình thêm).
 import StudioPipelinePanel from "./studio/StudioPipelinePanel";
@@ -1560,9 +1568,6 @@ export default function SublixStudioView({
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeVoiceSegRef = useRef<number | null>(null);
   const finishedVoiceSegRef = useRef<number | null>(null);
-  const videoVolumeBeforeDuckRef = useRef<number | null>(null);
-  // Âm lượng video NGAY SAU khi hạ (duck) — để biết người dùng có tự chỉnh volume trong lúc duck hay không.
-  const duckedVolumeRef = useRef<number | null>(null);
   const isFetchingTtsRef = useRef<Set<number>>(new Set());
   const [currentPlayingVoiceSegId, setCurrentPlayingVoiceSegId] = useState<number | null>(null);
 
@@ -1574,6 +1579,121 @@ export default function SublixStudioView({
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(false);
   const isVoiceMutedRef = useRef<boolean>(false);
   isVoiceMutedRef.current = isVoiceMuted;
+
+  // ── Smart Ducking (docs/DUCKING_SPEC.md §4.1) ──────────────────────────────
+  // Nền hạ theo ĐƯỜNG ÂM LƯỢNG (nối khoảng nghỉ ngắn thành 1 khối, ramp mượt) — cùng thuật toán
+  // và tham số với video xuất ra. Tính lại khi clip lồng tiếng / tham số đổi, KHÔNG tính mỗi frame.
+  const [duckParams, setDuckParams] = useState<DuckingParams>(() => duckingParamsFromConfig(null));
+  const duckEnvelope = useMemo(() => {
+    const total = Math.max(1, mediaDuration);
+    const voice: Array<[number, number]> = [];
+    for (const s of segments) {
+      if (s.hasAudio) voice.push([s.start, s.start + computeVoiceBlockDur(s, total)]);
+    }
+    return buildDuckingEnvelope(voice, total, duckParams);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- computeVoiceBlockDur thuần, không phụ thuộc state
+  }, [segments, mediaDuration, duckParams]);
+  const duckEnvRef = useRef(duckEnvelope);
+  duckEnvRef.current = duckEnvelope;
+
+  // ── VoicePicker: giọng ghim ★ (config toàn cục) + nghe mẫu 1 giọng (mỗi lần 1 mẫu) ──
+  const [favoriteVoices, setFavoriteVoices] = useState<string[]>([]);
+  const [previewVoiceId, setPreviewVoiceId] = useState<string | null>(null);
+  const [previewVoiceStatus, setPreviewVoiceStatus] = useState<"loading" | "playing" | null>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voicePreviewTokenRef = useRef<number>(0);
+  const pendingDuckPatchRef = useRef<Record<string, number>>({});
+  const duckSaveTimerRef = useRef<number | null>(null);
+  // Mức volume NGƯỜI DÙNG chọn (chưa nhân gain ducking) và giá trị rAF ghi gần nhất — để phân biệt
+  // sự kiện volumechange do ta ghi với do người dùng kéo thanh âm lượng.
+  const userVolumeRef = useRef<number>(1);
+  const lastDuckVolumeRef = useRef<number>(-1);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    userVolumeRef.current = v.volume;
+    lastDuckVolumeRef.current = -1;
+    let raf = 0;
+    /** Trả `video.volume` về mức người dùng (chỉ khi ta đã ghi đè). */
+    const restore = () => {
+      if (lastDuckVolumeRef.current < 0) return;
+      lastDuckVolumeRef.current = userVolumeRef.current;
+      if (Math.abs(v.volume - userVolumeRef.current) > 1e-4) v.volume = userVolumeRef.current;
+    };
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (v.paused || v.ended) return;
+      const user = userVolumeRef.current;
+      // Tắt tiếng / volume 0 → không đụng (giữ hành vi cũ "không ghi đè volume người dùng").
+      if (v.muted || user <= 0.001) {
+        restore();
+        return;
+      }
+      const gain = isVoiceMutedRef.current ? 1 : gainAt(duckEnvRef.current, v.currentTime);
+      const target = user * gain;
+      if (Math.abs(v.volume - target) > 5e-4) {
+        lastDuckVolumeRef.current = target;
+        v.volume = target;
+      }
+    };
+    const start = () => {
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      restore();
+    };
+    const onVolume = () => {
+      if (Math.abs(v.volume - lastDuckVolumeRef.current) < 0.0015) return; // do rAF ghi
+      userVolumeRef.current = v.volume;
+    };
+    v.addEventListener("play", start);
+    v.addEventListener("pause", stop);
+    v.addEventListener("ended", stop);
+    v.addEventListener("volumechange", onVolume);
+    if (!v.paused) start();
+    return () => {
+      v.removeEventListener("play", start);
+      v.removeEventListener("pause", stop);
+      v.removeEventListener("ended", stop);
+      v.removeEventListener("volumechange", onVolume);
+      stop();
+    };
+  }, [filePath, transcodedPath]);
+
+  // Đồng bộ tham số ducking với config (nạp lúc mở + khi Cài đặt đổi).
+  useEffect(() => {
+    let alive = true;
+    const sync = () => {
+      sublix
+        .getConfig()
+        .then((cfg: AppConfig) => {
+          if (!alive) return;
+          const next = duckingParamsFromConfig(cfg);
+          // Đang kéo thanh (chưa kịp lưu) → không để config cũ ghi đè giá trị đang kéo.
+          if (Object.keys(pendingDuckPatchRef.current).length === 0) {
+            setDuckParams((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+          }
+          const fav = Array.isArray(cfg.favorite_voices) ? cfg.favorite_voices : [];
+          setFavoriteVoices((prev) => (prev.join("\n") === fav.join("\n") ? prev : fav));
+        })
+        .catch((err) => console.warn("Không nạp được tham số ducking:", err));
+    };
+    sync();
+    let unlisten: (() => void) | null = null;
+    void listen("config:updated", sync)
+      .then((fn) => {
+        if (alive) unlisten = fn;
+        else fn();
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -1614,20 +1734,9 @@ export default function SublixStudioView({
     }
     activeVoiceSegRef.current = null;
     setCurrentPlayingVoiceSegId(null);
+    // Âm lượng nền KHÔNG còn hạ-bật theo từng câu: vòng rAF ducking (bên dưới) lo đường âm lượng.
     const v = videoRef.current;
-    if (v) {
-      // Khôi phục âm lượng video gốc về mức ban đầu trước khi ducking —
-      // NHƯNG nếu người dùng tự chỉnh volume trong lúc duck thì giữ nguyên mức họ vừa chỉnh.
-      if (videoVolumeBeforeDuckRef.current !== null) {
-        const ducked = duckedVolumeRef.current;
-        if (ducked === null || Math.abs(v.volume - ducked) < 0.01) {
-          v.volume = videoVolumeBeforeDuckRef.current;
-        }
-        videoVolumeBeforeDuckRef.current = null;
-        duckedVolumeRef.current = null;
-      }
-      v.muted = isOriginalMutedRef.current;
-    }
+    if (v) v.muted = isOriginalMutedRef.current;
   };
 
   const syncVoicePlayback = (now: number, paused: boolean) => {
@@ -1742,15 +1851,6 @@ export default function SublixStudioView({
       playVoiceClip();
     } else {
       va.onloadedmetadata = () => playVoiceClip();
-    }
-
-    // AUDIO DUCKING CHUẨN: Giảm nhỏ âm lượng video gốc xuống 20% khi có giọng lồng tiếng, KHÔNG tắt hẳn tiếng nền!
-    // Volume đang = 0 (người dùng tắt tiếng) → không duck, và không "bật lại" thành 1.0 khi kết thúc.
-    if (videoVolumeBeforeDuckRef.current === null && v.volume > 0.001) {
-      const original = v.volume;
-      videoVolumeBeforeDuckRef.current = original;
-      v.volume = Math.min(original, Math.max(0.05, Math.min(original * 0.25, 0.2)));
-      duckedVolumeRef.current = v.volume;
     }
 
     va.onended = () => {
@@ -5832,7 +5932,8 @@ export default function SublixStudioView({
           // (không đọc nhãn lỗi, cũng không đọc lại text gốc).
           status: seg.translateFailed ? "translate_failed" : "ready",
         })),
-        bgm_volume: 0.8,
+        // Smart Ducking: backend dựng đường nền từ config; bgm_volume chỉ là mức khởi tạo khi config chưa có ducking_level.
+        bgm_volume: duckParams.duckLevel,
         voice_volume: 1.0,
         sub_export_mode: exportSubMode,
         audio_export_mode: exportAudioMode,
@@ -6654,6 +6755,112 @@ export default function SublixStudioView({
     }
   };
 
+  /** Bật/tắt ghim ★ một giọng: đọc config MỚI NHẤT từ đĩa → gộp (giữ API key) → lưu → cập nhật state. */
+  const handleToggleFavoriteVoice = async (voiceId: string) => {
+    try {
+      const latest = (await sublix.getConfig()) as unknown as Record<string, unknown>;
+      const current = Array.isArray(latest.favorite_voices) ? (latest.favorite_voices as string[]) : [];
+      const next = current.includes(voiceId) ? current.filter((id) => id !== voiceId) : [...current, voiceId];
+      await sublix.saveConfig(mergeConfig({ latest, patch: { favorite_voices: next } }) as unknown as AppConfig);
+      setFavoriteVoices(next);
+    } catch (err) {
+      showToast(`⚠️ Không lưu được giọng ghim: ${String(err)}`);
+    }
+  };
+
+  /** Dừng mẫu giọng đang phát/đang tạo (huỷ cả kết quả tạo mẫu về muộn). */
+  const handleStopVoicePreview = () => {
+    voicePreviewTokenRef.current += 1;
+    const audio = voicePreviewAudioRef.current;
+    voicePreviewAudioRef.current = null;
+    if (audio) {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+    }
+    setPreviewVoiceId(null);
+    setPreviewVoiceStatus(null);
+  };
+
+  /** Nghe mẫu 1 giọng (cache của backend, câu mẫu chung — KHÔNG đổi giọng của vai). Mỗi lần 1 mẫu. */
+  const handlePreviewVoiceSample = async (voiceId: string) => {
+    handleStopVoicePreview();
+    // Dừng các nghe thử khác để chỉ có 1 âm thanh mẫu tại 1 thời điểm.
+    for (const ref of [currentAudioPreviewRef, engineSampleAudioRef]) {
+      if (ref.current) {
+        ref.current.pause();
+        ref.current = null;
+      }
+    }
+    setPlayingAudioSpkId(null);
+    setPlayingEngineSample(null);
+    const token = voicePreviewTokenRef.current;
+    setPreviewVoiceId(voiceId);
+    setPreviewVoiceStatus("loading");
+    try {
+      const dataUri = await sublix.voiceSampleEnsure(voiceId);
+      if (token !== voicePreviewTokenRef.current) return; // đã bị dừng / thay bằng mẫu khác
+      if (!dataUri) {
+        showToast("⚠️ Chưa tạo được mẫu cho giọng này (engine chưa sẵn sàng?)");
+        setPreviewVoiceId(null);
+        setPreviewVoiceStatus(null);
+        return;
+      }
+      const audio = new Audio(dataUri);
+      voicePreviewAudioRef.current = audio;
+      const finish = () => {
+        if (token !== voicePreviewTokenRef.current) return;
+        voicePreviewAudioRef.current = null;
+        setPreviewVoiceId(null);
+        setPreviewVoiceStatus(null);
+      };
+      audio.onended = finish;
+      audio.onerror = finish;
+      setPreviewVoiceStatus("playing");
+      await audio.play();
+    } catch (err) {
+      if (token === voicePreviewTokenRef.current) {
+        showToast(`⚠️ Không phát được mẫu giọng: ${String(err)}`);
+        handleStopVoicePreview();
+      }
+    }
+  };
+
+  /** Smart Ducking: kéo thanh → xem thử đổi NGAY, config lưu sau 400 ms yên (gộp các field, không nút Lưu). */
+  const handleSetDuckingField = (field: "ducking_level" | "ducking_bridge_sec", value: number) => {
+    setDuckParams((prev) =>
+      field === "ducking_level" ? { ...prev, duckLevel: value } : { ...prev, bridgeGapSec: value },
+    );
+    pendingDuckPatchRef.current = { ...pendingDuckPatchRef.current, [field]: value };
+    if (duckSaveTimerRef.current !== null) window.clearTimeout(duckSaveTimerRef.current);
+    duckSaveTimerRef.current = window.setTimeout(() => {
+      duckSaveTimerRef.current = null;
+      const patch = pendingDuckPatchRef.current;
+      void (async () => {
+        try {
+          const latest = (await sublix.getConfig()) as unknown as Record<string, unknown>;
+          await sublix.saveConfig(mergeConfig({ latest, patch }) as unknown as AppConfig);
+        } catch (err) {
+          showToast(`⚠️ Không lưu được tham số hạ tiếng nền: ${String(err)}`);
+        } finally {
+          // Chỉ xoá các field vừa lưu — nếu người dùng kéo tiếp trong lúc lưu thì giữ lại để lượt sau lưu.
+          const rest = { ...pendingDuckPatchRef.current };
+          for (const [k, v] of Object.entries(patch)) if (rest[k] === v) delete rest[k];
+          pendingDuckPatchRef.current = rest;
+        }
+      })();
+    }, 400);
+  };
+
+  // Rời Studio: dừng mẫu đang phát và xoá hẹn giờ lưu.
+  useEffect(() => {
+    return () => {
+      voicePreviewTokenRef.current += 1;
+      voicePreviewAudioRef.current?.pause();
+      if (duckSaveTimerRef.current !== null) window.clearTimeout(duckSaveTimerRef.current);
+    };
+  }, []);
+
   /** Nhãn nguồn phụ đề (dòng 1 dòng của bước Phụ đề). */
   const transcriptSourceLabel = useMemo(() => {
     if (!transcriptSource) return null;
@@ -6714,8 +6921,18 @@ export default function SublixStudioView({
       translateProvider,
       translatePhase,
       sttDownloadProgress: sttDownloadProgress ?? undefined,
+      favoriteVoices,
+      previewVoiceId,
+      previewVoiceStatus,
+      duckingLevel: duckParams.duckLevel,
+      duckingBridgeSec: duckParams.bridgeGapSec,
     }),
     [
+      favoriteVoices,
+      previewVoiceId,
+      previewVoiceStatus,
+      duckParams.duckLevel,
+      duckParams.bridgeGapSec,
       segments.length,
       sttLang,
       sttModel,
@@ -6817,6 +7034,11 @@ export default function SublixStudioView({
       onGlossaryChange: () => {},
       onGlossarySave: () => {},
       onGlossarySuggest: async () => null,
+      toggleFavoriteVoice: () => {},
+      previewVoiceSample: () => {},
+      stopVoicePreview: () => {},
+      setDuckingLevel: () => {},
+      setDuckingBridgeSec: () => {},
     };
   }
   Object.assign(pipelineApiRef.current, {
@@ -6908,6 +7130,17 @@ export default function SublixStudioView({
     onGlossaryChange: (next: Glossary) => handleGlossaryChange(next),
     onGlossarySave: (next: Glossary) => handleGlossarySave(next),
     onGlossarySuggest: () => handleGlossarySuggest(),
+    // [TSK-FEAT-VOICE-PICKER] Giọng ghim ★ + nghe mẫu từng giọng.
+    toggleFavoriteVoice: (voiceId: string) => {
+      void handleToggleFavoriteVoice(voiceId);
+    },
+    previewVoiceSample: (voiceId: string) => {
+      void handlePreviewVoiceSample(voiceId);
+    },
+    stopVoicePreview: () => handleStopVoicePreview(),
+    // [TSK-FEAT-SMART-DUCKING] 2 thanh trượt trong bước Lồng tiếng.
+    setDuckingLevel: (value: number) => handleSetDuckingField("ducking_level", value),
+    setDuckingBridgeSec: (value: number) => handleSetDuckingField("ducking_bridge_sec", value),
   });
   const pipelineApi = pipelineApiRef.current;
 

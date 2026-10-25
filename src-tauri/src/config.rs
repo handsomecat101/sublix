@@ -158,6 +158,32 @@ pub struct AppConfig {
     /// UI theme: "cinema" | "studio" | "light" | "vibrant".
     #[serde(default = "default_theme")]
     pub theme: String,
+
+    /// Smart Ducking (docs/DUCKING_SPEC.md §2): âm lượng nền khi có thoại (0–1, mặc định 0.20).
+    /// `None` = chưa đặt → migration lấy `bgm_volume` của dự án (config/dự án cũ), không có thì 0.20.
+    #[serde(default)]
+    pub ducking_level: Option<f32>,
+    /// Hai câu cách nhau < giá trị này (giây) → 1 khối, nền giữ thấp suốt (mặc định 2.0).
+    #[serde(default = "default_ducking_bridge_sec")]
+    pub ducking_bridge_sec: f32,
+    /// Thời gian hạ nền trước câu đầu khối (giây, mặc định 0.30).
+    #[serde(default = "default_ducking_attack_sec")]
+    pub ducking_attack_sec: f32,
+    /// Thời gian trả nền sau câu cuối khối (giây, mặc định 1.00).
+    #[serde(default = "default_ducking_release_sec")]
+    pub ducking_release_sec: f32,
+}
+
+fn default_ducking_bridge_sec() -> f32 {
+    2.0
+}
+
+fn default_ducking_attack_sec() -> f32 {
+    0.3
+}
+
+fn default_ducking_release_sec() -> f32 {
+    1.0
 }
 
 fn default_auto() -> String {
@@ -282,6 +308,10 @@ impl Default for AppConfig {
             favorite_voices: Vec::new(),
             llm_reasoning_effort: default_reasoning_effort(),
             theme: default_theme(),
+            ducking_level: None,
+            ducking_bridge_sec: default_ducking_bridge_sec(),
+            ducking_attack_sec: default_ducking_attack_sec(),
+            ducking_release_sec: default_ducking_release_sec(),
         }
     }
 }

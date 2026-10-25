@@ -204,6 +204,10 @@ export interface StudioPipelineState {
   previewVoiceId?: string | null;
   /** Trạng thái nghe mẫu (null = không có). TUỲ CHỌN. */
   previewVoiceStatus?: "loading" | "playing" | null;
+  /** Smart Ducking: mức nền khi có thoại (0–1, 0.20 = còn 20%). Thiếu = ẩn 2 thanh trượt. */
+  duckingLevel?: number;
+  /** Smart Ducking: hai câu cách nhau dưới giá trị này (giây) thì nền giữ thấp suốt. */
+  duckingBridgeSec?: number;
 }
 
 /** Các hành động của panel — truyền từ file cha (state KHÔNG chuyển sang con). */
@@ -271,6 +275,10 @@ export interface StudioPipelineApi {
   previewVoiceSample?: (voiceId: string) => void;
   /** Dừng mẫu đang phát. TUỲ CHỌN. */
   stopVoicePreview?: () => void;
+  /** Kéo thanh "Mức hạ" — cập nhật xem thử ngay, lưu config (debounce), không nút Lưu. */
+  setDuckingLevel?: (value: number) => void;
+  /** Kéo thanh "Nối khoảng nghỉ dưới … giây" — như trên. */
+  setDuckingBridgeSec?: (value: number) => void;
 }
 
 /** Nhãn hiển thị của 5 bước trên rail. */

@@ -1,5 +1,24 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 13:55 - Mavis/mcode #3 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-R2-8-VERIFY` — kiểm chứng giao diện **vòng 2**; **chưa commit**; **KHÔNG sửa** `src/**` / `src-tauri/**`).
+- **Ra:** `docs/UI_R2-8_VERIFY.md` (mới) + **12 ảnh** `docs/ui-mockups/shots/after-*.png` (1920×1080, đúng 12 trạng thái `01a/01b/01c/01d/02/02b/03/04/05/06/06b/06c`). ⚠️ `.gitignore:97` có `*.png` ⇒ **ảnh không commit được** nếu không chỉnh `.gitignore` (việc này ngoài phạm vi task, chưa làm).
+- **Kết quả:** **36/36 dòng checklist §7.1 còn đường vào mới** (32 ✓ thực chứng + 4 ✓* do điều kiện render — xem §6 báo cáo) · **19/19 mục chức năng PASS** trên app thật (A→Z, ▶ từng bước, In/Out, menu vai 7 mục, ↶/↷ 3 lớp, **Ripple delete 8→7 khối + toast "🗑 Đã xoá 1 câu và dồn 6 câu"**, tải 2 link + playlist 21 mục, Live, Lịch sử, Tiến trình + hộp xác nhận xoá, Cài đặt API key).
+- **Lỗi console:** **0 exception**; 1 lỗi thật `Encountered two children with the same key, 'dubbing_active'` → **BUG-R2-8-01** (đã tìm ra nguyên nhân gốc: id task **cứng** ở `SettingsView.tsx:298/623` + `SublixStudioView.tsx:792`, `saveToProcessHistory` chỉ khử trùng trong **3 s** `SettingsView.tsx:277-288` ⇒ `localStorage` có **4 mục trùng id**; `ProcessCenterView.tsx:436` render `key={task.id}`) — **không do R2-8**, **chưa sửa**.
+- **Môi trường:** instance **riêng** — `vite preview` **1423** (không dùng `vite dev` vì HMR reload mất state) + CDP **9225** + WebView2 user-data riêng; **app PO (1420/9223) không bị đụng**. Bẫy: app render **2 topbar** → mọi selector phải lọc phần tử đang hiển thị; click "Studio" trên topbar **ẩn** là no-op; `tauri://drag-drop` **không** bắn được từ JS → nạp video bằng hộp thoại native + `SendKeys`.
+- **Cần 1 lượt bổ sung của người điều phối:** bấm Enter thêm hồ sơ (S5) · tạo 1 câu Live rồi kiểm nút 🗑 (L7) · có ≥ 1 câu lịch sử rồi kiểm hộp xác nhận xoá (H4) — cả 3 đường vào **đã có trong code**, chỉ chưa xác minh runtime được.
+
+---
+
+### 2026-10-25 13:45 - Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-SMART-DUCKING` giai đoạn 2 + nối `VoicePicker`; **chưa commit**).
+- **Ducking:** Studio xem thử bỏ hạ-bật theo câu → vòng rAF `video.volume = userVolume × gainAt(t)` (tôn trọng mute/volume người dùng); xuất video dựng `volume` từ **cùng điểm gãy** (`ducking_export.rs`, độ dài clip thật; graph > 12K ký tự đọc bằng `-/filter_complex <file>`); `vocal_isolation` giữ nguyên. Config +4 field (`ducking_level` Option → thiếu thì lấy `bgm_volume` dự án); 2 thanh trượt "Mức hạ"/"Nối khoảng nghỉ" trong `StudioVoiceStep`, lưu ngay.
+- **Đo thật** (xuất video 45 s, nền tone cố định, 3 câu VieNeu): khe giữa 2 câu cách < 2 s còn **−14,0 dB**; đoạn không thoại 16–26 s về **0,0 dB**. **BUG-H24:** ffmpeg từ chối biểu thức cộng phẳng > ~100 số hạng → gom cây cân bằng.
+- **VoicePicker:** nối `toggleFavoriteVoice` / `previewVoiceSample` / `stopVoicePreview` + 3 state vào panel (★ lưu qua `mergeConfig` giữ API key; mẫu từ `voice_sample_ensure`, mỗi lần 1 mẫu).
+- **Verify:** `cargo test --lib` 284 pass · `cargo build --examples` OK · `node --test` 251/251 · `tsc` 0 · `vite build` OK. **Chưa kiểm GUI** vòng rAF xem thử và 2 thanh trượt (chỉ kiểm bằng kiểu + build).
+
+---
+
 ### 2026-10-25 07:05 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FEAT-VOICE-PICKER` — ô chọn giọng theo thiết kế Opus §4.10; **chưa commit**).
 - **Mới:** `src/components/voice/VoicePicker.tsx` + `VoicePickerRow.tsx` + `voicePickerModel.ts` (logic thuần) + `voicePicker.css`; `scripts/voice-picker-tests/` (**18 test**). Tìm không dấu, lọc ♂/♀, nhóm ★ → engine → ngôn ngữ, tìm trong tên+engine+ngôn ngữ, gợi ý "Bỏ lọc ♂ Nam (N kết quả)", chip vai trùng giọng, bàn phím ↑↓/↵/Ctrl+Space/Ctrl+S/Alt+1-3/Esc, popover portal + lật lên khi sát đáy, ảo hoá khi > 100 giọng.
@@ -71,13 +90,3 @@
 
 ---
 
-### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-DUBBING-STT-ENGINE` — pipeline lồng tiếng dùng engine STT đã chọn; **không commit**).
-- **Sửa:** module mới `src-tauri/src/dubbing/stt_select.rs` — `dubbing_analyze` đọc config `stt_asr_engine` (backend tự đọc → **không đổi tham số lệnh Tauri, không sửa `src/**`**); engine sherpa + model đã tải → nhận dạng bằng engine đó (SenseVoice/Paraformer/Parakeet), **chưa tải / lỗi → rơi về Whisper** kèm log `tracing` + event `dubbing:progress` để UI toast.
-- **Tán thổng:** engine không có timestamp từ (Paraformer) → dùng **timestamp câu**; kết quá đểnh dạng `SubtitleSegment` cũ nên để **bước phân vai (diarization) dùng đúc định dạng cũ**; `start_offset_sec` / `expected_speakers` giữ nguyên; ngôn ngợ nguồn chỉ truyền cho engine khi được hỗ trụ (SenseVoice zh/en/ja/ko/yue, Paraformer zh, còn lại để để auto).
-- **Test:** `stt_select_tests.rs` 9 test thuần (chọn engine, engine lạ, ngôn ngợ, SRT định dạng) + test e2e `dubbing_stt_sherpa_that` chạy chạy trên clip Trung (PASS khi có model, SKIP khi chưa có); `proc_kill.rs` **441 → 253 dòng** (tách test ra `proc_kill_tests.rs` 193) · `cargo test --lib` **231 pass / 0 fail** · `cargo build --examples` OK (cã 4 example dubbing) · `cargo clippy` không thêm cảnh báo mới.
-
----
----
-
----
