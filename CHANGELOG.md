@@ -16,33 +16,47 @@
 - **Cài đặt › Nhận giọng nói**: danh sách engine + **tải model ngay trong app** (có % , MB, tốc độ MB/s, ETA). Chọn engine ở **Studio**, có gợi ý theo ngôn ngữ nguồn.
 - Pipeline A→Z dùng **đúng engine bạn chọn** (SenseVoice / Paraformer); nếu engine chưa tải hoặc lỗi thì **tự lùi về Whisper** ⇒ không làm hỏng cả lô.
 - **Lồng tiếng Việt**: thêm **VieNeu-TTS v3 Turbo**, **ZeroTTS**, **Google Chirp 3 HD** và **FPT.AI**; chuẩn hóa cách đọc số / ngày / từ số / tiền / giờ cho mọi engine. Preview và xuất video giờ dùng **cùng một giọng** (trước đó preview nghe 1 giọng, xuất ra giọng khác ⇒ video không có tiếng Việt).
+- **Ô chọn giọng mới**: bấm vào ô giọng của một vai để mở danh sách đầy đủ — **tìm không cần dấu** (gõ *"adam"* ra *"Adam bựa"*), lọc **Nam / Nữ**, **★ yêu thích** (lưu cho mọi dự án), **nghe thử ngay trong danh sách**, và thấy giọng nào vai khác đang dùng.
+- **Mẫu nghe thử phát tức thì**: lần nghe đầu sẽ tạo mẫu (mất vài giây), những lần sau phát **tức thì** vì đã lưu sẵn.
+- **Phân vai theo giọng thật**: app đo **cao độ giọng** để nhận ra nam / nữ và gom các câu cùng giọng vào đúng vai (trước đó chia vai theo thứ tự câu ⇒ hay đảo người nói).
+- **Hạ tiếng nền thông minh**: nhạc nền **nhỏ lại đúng lúc có lời thoại** và **nối liền các khoảng nghỉ ngắn** (không còn lúc to lúc bé), chuyển đoạn mượt; **xem thử trong Studio và video xuất ra cho cùng một đường âm lượng**; 2 thanh trượt *Mức hạ* và *Nối khoảng nghỉ*.
 
-**3. Timeline**
+**3. Tải video**
+- **Thư mục tải mặc định**: `Downloads\Sublix Downloads` (dễ tìm, không bị giấu trong thư mục ứng dụng); file đã tải trước đó vẫn nằm ở chỗ cũ.
+- **Ảnh thu nhỏ + thời lượng** hiện trên từng mục tải (trước đó chỉ là khung đen).
+
+**4. Timeline**
 - **Redo** (Ctrl+Shift+Z / Ctrl+Y) cho phụ đề, bản dịch và âm thanh; nhớ **20 bước**.
 - **Ripple delete** (Shift+Delete): xoá câu đang chọn và **dồn các câu phía sau** theo khoảng hợp nhất (vẫn nằm đúng trong khóa track).
 
-**4. Giao diện mới**
+**5. Giao diện mới**
 - **Studio**: 1 thanh trên cùng dùng chung + **panel trái 5 bước** (mở 1 mục tại một thời, nút *Chạy N bước đã bật*, chuột phải vào vai để gộp / tách / xoá vai); danh sách engine và giọng lấy thẳng từ backend nên không bao giờ lệch với Cài đặt.
 - **Cài đặt**: tách theo nhóm (Dịch / Lồng tiếng / Giao diện / Trạng thái hệ thống) + mục **Mức độ suy luận**.
 - **Live**: gộp chế độ xuất và ngôn ngữ, nút quét âm thanh thiết bị, tuỳ chỉnh độ dài đoạn và VAD thông minh.
 - **Lịch sử**: 2 cột, thanh công cụ Sao chép / Xuất (SRT, TXT).
 - **Tiến trình**: 6 chip lọc ngang + menu thao tác, bỏ modal trung.
 - **Tải video**: 1 cột, chip Chất lượng / Phụ đề / Nâng cao, menu chuột phải đầy đủ.
+- Sau vòng duyệt thẩm mỹ: bỏ nút **“Lưu”** thừa (bảng thuật ngữ và Cài đặt › Dịch đã **tự lưu**, có dòng *“Đã lưu”*), ô nhập trong Cài đặt nay đúng nền tối của giao diện, nhãn **“Đang dùng”** chỉ hiện khi mô hình đã tải (chọn mã chưa tải sẽ ghi rõ *“Đã chọn – cần tải”*), **cảnh báo** khi nền tăng tốc CUDA đang chạy khác với lựa chọn CPU của bạn.
+- Live / Tiến trình / Lịch sử gọn hơn; thẻ phụ đề trong Studio gọn và dễ đọc hơn.
 
-**5. Sửa lỗi**
+**6. Sửa lỗi**
 - **Lưu Cài đặt không còn xoá mất API key** (app luôn đọc lại config từ đĩa trước khi ghi; ô trống = giữ nguyên).
 - App **chỉ tắt đúng tiến trình do chính nó mở** (trước đó tắt theo tên ⇒ có thể giết nhầm app khác của bạn).
 - **Cắt video**: báo lỗi tiếng Việt rõ ràng khi đoạn cắt không hợp lệ (bắt đầu ≥ kết thúc).
 - **Gợi ý thuật ngữ không còn hỏng với model local**: model trả thuật ngữ dạng chuỗi *"gốc => dịch"* vẫn được hiểu, và 1 phần hỏng **không làm mất** phần còn lại.
 - **Phím tắt Live** (Ctrl+Shift+L) không còn bị "đơ".
+- **Lịch sử tiến trình không còn trùng mục**: 1 lượt chạy = 1 mục lịch sử (trước đó 1 lượt có thể tạo 4 mục trùng nhau).
 
 **Bằng chứng (đo thật trên máy này):**
 - Dịch 60 câu thật: **MiniMax M3.1 Flash 26,3 s** (chất lượng **4,72/5**) so với dịch local **24,6 s** (**4,27/5**).
 - Dịch theo ngữ cảnh **+ bảng thuật ngữ đã duyệt**: số câu dùng từ cổ *"ngươi"* giảm **11 → 0** trên 60 câu; điểm *"xưng hô nhất quán"* của giám khảo **2/5 → 3/5**.
 - Nhận giọng nói: **SenseVoice WER 7,18 %** (EN) · **CER 4,72 %** (ZH) · **RTF 0,065**; **Paraformer-zh CER 5,79 %** · **RTF 0,032**; Whisper turbo trên CPU **RTF 1,22** (EN) / **1,62** (ZH) — chậm hơn khoảng **20×**. Clip 2 phút: SenseVoice **8,7 s** vs Whisper **146 s**; video 26 phút: **~2 phút** vs **~42 phút**.
 - Lồng tiếng Việt (đo trên CPU): **VieNeu WER 0 %**, **ZeroTTS 0 %**; Kokoro ở câu có số **30 % → 10 %**.
+- Mẫu nghe thử: lần đầu **Kokoro 7,89 s → 76 ms**, **VieNeu 16,32 s → 81 ms** ở các lần nghe sau.
+- Phân vai theo giọng thật (bộ 8 câu, 4 nam + 4 nữ): **đúng người 88 % → 100 %**, **đúng giới tính 50 % → 100 %**.
+- Hạ tiếng nền thông minh (video thật 45 s): khe ngắn hơn 2 s giữa 2 câu **−14,0 dB**, đoạn không có lời thoại **0,0 dB** (giữ nguyên).
+- Kiểm tra giao diện vòng R2-8: **36/36** mục checklist, **19/19** chức năng, ô chọn giọng **9/9**.
 
-**Tinh chỉnh giao diện theo duyệt cuối:**
 
 ---
 ## v0.11.36 — 2026-10-24

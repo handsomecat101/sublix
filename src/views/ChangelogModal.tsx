@@ -49,7 +49,19 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "Pipeline A→Z dùng đúng engine bạn chọn (SenseVoice / Paraformer); engine chưa tải hoặc lỗi thì tự lùi về Whisper nên không hỏng cả lô.",
           "Lồng tiếng Việt: thêm VieNeu-TTS v3 Turbo, ZeroTTS, Google Chirp 3 HD và FPT.AI; chuẩn hóa cách đọc số / ngày / từ số / tiền / giờ cho mọi engine.",
           "Đo thật: SenseVoice WER 7,18 % (EN), CER 4,72 % (ZH), RTF 0,065 — nhanh hơn Whisper turbo trên CPU khoảng 20× (clip 2 phút: 8,7 s so với 146 s).",
-          "Preview và xuất video giờ dùng cùng một giọng (trước đó preview nghe 1 giọng, xuất ra giọng khác nên video không có tiếng Việt)."
+          "Preview và xuất video giờ dùng cùng một giọng (trước đó preview nghe 1 giọng, xuất ra giọng khác nên video không có tiếng Việt).",
+          "Ô chọn giọng mới: tìm không cần dấu (gõ adam ra Adam bựa), lọc Nam / Nữ, ★ yêu thích (lưu cho mọi dự án), nghe thử ngay trong danh sách, và thấy giọng nào vai khác đang dùng.",
+          "Mẫu nghe thử phát tức thì: lần đầu tạo mẫu, những lần sau phát ngay vì đã lưu sẵn.",
+          "Phân vai theo giọng thật: app đo cao độ giọng để nhận ra nam / nữ và gom câu cùng giọng vào đúng vai.",
+          "Hạ tiếng nền thông minh: nhạc nền nhỏ lại đúng lúc có lời thoại, nối liền các khoảng nghỉ ngắn, chuyển đoạn mượt; xem thử trong Studio và video xuất ra cho cùng một đường âm lượng; có 2 thanh trượt Mức hạ và Nối khoảng nghỉ."
+        ]
+      },
+      {
+        category: "Tải video",
+        icon: "\u{1F4E5}",
+        items: [
+          "Thư mục tải mặc định: Downloads\\Sublix Downloads (dễ tìm, không bị giấu trong thư mục ứng dụng); file đã tải trước đó vẫn nằm ở chỗ cũ.",
+          "Ảnh thu nhỏ + thời lượng hiện trên từng mục tải (trước đó chỉ là khung đen)."
         ]
       },
       {
@@ -69,7 +81,9 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "Cài đặt tách theo nhóm: Dịch / Lồng tiếng / Giao diện / Trạng thái hệ thống, kèm mục Mức độ suy luận.",
           "Live: gộp chế độ xuất và ngôn ngữ, quét âm thanh thiết bị, tuỳ chỉnh độ dài đoạn và VAD thông minh.",
           "Lịch sử: 2 cột, thanh công cụ Sao chép / Xuất (SRT, TXT). Tiến trình: 6 chip lọc ngang + menu thao tác, bỏ modal trung.",
-          "Tải video: 1 cột, chip Chất lượng / Phụ đề / Nâng cao, menu chuột phải đầy đủ."
+          "Tải video: 1 cột, chip Chất lượng / Phụ đề / Nâng cao, menu chuột phải đầy đủ.",
+          "Sau vòng duyệt thẩm mỹ: bỏ nút Lưu thừa (bảng thuật ngữ và Cài đặt › Dịch đã tự lưu, có dòng Đã lưu), ô nhập trong Cài đặt nay đúng nền tối của giao diện, nhãn Đang dùng chỉ hiện khi mô hình đã tải, và có cảnh báo khi nền tăng tốc CUDA đang chạy khác với lựa chọn CPU của bạn.",
+          "Live / Tiến trình / Lịch sử gọn hơn; thẻ phụ đề trong Studio gọn và dễ đọc hơn."
         ]
       },
       {
@@ -80,7 +94,8 @@ const CHANGELOG_DATA: VersionEntry[] = [
           "App chỉ tắt đúng tiến trình do chính nó mở (trước đó tắt theo tên nên có thể giết nhầm app khác của bạn).",
           "Cắt video: báo lỗi tiếng Việt rõ ràng khi đoạn cắt không hợp lệ (bắt đầu ≥ kết thúc).",
           "Gợi ý thuật ngữ không còn hỏng với model local: model trả thuật ngữ dạng chuỗi gốc => dịch vẫn được hiểu, 1 phần hỏng không làm mất phần còn lại.",
-          "Phím tắt Live (Ctrl+Shift+L) không còn bị đơ."
+          "Phím tắt Live (Ctrl+Shift+L) không còn bị đơ.",
+          "Lịch sử tiến trình không còn trùng mục: 1 lượt chạy = 1 mục lịch sử (trước đó 1 lượt có thể tạo 4 mục trùng nhau)."
         ]
       }
     ]
