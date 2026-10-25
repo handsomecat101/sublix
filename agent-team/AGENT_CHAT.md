@@ -1,5 +1,22 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 12:25 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-RELEASE-0.12.0` — nâng phiên bản 0.11.36 → **0.12.0** + changelog; **chưa commit**).
+- **Version:** `package.json` + `src-tauri/Cargo.toml` + `src-tauri/tauri.conf.json` (field version + **2 tiêu đề cửa sổ**) + `src-tauri/Cargo.lock` (dòng version gói `sublix`) → **6/6 nguồn = 0.12.0**.
+- **Changelog:** `CHANGELOG.md` thêm mục `## v0.12.0 — 2026-10-25` ở đầu, 5 nhóm (dịch hay & nhất quán hơn · nhận giọng nói EN/ZH + lồng tiếng Việt · Timeline · giao diện mới · sửa lỗi) + số đo thật; để trống dòng **Tinh chỉnh giao diện theo duyệt cuối** cho coordinator bổ sung sau khi duyệt UI. `src/views/ChangelogModal.tsx` thêm entry `v0.12.0` đúng cấu trúc `VersionEntry` (chuyển `isCurrent` của v0.11.36 sang false).
+- **Nội dung lấy từ** `git log 62e4da8..HEAD` + `docs/STT_MODELS_2026.md` + `docs/UI_REDESIGN_PLAN.md` §7 — viết cho người dùng đọc, không tên thợ/task.
+- **Verify:** `npm run verify:version` **PASS** (6/6 nguồn) · `npx tsc --noEmit` 0 lỗi · `npx vite build` exit 0 (built in 2.07s). KHÔNG `cargo build --release`.
+
+---
+
+### 2026-10-25 12:20 - Opus (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-DESIGN-VOICE-PICKER` — chỉ thiết kế, không sửa `src/**`, **chưa commit**).
+- **File:** `docs/ui-mockups/voice-picker.html` (8 ô: đóng · mở · hover/đang phát/đang tạo mẫu · tìm+lọc · rỗng · lật lên trên · Cài đặt inline · bảng phím) + `docs/ui-mockups/shots/voice-picker-all.png` + `docs/UI_REDESIGN_PLAN.md` **§4.10** (§4.8 đã là Cài đặt nên không dùng số đó).
+- **Chốt:** nhãn → tên + badge engine (`parseVoiceLabel`); ★ = config toàn cục `favorite_voices: string[]`; ▶ trong danh sách = mẫu (không đổi giọng, tạo khi bấm, tự phát khi xong); chip vai = giọng đang dùng ở vai khác; phím `↑↓ Enter Esc Ctrl+Space Ctrl+S Alt+1/2/3`.
+- **Code tiếp (mcode):** `src/components/ui/VoicePicker.tsx` + `voicePickerModel.ts` thuần có test; props ở §4.10; ảo hoá tự viết khi > 100 giọng. Backend cần thêm: cache mẫu giọng + key config `favorite_voices`.
+
+---
+
 ### 2026-10-25 11:45 - mcode #2 (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-FIX-BUG-H23` — `glossary_suggest` chịu được JSON "dạng cũ" từ LLM; **chưa commit**).
 - **Sửa:** module mới `src-tauri/src/translate/glossary_parse.rs` — `thuat_ngu`/`terms` nhận **object HOẶC chuỗi** (`→` `=>` `->` `=` `:`), `xung_ho`/`pronouns` nhận object hoặc chuỗi `"Kaldares: gọi là anh, tự xưng tôi"`; phần tử hỏng ⇒ **bỏ qua + `tracing::warn!`**; **một phần hỏng không làm hỏng phần khác**; chịu được code fence + chữ thừa; chỉ `Err` khi JSON hỏng hẳn hoặc không lấy được gì.
@@ -63,30 +80,6 @@
 - **API công khai giữ nguyên:** `glossary::suggestion_from_reference` re-export qua `pub use`; `Glossary::to_rules()`/`hard_block()` vẫn là method của `Glossary`; `contextual_run::build_reference`/`translate_script_contextual` giữ nguyên vị trí ⇒ `lib.rs` + `bench/mod.rs` **không phải sửa** (compile + test pass là bằng chứng).
 
 ---
----
----
----
-
-### 2026-10-25 07:20 - mcode #3 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-018-FIX` — sửa BUG-002/003/010 (tiến trình ma, kill theo tên, command sync chặn luồng chính); **không commit**).
-- **BUG-003 (kill theo tên):** bỏ hoàn toàn `taskkill /IM whisper-server.exe|llama-server.exe /F` — thay bằng module mới `src-tauri/src/proc_kill.rs`: chỉ kết thến **PID con mình vừa spawn** (giữ handle `Child`) hoặc PID **ta đã ghi nhò** trong file `.pid`, và **kiểm tra tên tiến trình** trước khi giết (PID có thể bệ hệ được cấp lại cho tiến trình khác) → không bao giờ giết app/instance khác.
-- **BUG-002 (tiến trình ma):** thêm `stop_server()` idempotent (và `try_lock` + **timeout 3 s**, log `tracing`) cho cá 2 server; `RunEvent::Exit` **và** `ExitRequested` đều gọi `whisper_server::stop_server()` + `translate::server::stop_server()` ngoài `downloader::shutdown_all_jobs()`.
-- **BUG-010 (command sync chặn luồng chính):** `transcribe_test` · `translate_test` · `test_audio` · `scan_audio_levels` → **`async` + `tauri::async_runtime::spawn_blocking`** cho phần nặng; **giữ nguyên tên lệnh, tham số và kiểu trả về** ⇒ frontend không phải sửa.
-- **Test:** `proc_kill.rs` 6 test cho hàm thuần `pick_kill_target` + file test mới `stt/whisper_server_tests.rs` (3) và `translate/server_tests.rs` (3) — gời chố hội quy: mã nguồn cần có `"/IM"` trong mã nguồn. `cargo test --lib` **218 pass / 0 fail**, `cargo clippy --lib` **không thêm cảnh báo mới** (4 cảnh báo trong file tôi sửa đều là cãnh cũ).
-- **Cớn lại:** đã xoá `taskkill /IM` khối toàn `src-tauri/src/`; server cũ vẫn sống cổa đểu để đổng PID nén — nến uyê hiệm.
-
----
----
----
----
-
-### 2026-10-25 07:20 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` + `@handoff` (`TSK-TIMELINE-REDO-RIPPLE` — Redo + Ripple delete + marker định dạng cũ; **chưa commit**).
-- **1) REDO:** module thuần `src/lib/timeline/history.ts` (past/future, giới hạn 20, push xoá future, undo/redo trả snapshot) áp cho **cả 3 lớp** (phụ đề / bản dịch / audio); phím **Ctrl+Shift+Z** và **Ctrl+Y**; nút **↷** cạnh ↶ trên MasterTopbar (disabled khi rỗng, tooltip phím tắt, chuột phải chọn lớp làm lại).
-- **2) RIPPLE DELETE:** module thuần `src/lib/timeline/ripple.ts` — xoá câu/khối đang chọn (kể cả multi-select Ctrl+click) và dồn câu phía sau sang trái đúng bằng khoảng bị xoá (câu chọn nhiều → tính theo **khoảng hợp nhất**, không chồng nhau/không liền); **tôn trọng khoá track** (track khoá → không dồn + toast). Phím **Shift+Delete** + mục **"Xoá và dồn khoảng trống"** trong menu chuột phải.
-- **3) MARKER ĐỊNH DẠNG CŨ:** `normalizeMarkers(raw)` trong `markers.ts` chịu được số giây thuần (`[12.5, 30]`), object thiếu `id`, thiếu `color`, `time` dạng chuỗi, key khác (`seconds`/`start`/`position`), bọc `{version, markers}`; dùng khi nạp project cache → **marker cũ không còn "mất tăm"**.
-- **Verify:** `node --test scripts/timeline-tests/` **107/107 PASS** (18 case mới) · `tsc` 0 lỗi · `npm run build` OK · GUI instance riêng (release build `npx tauri build --no-bundle` — **không** `cargo build --release`, CDP 9227, APPDATA riêng) **5/5 PASS**: marker cũ hiện đủ 3 vạch, nút ↷ disabled khi rỗng, Shift+Delete dồn câu sau 117,19px → 58,59px, Ctrl+Z rồi Ctrl+Shift+Z khôi phục đúng, menu chuột phải có mục ripple.
-- **⚠️ Lưu ý:** đường `undoStack` (general) giữ nguyên như cũ; redo lấy từ `future` của từng lớp. Instance verify đã tắt, app PO (1420) không bị đụng; chưa commit.
 ---
 ---
 ---

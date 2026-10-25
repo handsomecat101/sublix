@@ -23,10 +23,73 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.12.0",
+    date: "25/10/2026",
+    title: "Dịch hay & nhất quán hơn · Nhận giọng nói EN/ZH nhanh hơn nhiều lần · Giao diện Studio mới",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Dịch hay & nhất quán hơn",
+        icon: "\u{1F4DA}",
+        items: [
+          "Dịch theo ngữ cảnh (2 lượt): AI đọc hiểu toàn bộ lời thoại trước, rồi dịch từng đoạn kèm 5 câu trước, tên nhân vật và giới hạn độ dài theo thời lượng câu — bản dịch bám cốt truyện hơn.",
+          "Bảng thuật ngữ & xưng hô do bạn duyệt, lưu theo từng dự án: nút Thuật ngữ & xưng hô ở bước Dịch, nút Gợi ý từ kịch bản (AI chỉ gợi ý, bạn chọn ✓), có tùy chọn Khoá bảng.",
+          "Câu sai quy tắc được tô vàng kèm lý do; chuột phải chọn Dịch lại câu này.",
+          "Mức suy luận AI: 5 mức (Tự động / Thấp / Vừa / Cao / Tối đa) — mức cao dịch kỹ hơn nhưng chậm và tốn token hơn.",
+          "Chọn model dịch ngay trong Studio + ước tính thời gian từng bước trước khi chạy (app tự học tốc độ máy của bạn).",
+          "Thêm MiniMax M3.1 Flash: nhanh và rẻ hơn khoảng 2× so với MiniMax-M3; sửa lỗi lô 15 câu bị quá thời gian chờ (trước đó rơi vào dịch từng câu, nghe như Google Translate).",
+          "Đo thật 60 câu: bảng thuật ngữ đã duyệt làm số câu dùng từ cổ ngươi giảm 11 → 0, điểm xưng hô nhất quán của giám khảo 2/5 → 3/5."
+        ]
+      },
+      {
+        category: "Nhận giọng nói EN/ZH & lồng tiếng Việt",
+        icon: "\u{1F3A4}",
+        items: [
+          "Cài đặt › Nhận giọng nói: danh sách engine + tải model ngay trong app (có %, MB, MB/s, ETA); chọn engine ở Studio, có gợi ý theo ngôn ngữ nguồn.",
+          "Pipeline A→Z dùng đúng engine bạn chọn (SenseVoice / Paraformer); engine chưa tải hoặc lỗi thì tự lùi về Whisper nên không hỏng cả lô.",
+          "Lồng tiếng Việt: thêm VieNeu-TTS v3 Turbo, ZeroTTS, Google Chirp 3 HD và FPT.AI; chuẩn hóa cách đọc số / ngày / từ số / tiền / giờ cho mọi engine.",
+          "Đo thật: SenseVoice WER 7,18 % (EN), CER 4,72 % (ZH), RTF 0,065 — nhanh hơn Whisper turbo trên CPU khoảng 20× (clip 2 phút: 8,7 s so với 146 s).",
+          "Preview và xuất video giờ dùng cùng một giọng (trước đó preview nghe 1 giọng, xuất ra giọng khác nên video không có tiếng Việt)."
+        ]
+      },
+      {
+        category: "Timeline",
+        icon: "\u{23ED}",
+        items: [
+          "Redo (Ctrl+Shift+Z / Ctrl+Y) cho phụ đề, bản dịch và âm thanh; nhớ 20 bước.",
+          "Ripple delete (Shift+Delete): xoá câu đang chọn và dồn các câu phía sau theo khoảng hợp nhất, vẫn đúng trong khóa track."
+        ]
+      },
+      {
+        category: "Giao diện mới",
+        icon: "\u{1F3A8}",
+        items: [
+          "Studio: 1 thanh trên cùng dùng chung + panel trái 5 bước (mở 1 mục tại một thời, nút Chạy N bước đã bật, chuột phải vào vai để gộp / tách / xoá vai).",
+          "Danh sách engine và giọng lấy thẳng từ backend nên không bao giờ lệch với Cài đặt.",
+          "Cài đặt tách theo nhóm: Dịch / Lồng tiếng / Giao diện / Trạng thái hệ thống, kèm mục Mức độ suy luận.",
+          "Live: gộp chế độ xuất và ngôn ngữ, quét âm thanh thiết bị, tuỳ chỉnh độ dài đoạn và VAD thông minh.",
+          "Lịch sử: 2 cột, thanh công cụ Sao chép / Xuất (SRT, TXT). Tiến trình: 6 chip lọc ngang + menu thao tác, bỏ modal trung.",
+          "Tải video: 1 cột, chip Chất lượng / Phụ đề / Nâng cao, menu chuột phải đầy đủ."
+        ]
+      },
+      {
+        category: "Sửa lỗi",
+        icon: "\u{1F41B}",
+        items: [
+          "Lưu Cài đặt không còn xoá mất API key (app luôn đọc lại config từ đĩa trước khi ghi; ô trống = giữ nguyên).",
+          "App chỉ tắt đúng tiến trình do chính nó mở (trước đó tắt theo tên nên có thể giết nhầm app khác của bạn).",
+          "Cắt video: báo lỗi tiếng Việt rõ ràng khi đoạn cắt không hợp lệ (bắt đầu ≥ kết thúc).",
+          "Gợi ý thuật ngữ không còn hỏng với model local: model trả thuật ngữ dạng chuỗi gốc => dịch vẫn được hiểu, 1 phần hỏng không làm mất phần còn lại.",
+          "Phím tắt Live (Ctrl+Shift+L) không còn bị đơ."
+        ]
+      }
+    ]
+  },
+  {
     version: "v0.11.36",
     date: "24/10/2026",
     title: "Thêm cấu hình phần cứng cho GPU tích hợp AMD (Radeon / Ryzen AI)",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Preset mới — GPU tích hợp AMD",

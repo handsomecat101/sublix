@@ -1,3 +1,50 @@
+## v0.12.0 — 2026-10-25
+### Dịch hay & nhất quán hơn · Nhận giọng nói EN/ZH nhanh hơn nhiều lần · Giao diện Studio mới
+
+**Bối cảnh:** bản này gom những thay đổi lớn của vòng lập trình 24–25/10: **dịch theo ngữ cảnh** + **bảng thuật ngữ & xưng hô do bạn duyệt**, **engine nhận giọng nói EN/ZH** tải được ngay trong app, và giao diện **Studio / Cài đặt / Live / Lịch sử / Tiến trình** được thiết kế lại.
+
+**1. Dịch hay & nhất quán hơn**
+- **Dịch theo ngữ cảnh** (2 lượt): AI đọc hiểu **toàn bộ lời thoại** trước (tóm tắt, nhân vật, cách xưng hô, thuật ngữ), rồi dịch từng đoạn kèm **5 câu trước**, tên nhân vật trên từng dòng và **giới hạn độ dài theo thời lượng câu** ⇒ bản dịch bám cốt truyện, ít bị cảm giác "dịch máy".
+- **Bảng thuật ngữ & xưng hô do bạn duyệt**, lưu **theo từng dự án**: nút *Thuật ngữ & xưng hô* ở bước **Dịch**; nút *⚡ Gợi ý từ kịch bản* (AI **chỉ gợi ý, không tự ghi** — bạn bấm ✓ để nhận); bật *Khoá bảng* để AI không tự ý đổi cách xưng hô.
+- Câu dịch sai quy tắc được **tô vàng** kèm lý do cụ thể; chuột phải chọn **"🔁 Dịch lại câu này"**.
+- **Mức suy luận** của AI: 5 mức (Tự động / Thấp / Vừa / Cao / Tối đa) — mức cao dịch kỹ hơn nhưng chậm và tốn token hơn; chỉ hiện với provider cloud hỗ trợ.
+- **Chọn model dịch ngay trong Studio** + **ước tính thời gian** từng bước trước khi chạy (app tự học tốc độ máy của bạn).
+- Thêm **MiniMax M3.1 Flash**: nhanh và rẻ hơn khoảng **2×** so với MiniMax-M3; sửa lỗi lô 15 câu bị quá thời gian chờ (trước đó rơi vào dịch từng câu ⇒ mất ngữ cảnh, nghe như Google Translate).
+- Dịch theo ngữ cảnh **bật sẵn với provider cloud** (OpenRouter / DeepSeek), **tắt với model local nhỏ** — đo thật cho thấy model 3B làm chất lượng tệ hơn.
+
+**2. Nhận giọng nói EN/ZH & lồng tiếng Việt**
+- **Cài đặt › Nhận giọng nói**: danh sách engine + **tải model ngay trong app** (có % , MB, tốc độ MB/s, ETA). Chọn engine ở **Studio**, có gợi ý theo ngôn ngữ nguồn.
+- Pipeline A→Z dùng **đúng engine bạn chọn** (SenseVoice / Paraformer); nếu engine chưa tải hoặc lỗi thì **tự lùi về Whisper** ⇒ không làm hỏng cả lô.
+- **Lồng tiếng Việt**: thêm **VieNeu-TTS v3 Turbo**, **ZeroTTS**, **Google Chirp 3 HD** và **FPT.AI**; chuẩn hóa cách đọc số / ngày / từ số / tiền / giờ cho mọi engine. Preview và xuất video giờ dùng **cùng một giọng** (trước đó preview nghe 1 giọng, xuất ra giọng khác ⇒ video không có tiếng Việt).
+
+**3. Timeline**
+- **Redo** (Ctrl+Shift+Z / Ctrl+Y) cho phụ đề, bản dịch và âm thanh; nhớ **20 bước**.
+- **Ripple delete** (Shift+Delete): xoá câu đang chọn và **dồn các câu phía sau** theo khoảng hợp nhất (vẫn nằm đúng trong khóa track).
+
+**4. Giao diện mới**
+- **Studio**: 1 thanh trên cùng dùng chung + **panel trái 5 bước** (mở 1 mục tại một thời, nút *Chạy N bước đã bật*, chuột phải vào vai để gộp / tách / xoá vai); danh sách engine và giọng lấy thẳng từ backend nên không bao giờ lệch với Cài đặt.
+- **Cài đặt**: tách theo nhóm (Dịch / Lồng tiếng / Giao diện / Trạng thái hệ thống) + mục **Mức độ suy luận**.
+- **Live**: gộp chế độ xuất và ngôn ngữ, nút quét âm thanh thiết bị, tuỳ chỉnh độ dài đoạn và VAD thông minh.
+- **Lịch sử**: 2 cột, thanh công cụ Sao chép / Xuất (SRT, TXT).
+- **Tiến trình**: 6 chip lọc ngang + menu thao tác, bỏ modal trung.
+- **Tải video**: 1 cột, chip Chất lượng / Phụ đề / Nâng cao, menu chuột phải đầy đủ.
+
+**5. Sửa lỗi**
+- **Lưu Cài đặt không còn xoá mất API key** (app luôn đọc lại config từ đĩa trước khi ghi; ô trống = giữ nguyên).
+- App **chỉ tắt đúng tiến trình do chính nó mở** (trước đó tắt theo tên ⇒ có thể giết nhầm app khác của bạn).
+- **Cắt video**: báo lỗi tiếng Việt rõ ràng khi đoạn cắt không hợp lệ (bắt đầu ≥ kết thúc).
+- **Gợi ý thuật ngữ không còn hỏng với model local**: model trả thuật ngữ dạng chuỗi *"gốc => dịch"* vẫn được hiểu, và 1 phần hỏng **không làm mất** phần còn lại.
+- **Phím tắt Live** (Ctrl+Shift+L) không còn bị "đơ".
+
+**Bằng chứng (đo thật trên máy này):**
+- Dịch 60 câu thật: **MiniMax M3.1 Flash 26,3 s** (chất lượng **4,72/5**) so với dịch local **24,6 s** (**4,27/5**).
+- Dịch theo ngữ cảnh **+ bảng thuật ngữ đã duyệt**: số câu dùng từ cổ *"ngươi"* giảm **11 → 0** trên 60 câu; điểm *"xưng hô nhất quán"* của giám khảo **2/5 → 3/5**.
+- Nhận giọng nói: **SenseVoice WER 7,18 %** (EN) · **CER 4,72 %** (ZH) · **RTF 0,065**; **Paraformer-zh CER 5,79 %** · **RTF 0,032**; Whisper turbo trên CPU **RTF 1,22** (EN) / **1,62** (ZH) — chậm hơn khoảng **20×**. Clip 2 phút: SenseVoice **8,7 s** vs Whisper **146 s**; video 26 phút: **~2 phút** vs **~42 phút**.
+- Lồng tiếng Việt (đo trên CPU): **VieNeu WER 0 %**, **ZeroTTS 0 %**; Kokoro ở câu có số **30 % → 10 %**.
+
+**Tinh chỉnh giao diện theo duyệt cuối:**
+
+---
 ## v0.11.36 — 2026-10-24
 ### Thêm cấu hình phần cứng cho GPU tích hợp AMD (Radeon / Ryzen AI)
 
