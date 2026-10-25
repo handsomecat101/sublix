@@ -1355,9 +1355,24 @@ textarea.downloader-url-input[rows="1"] {
   background: #000;
   display: grid;
   place-items: center;
+  position: relative;
 }
 .dl-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dl-th-ph { font-size: 22px; opacity: 0.8; }
+/* Badge thời lượng góc phải-dưới ảnh thu nhỏ (UI_R2-8 mục 22). */
+.dl-th-dur {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  pointer-events: none;
+}
 
 .dl-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .dl-title {

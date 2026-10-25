@@ -54,6 +54,8 @@ interface DownloadItem {
   url: string;
   title: string;
   thumbnail?: string | null;
+  /** Thời lượng (giây) — từ metadata yt-dlp; dùng cho badge trên ảnh thu nhỏ (UI_R2-8 mục 22). */
+  duration?: number | null;
   platform: string;
   format: string;
   browserCookies?: string | null;
@@ -295,6 +297,13 @@ export default function DownloaderView({
   const [inspecting, setInspecting] = useState<boolean>(false);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [inspectError, setInspectError] = useState<string | null>(null);
+  /**
+   * Metadata yt-dlp đã biết theo URL (ảnh thu nhỏ + thời lượng).
+   *
+   * UI_R2-8 mục 22: mục trong hàng đợi cần ảnh thu nhỏ + badge thời lượng; metadata
+   * chỉ có sau khi probe URL ⇒ cache lại để dùng khi xếp hàng.
+   */
+  const [metaByUrl, setMetaByUrl] = useState<Record<string, { thumbnail?: string | null; duration?: number | null }>>({});
   // R3-04 (1): React state to track broken thumbnail without direct DOM manipulation
   const [thumbFailed, setThumbFailed] = useState<boolean>(false);
 
@@ -367,6 +376,46 @@ export default function DownloaderView({
     } catch (e) {
       console.warn("Failed to save downloads history:", e);
     }
+  }, [items]);
+
+  // UI_R2-8 mục 22: lấp ảnh thu nhỏ + thời lượng từ metadata yt-dlp cho mục xếp hàng
+  // (mục batch/playlist không có metadata sẵn → probe nền, giới hạn 12 mục/lần).
+  const hydratingRef = useRef(false);
+  // Mỗi mục chỉ probe 1 lần: `items` đổi liên tục theo tiến độ tải ⇒ không có tập này
+  // thì mục probe lỗi / không có ảnh sẽ bị gọi yt-dlp lặp lại mãi.
+  const hydrateTriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (hydratingRef.current) return;
+    const missing = items.filter(
+      (i) =>
+        !i.thumbnail &&
+        !hydrateTriedRef.current.has(i.id) &&
+        (i.status === "queued" || i.status === "downloading"),
+    );
+    if (missing.length === 0) return;
+    hydratingRef.current = true;
+    void (async () => {
+      for (const it of missing.slice(0, 12)) {
+        hydrateTriedRef.current.add(it.id);
+        try {
+          const info = await sublix.downloaderGetInfo(it.url);
+          setItems((prev) =>
+            prev.map((x) =>
+              x.id === it.id
+                ? {
+                    ...x,
+                    thumbnail: x.thumbnail ?? info.thumbnail ?? null,
+                    duration: x.duration ?? info.duration ?? null,
+                  }
+                : x,
+            ),
+          );
+        } catch {
+          // URL hỏng / mạng lỗi → giữ nguyên khung đen, không báo lỗi cho người dùng.
+        }
+      }
+      hydratingRef.current = false;
+    })();
   }, [items]);
 
   // R2-09.7 & R3-04 (2): when an item becomes completed with a file path, probe disk.
@@ -649,6 +698,9 @@ export default function DownloaderView({
         id: `dl_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
         url: entry.url,
         title,
+        // Ảnh thu nhỏ + thời lượng từ metadata yt-dlp khi đã biết (UI_R2-8 mục 22).
+        thumbnail: metaByUrl[entry.url]?.thumbnail ?? null,
+        duration: entry.duration ?? metaByUrl[entry.url]?.duration ?? null,
         platform: detectPlatform(entry.url),
         format,
         browserCookies: browserCookie !== "none" ? browserCookie : null,
@@ -706,6 +758,10 @@ export default function DownloaderView({
     try {
       const info = await sublix.downloaderGetInfo(targetUrl);
       setVideoInfo(info);
+      setMetaByUrl((prev) => ({
+        ...prev,
+        [targetUrl]: { thumbnail: info.thumbnail ?? null, duration: info.duration ?? null },
+      }));
       setThumbFailed(false);
     } catch (e: any) {
       setInspectError(formatError(e, "Không thể lấy thông tin video"));
@@ -811,6 +867,7 @@ export default function DownloaderView({
         url: targetUrl,
         title,
         thumbnail: videoInfo?.thumbnail,
+        duration: videoInfo?.duration ?? null,
         platform: currentPlatform,
         format,
         browserCookies: browserCookie !== "none" ? browserCookie : null,
@@ -1594,6 +1651,9 @@ export default function DownloaderView({
                     ) : (
                       <span className="dl-th-ph">{meta.icon}</span>
                     )}
+                    {item.duration ? (
+                      <span className="dl-th-dur">{formatDuration(item.duration)}</span>
+                    ) : null}
                   </div>
 
                   <div className="dl-main">

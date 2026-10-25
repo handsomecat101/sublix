@@ -20,6 +20,7 @@ import {
   IconMic,
   IconPlay,
   IconRotateCw,
+  IconSearch,
   IconSettings,
   IconStop,
   IconTrash,
@@ -36,6 +37,7 @@ import {
   clampChunkSeconds,
   deviceLabel,
   deviceOptionValue,
+  langLabel,
   liveHint,
   liveStatusLabel,
   parseDeviceIndex,
@@ -242,7 +244,7 @@ function LiveViewInner({
           <ShellCard icon={<IconSettings size={14} />} title="Ngôn ngữ & Phụ đề">
             <div className="lv-field">
               <label className="lv-label" htmlFor="lv-source-lang">
-                Ngôn ngữ gốc (Source)
+                Ngôn ngữ gốc
               </label>
               <select
                 id="lv-source-lang"
@@ -252,7 +254,7 @@ function LiveViewInner({
               >
                 {SOURCE_LANGS.map((lang) => (
                   <option key={lang.code} value={lang.code}>
-                    {lang.flag} {lang.label}
+                    {lang.label}
                   </option>
                 ))}
               </select>
@@ -277,7 +279,7 @@ function LiveViewInner({
               <span className="lv-hint">
                 {outputMode === "original"
                   ? "Chỉ gõ chữ gốc — không gọi AI dịch."
-                  : `Dịch sang ${targetLang} theo thời gian thực.`}
+                  : `Dịch sang ${langLabel(targetLang)} theo thời gian thực.`}
               </span>
             </div>
           </ShellCard>
@@ -313,13 +315,14 @@ function LiveViewInner({
               </select>
               <button
                 type="button"
-                className="lv-icon-btn"
+                className="lv-btn lv-btn-tiny"
                 onClick={handleScan}
                 disabled={scanning || isLive}
                 title="Quét âm thanh — tìm thiết bị đang phát tiếng"
                 aria-label="Quét âm thanh"
               >
-                <IconRotateCw size={12} />
+                <IconSearch size={11} />
+                {scanning ? "Đang quét…" : "Quét"}
               </button>
             </div>
 
@@ -382,7 +385,7 @@ function LiveViewInner({
 
           <ShellCard
             icon={<IconSettings size={14} />}
-            title="⚙ Nâng cao"
+            title="Nâng cao"
             actions={
               <button
                 type="button"
@@ -475,49 +478,53 @@ function LiveViewInner({
         </div>
       }
       right={
-        <ShellCard
-          icon={<IconClock size={14} />}
-          title={`Luồng thoại (${recentSubs.length})`}
-          actions={
-            recentSubs.length > 0 ? (
-              <button
-                type="button"
-                className="lv-icon-btn"
-                onClick={handleClearSubs}
-                title="Xoá danh sách tạm"
-                aria-label="Xoá danh sách tạm"
-              >
-                <IconTrash size={12} />
-              </button>
-            ) : undefined
-          }
-        >
-          {recentSubs.length > 0 ? (
-            <div className="lv-stream">
-              {recentSubs.map((sub) => (
-                <div key={sub.id} className="lv-stream-item">
-                  <div className="lv-stream-text">{sub.text}</div>
-                  {sub.original && sub.original !== sub.text ? (
-                    <div className="lv-stream-orig">{sub.original}</div>
-                  ) : null}
-                  <div className="lv-stream-meta">
-                    <span>#{sub.id}</span>
-                    {sub.stt_duration !== undefined ? (
-                      <span>STT: {(sub.stt_duration * 1000).toFixed(0)}ms</span>
+        // UI_R2-8 mục 23: thẻ "Luồng thoại" cao bằng cột giữa (trước đây là thẻ ngắn
+        // 140px lơ lửng, lệch đáy) + trạng thái rỗng căn giữa dọc.
+        <div className="lv-stream-card">
+          <ShellCard
+            icon={<IconClock size={14} />}
+            title={`Luồng thoại (${recentSubs.length})`}
+            actions={
+              recentSubs.length > 0 ? (
+                <button
+                  type="button"
+                  className="lv-icon-btn"
+                  onClick={handleClearSubs}
+                  title="Xoá danh sách tạm"
+                  aria-label="Xoá danh sách tạm"
+                >
+                  <IconTrash size={12} />
+                </button>
+              ) : undefined
+            }
+          >
+            {recentSubs.length > 0 ? (
+              <div className="lv-stream">
+                {recentSubs.map((sub) => (
+                  <div key={sub.id} className="lv-stream-item">
+                    <div className="lv-stream-text">{sub.text}</div>
+                    {sub.original && sub.original !== sub.text ? (
+                      <div className="lv-stream-orig">{sub.original}</div>
                     ) : null}
-                    {sub.translate_duration !== undefined && sub.translate_duration > 0 ? (
-                      <span>LLM: {(sub.translate_duration * 1000).toFixed(0)}ms</span>
-                    ) : null}
+                    <div className="lv-stream-meta">
+                      <span>#{sub.id}</span>
+                      {sub.stt_duration !== undefined ? (
+                        <span>STT: {(sub.stt_duration * 1000).toFixed(0)}ms</span>
+                      ) : null}
+                      {sub.translate_duration !== undefined && sub.translate_duration > 0 ? (
+                        <span>LLM: {(sub.translate_duration * 1000).toFixed(0)}ms</span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="lv-empty">
-              Chưa có lời thoại nào. Bấm <strong>Bắt đầu Live</strong> để bắt đầu ghi nhận.
-            </div>
-          )}
-        </ShellCard>
+                ))}
+              </div>
+            ) : (
+              <div className="lv-empty">
+                Chưa có lời thoại nào. Bấm <strong>Bắt đầu Live</strong> để bắt đầu ghi nhận.
+              </div>
+            )}
+          </ShellCard>
+        </div>
       }
     />
   );

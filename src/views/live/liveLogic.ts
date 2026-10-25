@@ -15,32 +15,34 @@ export type LiveOutputMode = "original" | "translated";
 export interface TargetLang {
   code: string;
   label: string;
-  flag: string;
 }
 
 /** Ngôn ngữ gốc (ngôn ngữ đang nói). */
 export interface SourceLang {
   code: string;
   label: string;
-  flag: string;
 }
 
-/** Danh sách ngôn ngữ đích (thứ tự = thứ tự hiển thị trong select gộp). */
+/**
+ * Danh sách ngôn ngữ đích (thứ tự = thứ tự hiển thị trong select gộp).
+ *
+ * KHÔNG kèm cờ emoji: Windows không vẽ flag ⇒ hiện "JP Japanese" (UI_R2-8 mục 14).
+ */
 export const TARGET_LANGS: readonly TargetLang[] = [
-  { code: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
-  { code: "en", label: "English", flag: "🇺🇸" },
-  { code: "ja", label: "Japanese", flag: "🇯🇵" },
-  { code: "zh", label: "Chinese", flag: "🇨🇳" },
-  { code: "ko", label: "Korean", flag: "🇰🇷" },
+  { code: "vi", label: "Tiếng Việt" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "Japanese" },
+  { code: "zh", label: "Chinese" },
+  { code: "ko", label: "Korean" },
 ];
 
 /** Danh sách ngôn ngữ gốc (giữ nguyên thứ tự & nhãn của bản cũ). */
 export const SOURCE_LANGS: readonly SourceLang[] = [
-  { code: "ja", label: "Japanese (Phim / Anime Nhật)", flag: "🇯🇵" },
-  { code: "en", label: "English (YouTube / Meeting)", flag: "🇺🇸" },
-  { code: "zh", label: "Chinese (Phim / Video Trung)", flag: "🇨🇳" },
-  { code: "ko", label: "Korean (Phim / Video Hàn)", flag: "🇰🇷" },
-  { code: "auto", label: "Auto-detect (Tự động)", flag: "🌐" },
+  { code: "ja", label: "Japanese (Phim / Anime Nhật)" },
+  { code: "en", label: "English (YouTube / Meeting)" },
+  { code: "zh", label: "Chinese (Phim / Video Trung)" },
+  { code: "ko", label: "Korean (Phim / Video Hàn)" },
+  { code: "auto", label: "Auto-detect (Tự động)" },
 ];
 
 /** Ngôn ngữ đích mặc định. */
@@ -82,7 +84,8 @@ export function buildDisplayOptions(targetLang: string): DisplayOption[] {
   for (const t of TARGET_LANGS) {
     options.push({
       value: `${TRANSLATED_PREFIX}${t.code}`,
-      label: `Dịch sang ${t.flag} ${t.label}`,
+      // Không dùng cờ emoji: Windows không vẽ flag ⇒ hiện "JP Japanese" (UI_R2-8 mục 14).
+      label: `Dịch sang ${t.label}`,
       mode: "translated",
       lang: t.code,
     });
@@ -90,12 +93,24 @@ export function buildDisplayOptions(targetLang: string): DisplayOption[] {
   if (targetLang && !TARGET_LANGS.some((t) => t.code === targetLang)) {
     options.push({
       value: `${TRANSLATED_PREFIX}${targetLang}`,
-      label: `Dịch sang ${targetLang}`,
+      label: `Dịch sang ${langLabel(targetLang)}`,
       mode: "translated",
       lang: targetLang,
     });
   }
   return options;
+}
+
+/**
+ * Tên ngôn ngữ hiển thị (theo danh sách biết) — dùng cho hint "Dịch sang …".
+ *
+ * Có mã không nằm trong danh sách thì trả về chính mã (vd "vi" → "Tiếng Việt").
+ */
+export function langLabel(code: string): string {
+  const key = (code ?? "").trim();
+  const hit =
+    TARGET_LANGS.find((t) => t.code === key) ?? SOURCE_LANGS.find((s) => s.code === key);
+  return hit?.label ?? key;
 }
 
 /** Trạng thái (chế độ xuất + ngôn ngữ đích) → giá trị của select gộp. */
@@ -164,7 +179,7 @@ export function liveStatusLabel(isLive: boolean): string {
 export function liveHint(isLive: boolean): string {
   return isLive
     ? "Sublix đang lắng nghe qua WASAPI Loopback, cắt câu thông minh bằng Smart VAD, nhận dạng và bắn phụ đề trực tiếp lên màn hình."
-    : "Mở YouTube, phim, podcast hoặc game. Bấm 'Bắt Đầu Live' để phụ đề nổi tự động dịch theo thời gian thực.";
+    : "Mở YouTube, phim, podcast hoặc game. Bấm 'Bắt đầu Live' để phụ đề nổi tự động dịch theo thời gian thực.";
 }
 
 /** Phần trăm đỉnh âm thanh (0–100). */

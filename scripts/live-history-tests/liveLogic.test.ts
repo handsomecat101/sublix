@@ -15,6 +15,7 @@ import {
   deviceLabel,
   deviceOptionValue,
   fromDisplayValue,
+  langLabel,
   liveHint,
   liveStatusLabel,
   parseDeviceIndex,
@@ -91,6 +92,26 @@ test("buildDisplayOptions: không nhân bản lựa chọn khi ngôn ngữ đã 
   assert.equal(options.filter((o) => o.value === "translated:vi").length, 1);
 });
 
+test("buildDisplayOptions: nhãn KHÔNG còn cờ emoji (Windows không vẽ flag)", () => {
+  const options = buildDisplayOptions("vi");
+  for (const o of options) {
+    assert.ok(
+      !/\p{Regional_Indicator}/u.test(o.label),
+      `còn cờ emoji trong nhãn: ${o.label}`,
+    );
+  }
+  assert.equal(
+    options.find((o) => o.value === "translated:vi")?.label,
+    "Dịch sang Tiếng Việt",
+  );
+});
+
+test("langLabel: trả tên ngôn ngữ khi biết, không biết thì trả mã", () => {
+  assert.equal(langLabel("vi"), "Tiếng Việt");
+  assert.equal(langLabel("ja"), "Japanese");
+  assert.equal(langLabel("de"), "de");
+});
+
 /* ------------------------------------------------------------------ */
 /* Thiết bị âm thanh                                                    */
 /* ------------------------------------------------------------------ */
@@ -155,6 +176,6 @@ test("peakPercent: kẹp 0–100", () => {
 test("liveStatusLabel / liveHint đổi theo trạng thái Live", () => {
   assert.ok(liveStatusLabel(false).includes("SẴN SÀNG"));
   assert.ok(liveStatusLabel(true).includes("LIVE STREAM"));
-  assert.ok(liveHint(false).includes("Bắt Đầu Live"));
+  assert.ok(liveHint(false).includes("Bắt đầu Live"));
   assert.ok(liveHint(true).includes("Smart VAD"));
 });

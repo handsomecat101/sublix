@@ -35,8 +35,18 @@ export interface GlossaryEditorProps {
   onChange?: (next: Glossary) => void;
   /** Gọi khi bấm "Gợi ý từ kịch bản" — trả về gợi ý (hoặc null). */
   onSuggest?: () => Promise<GlossarySuggestion | null> | GlossarySuggestion | null;
-  /** Gọi khi bấm "Lưu". */
+  /** Gọi khi bấm "Lưu" (chỉ hiện nút này khi `autoSave = false`). */
   onSave?: (next: Glossary) => void | Promise<void>;
+  /**
+   * Tự động lưu (Studio drawer) — **mặc định `true`**.
+   *
+   * Khi `true`: KHÔNG hiện nút "Lưu" (tránh mâu thuẫn với dòng chân
+   * "Tự động lưu khi thay đổi"); thay bằng trạng thái nhỏ cạnh tiêu đề.
+   * Khi `false` (Cài đặt): hiện nút "Lưu" để người dùng bấm tường minh.
+   */
+  autoSave?: boolean;
+  /** Trạng thái lưu để hiện cạnh tiêu đề: "Đang lưu…" / "✓ Đã lưu". */
+  saveState?: "idle" | "saving" | "saved";
   /** Đang chạy gợi ý (parent truyền vào để hiện tiến trình). */
   suggesting?: boolean;
   /** Không cho sửa. */
@@ -59,6 +69,8 @@ function GlossaryEditorInner({
   onChange,
   onSuggest,
   onSave,
+  autoSave = true,
+  saveState = "idle",
   suggesting = false,
   readOnly = false,
   className,
@@ -67,6 +79,14 @@ function GlossaryEditorInner({
   const [busy, setBusy] = useState(false);
   const [suggestion, setSuggestion] = useState<GlossarySuggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Vừa tự động lưu xong (autoSave) — hiện "✓ Đã lưu" rồi tắt. */
+  const [savedTick, setSavedTick] = useState(false);
+
+  useEffect(() => {
+    if (!autoSave || !savedTick) return undefined;
+    const timer = window.setTimeout(() => setSavedTick(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [autoSave, savedTick]);
 
   const glossary: Glossary = value ?? emptyGlossary();
   const stats = glossaryStats(glossary);
@@ -81,8 +101,10 @@ function GlossaryEditorInner({
       // Gửi nguyên bảng khi đang sửa: chuẩn hoá ở đây sẽ xoá dòng vừa thêm (còn trống)
       // hoặc dòng đang gõ dở trùng nguồn. Bỏ dòng trống/trùng làm lúc GHI (cha + backend).
       onChange?.(next);
+      // Tự động lưu (autoSave) → báo "✓ Đã lưu" ngay cạnh tiêu đề.
+      if (autoSave) setSavedTick(true);
     },
-    [onChange],
+    [onChange, autoSave],
   );
 
   const handleSuggest = useCallback(async () => {
@@ -124,7 +146,14 @@ function GlossaryEditorInner({
     <div className={`glossary-editor ${className ?? ""}`.trim()}>
       <div className="glossary-editor__head">
         <div>
-          <h3 className="glossary-editor__title">Bảng thuật ngữ & xưng hô</h3>
+          <h3 className="glossary-editor__title">
+            Bảng thuật ngữ & xưng hô
+            {saveState === "saving" ? (
+              <span className="glossary-editor__save-state">Đang lưu…</span>
+            ) : saveState === "saved" || savedTick ? (
+              <span className="glossary-editor__save-state is-ok">✓ Đã lưu</span>
+            ) : null}
+          </h3>
           <p className="glossary-editor__sub">
             {scopeLabel(glossary)} · {stats.termCount} thuật ngữ · {stats.pronounCount} quy tắc xưng hô
             {stats.noteCount > 0 ? ` · ${stats.noteCount} ghi chú` : ""}
@@ -148,14 +177,16 @@ function GlossaryEditorInner({
           >
             {glossary.locked ? "🔒 Đã khoá" : "🔓 Khoá bảng"}
           </button>
-          <button
-            type="button"
-            className="glossary-btn glossary-btn--primary"
-            disabled={readOnly || !onSave}
-            onClick={() => onSave?.(glossary)}
-          >
-            💾 Lưu
-          </button>
+          {!autoSave ? (
+            <button
+              type="button"
+              className="glossary-btn glossary-btn--primary"
+              disabled={readOnly || !onSave}
+              onClick={() => onSave?.(glossary)}
+            >
+              💾 Lưu
+            </button>
+          ) : null}
         </div>
       </div>
 
