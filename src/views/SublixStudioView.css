@@ -839,6 +839,22 @@
   font-size: 11.5px;
 }
 
+/* [UI_R2-8_REVIEW mục 9] Hàng thống kê cạnh tiêu đề "Phụ đề". */
+.studio-segments-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  margin-right: 10px;
+  font-size: 11px;
+  color: var(--t3);
+  white-space: nowrap;
+}
+.studio-segments-stat b {
+  color: var(--t1);
+  font-weight: 700;
+}
+
 .studio-segments-filter-chips {
   display: flex;
   align-items: center;
@@ -881,15 +897,50 @@
 }
 
 .studio-segment-card {
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-radius: 6px;
   background: var(--bg-card);
   border: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+/* [UI_R2-8_REVIEW mục 8] Thẻ câu gọn (~70 px): nút ±0.1s / chọn vai / Nghe câu /
+   ✂ / 🗑 chỉ hiện ở thẻ ĐANG CHỌN hoặc đang hover ⇒ màn 1080 thấy ≥ 7 câu.
+   Selector có `.studio-segment-card` để thắng `.studio-segment-bottom-row`
+   (cùng độ ưu tiên nhưng định nghĩa sau trong file). */
+.studio-segment-card .studio-segment-tools {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+.studio-segment-card:hover .studio-segment-tools,
+.studio-segment-card.active .studio-segment-tools {
+  display: flex;
+}
+
+.studio-segment-speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--t2);
+}
+.studio-segment-speaker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.studio-segment-speaker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 96px;
 }
 
 .studio-segment-card:hover {
@@ -924,15 +975,25 @@
 
 .studio-segment-text-original {
   font-size: 11px;
-  color: var(--t4);
+  color: var(--t3);
   line-height: 1.3;
 }
 
+/* [UI_R2-8_REVIEW mục 8] Ô dịch: xuống dòng, tự cao theo nội dung. */
 .studio-segment-text-translated {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--t1);
   line-height: 1.35;
+  width: 100%;
+  margin-top: 2px;
+  border-radius: 4px;
+  padding: 3px 8px;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  min-height: 20px;
+  font-family: inherit;
 }
 
 /* ==========================================================================
@@ -1145,8 +1206,9 @@
 
 /* Left Track Headers (Fixed) */
 .studio-timeline-track-headers {
-  width: 170px;
-  min-width: 170px;
+  /* [UI_R2-8_REVIEW mục 11] Rộng 170 → 176 px (nhãn track bị cắt). */
+  width: 176px;
+  min-width: 176px;
   background: var(--bg-side);
   border-right: 1px solid var(--line);
   display: flex;
@@ -1186,6 +1248,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* [UI_R2-8_REVIEW mục 11] Nhãn dài (vd "🎙️ TIẾNG LỒNG:") phải CẮT GỌN bằng
+   ellipsis (kèm title ở JSX) thay vì bị cắt cụt giữa chữ. */
+.studio-track-header-left > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

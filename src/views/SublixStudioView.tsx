@@ -172,6 +172,12 @@ export interface StudioTaskUpdatePayload {
 }
 
 export interface SublixStudioViewProps {
+  /**
+   * [UI_R2-8_REVIEW mục 12] Phiên bản app từ backend (`appInfo.version`) — 1 nguồn
+   * cho MỌI tab (trước: Studio lấy `package.json` còn tab khác lấy backend ⇒
+   * thanh trên "nhảy" khi chuyển tab).
+   */
+  appVersion?: string;
   onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process") => void;
   currentTheme?: string;
   onThemeChange?: (theme: string) => void;
@@ -339,6 +345,14 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
 }: StudioSegmentCardProps) {
   // [TSK-STUDIO-GLOSSARY] Câu vi phạm bảng thuật ngữ → tô vàng nhạt + badge lý do.
   const violationClass = glossaryViolationClass(seg);
+  // [UI_R2-8_REVIEW mục 8] Ô dịch tự cao theo nội dung (không cắt chữ 1 dòng).
+  const translatedRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const el = translatedRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [seg.translated]);
   return (
     <div
       className={`studio-segment-card ${isSelected ? "active" : ""} ${violationClass}`}
@@ -352,33 +366,17 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
       onClick={() => onSelect(seg)}
     >
       <div className="studio-segment-header-row">
-        <div className="studio-segment-timing-controls">
-          <button
-            type="button"
-            className="studio-timing-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNudge(seg.id, "start", -0.1);
-            }}
-            title="Lùi mốc bắt đầu 0.1s"
-          >
-            -0.1s
-          </button>
-          <span className="studio-segment-timing-text">
-            {formatTimecode(seg.start)} → {formatTimecode(seg.end)}
+        {/* [UI_R2-8_REVIEW mục 8] Mặc định chỉ có mốc thời gian + chấm vai;
+            nút ±0.1s / chọn vai chỉ hiện khi thẻ đang chọn hoặc hover. */}
+        <span className="studio-segment-timing-text">
+          {formatTimecode(seg.start)} → {formatTimecode(seg.end)}
+        </span>
+        <span className="studio-segment-speaker">
+          <span className="studio-segment-speaker-dot" style={{ background: spk?.color }} />
+          <span className="studio-segment-speaker-name" title={spk?.name ?? undefined}>
+            {spk?.name ?? "—"}
           </span>
-          <button
-            type="button"
-            className="studio-timing-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNudge(seg.id, "end", 0.1);
-            }}
-            title="Tiến mốc kết thúc 0.1s"
-          >
-            +0.1s
-          </button>
-        </div>
+        </span>
 
         {seg.glossaryViolation ? (
           <span
@@ -399,29 +397,57 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
           </span>
         ) : null}
 
-        <select
-          className="studio-segment-speaker-select"
-          style={{ borderColor: spk?.color }}
-          value={seg.speakerId}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            e.stopPropagation();
-            onUpdateSpeaker(seg.id, e.target.value);
-          }}
-          title="Chuyển vai diễn cho câu thoại này"
-        >
-          {speakers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <div className="studio-segment-tools">
+          <div className="studio-segment-timing-controls">
+            <button
+              type="button"
+              className="studio-timing-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNudge(seg.id, "start", -0.1);
+              }}
+              title="Lùi mốc bắt đầu 0.1s"
+            >
+              -0.1s
+            </button>
+            <button
+              type="button"
+              className="studio-timing-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNudge(seg.id, "end", 0.1);
+              }}
+              title="Tiến mốc kết thúc 0.1s"
+            >
+              +0.1s
+            </button>
+          </div>
+
+          <select
+            className="studio-segment-speaker-select"
+            style={{ borderColor: spk?.color }}
+            value={seg.speakerId}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              e.stopPropagation();
+              onUpdateSpeaker(seg.id, e.target.value);
+            }}
+            title="Chuyển vai diễn cho câu thoại này"
+          >
+            {speakers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="studio-segment-text-original">{seg.original}</div>
-      <input
-        type="text"
+      <textarea
+        ref={translatedRef}
         className="studio-segment-text-translated"
+        rows={1}
         style={{
           background: seg.glossaryViolation ? "rgba(250, 204, 21, 0.08)" : "rgba(255,255,255,0.03)",
           border: seg.translateFailed
@@ -429,13 +455,6 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
             : seg.glossaryViolation
               ? "1px solid rgba(250,204,21,0.6)"
               : "1px solid var(--line-soft)",
-          borderRadius: 4,
-          padding: "4px 8px",
-          color: "var(--t1)",
-          fontSize: 12,
-          outline: "none",
-          width: "100%",
-          marginTop: 4,
         }}
         placeholder={seg.translateFailed ? "⚠️ Dịch lỗi — chưa tạo lồng tiếng" : ""}
         value={seg.translated}
@@ -444,7 +463,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
         onChange={(e) => onUpdateTranslated(seg.id, e.target.value)}
       />
 
-      <div className="studio-segment-bottom-row">
+      <div className="studio-segment-bottom-row studio-segment-tools">
         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
           <button
             type="button"
@@ -477,9 +496,9 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
                 e.stopPropagation();
                 onClearVoice(seg.id);
               }}
-              title="Xóa âm thanh lồng tiếng câu này (giữ nguyên phụ đề chữ)"
+              title="Xoá âm thanh lồng tiếng câu này (giữ nguyên phụ đề chữ)"
             >
-              <IconVolumeX size={11} /> Xóa tiếng
+              <IconVolumeX size={11} /> Xoá tiếng
             </button>
           )}
         </div>
@@ -503,7 +522,7 @@ const StudioSegmentCard = memo(function StudioSegmentCard({
               e.stopPropagation();
               onDelete(seg.id);
             }}
-            title="Xóa toàn bộ câu này (cả phụ đề chữ & âm thanh)"
+            title="Xoá toàn bộ câu này (cả phụ đề chữ & âm thanh)"
           >
             <IconTrash size={11} />
           </button>
@@ -756,6 +775,7 @@ interface SavedStudioProject {
 }
 
 export default function SublixStudioView({
+  appVersion,
   onNavigateTab,
   currentTheme = "cinema",
   onThemeChange,
@@ -765,6 +785,21 @@ export default function SublixStudioView({
   onTaskUpdate,
   onClearPendingFile,
 }: SublixStudioViewProps) {
+  // [UI_R2-8_REVIEW mục 12] Trạng thái cửa sổ overlay nổi (nút 👁 trên topbar Studio).
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const handleToggleOverlay = async () => {
+    try {
+      if (overlayVisible) {
+        await sublix.hideOverlay();
+        setOverlayVisible(false);
+      } else {
+        await sublix.showOverlay();
+        setOverlayVisible(true);
+      }
+    } catch (err) {
+      console.warn("Bật/tắt overlay thất bại:", err);
+    }
+  };
   // Tự động khôi phục project đã nạp từ cache nếu không có initialFilePath mới
   const [cachedProject] = useState<SavedStudioProject | null>(() => {
     if (initialFilePath) return null;
@@ -1038,6 +1073,10 @@ export default function SublixStudioView({
   const [workflowOptStt, setWorkflowOptStt] = useState<boolean>(true);
   const [workflowOptTranslate, setWorkflowOptTranslate] = useState<boolean>(true);
   const [workflowOptVoice, setWorkflowOptVoice] = useState<boolean>(false);
+  // [UI_R2-8_REVIEW mục 10] Số bước đang bật — dùng cho gợi ý "▶ Chạy N bước đã bật"
+  // (khớp với nút chạy ở panel trái).
+  const enabledStepCount =
+    (workflowOptStt ? 1 : 0) + (workflowOptTranslate ? 1 : 0) + (workflowOptVoice ? 1 : 0);
 
   // v0.11.32 (PO): tận dụng phụ đề đã tải (YouTube .srt cạnh video) — mặc định BẬT.
   const [preferExistingSrt, setPreferExistingSrt] = useState<boolean>(true);
@@ -2726,7 +2765,7 @@ export default function SublixStudioView({
     if (activeVoiceSegRef.current === segId) {
       stopVoicePlayback();
     }
-    showToast(`🔇 Đã xóa âm thanh lồng tiếng câu #${segId} (phụ đề vẫn giữ nguyên 100%)`);
+    showToast(`🔇 Đã xoá âm thanh lồng tiếng câu #${segId} (phụ đề vẫn giữ nguyên 100%)`);
   };
 
   const handleDeleteSegment = (idToDelete?: number) => {
@@ -2764,7 +2803,7 @@ export default function SublixStudioView({
       if (ids.some((id) => activeVoiceSegRef.current === id)) {
         stopVoicePlayback();
       }
-      showToast(`🔇 Đã xóa âm thanh lồng tiếng cho ${ids.length} câu đã chọn (giữ nguyên 100% phụ đề)`);
+      showToast(`🔇 Đã xoá âm thanh lồng tiếng cho ${ids.length} câu đã chọn (giữ nguyên 100% phụ đề)`);
       return;
     }
 
@@ -2788,7 +2827,7 @@ export default function SublixStudioView({
     if (ids.some((id) => activeVoiceSegRef.current === id)) {
       stopVoicePlayback();
     }
-    showToast(`🗑️ Đã xóa ${ids.length} câu thoại`);
+    showToast(`🗑️ Đã xoá ${ids.length} câu thoại`);
   };
 
   // ROUND-11 & ROUND-25: Xóa toàn bộ Track (Toàn bộ phụ đề hoặc chỉ xóa âm thanh lồng tiếng)
@@ -2799,7 +2838,7 @@ export default function SublixStudioView({
         showToast("ℹ️ Track phụ đề hiện đang trống.");
         return;
       }
-      if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xóa TOÀN BỘ ${count} câu phụ đề không?\n(Thao tác này sẽ xóa cả phụ đề chữ & âm thanh. Có thể hoàn tác bằng Ctrl+Z)`)) {
+      if (!window.confirm(`⚠️ Bạn có chắc chắn muốn xoá TOÀN BỘ ${count} câu phụ đề không?\n(Thao tác này sẽ xoá cả phụ đề chữ & âm thanh. Có thể hoàn tác bằng Ctrl+Z)`)) {
         return;
       }
       saveUndoHistory();
@@ -2809,7 +2848,7 @@ export default function SublixStudioView({
       setSelectedSegId(0);
       selectedSegIdRef.current = 0;
       stopVoicePlayback();
-      showToast(`🗑️ Đã xóa sạch toàn bộ ${count} câu thoại trong track phụ đề`);
+      showToast(`🗑️ Đã xoá sạch toàn bộ ${count} câu thoại trong track phụ đề`);
     } else if (type === "speaker") {
       // ROUND-25 FIX: Khi xóa track tiếng lồng, CHỈ XÓA ÂM THANH (hasAudio = false), BẢO TOÀN NGUYÊN VẸN 100% PHỤ ĐỀ!
       const targetSpkId = spkId || "all";
@@ -2819,7 +2858,7 @@ export default function SublixStudioView({
       ).length;
 
       if (audioCount === 0) {
-        showToast(`ℹ️ Không có âm thanh lồng tiếng nào ${spk ? `của vai "${spk.name}"` : ""} để xóa.`);
+        showToast(`ℹ️ Không có âm thanh lồng tiếng nào ${spk ? `của vai "${spk.name}"` : ""} để xoá.`);
         return;
       }
 
@@ -2834,7 +2873,7 @@ export default function SublixStudioView({
       );
       stopVoicePlayback();
       showToast(
-        `🗑️ Đã xóa âm thanh lồng tiếng (${audioCount} câu) ${spk ? `của vai "${spk.name}"` : ""}. Toàn bộ phụ đề vẫn giữ nguyên 100%!`
+        `🗑️ Đã xoá âm thanh lồng tiếng (${audioCount} câu) ${spk ? `của vai "${spk.name}"` : ""}. Toàn bộ phụ đề vẫn giữ nguyên 100%!`
       );
     }
   };
@@ -3446,7 +3485,7 @@ export default function SublixStudioView({
     setInPoint(null);
     setOutPoint(null);
     setUseRangeOnly(false);
-    showToast("Đã xóa vùng chọn Timeline");
+    showToast("Đã xoá vùng chọn Timeline");
   };
 
   // ROUND-25: Xử lý sự kiện click chuột phải trên Timeline (Hiện Context Menu)
@@ -4093,10 +4132,26 @@ export default function SublixStudioView({
   }, [isActive]);
 
   // v0.11.3: Zoom = % viewport. 100% = full video fit viewport ~1200px.
-  // V dụ Kenji 38:24 = 2304s: zoom 100% → 0.52 px/s; zoom 1000% → 5.2 px/s.
+  // [UI_R2-8_REVIEW mục 11] Viewport cứng 1200 px ⇒ timeline chỉ rộng tới ~1410 px,
+  // bỏ trống ~500 px bên phải. Nay đo BỀ RỘNG KHUNG THẬT (ResizeObserver) ⇒ timeline
+  // trải hết chiều ngang của khung (zoom 100 % = vừa khung).
   const TIMELINE_VIEWPORT_WIDTH = 1200;
-  const pxPerSec = (TIMELINE_VIEWPORT_WIDTH * (zoomLevel / 100)) / Math.max(1, mediaDuration);
-  const timelineWidth = Math.max(TIMELINE_VIEWPORT_WIDTH, Math.round(mediaDuration * pxPerSec));
+  const [timelineViewportWidth, setTimelineViewportWidth] = useState(TIMELINE_VIEWPORT_WIDTH);
+  useEffect(() => {
+    const el = timelineTracksBodyRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = () => {
+      const w = Math.floor(el.clientWidth);
+      if (w > 0) setTimelineViewportWidth((prev) => (prev === w ? prev : w));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isActive]);
+  const viewportWidth = Math.max(360, timelineViewportWidth);
+  const pxPerSec = (viewportWidth * (zoomLevel / 100)) / Math.max(1, mediaDuration);
+  const timelineWidth = Math.max(viewportWidth, Math.round(mediaDuration * pxPerSec));
 
   // v0.11.3: chọn tick interval đẹp (~100px giữa 2 tick) theo zoom hiện tại.
   // Trả về số giây giữa 2 mốc (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200).
@@ -5719,15 +5774,56 @@ export default function SublixStudioView({
     }
   }, [audioPeaks, mediaDuration, timelineWidth]);
 
+  // [UI_R2-8_REVIEW mục 9] Lọc theo TRẠNG THÁI câu (trước chip vai).
+  const [segmentStatusFilter, setSegmentStatusFilter] = useState<
+    "none" | "untranslated" | "missing_voice" | "long"
+  >("none");
+
   // Filter segments for P4
   const filteredSegments = segments.filter((seg) => {
     if (speakerFilter !== "all" && seg.speakerId !== speakerFilter) return false;
+    // Lọc trạng thái (mục 9)
+    if (segmentStatusFilter === "untranslated" && seg.translated.trim()) return false;
+    if (segmentStatusFilter === "missing_voice" && seg.hasAudio) return false;
+    if (segmentStatusFilter === "long" && seg.end - seg.start <= 12) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return seg.original.toLowerCase().includes(q) || seg.translated.toLowerCase().includes(q);
     }
     return true;
   });
+
+  // [UI_R2-8_REVIEW mục 9] Thống kê đầu cột phụ đề: số câu · tổng thời lượng · số vai · WPM.
+  const segmentStats = useMemo(() => {
+    const totalSec = segments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
+    const words = segments.reduce(
+      (sum, s) =>
+        sum +
+        (s.translated || s.original || "")
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean).length,
+      0,
+    );
+    const minutes = totalSec / 60;
+    const speakerCount = new Set(segments.map((s) => s.speakerId)).size;
+    return {
+      count: segments.length,
+      totalSec,
+      speakerCount,
+      wpm: minutes > 0.05 ? Math.round(words / minutes) : 0,
+    };
+  }, [segments]);
+
+  /** Đếm số câu theo trạng thái (cho 3 chip lọc). */
+  const segmentStatusCounts = useMemo(
+    () => ({
+      untranslated: segments.filter((s) => !s.translated.trim()).length,
+      missingVoice: segments.filter((s) => !s.hasAudio).length,
+      long: segments.filter((s) => s.end - s.start > 12).length,
+    }),
+    [segments],
+  );
 
   // Current subtitle based on playhead position
   const activeSubtitle = segments.find(
@@ -6382,7 +6478,11 @@ export default function SublixStudioView({
       mediaDurationSec: mediaDuration,
       audioDurationSec,
       segmentCount: segments.length,
-      sttModel: sttModel === "base" ? "Whisper base" : "Whisper Large-v3-Turbo",
+      // [UI_R2-8_REVIEW mục 3] Nhãn phải theo ENGINE ĐANG CHỌN (trước: nhánh cứng
+      // "base" ? "Whisper base" : "Whisper Large-v3-Turbo" ⇒ sai khi chọn SenseVoice).
+      sttModel:
+        sttEngines.find((engine) => engine.id === sttSelectedEngineId)?.label ??
+        (sttModel === "base" ? "Whisper base" : "Whisper Large-v3-Turbo"),
       sttEngineId: sttSelectedEngineId || "whisper",
       sttRtfNote: sttEngines.find((engine) => engine.id === sttSelectedEngineId)?.rtfNote,
       sourceLang: sttLang,
@@ -7164,7 +7264,7 @@ export default function SublixStudioView({
           ==================================================================== */}
       {/* R2-2: thanh trên DÙNG CHUNG (MasterTopbar) — thay bản copy riêng của Studio. */}
       <MasterTopbar
-        version={APP_VERSION_PKG}
+        version={appVersion ?? APP_VERSION_PKG}
         activeTab="studio"
         onNavigateTab={(tabId) => {
           if (tabId === "studio") return;
@@ -7182,6 +7282,11 @@ export default function SublixStudioView({
         ]}
         statusLabel={isAnalyzing ? analyzeMessage || "Đang xử lý…" : "Sẵn sàng"}
         onStatusClick={() => onNavigateTab?.("process")}
+        // [UI_R2-8_REVIEW mục 12] Nút 👁 overlay (mockup có) — bật/tắt cửa sổ phụ đề nổi.
+        overlay={{
+          onClick: handleToggleOverlay,
+          title: "Bật/tắt Overlay (Ctrl+Shift+O)",
+        }}
         undo={{
           onUndo: handleUndo,
           layers: [
@@ -7987,6 +8092,23 @@ export default function SublixStudioView({
                 ⚙ Thuộc tính
               </button>
             </div>
+            {/* [UI_R2-8_REVIEW mục 9] Hàng thống kê cạnh tiêu đề "Phụ đề". */}
+            {rightTab === "subtitles" ? (
+              <div className="studio-segments-stats">
+                <span className="studio-segments-stat">
+                  <b>{segmentStats.count}</b> câu
+                </span>
+                <span className="studio-segments-stat">
+                  <b>{Math.round(segmentStats.totalSec)}s</b>
+                </span>
+                <span className="studio-segments-stat">
+                  <b>{segmentStats.speakerCount}</b> vai
+                </span>
+                <span className="studio-segments-stat">
+                  <b>{segmentStats.wpm}</b> WPM
+                </span>
+              </div>
+            ) : null}
             {rightTab === "subtitles" && (
               <div className="studio-segments-actions">
                 <button
@@ -8016,8 +8138,36 @@ export default function SublixStudioView({
                 </div>
               </div>
 
-              {/* Filter Chips per speaker */}
+              {/* [UI_R2-8_REVIEW mục 9] 3 chip lọc TRẠNG THÁI (trước chip vai). */}
               <div className="studio-segments-filter-chips">
+            <button
+              type="button"
+              className={`studio-filter-chip ${segmentStatusFilter === "untranslated" ? "active" : ""}`}
+              onClick={() =>
+                setSegmentStatusFilter((cur) => (cur === "untranslated" ? "none" : "untranslated"))
+              }
+              title="Chỉ hiện câu chưa có bản dịch"
+            >
+              Chưa dịch ({segmentStatusCounts.untranslated})
+            </button>
+            <button
+              type="button"
+              className={`studio-filter-chip ${segmentStatusFilter === "missing_voice" ? "active" : ""}`}
+              onClick={() =>
+                setSegmentStatusFilter((cur) => (cur === "missing_voice" ? "none" : "missing_voice"))
+              }
+              title="Chỉ hiện câu chưa có tiếng lồng tiếng"
+            >
+              Thiếu tiếng ({segmentStatusCounts.missingVoice})
+            </button>
+            <button
+              type="button"
+              className={`studio-filter-chip ${segmentStatusFilter === "long" ? "active" : ""}`}
+              onClick={() => setSegmentStatusFilter((cur) => (cur === "long" ? "none" : "long"))}
+              title="Chỉ hiện câu dài hơn 12 giây"
+            >
+              Câu &gt;12s ({segmentStatusCounts.long})
+            </button>
             <button
               type="button"
               className={`studio-filter-chip ${speakerFilter === "all" ? "active" : ""}`}
@@ -8280,7 +8430,7 @@ export default function SublixStudioView({
               type="button"
               className="studio-timeline-tool-btn"
               onClick={() => handleDeleteSegment()}
-              title="Xóa câu (Delete)"
+              title="Xoá câu (Delete)"
             >
               <IconTrash size={13} />
             </button>
@@ -8313,7 +8463,7 @@ export default function SublixStudioView({
                 setLinkTracks(next);
                 showToast(next ? "🔗 ĐÃ BẬT Liên kết đồng bộ clip & phụ đề" : "ĐÃ TẮT Liên kết rãnh");
               }}
-              title="Liên kết — di chuyển hoặc xóa nội dung đi kèm clip trên rãnh chính (P)"
+              title="Liên kết — di chuyển hoặc xoá nội dung đi kèm clip trên rãnh chính (P)"
             >
               <IconLink size={13} />
             </button>
@@ -8361,7 +8511,7 @@ export default function SublixStudioView({
                     type="button"
                     className="studio-timeline-tool-btn"
                     onClick={handleClearRange}
-                    title="Xóa vùng chọn (Clear In/Out — phím X)"
+                    title="Xoá vùng chọn (Clear In/Out — phím X)"
                   >
                     <IconX size={12} />
                   </button>
@@ -8449,7 +8599,7 @@ export default function SublixStudioView({
             title="Batch Mode: Tự động chạy hàng loạt cho nhiều tập phim"
           >
             <input type="checkbox" checked={batchMode} readOnly style={{ cursor: "pointer" }} />
-            <span>Batch Mode {batchMode ? "BẬT" : "TẮT"}</span>
+            <span>Chạy hàng loạt: {batchMode ? "Bật" : "Tắt"}</span>
           </div>
 
           <div className="studio-timeline-zoom-wrap">
@@ -8634,7 +8784,7 @@ export default function SublixStudioView({
                           e.stopPropagation();
                           handleClearTrack("subtitles");
                         }}
-                        title="Xóa toàn bộ câu trong track phụ đề"
+                        title="Xoá toàn bộ câu trong track phụ đề"
                       >
                         🗑️
                       </button>
@@ -8677,7 +8827,7 @@ export default function SublixStudioView({
                             e.stopPropagation();
                             handleClearTrack("speaker", "all");
                           }}
-                          title="Xóa âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
+                          title="Xoá âm thanh lồng tiếng của tất cả vai (giữ nguyên phụ đề)"
                         >
                           🗑️
                         </button>
@@ -8747,7 +8897,7 @@ export default function SublixStudioView({
                               e.stopPropagation();
                               handleClearTrack("speaker", spk.id);
                             }}
-                            title={`Xóa âm thanh lồng tiếng của vai ${spkName} (giữ nguyên phụ đề)`}
+                            title={`Xoá âm thanh lồng tiếng của vai ${spkName} (giữ nguyên phụ đề)`}
                           >
                             🗑️
                           </button>
@@ -8759,8 +8909,9 @@ export default function SublixStudioView({
 
                 {!showSubtitlesTrack && (
                   <div className="studio-track-header-item studio-track-header-empty-hint">
+                    {/* [UI_R2-8_REVIEW mục 11] Bỏ tiếng Anh lẫn tạp ("Sub / Voice"). */}
                     <span style={{ fontSize: 10, color: "var(--t3)", fontStyle: "italic", opacity: 0.7 }}>
-                      (Chưa tạo Sub / Voice)
+                      (Chưa có phụ đề / giọng)
                     </span>
                   </div>
                 )}
@@ -9326,7 +9477,9 @@ export default function SublixStudioView({
                   <div className="studio-empty-hint-text">
                     <strong>Chưa có track Phụ đề & Tiếng lồng</strong>
                     <span>
-                      Bấm nút <em>"Bắt Đầu Xử Lý AI"</em> hoặc khoanh vùng trên timeline rồi <em>Bấm chuột phải</em> để tạo phân đoạn mong muốn.
+                      {/* [UI_R2-8_REVIEW mục 10] Nút "Bắt Đầu Xử Lý AI" đã bị bỏ
+                          (Zero-Button) ⇒ hướng dẫn trỏ sang nút chạy của panel trái. */}
+                      Bấm <em>▶ Chạy {enabledStepCount} bước đã bật</em> ở panel trái, hoặc khoanh vùng trên timeline rồi <em>bấm chuột phải</em> để tạo phân đoạn mong muốn.
                     </span>
                   </div>
                 </div>
@@ -9822,7 +9975,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">▶️</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Phát Thử Đoạn Này</span>
+                  <span className="timeline-ctx-main-text">Phát thử đoạn này</span>
                   <span className="timeline-ctx-desc-text">Tua về mốc In và phát video</span>
                 </div>
                 <span className="timeline-ctx-shortcut">Space</span>
@@ -9844,13 +9997,13 @@ export default function SublixStudioView({
                   saveUndoHistory();
                   setSegments((prev) => prev.filter((s) => !isSegInRange(s, minT, maxT)));
                   clearSegmentSelection();
-                  showToast(`🗑️ Đã xóa ${toDelete.length} câu thoại trong vùng chọn (Ctrl+Z để hoàn tác)`);
+                  showToast(`🗑️ Đã xoá ${toDelete.length} câu thoại trong vùng chọn (Ctrl+Z để hoàn tác)`);
                 }}
               >
                 <span className="timeline-ctx-icon">🗑️</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Xóa Các Câu Trong Đoạn Này</span>
-                  <span className="timeline-ctx-desc-text">Xóa câu thoại nằm trong khoảng In/Out</span>
+                  <span className="timeline-ctx-main-text">Xoá các câu trong đoạn này</span>
+                  <span className="timeline-ctx-desc-text">Xoá câu thoại nằm trong khoảng In/Out</span>
                 </div>
                 <span className="timeline-ctx-shortcut">Del</span>
               </button>
@@ -9866,7 +10019,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">❌</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Hủy Khoanh Vùng</span>
+                  <span className="timeline-ctx-main-text">Hủy khoanh vùng</span>
                   <span className="timeline-ctx-desc-text">Bỏ điểm In/Out về toàn bộ video</span>
                 </div>
                 <span className="timeline-ctx-shortcut">X</span>
@@ -9896,7 +10049,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">📍</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Đặt Điểm Vào (Mark In) Tại Đây</span>
+                  <span className="timeline-ctx-main-text">Đặt điểm vào tại đây</span>
                   <span className="timeline-ctx-desc-text">Bắt đầu vùng chọn từ {formatTimecode(timelineContextMenu.time)}</span>
                 </div>
                 <span className="timeline-ctx-shortcut">I</span>
@@ -9913,7 +10066,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">📍</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Đặt Điểm Ra (Mark Out) Tại Đây</span>
+                  <span className="timeline-ctx-main-text">Đặt điểm ra tại đây</span>
                   <span className="timeline-ctx-desc-text">Kết thúc vùng chọn tại {formatTimecode(timelineContextMenu.time)}</span>
                 </div>
                 <span className="timeline-ctx-shortcut">O</span>
@@ -9933,7 +10086,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">⚡</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Khoanh Nhanh Đoạn 5s Từ Đây</span>
+                  <span className="timeline-ctx-main-text">Khoanh nhanh đoạn 5s từ đây</span>
                   <span className="timeline-ctx-desc-text">Tạo vùng chọn 5 giây để thử nghiệm nhanh</span>
                 </div>
                 <span className="timeline-ctx-shortcut">+5s</span>
@@ -9950,7 +10103,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">▶️</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Di Chuyển Playhead Đến Đây</span>
+                  <span className="timeline-ctx-main-text">Di chuyển playhead đến đây</span>
                   <span className="timeline-ctx-desc-text">Tua video đến {formatTimecode(timelineContextMenu.time)}</span>
                 </div>
               </button>
@@ -9987,7 +10140,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">💬</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Tạo Phụ Đề Toàn Bộ Video</span>
+                  <span className="timeline-ctx-main-text">Tạo phụ đề toàn bộ video</span>
                   <span className="timeline-ctx-desc-text">Whisper STT quét toàn bộ video</span>
                 </div>
               </button>
@@ -10003,7 +10156,7 @@ export default function SublixStudioView({
               >
                 <span className="timeline-ctx-icon">🎙️</span>
                 <div className="timeline-ctx-text">
-                  <span className="timeline-ctx-main-text">Tạo Tiếng Lồng Toàn Bộ Video</span>
+                  <span className="timeline-ctx-main-text">Tạo tiếng lồng toàn bộ video</span>
                   <span className="timeline-ctx-desc-text">Tổng hợp TTS cho tất cả câu thoại</span>
                 </div>
               </button>

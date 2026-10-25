@@ -1608,6 +1608,8 @@ export default function SettingsView() {
           initialFilePath={pendingStudioPath || pendingDubbingPath}
           fileNonce={studioFileNonce}
           isActive={activeTab === "studio"}
+          // [UI_R2-8_REVIEW mục 12] 1 nguồn version cho mọi tab (backend `appInfo.version`).
+          appVersion={appInfo?.version}
           onNavigateTab={(t) => setActiveTab(t)}
           currentTheme={theme}
           onThemeChange={handleThemeChange}
@@ -1658,12 +1660,13 @@ export default function SettingsView() {
             status.kind === "idle"
               ? isLive
                 ? "🔴 Đang bắt âm thanh & dịch live..."
-                : "✓ Sẵn sàng"
+                : "Sẵn sàng"
               : status.kind === "working"
               ? `⏳ ${status.message}`
               : status.kind === "error"
               ? `⚠ ${status.message}`
-              : `✓ ${status.message}`
+              // [UI_R2-8_REVIEW mục 12] Bỏ "✓ " — pill đã có chấm xanh ở MasterTopbar.
+              : status.message
           }
           onStatusClick={() => setActiveTab("process")}
           overlay={{
@@ -1770,9 +1773,10 @@ export default function SettingsView() {
               {/* SUBTAB: PRESETS */}
               {settingsSubtab === "presets" && (
                 <section className="settings-section">
-                  <h2>⚡ Lựa Chọn Cấu Hình Phần Cứng Đề Xuất (1-Click Presets)</h2>
+                  {/* [UI_R2-8_REVIEW mục 18] Tiêu đề sentence case, bỏ ngoặc tiếng Anh. */}
+                  <h2>Cấu hình theo máy</h2>
                   <p className="settings-help">
-                    Bấm 1-click để Sublix tự động tối ưu mô hình STT, Translation và Engine theo sức mạnh máy tính của bạn:
+                    Bấm 1-click để Sublix tự động tối ưu mô hình nhận dạng, dịch và tăng tốc theo sức mạnh máy tính của bạn:
                   </p>
 
                   <div className="hardware-presets">
@@ -1784,6 +1788,7 @@ export default function SettingsView() {
                       <div className="preset-header">
                         <span className="preset-title">💻 Thuần CPU (Laptop / Văn Phòng)</span>
                         <span className="preset-tag">Pure CPU</span>
+                        {currentPreset === "cpu" ? <span className="st-pill ok">Đang dùng</span> : null}
                       </div>
                       <div className="preset-desc">
                         Dành cho laptop mỏng nhẹ hoặc PC không có card đồ hoạ rời NVIDIA. Tiết kiệm RAM, máy mát và ổn định.
@@ -1812,6 +1817,7 @@ export default function SettingsView() {
                       <div className="preset-header">
                         <span className="preset-title">⚡ GPU Tầm Trung (4GB – 8GB VRAM)</span>
                         <span className="preset-tag">GTX / RTX Phổ Thông</span>
+                        {currentPreset === "gpu_mid" ? <span className="st-pill ok">Đang dùng</span> : null}
                       </div>
                       <div className="preset-desc">
                         Phổ biến nhất (GTX 1650/1660, RTX 2060, 3050, 3060 6G, 4050/4060). STT nhanh ~0.1s, dịch tiếng Việt tự nhiên.
@@ -1840,6 +1846,7 @@ export default function SettingsView() {
                       <div className="preset-header">
                         <span className="preset-title">🚀 GPU Khủng (12GB – 24GB VRAM)</span>
                         <span className="preset-tag">RTX 3080/3090/4090</span>
+                        {currentPreset === "gpu_high" ? <span className="st-pill ok">Đang dùng</span> : null}
                       </div>
                       <div className="preset-desc">
                         Tối ưu cho card đồ hoạ cao cấp (RTX 3060 12GB, 3080, 3090, 4080, 4090). Nhận diện Whisper Turbo Q8 + Qwen3 2026 đỉnh cao!
@@ -1870,6 +1877,7 @@ export default function SettingsView() {
                       <div className="preset-header">
                         <span className="preset-title">🔺 GPU Tích Hợp AMD (Radeon / Ryzen AI)</span>
                         <span className="preset-tag">AMD iGPU · Ollama ROCm</span>
+                        {currentPreset === "amd_igpu" ? <span className="st-pill ok">Đang dùng</span> : null}
                       </div>
                       <div className="preset-desc">
                         Dành cho máy có GPU tích hợp AMD (Radeon 780M/890M, Ryzen AI Max, Radeon 8050S…). Whisper chạy CPU, còn phần dịch chạy qua <strong>Ollama</strong> — Ollama tự dùng ROCm/Vulkan trên iGPU nên nhanh hơn CPU khoảng 2×. Không cần card NVIDIA rời.

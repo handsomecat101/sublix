@@ -1,5 +1,4 @@
 import { memo } from "react";
-import { ModelDownloadRow } from "../../components/ui/ModelDownloadRow";
 import type { ModelDownloadProgressState } from "../../lib/tauri";
 import type { PanelSttEngine } from "./studioPipelineTypes";
 
@@ -10,8 +9,10 @@ import type { PanelSttEngine } from "./studioPipelineTypes";
  * - Danh sách engine đến từ backend (`stt_engines_status` → catalog), KHÔNG
  *   hard-code: thứ hạng gợi ý được tính từ `languages` của catalog theo ngôn ngữ
  *   nguồn (engine có ngôn ngữ đó được đưa lên trước + gắn nhãn "Phù hợp").
- * - Engine CHƯA tải model → hiện `ModelDownloadRow` ngay dưới dropdown, có
- *   tiến trình (sự kiện `model:download-progress`) + nút Hủy (`stt_model_cancel`).
+ * - [UI_R2-8_REVIEW mục 1] Trong Studio **KHÔNG** dùng `ModelDownloadRow` đầy đủ
+ *   (thẻ ~330 px làm vỡ khung 340 px): thay bằng **1 dòng gọn**
+ *   `⚠ SenseVoice chưa tải (228 MB) · [Tải]`; mô tả/license chỉ ở Cài đặt › STT.
+ *   Tiến trình hiện **inline** thay chữ khi đang tải.
  * - Chọn engine → `stt_set_engine` (lưu config, không có nút Lưu).
  */
 export interface StudioSttEnginePickerProps {
@@ -30,6 +31,16 @@ export interface StudioSttEnginePickerProps {
   /** Hủy tải. */
   onCancel: (id: string) => void;
 }
+
+/** Nhãn pha tải (tiếng Việt, sentence case). */
+const PHASE_LABEL: Record<string, string> = {
+  downloading: "Đang tải",
+  verifying: "Đang kiểm tra",
+  extracting: "Đang giải nén",
+  installing_deps: "Đang cài phụ thuộc",
+  done: "Đã tải xong",
+  error: "Tải lỗi",
+};
 
 function StudioSttEnginePickerInner({
   engines,
@@ -62,6 +73,7 @@ function StudioSttEnginePickerInner({
   });
 
   const selected = engines.find((engine) => engine.id === selectedId) ?? null;
+  const downloading = progress && progress.model_id === selected?.id ? progress : null;
 
   return (
     <div className="spp-field">
@@ -87,23 +99,41 @@ function StudioSttEnginePickerInner({
             {selected.langLabel}
             {selected.rtfNote ? ` · ${selected.rtfNote}` : ""}
           </div>
+          {/* [UI_R2-8_REVIEW mục 1] 1 dòng gọn thay cho thẻ model đầy đủ. */}
           {!selected.downloaded ? (
-            <ModelDownloadRow
-              modelId={selected.id}
-              kind="stt"
-              name={selected.name}
-              langLabel={selected.langLabel}
-              sizeNote={selected.sizeNote}
-              license={selected.license}
-              desc={selected.desc}
-              downloaded={selected.downloaded}
-              selected={selected.id === selectedId}
-              rtfNote={selected.rtfNote}
-              progress={progress?.model_id === selected.id ? progress : undefined}
-              onDownload={onDownload}
-              onCancel={onCancel}
-              onSelect={onSelect}
-            />
+            <div className="spp-note spp-stt-download-line">
+              {downloading ? (
+                <span className="spp-stt-download-progress">
+                  {PHASE_LABEL[downloading.phase] ?? "Đang tải"} ·{" "}
+                  {downloading.bytes_total > 0
+                    ? `${Math.round((downloading.bytes_done / downloading.bytes_total) * 100)}%`
+                    : "…"}
+                  {downloading.message ? ` · ${downloading.message}` : ""}
+                </span>
+              ) : (
+                <>
+                  <span>⚠ {selected.label} chưa tải ({selected.sizeNote})</span>
+                  <button
+                    type="button"
+                    className="ui-mdl-btn is-primary"
+                    onClick={() => onDownload(selected.id)}
+                    title={`Tải ${selected.label} (${selected.sizeNote}) — chi tiết ở Cài đặt › Nhận dạng`}
+                  >
+                    Tải
+                  </button>
+                </>
+              )}
+              {downloading ? (
+                <button
+                  type="button"
+                  className="ui-mdl-btn"
+                  onClick={() => onCancel(selected.id)}
+                  title="Hủy tải model"
+                >
+                  Hủy
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </>
       ) : null}

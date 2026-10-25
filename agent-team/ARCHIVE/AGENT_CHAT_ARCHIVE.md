@@ -758,3 +758,44 @@
 ---
 
 ---
+
+## ARCHIVED 2026-10-25 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 12:50 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FIX-SPEAKER-ROLES` — phân vai **thật** theo giọng + giới tính nghe từ F0; **chưa commit**).
+- **Đã làm:** sidecar mới `src-tauri/scripts/speaker_gender.py` (đo **F0 trung vị mỗi cụm** bằng tự tương quan, chỉ cần numpy) + module mới `dubbing/speaker_assign.rs` (ngưỡng **165/180 Hz**, **gộp cụm gần nhất theo F0 thay cho `% n`**) + `dubbing/mod.rs` sửa 3 vùng phân vai: giọng TTS mặc định theo giới tính **thật** (đánh dấu `(~)` khi mơ hồ), MiniMax **chỉ đặt tên + dịch** (giữ `speaker_id` theo giọng), cờ `diarization_engine="heuristic"` khi thiếu model.
+- **Đo thật** (`src-tauri/scripts/speaker_measure.py` — tái lập được; fixture 8 câu 4 nam + 4 nữ, Kokoro offline, F0 hạ về vùng người thật): **phân vai 88 % → 100 %** (sherpa ra 3–4 cụm, modulo gộp nhầm nam↔nữ) · **giới tính 50 % → 100 %** (mặc định cũ N=2 ⇒ tất cả nam).
+- **Verify:** `cargo test --lib` **275 pass / 0 fail** (8 test mới) · `cargo build --examples` OK · `cargo clippy --lib` không có cảnh báo mới trong file của tôi.
+- **⚠️ Cần biết:** model sherpa **đã có sẵn trong danh mục tải voice model** (`sherpa-diarization`, ~34 MB, CPU) nên không cần thêm UI; **không** đụng vùng voice sample (mcode #4 đang sửa) và **không** sửa `src/**`.
+
+---
+
+---
+
+## ARCHIVED 2026-10-25 (Mavis/mcode prune: giu 8 tin gan nhat)
+
+### 2026-10-25 07:05 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-VOICE-PICKER` — ô chọn giọng theo thiết kế Opus §4.10; **chưa commit**).
+- **Mới:** `src/components/voice/VoicePicker.tsx` + `VoicePickerRow.tsx` + `voicePickerModel.ts` (logic thuần) + `voicePicker.css`; `scripts/voice-picker-tests/` (**18 test**). Tìm không dấu, lọc ♂/♀, nhóm ★ → engine → ngôn ngữ, tìm trong tên+engine+ngôn ngữ, gợi ý "Bỏ lọc ♂ Nam (N kết quả)", chip vai trùng giọng, bàn phím ↑↓/↵/Ctrl+Space/Ctrl+S/Alt+1-3/Esc, popover portal + lật lên khi sát đáy, ảo hoá khi > 100 giọng.
+- **Nối:** Studio `StudioVoiceStep.tsx` thay `<select>` bằng `<VoicePicker variant="popover">`; Cài đặt › Giọng đọc thêm `VoiceListSection.tsx` (variant inline) — ★ lưu qua `getConfig` → `mergeConfig` → `saveConfig` (không mất API key); `config.rs` +1 field `favorite_voices`.
+- **⚠️ CẦN NỐI (tôi KHÔNG sửa `SublixStudioView.tsx` — mcode #4 đang sửa):** trong `pipelineApiRef` thêm `toggleFavoriteVoice(voiceId)` (đọc config từ đĩa → gộp `favorite_voices` → save → set state), `previewVoiceSample(voiceId)` (tạo mẫu 1 lần rồi phát → set `previewVoiceId` + `previewVoiceStatus`), `stopVoicePreview()`; và truyền 3 field mới (`favoriteVoices`, `previewVoiceId`, `previewVoiceStatus`) vào `state` của panel. Tôi đã khai báo chúng là **optional** trong `studioPipelineTypes.ts` nên chưa nối cũng không lỗi tsc.
+- **Verify:** `cargo check --lib` OK · `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · `node --test` **250 test / 0 fail** (18 mới + 232 cũ) · ảnh thật: popover + danh sách inline trong app (Cài đặt › Giọng đọc, **92 giọng thật** từ backend).
+
+---
+
+---
+
+
+
+## ARCHIVED 2026-10-25 (mcode #2 prune: giu 8 tin gan nhat)
+
+### 2026-10-25 13:45 - Sonnet 5.5 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FEAT-SMART-DUCKING` giai đoạn 2 + nối `VoicePicker`; **chưa commit**).
+- **Ducking:** Studio xem thử bỏ hạ-bật theo câu → vòng rAF `video.volume = userVolume × gainAt(t)` (tôn trọng mute/volume người dùng); xuất video dựng `volume` từ **cùng điểm gãy** (`ducking_export.rs`, độ dài clip thật; graph > 12K ký tự đọc bằng `-/filter_complex <file>`); `vocal_isolation` giữ nguyên. Config +4 field (`ducking_level` Option → thiếu thì lấy `bgm_volume` dự án); 2 thanh trượt "Mức hạ"/"Nối khoảng nghỉ" trong `StudioVoiceStep`, lưu ngay.
+- **Đo thật** (xuất video 45 s, nền tone cố định, 3 câu VieNeu): khe giữa 2 câu cách < 2 s còn **−14,0 dB**; đoạn không thoại 16–26 s về **0,0 dB**. **BUG-H24:** ffmpeg từ chối biểu thức cộng phẳng > ~100 số hạng → gom cây cân bằng.
+- **VoicePicker:** nối `toggleFavoriteVoice` / `previewVoiceSample` / `stopVoicePreview` + 3 state vào panel (★ lưu qua `mergeConfig` giữ API key; mẫu từ `voice_sample_ensure`, mỗi lần 1 mẫu).
+- **Verify:** `cargo test --lib` 284 pass · `cargo build --examples` OK · `node --test` 251/251 · `tsc` 0 · `vite build` OK. **Chưa kiểm GUI** vòng rAF xem thử và 2 thanh trượt (chỉ kiểm bằng kiểu + build).
+
+---
+
+---
