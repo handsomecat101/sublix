@@ -421,6 +421,66 @@ Studio: `StudioVoiceStep` truyền `usedBy` tính từ `state.roles` (bỏ chín
 - Popover chỉ mount khi mở; nút đóng là component nhẹ riêng → 5 vai × 25 giọng không tạo 125 `<option>` như hiện nay.
 - `<audio>` mẫu: 1 phần tử dùng chung, dừng + giải phóng khi đóng ô.
 
+### 4.11 Tab dự án Studio (mockup `studio-tabs.html`, ảnh `shots/studio-tabs.png`)
+
+Mỗi video = 1 tab (kiểu Premiere). Việc đang chạy gắn với **tab**, không với màn hình: mở video khác thì việc cũ vẫn chạy và vẫn hiện tiến độ trên tab của nó. Mục này chỉ lo **nhìn + tương tác**; trạng thái/luồng việc nền ở `docs/STUDIO_TABS_PLAN.md` (Sonnet).
+
+**Vị trí — dưới topbar, chỉ trong Studio.** Topbar đã kín (logo + 6 tab ứng dụng + trạng thái + ↶↷ + Xuất); nhét tab dự án vào đó sẽ lẫn 2 cấp tab. Thanh riêng 34 px ngay dưới topbar, **luôn hiện** kể cả 1 tab hoặc 0 tab (không nhảy bố cục, ＋ luôn cùng chỗ). Thanh tab **thay** 2 thứ trên topbar: chip tên file ở giữa và nút "＋ Mở video" → bỏ khỏi topbar (zero-duplication). Ô trạng thái topbar gộp: "● N việc đang chạy" (bấm → menu nhảy tới tab); tab ứng dụng "Tiến trình" có badge số việc.
+
+```
+topbar 48 │ 🎬 SUBLIX  [Studio] Tải video … Cài đặt        ● 1 việc đang chạy  ↶ ↷  [⤓ Xuất video]
+tabs   34 │ [◔ Tap_07_long_tieng 62%][● StarCraft_trailer…][● Phim_ngan_CN_…tap03][▭ A2Z_TEST_EN ✕] ＋      12 tab ⌄
+          │  └ đang chạy               └ lỗi (đỏ)          └ xong chưa xem (xanh)  └ đang mở (gạch vàng)
+```
+
+**Kích thước:** thanh 34 px, nền `#0f0d0b` + viền dưới `--line`. Tab cao 30 px (đang mở 31 px, đè viền để "dính" vào nội dung), bo trên 8 px, rộng **200 px, co tới 120 px, tối đa 220 px**, chữ 12 px/600. Bố cục trong tab: ô biểu tượng **14 px luôn giữ chỗ** · tên · (số %) · ✕ 18 px. Tab nghỉ: nền trong suốt, chữ `--t3`, vạch ngăn 1 px giữa các tab. Hover: `--hover`. Đang mở: nền `--bg-side`, viền `--line`, **gạch `--ac` 2 px trên đỉnh**, chữ `--t1`. ✕ chỉ hiện khi hover hoặc tab đang mở; chuột giữa = đóng.
+
+**Trạng thái trên tab** (1 ô biểu tượng, không thêm huy hiệu)
+
+| Trạng thái | Biểu tượng | Ghi chú |
+|---|---|---|
+| Nghỉ | khung phim mờ `--t4` | |
+| Đang chạy | **vòng 14 px** (conic) + số `62%` mono bên phải | % của **bước đang chạy**, không phải cả chuỗi. Màu = token bước: `--step-sub` nhận dạng · `--step-tr` dịch · `--step-dub` lồng tiếng · `--ac` xuất. Chưa có % (nạp model) → cung 1/4 quay, không số. Hover: ✕ thay chỗ số % |
+| Chờ lượt | vòng nét đứt + chữ "chờ" | việc nặng chạy lần lượt (CPU/GPU chung) |
+| Lỗi | chấm đỏ "!" | giữ tới khi mở tab |
+| Xong, chưa xem | chấm xanh + tên sáng | tự hết khi mở tab; kèm toast "Xong lồng tiếng … · Mở" |
+
+Chọn **vòng** thay vì thanh mảnh đáy tab: thanh 2 px dưới tab đang mở trùng gạch vàng/viền, và ở 120 px gần như không thấy; vòng nằm ở ô cố định, đọc được ở mọi bề rộng.
+
+**Tên tab:** tên file **bỏ đuôi** (`.mp4`), cắt **giữa** khi dài (`Phim_ngan_CN_…tap03`) — loạt tập phim khác nhau ở cuối, cắt đuôi sẽ ra 12 tab giống hệt. Đổi tên (F2 / nhấp đúp tên): sửa ngay trên tab, chọn sẵn cả tên, Enter lưu · Esc huỷ · rỗng = về tên file; chỉ đổi **tên hiển thị** (lưu theo dự án), không đổi file trên đĩa.
+
+**Thẻ hover** (chờ 500 ms, rộng 340, style popover như §4.10): tên file đủ · đường dẫn (mono, cắt giữa) · `26:14 · 1920×1080 · 323 câu · 3 vai` · việc đang chạy "Đang lồng tiếng · câu 201/323 · 62 % · còn ~4 phút" + thanh 3 px · 5 bước thu nhỏ (✓ / đang chạy / chưa). Tab lỗi: bước lỗi + 1 dòng lỗi. Tab chờ: "Chờ sau Tap_07 (~4 phút)".
+
+**Mở tab:** ＋ cuối dãy tab (Ctrl+O; Ctrl+I cũ giữ làm bí danh) · **thả file ở bất kỳ đâu trong Studio = tab mới** (nhiều file = nhiều tab; không bao giờ ghi đè dự án đang mở) · "Mở trong Studio" từ Tải video = tab mới · file **đã có tab → nhảy tới tab đó**, nháy viền 1 lần (khử trùng theo đường dẫn chuẩn hoá). Tab mới chèn **ngay sau tab đang mở**.
+
+**Đóng tab đang chạy → hộp hỏi:** tiêu đề "Tap_07 đang lồng tiếng (62 %)"; nút **Để chạy nền** = mặc định (Enter, không phá gì) · **Huỷ** (Esc) · **■ Dừng việc** tách bên trái, đỏ. Ô "Lần sau không hỏi — luôn để chạy nền". Chạy nền: tab biến mất, việc xem ở tab Tiến trình; xong → toast "Xong · Mở lại" (mở lại đúng vị trí cũ). Đóng nhiều tab (Đóng các tab khác/bên phải) hoặc đóng app khi còn việc → **1 hộp gộp** ("2 tab đang chạy"), không hỏi từng tab. Tab không chạy: đóng ngay, không hỏi (dự án tự lưu cache), Ctrl+Shift+T mở lại.
+
+**Kéo đổi thứ tự:** kéo > 4 px mới tính; tab nổi theo chuột, vạch `--ac` 2 px chỉ chỗ thả, tab khác dạt ra 150 ms; Esc / thả ngoài thanh = huỷ; **không** tách cửa sổ. Bàn phím: Ctrl+Shift+PgUp/PgDn.
+
+**Menu chuột phải:** [mục theo trạng thái: lỗi → "↻ Chạy lại bước …"; đang chạy → "■ Dừng việc" (đỏ)] — Đóng `Ctrl+W` · Đóng các tab khác · Đóng các tab bên phải · Đóng các tab đã xong — Mở thư mục chứa video · Đổi tên tab `F2`.
+
+**Tràn:** tab co 200 → 120 px; hết chỗ thì **cuộn ngang** (lăn chuột trên thanh), mép mờ 40 px báo còn tab, tab đang mở luôn cuộn vào tầm nhìn. Khi tràn mới hiện nút **"12 tab ⌄"** bên phải: danh sách đủ tab + ô tìm (không dấu, dùng lại hàm của VoicePicker) + trạng thái từng tab; có **chấm cam** khi tab đang chạy bị khuất. Không dùng mũi tên ‹ › (bấm từng nấc chậm).
+
+**Phím tắt** (chỉ khi đang ở Studio; đã grep `src/` — không trùng phím sẵn có, VoicePicker dùng Alt+1..3 nên không đụng)
+
+| Phím | Việc |
+|---|---|
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | tab sau / trước theo **thứ tự trên thanh** (không MRU — dễ đoán), xoay vòng |
+| `Ctrl+1` … `Ctrl+8` | tới tab 1…8 |
+| `Ctrl+9` | tới tab **cuối** (quy ước trình duyệt) |
+| `Ctrl+W` | đóng tab đang mở (đang chạy → hộp hỏi) |
+| `Ctrl+Shift+T` | mở lại tab vừa đóng |
+| `Ctrl+O` | mở video (tab mới) |
+| `F2` | đổi tên tab |
+
+Các phím này phải chạy cả khi focus đang ở ô nhập (Ctrl+Tab trong `<textarea>` phụ đề không chèn tab).
+
+**Trạng thái rỗng (0 tab):** thanh vẫn hiện, ＋ nở thành nút "＋ Mở video `Ctrl+O`", bên phải "Mở gần đây: 2 file" (bấm = mở tab); thân Studio là màn "Chưa mở video" hiện có (`after-01a`) + dòng "kéo thả 1 hay nhiều video — mỗi file 1 tab". Đóng tab cuối → về đây, **không** tự tạo tab trống.
+
+**Giới hạn đề xuất:** **tối đa 12 tab mở**; mở tab thứ 13 → toast "Đã mở 12 tab · Đóng các tab đã xong (N)" (1 bấm), không chặn cứng bằng hộp lỗi. **1 việc nặng chạy cùng lúc** (STT/TTS/xuất cùng ăn CPU/iGPU máy dev) — việc sau vào trạng thái "chờ lượt"; dịch qua API cloud có thể chạy song song (Sonnet chốt trong STUDIO_TABS_PLAN). Chỉ tab đang mở giữ `<video>` + timeline đã mount; tab nền giữ state dữ liệu, không giữ DOM. Mở lại app → khôi phục danh sách tab + tab đang mở, nạp lười (tab nạp khi được bấm).
+
+**Component đề xuất:** `src/views/studio/tabs/StudioTabStrip.tsx` (+ `.css`, `StudioTab.tsx` bọc `React.memo` — tiến độ đổi chỉ render lại 1 tab; `tabStripModel.ts` thuần: tên rút gọn cắt giữa, khử trùng đường dẫn, thứ tự/di chuyển, chọn tab kế khi đóng (bên phải, hết thì bên trái), map phím → test `node --test`). Hộp hỏi dùng lại component xác nhận của Tiến trình.
+
 ---
 
 ## 5. MOCKUP & ẢNH
@@ -433,6 +493,8 @@ Studio: `StudioVoiceStep` truyền `usedBy` tính từ `state.roles` (bỏ chín
 | `docs/ui-mockups/cai-dat.html` | Cài đặt › Dịch thuật: 5 nhà cung cấp, tự lưu, preset 1 chỗ, trạng thái thật |
 | `docs/ui-mockups/voice-picker.html` | Ô chọn giọng (§4.10): 8 ô — đóng, mở, hover/đang phát/chưa có mẫu, tìm + lọc, rỗng, lật lên trên, Cài đặt inline, bảng phím |
 | `docs/ui-mockups/shots/voice-picker-all.png` | Ảnh 1920×1080 của `voice-picker.html` |
+| `docs/ui-mockups/studio-tabs.html` | Tab dự án Studio (§4.11): toàn cảnh 4 tab + thẻ hover, bảng trạng thái tab, 1 tab, rỗng, tràn + danh sách, kéo đổi thứ tự, menu chuột phải, hộp hỏi đóng tab đang chạy, đổi tên, thả file |
+| `docs/ui-mockups/shots/studio-tabs.png` | Ảnh 1920×2700 của `studio-tabs.html` |
 | `docs/ui-mockups/shots/after-*.png` | Ảnh mockup (Edge headless 1920×1080) |
 | `docs/ui-mockups/shots/compare-*.png` | **Trước | Sau** đặt cạnh nhau cho Studio, Tải video, Cài đặt |
 

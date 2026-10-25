@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Tab dự án Studio (mockup §4.11)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  body { height: auto; overflow: auto; }
+  /* ================= THANH TAB DỰ ÁN (đề xuất code: StudioTabStrip) ================= */
+  .strip { height: 34px; display: flex; align-items: flex-end; gap: 0; padding: 0 8px; background: #0f0d0b; border-bottom: 1px solid var(--line); position: relative; }
+  .tabs-scroll { display: flex; align-items: flex-end; min-width: 0; overflow: hidden; flex: 0 1 auto; }
+  .dt { height: 30px; flex: 0 1 200px; min-width: 120px; max-width: 220px; display: flex; align-items: center; gap: 7px; padding: 0 6px 0 10px; border-radius: 8px 8px 0 0; color: var(--t3); font-size: 12px; font-weight: 600; position: relative; border: 1px solid transparent; border-bottom: none; white-space: nowrap; cursor: default; }
+  .dt + .dt::after { content: ""; position: absolute; left: -1px; top: 8px; height: 14px; width: 1px; background: var(--line); }
+  .dt.on + .dt::after, .dt.on::after, .dt.hov::after, .dt.hov + .dt::after { display: none; }
+  .dt.hov { background: var(--hover); color: var(--t2); }
+  .dt.on { height: 31px; margin-bottom: -1px; background: var(--bg-side); color: var(--t1); border-color: var(--line); z-index: 1; }
+  .dt.on::before { content: ""; position: absolute; left: 8px; right: 8px; top: -1px; height: 2px; border-radius: 0 0 2px 2px; background: var(--ac); }
+  .dt .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .dt .nm em { font-style: normal; color: var(--t4); }
+  .dt .x { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: var(--t4); font-size: 11px; flex: none; visibility: hidden; }
+  .dt.on .x, .dt.hov .x { visibility: visible; }
+  .dt.hov .x.hot { background: rgba(255,255,255,.08); color: var(--t1); }
+  .pct { font-family: var(--font-mono); font-size: 10.5px; flex: none; }
+  .dt.hov .pct { display: none; }
+  /* ô biểu tượng 14 px — luôn có, để tên không nhảy khi đổi trạng thái */
+  .ic { width: 14px; height: 14px; flex: none; display: grid; place-items: center; }
+  .ic.idle::before { content: ""; width: 12px; height: 9px; border-radius: 2px; border: 1.5px solid var(--t4); }
+  .ring { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--c, var(--step-dub)) calc(var(--p) * 1%), rgba(255,255,255,.12) 0); -webkit-mask: radial-gradient(circle at center, transparent 4px, #000 4.5px); mask: radial-gradient(circle at center, transparent 4px, #000 4.5px); }
+  .ring.q { background: none; border: 1.5px dashed var(--t4); -webkit-mask: none; mask: none; box-sizing: border-box; }
+  .ic.err { width: 14px; height: 14px; border-radius: 50%; background: var(--dang); color: #1a0806; font-size: 10px; font-weight: 900; }
+  .ic.err::before { content: "!"; }
+  .ic.new::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+  .dt.unseen .nm { color: var(--t1); }
+  .add { width: 28px; height: 26px; margin: 0 0 2px 4px; border-radius: 7px; display: grid; place-items: center; color: var(--t3); font-size: 15px; flex: none; }
+  .add.hov { background: var(--hover); color: var(--t1); }
+  .strip-r { margin-left: auto; display: flex; align-items: center; gap: 6px; height: 33px; padding-left: 8px; }
+  .ovf { height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line); color: var(--t2); font-size: 11.5px; font-weight: 700; background: var(--bg-card); }
+  .ovf .d { width: 6px; height: 6px; border-radius: 50%; background: var(--step-dub); }
+  .fade { position: absolute; top: 0; bottom: 0; width: 40px; pointer-events: none; }
+  /* topbar: bỏ chip tên file + nút Mở video (đã xuống thanh tab) */
+  .status-pill.run { color: #fcd9a0; border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.08); }
+  .status-pill.run .dot { background: var(--step-dub); box-shadow: 0 0 0 3px rgba(245,158,11,.2); }
+  /* thẻ hover */
+  .hc { position: absolute; z-index: 30; width: 340px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 11px 12px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+  .hc .t { font-weight: 700; font-size: 12.5px; word-break: break-all; }
+  .hc .p { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hc .m { font-size: 11px; color: var(--t3); }
+  .hc hr { border: 0; border-top: 1px solid var(--line-soft); margin: 2px 0; }
+  .bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--step-dub); }
+  .mrail { display: flex; gap: 4px; font-size: 10.5px; color: var(--t4); }
+  .mrail span { padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-soft); }
+  .mrail .ok { color: var(--ok-txt); border-color: var(--ok-br); }
+  .mrail .cur { color: #fcd9a0; border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.08); }
+  /* menu chuột phải / danh sách tràn */
+  .menu { position: absolute; z-index: 30; width: 250px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 5px; font-size: 12px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 9px; border-radius: 6px; color: var(--t2); }
+  .mi .kbd { margin-left: auto; }
+  .mi.hot { background: var(--ac-soft); color: var(--ac-txt); }
+  .mi.dang { color: var(--dang-txt); }
+  .mi.off { color: var(--t4); }
+  .ms { height: 1px; background: var(--line-soft); margin: 4px 2px; }
+  .mh { font-size: 10.5px; color: var(--t4); font-weight: 700; padding: 4px 9px 2px; letter-spacing: .04em; }
+  /* hộp hỏi */
+  .scrim { position: absolute; inset: 0; background: rgba(8,6,4,.62); display: grid; place-items: center; border-radius: 10px; }
+  .dlg { width: 470px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.7); padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .dlg h3 { margin: 0; font-size: 15px; }
+  .dlg p { margin: 0; color: var(--t2); font-size: 12.5px; line-height: 1.5; }
+  .dlg .acts { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .btn.dang { color: var(--dang-txt); border-color: var(--dang-br); background: var(--dang-soft); }
+  .btn.focus { box-shadow: var(--shadow-btn), 0 0 0 2px #12100e, 0 0 0 4px var(--ac-txt); }
+  .chk { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--t3); }
+  .chk i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line); }
+  /* khung trình bày */
+  .page { padding: 26px 28px 60px; display: flex; flex-direction: column; gap: 26px; }
+  h1 { font-size: 20px; margin: 0; } h2 { font-size: 14px; margin: 0 0 10px; color: var(--ac-txt); }
+  .lead { color: var(--t3); margin: 4px 0 0; max-width: 1100px; }
+  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .demo { position: relative; }
+  .demo .frame { height: 230px; }
+  .demo .body { position: absolute; left: 0; right: 0; top: 34px; bottom: 0; background: var(--bg-side); display: grid; place-items: center; color: var(--t4); font-size: 12px; }
+  .cap { margin-top: 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
+  .cap b { color: var(--t1); }
+  /* studio thu gọn (chỉ để thấy vị trí — chi tiết như studio.html) */
+  .ws { display: flex; height: 560px; }
+  .ws .left { width: 340px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sk { border-radius: 8px; background: var(--bg-card); border: 1px solid var(--line-soft); }
+  .ws .mid { flex: 1; background: #0c0b0a; display: grid; place-items: center; }
+  .ws .vid { width: 760px; height: 428px; border-radius: 6px; background: radial-gradient(ellipse at 40% 30%, #2b2f36 0%, #15171b 55%, #0b0c0e 100%); position: relative; }
+  .ws .vid span { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); background: rgba(0,0,0,.72); padding: 5px 12px; border-radius: 6px; color: #f6d27a; font-weight: 700; font-size: 16px; white-space: nowrap; }
+  .ws .right { width: 360px; border-left: 1px solid var(--line); background: var(--bg-side); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .tbl { border-collapse: collapse; font-size: 12px; }
+  .tbl td, .tbl th { border-bottom: 1px solid var(--line-soft); padding: 7px 10px; text-align: left; vertical-align: middle; }
+  .tbl th { color: var(--t4); font-size: 11px; font-weight: 700; }
+  .tbl .strip { width: 236px; padding: 0; background: transparent; border: 0; height: 32px; }
+  .ghost { position: absolute; z-index: 20; box-shadow: 0 10px 26px rgba(0,0,0,.6); opacity: .95; transform: translateY(-3px); background: #2a231c !important; border-color: var(--ac-br) !important; border-radius: 8px !important; height: 30px !important; }
+  .ins { width: 2px; height: 22px; background: var(--ac); border-radius: 1px; margin: 0 -1px 4px; box-shadow: 0 0 6px var(--ac); flex: none; }
+  .ren { flex: 1; min-width: 0; height: 22px; border-radius: 5px; background: var(--bg-inset); border: 1px solid var(--ac-br); box-shadow: 0 0 0 2px var(--ac-soft); padding: 0 6px; display: flex; align-items: center; font-weight: 600; color: var(--t1); }
+  .ren .s { background: rgba(232,163,61,.35); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <h1>Tab dự án Studio — mockup §4.11</h1>
+    <p class="lead">Mỗi video = 1 tab. Việc đang chạy (nhận dạng · dịch · lồng tiếng · xuất) sống theo tab, không theo màn hình. Thanh tab nằm <b>ngay dưới topbar, chỉ trong Studio</b>, thay cho chip tên file ở giữa topbar và nút "＋ Mở video". Kích thước thật (1:1 ở 1920 px).</p>
+  </div>
+
+  <!-- ===================== A. TOÀN CẢNH: 4 TAB ===================== -->
+  <section>
+    <h2>A · 4 tab: đang lồng tiếng 62 % · lỗi · xong chưa xem · đang mở (+ thẻ hover trên tab đang chạy)</h2>
+    <div class="frame">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.12</span></div>
+        <nav class="tabs">
+          <span class="tab on">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình <span class="badge">1</span></span><span class="tab">⚙ Cài đặt</span>
+        </nav>
+        <div class="top-mid"></div>
+        <div class="top-right">
+          <span class="status-pill run"><span class="dot"></span>1 việc đang chạy</span>
+          <span class="icon-btn">↶</span><span class="icon-btn">↷</span>
+          <span class="btn primary">⤓ Xuất video</span>
+        </div>
+      </header>
+      <div class="strip">
+        <div class="tabs-scroll">
+          <div class="dt hov"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07_long_tieng</span><span class="pct" style="color:var(--step-dub)">62%</span><span class="x">✕</span></div>
+          <div class="dt"><span class="ic err"></span><span class="nm">StarCraft_trailer_2026</span><span class="x">✕</span></div>
+          <div class="dt unseen"><span class="ic new"></span><span class="nm">Phim_ngan_CN_<em>…</em>tap03</span><span class="x">✕</span></div>
+          <div class="dt on"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div>
+        </div>
+        <span class="add" title="Mở video (Ctrl+O) — hoặc kéo thả file vào thanh tab">＋</span>
+        <div class="strip-r"><span class="dim" style="font-size:11px">Ctrl+Tab đổi tab · Ctrl+W đóng</span></div>
+      </div>
+      <div class="ws">
+        <aside class="left panel"><div class="sk" style="height:46px"></div><div class="sk" style="height:52px"></div><div class="sk" style="height:52px"></div><div class="sk" style="height:220px;border-color:rgba(245,158,11,.3)"></div><div class="grow"></div><div class="sk" style="height:44px;background:var(--grad-ac);opacity:.85"></div></aside>
+        <section class="mid"><div class="vid"><span>Chúng ta đã hết thời gian rồi. Thành phố sắp mất điện.</span></div></section>
+        <aside class="right"><div class="sk" style="height:60px"></div><div class="sk" style="height:84px"></div><div class="sk" style="height:84px"></div><div class="sk" style="height:84px"></div><div class="sk" style="height:84px"></div></aside>
+      </div>
+      <!-- thẻ hover của tab 1 -->
+      <div class="hc" style="left:12px;top:84px">
+        <div class="t">Tap_07_long_tieng.mp4</div>
+        <div class="p">D:\Phim\Bo_Truyen_Ky\Mua_2\Tap_07_long_tieng.mp4</div>
+        <div class="m">26:14 · 1920×1080 · 323 câu · 3 vai</div>
+        <hr>
+        <div class="row between"><b style="color:#fcd9a0">Đang lồng tiếng · câu 201/323</b><span class="mono" style="font-size:11px;color:var(--t3)">62 % · còn ~4 phút</span></div>
+        <div class="bar"><i style="width:62%"></i></div>
+        <div class="mrail"><span class="ok">✓ Nguồn</span><span class="ok">✓ Phụ đề</span><span class="ok">✓ Dịch</span><span class="cur">Lồng tiếng</span><span>Xuất</span></div>
+      </div>
+      <div class="note" data-n="1" style="left:370px;top:96px">Thanh tab 34 px dưới topbar. Tab đang mở = nền của panel + gạch vàng 2 px trên đỉnh, "dính" vào nội dung bên dưới.</div>
+      <div class="note" data-n="2" style="left:370px;top:178px">Tab đang chạy: vòng tiến độ 14 px (màu của bước) + số % ở bên phải. Hover → ✕ thay chỗ số %.</div>
+      <div class="note" data-n="3" style="left:370px;top:248px">Thẻ hover (chờ 500 ms): tên đủ, đường dẫn, thông số, việc đang chạy + còn lại, 5 bước thu nhỏ.</div>
+      <div class="note" data-n="4" style="left:1210px;top:96px">Topbar bỏ chip tên file + nút "Mở video" (đã xuống thanh tab). Ô trạng thái gộp: "1 việc đang chạy" — bấm → menu nhảy tới tab.</div>
+    </div>
+  </section>
+
+  <!-- ===================== B. TRẠNG THÁI 1 TAB (ô chú giải) ===================== -->
+  <section>
+    <h2>B · Giải phẫu 1 tab — các trạng thái (ô biểu tượng 14 px luôn giữ chỗ để tên không nhảy)</h2>
+    <table class="tbl">
+      <tr><th>Trạng thái</th><th>Trông thế nào</th><th>Quy tắc</th></tr>
+      <tr><td>Nghỉ</td><td><div class="strip"><div class="dt"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div></div></td><td>Biểu tượng khung phim mờ. ✕ chỉ hiện khi hover hoặc tab đang mở.</td></tr>
+      <tr><td>Đang mở</td><td><div class="strip" style="border-bottom:1px solid var(--line)"><div class="dt on"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div></div></td><td>Nền <code>--bg-side</code>, viền, gạch <code>--ac</code> 2 px trên đỉnh, chữ <code>--t1</code>.</td></tr>
+      <tr><td>Đang chạy — nhận dạng</td><td><div class="strip"><div class="dt"><span class="ic"><span class="ring" style="--p:30;--c:var(--step-sub)"></span></span><span class="nm">Tap_08_raw</span><span class="pct" style="color:var(--step-sub)">30%</span><span class="x">✕</span></div></div></td><td rowspan="4">Vòng = <b>% của bước đang chạy</b> (không phải cả chuỗi — người dùng hiểu "lồng tiếng 62 %" hơn "bước 4/5 · 81 %"). Màu = token bước: <code>--step-sub</code> · <code>--step-tr</code> · <code>--step-dub</code> · <code>--ac</code> (xuất). Bước không có % (đang nạp model) → vòng quay 1/4 cung, không số.</td></tr>
+      <tr><td>Đang chạy — dịch</td><td><div class="strip"><div class="dt"><span class="ic"><span class="ring" style="--p:45;--c:var(--step-tr)"></span></span><span class="nm">Phim_ngan_CN_tap04</span><span class="pct" style="color:var(--step-tr)">45%</span><span class="x">✕</span></div></div></td></tr>
+      <tr><td>Đang chạy — lồng tiếng</td><td><div class="strip"><div class="dt"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07_long_tieng</span><span class="pct" style="color:var(--step-dub)">62%</span><span class="x">✕</span></div></div></td></tr>
+      <tr><td>Đang chạy — xuất</td><td><div class="strip"><div class="dt"><span class="ic"><span class="ring" style="--p:88;--c:var(--ac)"></span></span><span class="nm">Tap_06_final</span><span class="pct" style="color:var(--ac-txt)">88%</span><span class="x">✕</span></div></div></td></tr>
+      <tr><td>Chờ lượt</td><td><div class="strip"><div class="dt"><span class="ic"><span class="ring q"></span></span><span class="nm">Tap_09_raw</span><span class="pct dim">chờ</span><span class="x">✕</span></div></div></td><td>Việc nặng chạy lần lượt (CPU/GPU dùng chung) — vòng nét đứt + chữ "chờ". Thẻ hover: "Chờ sau Tap_07 (~4 phút)".</td></tr>
+      <tr><td>Lỗi</td><td><div class="strip"><div class="dt"><span class="ic err"></span><span class="nm">StarCraft_trailer_2026</span><span class="x">✕</span></div></div></td><td>Chấm đỏ "!" — giữ tới khi người dùng mở tab. Thẻ hover: bước lỗi + câu lỗi 1 dòng + "Chuột phải › Chạy lại bước Dịch".</td></tr>
+      <tr><td>Xong, chưa xem</td><td><div class="strip"><div class="dt unseen"><span class="ic new"></span><span class="nm">Phim_ngan_CN_tap03</span><span class="x">✕</span></div></div></td><td>Chấm xanh + tên sáng. Tự hết khi tab được mở. Kèm 1 toast "Xong lồng tiếng Phim_ngan_CN_tap03 · <u>Mở</u>".</td></tr>
+      <tr><td>Hover</td><td><div class="strip"><div class="dt hov"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07_long_tieng</span><span class="pct">62%</span><span class="x hot">✕</span></div></div></td><td>Nền <code>--hover</code>; số % nhường chỗ cho ✕. Chuột giữa = đóng.</td></tr>
+    </table>
+  </section>
+
+  <!-- ===================== C. LƯỚI TRẠNG THÁI ===================== -->
+  <section class="grid2">
+    <!-- C1: 1 tab -->
+    <div class="demo">
+      <h2>C1 · 1 tab (mặc định khi mở 1 video)</h2>
+      <div class="frame">
+        <div class="strip">
+          <div class="tabs-scroll"><div class="dt on"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div></div>
+          <span class="add">＋</span>
+        </div>
+        <div class="body">Studio như hiện nay</div>
+      </div>
+      <p class="cap">Thanh tab <b>luôn hiện</b> kể cả 1 tab — không nhảy bố cục khi mở video thứ 2, và ＋ luôn ở cùng chỗ. Tốn 34 px dọc (timeline vẫn đủ 4 track ở 1080p).</p>
+    </div>
+
+    <!-- C2: rỗng -->
+    <div class="demo">
+      <h2>C2 · Rỗng (0 tab)</h2>
+      <div class="frame">
+        <div class="strip">
+          <span class="add hov" style="width:auto;padding:0 10px;gap:6px;display:flex;font-size:12px;font-weight:700">＋ Mở video <span class="kbd">Ctrl+O</span></span>
+          <div class="strip-r"><span class="dim" style="font-size:11px">Mở gần đây: <span class="link">Tap_06_final</span> · <span class="link">A2Z_TEST_EN</span></span></div>
+        </div>
+        <div class="body"><div style="text-align:center;line-height:1.7">Màn "Chưa mở video" hiện có (ảnh <code>after-01a</code>)<br><span class="dim">Kéo thả 1 hay nhiều video vào đây — mỗi file 1 tab</span></div></div>
+      </div>
+      <p class="cap">Đóng tab cuối → về màn rỗng, <b>không</b> tự tạo tab trống. ＋ nở thành nút có chữ; bên phải 2 file gần đây (bấm = mở tab).</p>
+    </div>
+
+    <!-- C3: tràn -->
+    <div class="demo">
+      <h2>C3 · Tràn tab (12 tab, chỗ chỉ đủ ~6)</h2>
+      <div class="frame">
+        <div class="strip">
+          <div class="tabs-scroll" style="max-width:780px">
+            <div class="dt" style="min-width:120px"><span class="ic idle"></span><span class="nm">Tap_04_final</span></div>
+            <div class="dt" style="min-width:120px"><span class="ic idle"></span><span class="nm">Tap_05_final</span></div>
+            <div class="dt on" style="min-width:120px"><span class="ic idle"></span><span class="nm">Tap_06_final</span><span class="x">✕</span></div>
+            <div class="dt" style="min-width:120px"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07…</span><span class="pct" style="color:var(--step-dub)">62%</span></div>
+            <div class="dt" style="min-width:120px"><span class="ic"><span class="ring q"></span></span><span class="nm">Tap_08_raw</span></div>
+            <div class="dt" style="min-width:120px"><span class="ic idle"></span><span class="nm">Tap_09_raw</span></div>
+            <div class="dt" style="min-width:120px"><span class="ic idle"></span><span class="nm">Tap_10_raw</span></div>
+          </div>
+          <span class="add">＋</span>
+          <div class="strip-r"><span class="ovf"><span class="d"></span>12 tab ⌄</span></div>
+          <div class="fade" style="left:8px;width:30px;background:linear-gradient(90deg,#0f0d0b,transparent)"></div>
+          <div class="fade" style="left:752px;background:linear-gradient(90deg,transparent,#0f0d0b)"></div>
+        </div>
+        <div class="body" style="place-items:start end;padding:6px 10px">
+          <div class="menu" style="position:relative;width:300px">
+            <div class="inp" style="height:28px;color:var(--t4);margin-bottom:4px">⌕ Tìm tab…</div>
+            <div class="mi"><span class="ic idle"></span>Tap_01_final</div>
+            <div class="mi"><span class="ic err"></span>Tap_02_final <span class="dim" style="margin-left:auto;font-size:10.5px">lỗi dịch</span></div>
+            <div class="mi hot"><span class="ic"><span class="ring" style="--p:62"></span></span>Tap_07_long_tieng <span class="mono" style="margin-left:auto;font-size:10.5px">62%</span></div>
+            <div class="mi dim">… 9 tab khác</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Tab co từ 200 → <b>120 px</b> (tên vẫn đọc được ~12 ký tự); hết chỗ thì <b>cuộn ngang</b> (lăn chuột trên thanh), mép mờ báo còn tab. Nút <b>"12 tab ⌄"</b> chỉ hiện khi tràn: danh sách đủ tab + ô tìm; có chấm cam nếu tab đang chạy bị khuất. Tab đang mở luôn được cuộn vào tầm nhìn.</p>
+    </div>
+
+    <!-- C4: kéo đổi thứ tự -->
+    <div class="demo">
+      <h2>C4 · Kéo đổi thứ tự</h2>
+      <div class="frame">
+        <div class="strip">
+          <div class="tabs-scroll" style="overflow:visible">
+            <div class="dt"><span class="ic err"></span><span class="nm">StarCraft_trailer_2026</span></div>
+            <div class="ins"></div>
+            <div class="dt unseen"><span class="ic new"></span><span class="nm">Phim_ngan_CN_tap03</span></div>
+            <div class="dt on" style="opacity:.25"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span></div>
+          </div>
+          <span class="add">＋</span>
+          <div class="dt ghost" style="left:290px;top:6px;width:200px"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm" style="color:var(--t1)">Tap_07_long_tieng</span><span class="pct" style="color:var(--step-dub)">62%</span></div>
+        </div>
+        <div class="body">Nội dung tab không đổi khi kéo</div>
+      </div>
+      <p class="cap">Nhấn giữ + kéo <b>&gt; 4 px</b> mới tính kéo (bấm thường vẫn là chọn). Tab nổi theo chuột, <b>vạch vàng 2 px</b> chỉ chỗ thả, các tab khác dạt ra (150 ms). <span class="kbd">Esc</span> huỷ. Thả ra ngoài thanh = huỷ (không tách cửa sổ). Bàn phím: <span class="kbd">Ctrl+Shift+PgUp/PgDn</span> dời tab.</p>
+    </div>
+
+    <!-- C5: menu chuột phải -->
+    <div class="demo">
+      <h2>C5 · Menu chuột phải (trên tab lỗi)</h2>
+      <div class="frame" style="height:300px">
+        <div class="strip">
+          <div class="tabs-scroll">
+            <div class="dt"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07_long_tieng</span><span class="pct" style="color:var(--step-dub)">62%</span></div>
+            <div class="dt hov"><span class="ic err"></span><span class="nm">StarCraft_trailer_2026</span><span class="x">✕</span></div>
+            <div class="dt on"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div>
+          </div>
+          <span class="add">＋</span>
+        </div>
+        <div class="body"></div>
+        <div class="menu" style="left:300px;top:36px">
+          <div class="mi hot">↻ Chạy lại bước Dịch</div>
+          <div class="ms"></div>
+          <div class="mi">Đóng <span class="kbd">Ctrl+W</span></div>
+          <div class="mi">Đóng các tab khác</div>
+          <div class="mi">Đóng các tab bên phải</div>
+          <div class="mi">Đóng các tab đã xong</div>
+          <div class="ms"></div>
+          <div class="mi">Mở thư mục chứa video</div>
+          <div class="mi">Đổi tên tab <span class="kbd">F2</span></div>
+        </div>
+      </div>
+      <p class="cap">Mục đầu đổi theo trạng thái: lỗi → <b>"↻ Chạy lại bước …"</b>; đang chạy → <b>"■ Dừng việc"</b> (đỏ); xong chưa xem → không có. "Đóng các tab khác/bên phải" gặp tab đang chạy → <b>1</b> hộp hỏi gộp ("2 tab đang chạy"), không hỏi từng tab.</p>
+    </div>
+
+    <!-- C6: hộp hỏi đóng tab đang chạy -->
+    <div class="demo">
+      <h2>C6 · Đóng tab đang chạy → hộp hỏi</h2>
+      <div class="frame" style="height:300px">
+        <div class="strip">
+          <div class="tabs-scroll"><div class="dt on"><span class="ic"><span class="ring" style="--p:62"></span></span><span class="nm">Tap_07_long_tieng</span><span class="x">✕</span></div><div class="dt"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span></div></div>
+          <span class="add">＋</span>
+        </div>
+        <div class="body"></div>
+        <div class="scrim">
+          <div class="dlg">
+            <h3>Tap_07_long_tieng đang lồng tiếng (62 %)</h3>
+            <p>Đóng tab không mất phần đã xong. Để chạy nền thì việc tiếp tục — xem ở tab <b>Tiến trình</b>, xong sẽ báo.</p>
+            <div class="acts">
+              <span class="btn dang">■ Dừng việc</span><span class="grow"></span>
+              <span class="btn">Huỷ</span><span class="btn primary focus">Để chạy nền</span>
+            </div>
+            <div class="chk"><i></i>Lần sau không hỏi — luôn để chạy nền</div>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>Để chạy nền</b> là nút mặc định (Enter) vì không phá gì; <b>Dừng việc</b> tách sang trái, màu đỏ. <span class="kbd">Esc</span> = Huỷ. Chạy nền xong → toast "Xong · <u>Mở lại</u>" (mở lại tab đúng chỗ cũ). Đóng app khi còn việc → cùng hộp này, ghi số việc.</p>
+    </div>
+
+    <!-- C7: đổi tên -->
+    <div class="demo">
+      <h2>C7 · Đổi tên tab (F2 / nhấp đúp tên)</h2>
+      <div class="frame" style="height:150px">
+        <div class="strip">
+          <div class="tabs-scroll"><div class="dt"><span class="ic idle"></span><span class="nm">StarCraft_trailer_2026</span></div><div class="dt on" style="flex-basis:220px"><span class="ic idle"></span><span class="ren"><span class="s">A2Z_TEST_EN_dubbed</span></span></div></div>
+          <span class="add">＋</span>
+        </div>
+        <div class="body"></div>
+      </div>
+      <p class="cap">Sửa ngay trên tab, chọn sẵn cả tên. <span class="kbd">Enter</span> lưu · <span class="kbd">Esc</span> huỷ · rỗng = về tên file. Chỉ đổi <b>tên hiển thị</b> (lưu vào project), <b>không</b> đổi tên file trên đĩa. Thẻ hover vẫn ghi tên file thật.</p>
+    </div>
+
+    <!-- C8: kéo thả file -->
+    <div class="demo">
+      <h2>C8 · Kéo thả file / mở video đã mở</h2>
+      <div class="frame" style="height:150px">
+        <div class="strip" style="box-shadow:inset 0 0 0 2px var(--ac-br);background:rgba(232,163,61,.06)">
+          <div class="tabs-scroll"><div class="dt on"><span class="ic idle"></span><span class="nm">A2Z_TEST_EN_dubbed</span><span class="x">✕</span></div><div class="ins"></div></div>
+          <span class="dim" style="font-size:11.5px;margin:0 0 8px 10px">Thả để mở <b style="color:var(--ac-txt)">3 video</b> thành 3 tab</span>
+        </div>
+        <div class="body"></div>
+      </div>
+      <p class="cap">Thả file ở <b>bất kỳ đâu</b> trong Studio = tab mới (không bao giờ ghi đè dự án đang mở — hết lỗi "dội ngược file cũ"). File đã có tab → <b>nhảy tới tab đó</b>, nháy viền 1 lần. "Mở trong Studio" từ Tải video cũng vậy.</p>
+    </div>
+  </section>
+</div>
+</body>
+</html>

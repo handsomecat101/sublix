@@ -182,6 +182,13 @@ Trong instance, sau mỗi `await` của lệnh nền: so `filePathRef.current` (
 | Job gián đoạn khi tắt app | đánh dấu "bị gián đoạn", không tự chạy lại; whisper-server/ffmpeg đã được dọn lúc thoát (`stop_server`, `whisper_server.rs:432`) |
 | Va chạm phím tắt | chỉ đăng ký khi `isActive`; kiểm `:1214,:3371,:4075` |
 
+## 6b. Quyết định của người điều phối khi ghép với thiết kế Opus (§4.11 UI_REDESIGN_PLAN)
+- **Giao diện thanh tab:** theo đúng Opus §4.11 (`docs/ui-mockups/studio-tabs.html`) — vị trí, kích thước, vòng tiến độ, hộp hỏi khi đóng, menu, phím tắt.
+- **Trần số tab:** **6** (theo kế hoạch này, vì mount-all tốn RAM), KHÔNG phải 12. Ở P1 đo RAM thật với 3/6 tab; nếu 6 tab < 600 MB thì nâng lên 12 như Opus đề xuất.
+- **Phím `Ctrl+1..9`:** theo Opus (Ctrl+9 = tab cuối); với trần 6 thì Ctrl+7/8 không làm gì.
+- **"Chỉ tab đang mở mount video/timeline" (Opus)** = cùng ý với "nhả `<video>` khi `!isActive`" ở trên: instance vẫn giữ state, chỉ nhả media nặng.
+- **§3.5 (kết quả sai video)** là lỗi đang có ⇒ làm **sớm nhất** (P1, hoặc tách riêng ngay khi `SublixStudioView.tsx` rảnh).
+
 ## 7. Việc KHÔNG làm (chốt phạm vi)
 - Không chạy song song thật nhiều job nặng; không làm lại cơ chế generation Rust.
 - Không chuyển state Studio sang store toàn cục / tách nhỏ 9k dòng trong đợt này.
