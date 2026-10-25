@@ -53,6 +53,20 @@ function TabStateIcon({ tab }: { tab: StudioTab }) {
   return <span className="sts-ic sts-ic-idle" title="Nghỉ" />;
 }
 
+/** Tên cắt giữa — dấu "…" làm mờ như mockup (`Phim_ngan_CN_…tap03`). */
+function TabName({ title }: { title: string }) {
+  const short = middleTruncate(title, 20);
+  const cut = short === title ? -1 : short.indexOf("…");
+  if (cut < 0) return <span className="sts-tab-name">{short}</span>;
+  return (
+    <span className="sts-tab-name">
+      {short.slice(0, cut)}
+      <em>…</em>
+      {short.slice(cut + 1)}
+    </span>
+  );
+}
+
 function StudioTabStripInner({ tabs, activeId, onSelect, onClose, onAdd }: StudioTabStripProps) {
   const runningCount = tabs.filter((tab) => tab.busy === "running" || tab.busy === "queued").length;
   return (
@@ -66,7 +80,7 @@ function StudioTabStripInner({ tabs, activeId, onSelect, onClose, onAdd }: Studi
               role="tab"
               aria-selected={active}
               tabIndex={active ? 0 : -1}
-              className={`sts-tab${active ? " on" : ""}`}
+              className={`sts-tab${active ? " on" : ""}${tab.busy === "done" ? " unseen" : ""}`}
               title={tab.path || tab.title}
               onClick={() => onSelect(tab.id)}
               onDoubleClick={() => onSelect(tab.id)}
@@ -74,9 +88,11 @@ function StudioTabStripInner({ tabs, activeId, onSelect, onClose, onAdd }: Studi
               <span className="sts-tab-ic">
                 <TabStateIcon tab={tab} />
               </span>
-              <span className="sts-tab-name">{middleTruncate(tab.title || "Video mới", 24)}</span>
+              <TabName title={tab.title || "Video mới"} />
               {tab.busy === "running" ? (
                 <span className="sts-tab-pct">{Math.round(tab.percent)}%</span>
+              ) : tab.busy === "queued" ? (
+                <span className="sts-tab-pct is-wait">chờ</span>
               ) : null}
               <button
                 type="button"
@@ -95,16 +111,18 @@ function StudioTabStripInner({ tabs, activeId, onSelect, onClose, onAdd }: Studi
         })}
       </div>
 
-      {runningCount > 0 ? (
-        <span className="sts-busy-count" title={`${runningCount} việc đang chạy/chờ`}>
-          <span className="sts-busy-dot" />
-          {runningCount} việc
-        </span>
-      ) : null}
-
       <button type="button" className="sts-add" title="Mở video thành tab mới" onClick={onAdd}>
         ＋
       </button>
+
+      {runningCount > 0 ? (
+        <div className="sts-strip-r">
+          <span className="sts-busy-count" title={`${runningCount} việc đang chạy/chờ`}>
+            <span className="sts-busy-dot" />
+            {runningCount} việc
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

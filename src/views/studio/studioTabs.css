@@ -11,20 +11,27 @@
   align-items: flex-end;
   gap: 0;
   padding: 0 8px;
-  background: #0f0d0b;
+  /* Mockup: #0f0d0b = --bg Cinema tối thêm ~18%; color-mix để theme sáng không bị dải đen. */
+  background: color-mix(in srgb, var(--bg) 82%, #000);
   border-bottom: 1px solid var(--line);
   position: relative;
   flex: none;
 }
 
+/* flex 0 1 auto: ＋ đứng ngay sau tab cuối (mockup), không bị đẩy sát mép phải. */
 .sts-tabs-scroll {
   display: flex;
   align-items: flex-end;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   scrollbar-width: none;
+  /* Cho tab đang mở (margin-bottom −1) phủ lên viền dưới — overflow không cắt mất. */
+  padding-bottom: 1px;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
 }
 .sts-tabs-scroll::-webkit-scrollbar { height: 0; }
 
@@ -58,8 +65,12 @@
   width: 1px;
   background: var(--line);
 }
-.sts-tab:hover { background: var(--hover); color: var(--t1); }
+.sts-tab:hover { background: var(--hover); color: var(--t2); }
+/* Tab đang mở cao 31 px, đè viền dưới thanh để "dính" vào nội dung. */
 .sts-tab.on {
+  height: 31px;
+  margin-bottom: -1px;
+  z-index: 1;
   background: var(--bg-side);
   border-color: var(--line);
   color: var(--t1);
@@ -67,15 +78,19 @@
 .sts-tab.on::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 8px;
+  right: 8px;
   top: -1px;
   height: 2px;
   background: var(--ac);
-  border-radius: 2px 2px 0 0;
+  border-radius: 0 0 2px 2px;
 }
 .sts-tab.on::after,
-.sts-tab.on + .sts-tab::after { display: none; }
+.sts-tab.on + .sts-tab::after,
+.sts-tab:hover::after,
+.sts-tab:hover + .sts-tab::after { display: none; }
+.sts-tab:focus-visible { outline: 2px solid var(--ac-br); outline-offset: -2px; }
+.sts-tab.unseen .sts-tab-name { color: var(--t1); }
 
 .sts-tab-ic {
   width: 14px;
@@ -99,6 +114,14 @@
   -webkit-mask: none;
   mask: none;
   box-sizing: border-box;
+}
+/* Ô biểu tượng phải là grid 14 px — thiếu rule này thì ::before thành inline,
+   width/height bị bỏ qua ⇒ khung phim "nghỉ" chỉ còn 1 vạch "|" (ảnh p1_tabs2). */
+.sts-ic {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
 }
 .sts-ic-idle::before {
   content: "";
@@ -133,31 +156,37 @@
   min-width: 0;
   flex: 1 1 auto;
 }
+.sts-tab-name em { font-style: normal; color: var(--t4); }
 .sts-tab-pct {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--t2);
+  color: var(--ac-txt);
   flex: none;
 }
+.sts-tab-pct.is-wait { color: var(--t4); font-family: inherit; }
+/* Hover / tab đang mở: ✕ thay chỗ số % (mockup A, C6). */
+.sts-tab:hover .sts-tab-pct,
+.sts-tab.on .sts-tab-pct { display: none; }
 .sts-tab-x {
   width: 18px;
   height: 18px;
   border: none;
   background: transparent;
-  color: var(--t3);
+  color: var(--t4);
   border-radius: 5px;
   display: grid;
   place-items: center;
   cursor: pointer;
   flex: none;
-  opacity: 0;
-  font-size: 12px;
+  visibility: hidden;
+  font-size: 11px;
   line-height: 1;
   padding: 0;
 }
 .sts-tab:hover .sts-tab-x,
-.sts-tab.on .sts-tab-x { opacity: 1; }
-.sts-tab-x:hover { background: var(--hover); color: var(--t1); }
+.sts-tab.on .sts-tab-x,
+.sts-tab-x:focus-visible { visibility: visible; }
+.sts-tab-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--t1); }
 
 .sts-add {
   width: 28px;
@@ -175,6 +204,17 @@
 }
 .sts-add:hover { background: var(--hover); color: var(--t1); }
 
+/* Cụm phải (mockup .strip-r) — đẩy sát mép phải, ＋ vẫn ở cuối dãy tab. */
+.sts-strip-r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 33px;
+  padding-left: 8px;
+  flex: none;
+}
+
 /* Ô "việc nền" (P1: chỉ đếm) */
 .sts-busy-count {
   display: inline-flex;
@@ -182,7 +222,6 @@
   gap: 5px;
   height: 24px;
   padding: 0 8px;
-  margin: 0 0 2px 6px;
   border-radius: 7px;
   border: 1px solid var(--line);
   color: var(--t2);
@@ -204,26 +243,27 @@
   z-index: 1400;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(8, 6, 4, 0.62);
 }
+/* Mockup C6: nền đặc (bg-card trong suốt sẽ lộ Studio phía sau). */
 .sts-dialog {
-  width: min(420px, calc(100vw - 48px));
+  width: min(470px, calc(100vw - 48px));
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--bg-card);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
-  padding: 16px 18px;
+  background: var(--bg-side);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+  padding: 18px 18px 14px;
 }
 .sts-dialog h3 {
-  margin: 0 0 6px;
-  font-size: 13.5px;
+  margin: 0 0 10px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--t1);
 }
 .sts-dialog p {
-  margin: 0 0 14px;
-  font-size: 12px;
-  color: var(--t3);
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--t2);
   line-height: 1.5;
 }
 .sts-dialog-actions {
@@ -244,8 +284,8 @@
 }
 .sts-btn:hover { color: var(--t1); background: var(--hover); }
 .sts-btn.is-danger {
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--dang-txt);
+  border-color: var(--dang-br);
+  background: var(--dang-soft);
 }
-.sts-btn.is-danger:hover { background: rgba(239, 68, 68, 0.18); }
+.sts-btn.is-danger:hover { background: rgba(224, 91, 75, 0.18); }
