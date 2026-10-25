@@ -25,3 +25,5 @@ import "./estimate.test.ts";
 import "./history.test.ts";
 import "./ripple.test.ts";
 import "./glossary.test.ts";
+// TSK-TABS-3.5: chặn kết quả của video cũ ghi đè video mới.
+import "./result-guard.test.ts";

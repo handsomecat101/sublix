@@ -1,6 +1,6 @@
 //! SublixStudioView.tsx  All-in-One Multi-track AI Dubbing & Subtitle Studio
 //! Reverse-Engineered from EZMAXSUB (ezmaxsoft.com) benchmark.
-//! Specification: agent-team/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
+//! Specification: agent-team/ARCHIVE/PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO.md & UI_SPEC_SUBLIX_STUDIO.md
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, memo, useCallback } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -151,6 +151,8 @@ import { computeFollowScroll } from "../lib/timeline/autoFollow";
 import { TimecodeInput } from "./studio/TimecodeInput";
 // [TSK-FIX-BUG-R2-8-01] Sinh id task DUY NHẤT theo lần chạy (logic thuần, test được).
 import { makeTaskRunId } from "./processLogic";
+// [TSK-TABS-3.5] Chặn kết quả của video cũ ghi đè video mới (logic thuần, test được).
+import { projectDisplayName, staleProjectNotice } from "../lib/studio/resultGuard";
 
 export interface StudioTaskUpdatePayload {
   id?: string;
@@ -1309,6 +1311,20 @@ export default function SublixStudioView({
     toastTimeoutRef.current = window.setTimeout(() => setToastMsg(null), 3000);
   };
 
+  /**
+   * [TSK-TABS-3.5] Chặn "kết quả video A ghi đè video B".
+   *
+   * Mọi lệnh nền chụp `startedPath` **trước** `await`; sau `await` gọi hàm này.
+   * Nếu video đã đổi ⇒ trả `false` (kết quả thuộc video cũ ⇒ **bỏ**, không setState
+   * / không ghi project) kèm toast "Đã bỏ kết quả của video cũ: <tên file>".
+   */
+  const guardProject = (startedPath: string | null | undefined): boolean => {
+    const notice = staleProjectNotice(startedPath, filePathRef.current);
+    if (!notice) return true;
+    showToast(notice);
+    return false;
+  };
+
   // Load config on mount
   useEffect(() => {
     sublix.getConfig().then((cfg: AppConfig) => {
@@ -1435,8 +1451,10 @@ export default function SublixStudioView({
 
     const runExtract = async () => {
       try {
+        // [TSK-TABS-3.5] Chụp video TRƯỚC await → sau await mà đã đổi video thì bỏ.
+        const startedPath = filePath;
         const res = await sublix.extractMediaPreview(filePath, mediaDuration > 0 ? mediaDuration : undefined);
-        if (!isCancelled) {
+        if (!isCancelled && guardProject(startedPath)) {
           if (res.peaks && res.peaks.length > 0) {
             setAudioPeaks(res.peaks);
           }
@@ -1583,8 +1601,10 @@ export default function SublixStudioView({
           const wasPlaying = !cur.paused;
           void (async () => {
             try {
-              const previewPath = await sublix.transcodeForPreview(filePathRef.current!);
-              if (previewPath) {
+              // [TSK-TABS-3.5] Chụp video TRƯỚC await → bỏ kết quả nếu đã đổi video.
+              const startedPath = filePathRef.current;
+              const previewPath = await sublix.transcodeForPreview(startedPath!);
+              if (previewPath && guardProject(startedPath)) {
                 setTranscodedPath(previewPath);
                 // R7-02: sau khi <video> src đổi sang preview, React sẽ remount. Đợi frame tiếp theo
                 // rồi gọi play() + seek về currentTime cũ nếu có thể.
@@ -3591,6 +3611,8 @@ export default function SublixStudioView({
       let translated = "";
       let violation = false;
       let reason: string | null = null;
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → bỏ kết quả nếu đã đổi video.
+      const startedPath = filePath;
       if (contextualTranslate) {
         const speakerNames = new Map(speakersRef.current.map((spk) => [spk.id, spk.name]));
         const lines: ScriptLine[] = [
@@ -3621,6 +3643,8 @@ export default function SublixStudioView({
         translated = (results[0] ?? "").trim();
         if (!translated) throw new Error("dịch thất bại");
       }
+      // Video đã đổi trong lúc dịch ⇒ bỏ kết quả (không ghi vào câu nào).
+      if (!guardProject(startedPath)) return;
       setSegments((prev) =>
         prev.map((s) =>
           s.id === segId
@@ -4492,6 +4516,9 @@ export default function SublixStudioView({
         !!customStt && !customStt.id.startsWith("whisper") && customStt.downloaded;
 
       let project: DubbingProject;
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → sau await mà đổi video thì bỏ
+      // toàn bộ kết quả (không setState, không ghi project).
+      const startedPath = filePath;
       if (useCustomStt && customStt) {
         const sttMsg = `Đang nhận dạng bằng ${customStt.label}...`;
         setTimelineProcessMessage(sttMsg);
@@ -4539,6 +4566,14 @@ export default function SublixStudioView({
           1, // Khi chỉ làm phụ đề: ép 1 speaker duy nhất, không phân mảnh vai diễn
           preferExistingSrt
         );
+      }
+
+      // Video đã đổi trong lúc chạy ⇒ bỏ kết quả (không ghi đè video mới).
+      if (!guardProject(startedPath)) {
+        setTimelineProcessMessage("");
+        setAnalyzeMessage("");
+        setAnalyzeProgress(0);
+        return null;
       }
 
       if (project) {
@@ -4705,6 +4740,9 @@ export default function SublixStudioView({
       await handleSaveProviderConfig();
       saveTranslationUndo();
 
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → sau await mà đổi video thì bỏ kết quả.
+      const startedPath = filePath;
+
       // ── [TSK-STUDIO-WIRE-CTX-STT] Đường dịch THEO NGỮ CẢNH ────────────────
       // 2 lượt: (1) đọc hiểu cả kịch bản, (2) dịch theo lô có ngữ cảnh trượt.
       // Chỉ chạy khi người dùng BẬT công tắc; lỗi → tự rơi về dịch theo lô (không crash).
@@ -4733,6 +4771,8 @@ export default function SublixStudioView({
           );
           const ctxFailed = ctxResults.filter((r) => r.failed || !r.translated).length;
           const ctxById = new Map(ctxResults.map((r) => [r.id, r]));
+          // [TSK-TABS-3.5] Video đã đổi ⇒ bỏ kết quả (không ghi đè video mới).
+          if (!guardProject(startedPath)) return;
           setSegments((prev) =>
             prev.map((seg) => {
               const hit = ctxById.get(String(seg.id));
@@ -4823,6 +4863,9 @@ export default function SublixStudioView({
           }
         }
 
+        // [TSK-TABS-3.5] Video đã đổi ⇒ bỏ lô kết quả này (và các lô sau).
+        if (!guardProject(startedPath)) return;
+
         // Đếm câu lỗi để báo trung thực ở toast cuối
         failedCount += chunk.filter((_, i) => !translatedTexts[i] || translatedTexts[i].trimStart().startsWith("[Dịch lỗi:")).length;
 
@@ -4910,6 +4953,9 @@ export default function SublixStudioView({
   // onlyIds: chỉ tạo tiếng cho đúng các id này (dùng sau khi bóc tách vùng → chỉ câu MỚI, không đụng câu ngoài vùng)
   const handleRunVoiceOnly = async (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>) => {
     const allSegs = overrideSegs || segmentsRef.current || segments;
+    // [TSK-TABS-3.5] Chụp video TRƯỚC vòng lặp TTS → nếu đổi video thì bỏ tiếng
+    // đã tạo (không ghi đè video mới).
+    const startedPath = filePath;
     // Pipeline chạy tiếp từ handleRunAnalysis(dubImmediately) đang giữ isAnalyzing → mọi lối thoát sớm phải nhả cờ
     const bailOut = (msg: string) => {
       showToast(msg);
@@ -5021,6 +5067,9 @@ export default function SublixStudioView({
             probe.src = clipDataUri!;
           });
         }
+
+        // [TSK-TABS-3.5] Video đã đổi ⇒ bỏ clip TTS vừa tạo (không ghi vào video mới).
+        if (!guardProject(startedPath)) return;
 
         setSegments((prev) =>
           prev.map((s) =>
@@ -5147,6 +5196,9 @@ export default function SublixStudioView({
         });
       });
 
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → sau await mà đổi video thì bỏ toàn bộ
+      // kết quả phân tích (đây là chỗ ghi đè mạnh nhất: segments + speakers).
+      const startedPath = filePath;
       const project: DubbingProject = await sublix.dubbingAnalyze(
         filePath,
         sttLang === "auto" ? undefined : sttLang,
@@ -5157,6 +5209,14 @@ export default function SublixStudioView({
         expectedSpeakerCount > 0 ? expectedSpeakerCount : undefined,
         preferExistingSrt
       );
+
+      // Video đã đổi trong lúc phân tích ⇒ bỏ kết quả (không ghi đè video mới).
+      if (!guardProject(startedPath)) {
+        setTimelineProcessMessage("");
+        setAnalyzeMessage("");
+        setAnalyzeProgress(0);
+        return;
+      }
 
       if (project) {
         const vidDur = videoRef.current?.duration;
@@ -5926,7 +5986,13 @@ export default function SublixStudioView({
           }
         }
         const textToSpeak = (seg.translated || seg.original || "").trim();
+        // [TSK-TABS-3.5] Chụp video TRƯỚC await → bỏ mẫu nếu đã đổi video.
+        const startedPath = filePath;
         const wavData = await sublix.dubbingPreviewTts(textToSpeak, voice);
+        if (!guardProject(startedPath)) {
+          setPreviewingSegId(null);
+          return;
+        }
         if (wavData) {
           const audio = new Audio(wavData);
           previewAudioRef.current = audio;
@@ -6054,7 +6120,14 @@ export default function SublixStudioView({
         setExportMessage(event.payload.message);
       });
 
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → nếu đã đổi video thì không gắn kết quả
+      // vào video mới, nhưng vẫn báo đường dẫn file đã xuất (file đúng của dự án cũ).
+      const startedPath = filePath;
       const outPath = await sublix.dubbingExport(project);
+      if (staleProjectNotice(startedPath, filePathRef.current)) {
+        showToast(`🎉 Đã xuất xong video cũ (${projectDisplayName(startedPath)}): ${outPath}`);
+        return;
+      }
       setExportProgress(100);
       setExportMessage("Xuất video thành công!");
       setExportDonePath(outPath);
@@ -6654,11 +6727,14 @@ export default function SublixStudioView({
       `📖 Đang đọc hiểu ${lines.length} câu để gợi ý thuật ngữ (ước tính ~${formatDuration(estimateSec)})…`,
     );
     try {
+      // [TSK-TABS-3.5] Chụp video TRƯỚC await → gợi ý của video cũ thì bỏ.
+      const startedPath = filePath;
       const suggestion = await sublix.glossarySuggest(
         lines,
         sttLang === "auto" ? "auto" : sttLang,
         targetLang,
       );
+      if (!guardProject(startedPath)) return null;
       const diff = diffGlossarySuggestion(glossaryRef.current, suggestion);
       const fresh = diff.newTerms.length + diff.newPronouns.length;
       showToast(
@@ -7864,7 +7940,10 @@ export default function SublixStudioView({
                       const wasPlaying = curV ? !curV.paused : false;
                       try {
                         console.log("Đang chuyển tạm video sang H.264 để xem được trong Studio…");
-                        const previewPath = await sublix.transcodeForPreview(filePath);
+                        // [TSK-TABS-3.5] Chụp video TRƯỚC await → bỏ nếu đã đổi video.
+                        const startedPath = filePath;
+                        const previewPath = await sublix.transcodeForPreview(startedPath);
+                        if (!guardProject(startedPath)) return;
                         setTranscodedPath(previewPath);
                         // R7-02: đợi React remount video element rồi play() + seek về currentTime cũ
                         setTimeout(() => {
