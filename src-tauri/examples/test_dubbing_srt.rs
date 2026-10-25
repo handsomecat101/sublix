@@ -219,7 +219,7 @@ fn main() -> Result<()> {
     println!("\n⏳ STAGE 2: Export (Kokoro LOCAL TTS + atempo + remux)...");
     let t2 = Instant::now();
     let result_path =
-        export_dubbed_video(None, project, Some(output.to_string())).context("Export stage failed")?;
+        export_dubbed_video(None, project, Some(output.to_string()), None).context("Export stage failed")?;
     let dur2 = t2.elapsed().as_secs_f32();
     println!("✅ Stage 2 done in {dur2:.1}s -> {result_path}\n");
 

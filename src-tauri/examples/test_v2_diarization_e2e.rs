@@ -85,7 +85,7 @@ fn main() -> Result<()> {
     println!("\n🎬 Xuất video thành phẩm lồng tiếng (Audio Ducking)...");
     let out_video = out_dir.join("v2_multi_speaker_DUBBED.mp4");
     let export_start = std::time::Instant::now();
-    let res = export_dubbed_video(None, project, Some(out_video.to_string_lossy().to_string()))?;
+    let res = export_dubbed_video(None, project, Some(out_video.to_string_lossy().to_string()), None)?;
     println!("✅ Đã xuất video thành công trong {:.2}s: {}", export_start.elapsed().as_secs_f32(), res);
 
     println!("\n=================================================================");

@@ -269,6 +269,8 @@ export interface FileSubProgress {
   total_segments: number;
   current_original: string | null;
   current_translated: string | null;
+  /** Định danh lượt chạy (echo từ backend) — xem `DubbingProgress.run_id`. */
+  run_id?: string;
 }
 
 export interface FileSubResult {
@@ -347,12 +349,18 @@ export const sublix = {
     sourceLang: string,
     targetLang: string,
     projectPath?: string,
+    /**
+     * Định danh lượt chạy — backend echo lại trong `translate:progress` để listener
+     * lọc đúng tab. Bỏ trống ⇒ hành vi y hệt trước đây.
+     */
+    runId?: string,
   ): Promise<ContextualLine[]> {
     return await invoke<ContextualLine[]>("translate_script_contextual", {
       lines,
       sourceLang,
       targetLang,
       projectPath: projectPath ?? null,
+      runId: runId ?? null,
     });
   },
 
@@ -593,6 +601,8 @@ export const sublix = {
     createBilingual?: boolean;
     sttModelName?: string;
     translationModelName?: string;
+    /** Định danh lượt chạy — backend echo lại trong `file_sub:progress`. */
+    runId?: string;
   }): Promise<FileSubResult> {
     return await invoke<FileSubResult>("generate_file_subtitles", {
       inputPath: opts.inputPath,
@@ -601,6 +611,7 @@ export const sublix = {
       createBilingual: opts.createBilingual ?? true,
       sttModelName: opts.sttModelName,
       translationModelName: opts.translationModelName,
+      runId: opts.runId ?? null,
     });
   },
 
@@ -724,7 +735,9 @@ export const sublix = {
     timeLimitSec?: number,
     startOffsetSec?: number,
     expectedSpeakers?: number,
-    preferExistingSrt?: boolean
+    preferExistingSrt?: boolean,
+    /** Định danh lượt chạy — backend echo lại trong `dubbing:progress`. */
+    runId?: string,
   ): Promise<DubbingProject> {
     return await invoke<DubbingProject>("dubbing_analyze", {
       filePath,
@@ -734,6 +747,7 @@ export const sublix = {
       startOffsetSec: startOffsetSec && startOffsetSec > 0 ? startOffsetSec : null,
       expectedSpeakers: expectedSpeakers && expectedSpeakers > 0 ? expectedSpeakers : null,
       preferExistingSrt: preferExistingSrt === undefined ? null : preferExistingSrt,
+      runId: runId ?? null,
     });
   },
 
@@ -745,8 +759,17 @@ export const sublix = {
     return await invoke<string>("dubbing_preview_tts", { text, voice, rate, pitch });
   },
 
-  async dubbingExport(project: DubbingProject, outputPath?: string): Promise<string> {
-    return await invoke<string>("dubbing_export", { project, outputPath });
+  async dubbingExport(
+    project: DubbingProject,
+    outputPath?: string,
+    /** Định danh lượt chạy — backend echo lại trong `dubbing:progress`. */
+    runId?: string,
+  ): Promise<string> {
+    return await invoke<string>("dubbing_export", {
+      project,
+      outputPath,
+      runId: runId ?? null,
+    });
   },
 
   /**
@@ -952,6 +975,12 @@ export interface DubbingProgress {
   message: string;
   current_item: number;
   total_items: number;
+  /**
+   * Định danh lượt chạy (echo từ backend) — dùng để lọc sự kiện theo tab.
+   *
+   * Chỉ có mặt khi frontend truyền `runId` vào lệnh (xem `docs/STUDIO_TABS_PLAN.md` §3.3).
+   */
+  run_id?: string;
 }
 
 export interface VideoInfo {

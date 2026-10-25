@@ -309,13 +309,19 @@ fn default_audio_export_mode() -> Option<String> {
     Some("multitrack".to_string())
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DubbingProgress {
     pub stage: String, // "extracting" | "transcribing" | "diarizing" | "scripting" | "synthesizing" | "remuxing" | "done"
     pub percent: f32,
     pub message: String,
     pub current_item: usize,
     pub total_items: usize,
+    /// Định danh lượt chạy (echo từ frontend) — listener lọc theo `run_id` để không
+    /// lẫn tiến trình giữa nhiều tab (xem `docs/STUDIO_TABS_PLAN.md` §3.3).
+    ///
+    /// Không có `run_id` ⇒ payload **giống hệt** bản cũ (tương thích ngược).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub run_id: Option<String>,
 }
 
 /// Helper to generate timestamp unique id
@@ -2437,6 +2443,7 @@ pub fn analyze_and_create_project(
         start_offset_sec,
         expected_speakers,
         None,
+        None,
     )
 }
 
@@ -2452,6 +2459,7 @@ pub fn analyze_and_create_project_full(
     start_offset_sec: Option<f64>,
     expected_speakers: Option<usize>,
     prefer_existing_srt: Option<bool>,
+    run_id: Option<String>,
 ) -> Result<DubbingProject> {
     let my_gen = start_new_generation();
 
@@ -2474,6 +2482,7 @@ pub fn analyze_and_create_project_full(
                     message: msg.to_string(),
                     current_item: cur,
                     total_items: tot,
+                    run_id: run_id.clone(),
                 },
             );
         } else {
@@ -3125,6 +3134,7 @@ pub fn export_dubbed_video(
     app: Option<&AppHandle>,
     project: DubbingProject,
     output_path: Option<String>,
+    run_id: Option<String>,
 ) -> Result<String> {
     let my_gen = start_new_generation();
 
@@ -3148,6 +3158,7 @@ pub fn export_dubbed_video(
                     message: msg.to_string(),
                     current_item: cur,
                     total_items: tot,
+                    run_id: run_id.clone(),
                 },
             );
         } else {
@@ -3902,6 +3913,31 @@ pub fn build_hierarchical_amix_filter(num_speech: usize, voice_volume: f32) -> S
 mod tests {
     use super::*;
 
+    /// TSK-TABS-P0: `run_id` là tuỳ chọn — JSON cũ (không có `run_id`) vẫn parse được
+    /// và không trường nào mới xuất hiện khi không truyền `run_id`.
+    #[test]
+    fn dubbing_progress_serde_run_id_tuy_chon() {
+        let old_json = r#"{"stage":"extracting","percent":5.0,"message":"x",
+            "current_item":0,"total_items":100}"#;
+        let parsed: DubbingProgress =
+            serde_json::from_str(old_json).expect("JSON cu phai parse duoc");
+        assert_eq!(parsed.run_id, None);
+        let out = serde_json::to_value(&parsed).expect("serialize");
+        assert!(
+            out.get("run_id").is_none(),
+            "khong co run_id thi khong duoc them key: {out}"
+        );
+
+        let with_id = DubbingProgress {
+            run_id: Some("run-9".to_string()),
+            ..parsed
+        };
+        let out2 = serde_json::to_value(&with_id).expect("serialize");
+        assert_eq!(out2["run_id"], "run-9");
+        let back: DubbingProgress = serde_json::from_value(out2).expect("parse lai");
+        assert_eq!(back.run_id.as_deref(), Some("run-9"));
+    }
+
     /// KHÓA CHỈ DÙNG TRONG TEST: các test dùng chung bộ đếm generation TOÀN CỤC
     /// (CURRENT_GENERATION / CANCELLED_GENERATION) phải chạy TUẦN TỰ. Nếu chạy
     /// song song, `start_new_generation()` của test này sẽ hủy generation của
@@ -4299,7 +4335,7 @@ mod tests {
             target_lang: Some("vi".to_string()),
         };
 
-        let res = export_dubbed_video(None, project, Some(out_file.to_string_lossy().to_string()));
+        let res = export_dubbed_video(None, project, Some(out_file.to_string_lossy().to_string()), None);
         if let Ok(path) = res {
             let out_p = PathBuf::from(&path);
             assert!(out_p.exists(), "Output video must exist");
@@ -4351,7 +4387,7 @@ mod tests {
 
                 println!("--- EXPORTING DUBBED VIDEO SAMPLE ---");
                 let out_sample = "H:\\AI Project\\sublix\\test_media\\output_dubbed_test.mp4";
-                let export_res = export_dubbed_video(None, proj, Some(out_sample.to_string()));
+                let export_res = export_dubbed_video(None, proj, Some(out_sample.to_string()), None);
                 match export_res {
                     Ok(path) => {
                         println!("✅ Export succeeded to: {}", path);

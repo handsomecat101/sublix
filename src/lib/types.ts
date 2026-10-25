@@ -46,6 +46,13 @@ export interface TranslateProgress {
   total: number;
   /** "reading" (lượt 1) | "translating" (lượt 2) | "done" */
   phase: string;
+  /**
+   * Định danh lượt chạy (echo từ backend).
+   *
+   * Chỉ có mặt khi frontend truyền `runId` vào lệnh — dùng để lọc sự kiện theo tab
+   * (xem `docs/STUDIO_TABS_PLAN.md` §3.3). Thiếu ⇒ hành vi cũ.
+   */
+  run_id?: string;
 }
 
 /** 1 model trong danh sách lựa chọn dịch. */

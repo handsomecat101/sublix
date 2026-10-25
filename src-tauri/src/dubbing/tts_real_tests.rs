@@ -160,7 +160,7 @@ fn tts_real_export_mp4_with_vieneu() {
     };
     let out = out_dir("export").join("vieneu_dubbed.mp4");
     let _ = std::fs::remove_file(&out);
-    let path = export_dubbed_video(None, project, Some(out.to_string_lossy().to_string())).expect("xuất video");
+    let path = export_dubbed_video(None, project, Some(out.to_string_lossy().to_string()), None).expect("xuất video");
     println!("[export] → {path}");
     let probe = Command::new("ffprobe")
         .args(["-v", "error", "-show_entries", "stream=index,codec_type,codec_name", "-of", "csv=p=0", &path])

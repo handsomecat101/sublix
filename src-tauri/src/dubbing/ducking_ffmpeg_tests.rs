@@ -125,7 +125,7 @@ fn ducking_real_export_measure() {
     };
     let out = dir.join("ducked.mp4");
     let _ = std::fs::remove_file(&out);
-    let path = export_dubbed_video(None, project, Some(out.to_string_lossy().to_string())).expect("xuất video");
+    let path = export_dubbed_video(None, project, Some(out.to_string_lossy().to_string()), None).expect("xuất video");
     let extract = |track: &str, name: &str| -> Vec<f64> {
         let wav = dir.join(name);
         let st = Command::new(&ff)

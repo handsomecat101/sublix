@@ -72,7 +72,7 @@ fn main() -> Result<()> {
     let out_ducking = r"H:\AI Project\sublix\test_dubbing_input\multi_speaker_DUBBED_DUCKING.mp4";
     project.dubbing_mode = "ducking".to_string();
     let export_start = std::time::Instant::now();
-    let res_ducking = export_dubbed_video(None, project.clone(), Some(out_ducking.to_string()))?;
+    let res_ducking = export_dubbed_video(None, project.clone(), Some(out_ducking.to_string()), None)?;
     println!("✅ Đã xuất video thuyết minh trong {:.2}s: {}", export_start.elapsed().as_secs_f32(), res_ducking);
 
     // Step 4: Export mode 2: Demucs Vocal Isolation
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
     let out_isolation = r"H:\AI Project\sublix\test_dubbing_input\multi_speaker_DUBBED_THEATRICAL.mp4";
     project.dubbing_mode = "vocal_isolation".to_string();
     let iso_start = std::time::Instant::now();
-    let res_iso = export_dubbed_video(None, project, Some(out_isolation.to_string()))?;
+    let res_iso = export_dubbed_video(None, project, Some(out_isolation.to_string()), None)?;
     println!("✅ Đã xuất video chiếu rạp trong {:.2}s: {}", iso_start.elapsed().as_secs_f32(), res_iso);
 
     println!("\n=================================================================");

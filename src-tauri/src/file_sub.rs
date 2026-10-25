@@ -33,7 +33,7 @@ pub struct SubtitleSegment {
     pub translated: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileSubProgress {
     pub stage: String,           // "extracting" | "transcribing" | "translating" | "saving" | "done"
     pub message: String,
@@ -42,6 +42,10 @@ pub struct FileSubProgress {
     pub total_segments: usize,
     pub current_original: Option<String>,
     pub current_translated: Option<String>,
+    /// Định danh lượt chạy (echo từ frontend) — listener lọc theo `run_id`
+    /// (xem `docs/STUDIO_TABS_PLAN.md` §3.3). Không có ⇒ payload y hệt bản cũ.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -375,6 +379,7 @@ pub fn generate_file_subtitles(
     create_bilingual: bool,
     stt_model_name: Option<String>,
     translation_model_name: Option<String>,
+    run_id: Option<String>,
 ) -> Result<FileSubResult, String> {
     if FILE_SUB_RUNNING.swap(true, Ordering::SeqCst) {
         return Err("Tiến trình tạo phụ đề cho tệp đang chạy. Vui lòng đợi hoàn tất.".to_string());
@@ -416,6 +421,7 @@ pub fn generate_file_subtitles(
             total_segments: 0,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -434,6 +440,7 @@ pub fn generate_file_subtitles(
             total_segments: 0,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -547,6 +554,7 @@ pub fn generate_file_subtitles(
             total_segments: total,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -579,6 +587,7 @@ pub fn generate_file_subtitles(
             total_segments: total,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -619,6 +628,7 @@ pub fn generate_file_subtitles(
                 total_segments: total,
                 current_original: Some(original_text),
                 current_translated: Some(final_translated),
+            run_id: run_id.clone(),
             },
         );
     }
@@ -648,6 +658,7 @@ pub fn generate_file_subtitles(
             total_segments: total,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -691,6 +702,7 @@ pub fn generate_file_subtitles(
             total_segments: total,
             current_original: None,
             current_translated: None,
+            run_id: run_id.clone(),
         },
     );
 
@@ -739,6 +751,31 @@ pub fn launch_in_vlc(video_path: &str, srt_path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TSK-TABS-P0: `run_id` là tuỳ chọn — JSON cũ (không có `run_id`) vẫn parse được
+    /// và không trường nào mới xuất hiện khi không truyền `run_id`.
+    #[test]
+    fn file_sub_progress_serde_run_id_tuy_chon() {
+        let old_json = r#"{"stage":"extracting","message":"x","percent":5.0,
+            "current_segment":0,"total_segments":0,"current_original":null,"current_translated":null}"#;
+        let parsed: FileSubProgress =
+            serde_json::from_str(old_json).expect("JSON cu phai parse duoc");
+        assert_eq!(parsed.run_id, None);
+        let out = serde_json::to_value(&parsed).expect("serialize");
+        assert!(
+            out.get("run_id").is_none(),
+            "khong co run_id thi khong duoc them key: {out}"
+        );
+
+        let with_id = FileSubProgress {
+            run_id: Some("run-7".to_string()),
+            ..parsed
+        };
+        let out2 = serde_json::to_value(&with_id).expect("serialize");
+        assert_eq!(out2["run_id"], "run-7");
+        let back: FileSubProgress = serde_json::from_value(out2).expect("parse lai");
+        assert_eq!(back.run_id.as_deref(), Some("run-7"));
+    }
 
     /// File SRT rolling-caption that (ten chua dau hai cham rong U+FF1A).
     const REAL_ROLLING_SRT_PATH: &str = "C:\\Users\\TTC\\AppData\\Roaming\\com.sublix.desktop\\downloads\\StarCraft II\u{FF1A} Legacy of the Void - Reclamation [uQnmfEka3vw].en.srt";

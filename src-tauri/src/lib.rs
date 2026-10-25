@@ -160,6 +160,10 @@ async fn translate_batch(
 ///
 /// `project_path` (tuỳ chọn): dùng để tìm bảng glossary **theo dự án**
 /// (`<project>.sublix-glossary.json`). Có bảng đã duyệt ⇒ dùng làm ràng buộc CỨNG.
+///
+/// `run_id` (tuỳ chọn): định danh lượt chạy — backend **echo** lại trong payload
+/// `translate:progress` để listener lọc đúng tab (xem `docs/STUDIO_TABS_PLAN.md` §3.3).
+/// Không truyền ⇒ payload giống hệt bản cũ.
 #[tauri::command]
 async fn translate_script_contextual(
     app: tauri::AppHandle,
@@ -167,6 +171,7 @@ async fn translate_script_contextual(
     source_lang: String,
     target_lang: String,
     project_path: Option<String>,
+    run_id: Option<String>,
 ) -> Result<Vec<translate::contextual::ContextualLine>, String> {
     let emit_app = app.clone();
     tokio::task::spawn_blocking(move || {
@@ -179,7 +184,7 @@ async fn translate_script_contextual(
         let mut progress = |done: u32, total: u32, phase: &str| {
             let _ = emit_app.emit(
                 "translate:progress",
-                serde_json::json!({ "done": done, "total": total, "phase": phase }),
+                translate_progress_payload(done, total, phase, run_id.as_deref()),
             );
         };
         Ok(translate::contextual_run::translate_script_contextual(
@@ -192,6 +197,23 @@ async fn translate_script_contextual(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Payload sự kiện `translate:progress`.
+///
+/// `run_id` **chỉ** xuất hiện khi frontend truyền vào ⇒ không ai truyền thì payload
+/// y hệt bản cũ (tương thích ngược cho `DubbingStudioView` / `FileSubView`).
+fn translate_progress_payload(
+    done: u32,
+    total: u32,
+    phase: &str,
+    run_id: Option<&str>,
+) -> serde_json::Value {
+    let mut payload = serde_json::json!({ "done": done, "total": total, "phase": phase });
+    if let Some(rid) = run_id {
+        payload["run_id"] = serde_json::Value::String(rid.to_string());
+    }
+    payload
 }
 
 /// Đọc các lựa chọn dịch hiện tại + danh sách model (nút chọn nhanh, Ollama, GGUF).
@@ -1650,6 +1672,7 @@ async fn generate_file_subtitles(
     create_bilingual: bool,
     stt_model_name: Option<String>,
     translation_model_name: Option<String>,
+    run_id: Option<String>,
 ) -> Result<file_sub::FileSubResult, String> {
     tokio::task::spawn_blocking(move || {
         file_sub::generate_file_subtitles(
@@ -1660,6 +1683,7 @@ async fn generate_file_subtitles(
             create_bilingual,
             stt_model_name,
             translation_model_name,
+            run_id,
         )
     })
     .await
@@ -1708,6 +1732,7 @@ async fn dubbing_analyze(
     start_offset_sec: Option<f64>,
     expected_speakers: Option<usize>,
     prefer_existing_srt: Option<bool>,
+    run_id: Option<String>,
 ) -> Result<dubbing::DubbingProject, String> {
     tokio::task::spawn_blocking(move || {
         dubbing::analyze_and_create_project_full(
@@ -1719,6 +1744,7 @@ async fn dubbing_analyze(
             start_offset_sec,
             expected_speakers,
             prefer_existing_srt,
+            run_id,
         )
     })
     .await
@@ -1765,9 +1791,10 @@ async fn dubbing_export(
     app: tauri::AppHandle,
     project: dubbing::DubbingProject,
     output_path: Option<String>,
+    run_id: Option<String>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        dubbing::export_dubbed_video(Some(&app), project, output_path)
+        dubbing::export_dubbed_video(Some(&app), project, output_path, run_id)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -2171,4 +2198,29 @@ fn cleanup_all_previews() -> Result<usize, String> {
     Ok(removed)
 }
 
+#[cfg(test)]
+mod run_id_payload_tests {
+    use super::translate_progress_payload;
 
+    /// Khong truyen run_id -> payload giong het ban cu (tuong thich nguoc).
+    #[test]
+    fn payload_khong_run_id_giong_ban_cu() {
+        let v = translate_progress_payload(3, 10, "translating", None);
+        assert_eq!(v["done"], 3);
+        assert_eq!(v["total"], 10);
+        assert_eq!(v["phase"], "translating");
+        assert!(
+            v.get("run_id").is_none(),
+            "khong co run_id -> payload phai giong ban cu: {v}"
+        );
+    }
+
+    /// Co run_id -> them khoa "run_id" vao payload.
+    #[test]
+    fn payload_co_run_id_them_khoa() {
+        let v = translate_progress_payload(1, 2, "reading", Some("run-42"));
+        assert_eq!(v["run_id"], "run-42");
+        assert_eq!(v["done"], 1);
+        assert_eq!(v["total"], 2);
+    }
+}

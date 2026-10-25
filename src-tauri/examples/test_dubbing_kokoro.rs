@@ -72,7 +72,7 @@ fn main() -> Result<()> {
     let out = r"H:\AI Project\sublix\test_dubbing_input\kokoro_DUBBED_TEST.mp4";
     project.dubbing_mode = "ducking".to_string();
     let export_start = std::time::Instant::now();
-    let res = export_dubbed_video(None, project, Some(out.to_string()))?;
+    let res = export_dubbed_video(None, project, Some(out.to_string()), None)?;
     println!("✅ Xuất xong trong {:.2}s: {res}", export_start.elapsed().as_secs_f32());
 
     assert!(Path::new(&res).exists(), "Video lồng tiếng phải tồn tại trên đĩa");
