@@ -36,7 +36,7 @@
 | `BUG-085` | **Cài đặt ghi đè API key bằng chuỗi rỗng**: `fullConfig` nạp lúc mở app, key được nạp thẳng vào file sau đó → bấm "Lưu" ghi bản cũ (key = "") và **xoá key thật** (đã xảy ra với minimax/openrouter) | `src/views/settings/configMerge.ts` (mới), `SettingsView.tsx` | **Luôn đọc lại config từ đĩa ngay trước khi lưu**, gộp bằng hàm thuần; chỉ ghi field vừa sửa + key VỪA GÕ (rỗng = giữ nguyên); xoá key phải là hành động chủ động | ✅ Fixed |
 | `BUG-H21` | **Bảng thuật ngữ không thêm được dòng**: `GlossaryEditor` bấm "+ Thêm thuật ngữ" → dòng mới biến mất ngay, vì `glossaryModel.normalizeGlossary` **xoá dòng thiếu "Từ gốc"** ngay lúc `emit` (dòng nháp luôn trống) ⇒ người dùng **không tự thêm được** mục nào vào bảng | `src/components/glossary/glossaryModel.ts` (`normalizeGlossary`) | `normalizeGlossary` chỉ được dùng khi **lưu/đọc**, **không** dùng trong `emit`; hoặc giữ dòng nháp trong state và lọc khi ghi xuống đĩa (backend `glossary.rs::normalise` vốn đã lọc) | ✅ Fixed (điều phối: `GlossaryEditor.emit` gửi nguyên bảng; lọc dòng trống/trùng khi ghi — bỏ workaround trong drawer) |
 | `BUG-H22` | **Chạy 2 instance Tauri cùng máy → instance thứ 2 chết ngay lúc mở** (panic `Failed to setup app`): WebView2 dùng chung thư mục dữ liệu `%LOCALAPPDATA%\<identifier>\EBWebView`; instance thứ 2 thêm `--remote-debugging-port` ⇒ **browser args khác** ⇒ WebView2 từ chối dùng chung UDF ⇒ `WebviewWindowBuilder::build()` lỗi ⇒ app panic (mà release build **không in console** vì `windows_subsystem="windows"`) | `src-tauri/src/lib.rs` (setup) + cách chạy instance verify | Khi verify GUI cần 2 instance: **đổi `identifier`** cho instance verify (`npx tauri build --no-bundle --config '{"identifier":"com.sublix.verify.xxx"}'`) ⇒ tách UDF + tách thư mục config; **không** đổi `%LOCALAPPDATA%` (Tauri dùng API `SHGetKnownFolderPath`, không đọc env var) và **không** kill app của PO | ✅ Workaround (dùng identifier riêng cho instance verify) |
-| `BUG-H23` | **`glossary_suggest` lỗi parse khi LLM trả thuật ngữ dạng chuỗi**: *"JSON không hợp lệ: invalid type: string \"Dark Templar\", expected struct GlossaryTerm"* ⇒ **mất trọn kết quả gợi ý** (mất cả phần xưng hô đã parse được) vì model local (`qwen2.5:3b`) hay trả khối thuật ngữ theo **định dạng cũ** (`"gốc => dịch"`) thay vì object `{source,target}` | `src-tauri/src/translate/glossary*.rs` (`glossary_suggest` — parse JSON LLM) | Deserializer của `GlossarySuggestion` phải **chấp nhận cả 2 dạng** (string cũ → `Glossary::from_legacy`, object mới → `GlossaryTerm`) như `Glossary::from_legacy` đã làm cho config; **và** khi 1 phần lỗi thì **giữ phần parse được** thay vì fail cả response | 🔴 Open (cần owner `src-tauri/translate/`) |
+| `BUG-H23` | **`glossary_suggest` lỗi parse khi LLM trả thuật ngữ dạng chuỗi**: *"JSON không hợp lệ: invalid type: string \"Dark Templar\", expected struct GlossaryTerm"* ⇒ **mất trọn kết quả gợi ý** (mất cả phần xưng hô đã parse được) vì model local (`qwen2.5:3b`) hay trả khối thuật ngữ theo **định dạng cũ** (`"gốc => dịch"`) thay vì object `{goc,dich}` | `src-tauri/src/translate/glossary_parse.rs` (mới) + `contextual.rs::parse_reference` (gọi parser khoan dung) | **Parse từng phần, đừng parse cả cục**: mỗi phần tử `thuat_ngu`/`xung_ho` nhận **object HOẶC chuỗi** (`→`, `=>`, `->`, `=`, `:`); phần tử hỏng ⇒ **bỏ qua + `tracing::warn!`**, **một phần hỏng không được làm hỏng phần khác**; chỉ `Err` khi JSON hỏng hẳn hoặc không lấy được gì | ✅ Fixed (task `TSK-FIX-BUG-H23`) |
 
 ---
 
@@ -595,3 +595,28 @@
 - **Ghi chú WDAC:** `cargo test` có thể bị chặn `os error 4551` (Smart App Control) ngay sau khi build — cách vượt: **đổi mtime file nguồn** để dựng lại hash rồi chạy lại (xem `BUG-084`), `CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`.
 
 ---
+
+### [BUG-H23] `glossary_suggest` chịu được JSON "dạng cũ" từ LLM
+- **Ngày:** 2026-10-25 | **Phát hiện bởi:** mcode #2 (`TSK-FIX-BUG-H23`) | **Status:** ✅ Fixed
+- **Triệu chứng:** `glossary_suggest` báo *"JSON không hợp lệ: invalid type: string \"Dark Templar\",
+  expected struct GlossaryTerm"* ⇒ **mất TRỌN** kết quả gợi ý, kể cả phần **xưng hô vốn đã parse
+  được**. Model local (`qwen2.5:3b`) trả `thuat_ngu` là **mảng chuỗi** (`"Dark Templar => Mẫu Tử Tối"`,
+  `"a → b"`, `"a=b"`) thay vì object `{goc, dich}`.
+- **Root Cause:** deserialize cứng của `ScriptReference` (`thuat_ngu: Vec<GlossaryTerm>`) ⇒ 1 phần tử
+  sai là **fail cả response**; không có cơ chế "giữ phần parse được".
+- **Cách sửa:** module mới `src-tauri/src/translate/glossary_parse.rs`:
+  - `thuat_ngu` / `terms` nhận **object** `{goc,dich}` (kèm alias `source`/`target`) **hoặc chuỗi**
+    (`→`, `=>`, `->`, `=`, `:`) — tách bằng `split_term()`;
+  - `xung_ho` / `pronouns` nhận **object** hoặc chuỗi `"Kaldares: gọi là anh, tự xưng tôi"`;
+  - `nhan_vat` nhận object; phần tử hỏng ⇒ **bỏ qua + `tracing::warn!`**;
+  - **một phần hỏng không làm hỏng phần khác** (terms hỏng vẫn giữ pronouns và ngược lại);
+  - chịu được ```json fences ``` và chữ thừa trước/sau;
+  - chỉ `Err` khi JSON hỏng hẳn hoặc không lấy được gì.
+  `contextual.rs::parse_reference` (đúng 1 hàm) gọi parser này ⇒ cả `glossary_suggest` lẫn lượt 1
+  của đường dịch đều hưởng lợi.
+- **Verify:** `cargo test --lib` **242 pass / 0 fail** (10 test mới trong `glossary_parse_tests.rs`) ·
+  `cargo build --example bench_translate` OK · **test thật với Ollama `qwen2.5:3b`**:
+  lần model trả định dạng cũ ⇒ *parse cứng* **FAIL**, *parse khoan dung* **OK**
+  (cứu được 3 quy tắc xưng hô + 2 nhân vật + tóm tắt).
+- **Bài học:** khi LLM sinh JSON, **phải parse khoan dung từng phần** — đừng deserialize cứng cả
+  cục; 1 trường "sai kiểu" không được xoá sạch kết quả của các trường khác.

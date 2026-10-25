@@ -17,6 +17,7 @@ pub mod contextual_types;
 pub mod contextual_verify;
 pub mod glossary;
 pub mod glossary_check;
+pub mod glossary_parse;
 pub mod glossary_prompt;
 pub mod glossary_store;
 pub mod pronoun_audit;

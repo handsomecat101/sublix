@@ -246,26 +246,16 @@ impl Glossary {
 
 }
 
-/// Tách "gốc → dịch" từ 1 dòng glossary cũ.
-fn split_pair(s: &str) -> Option<(String, String)> {
-    for sep in ["=>", "→", "->", "="] {
-        if let Some(pos) = s.find(sep) {
-            let (a, b) = s.split_at(pos);
-            let b = &b[sep.len()..];
-            if a.trim().is_empty() {
-                return None;
-            }
-            return Some((a.to_string(), b.to_string()));
-        }
-    }
-    None
-}
+// Hàm tách "gốc → dịch" nằm ở `glossary_parse.rs` cho file này < 300 dòng.
+use super::glossary_parse::split_pair;
+
 
 
 // Phần sinh prompt + gợi ý nằm ở file riêng (`glossary_prompt.rs`) cho file này
 // < 300 dòng — nhưng **API công khai giữ nguyên**:
 // `Glossary::to_rules()`, `Glossary::hard_block()`, `glossary::suggestion_from_reference()`.
 pub use super::glossary_prompt::suggestion_from_reference;
+pub use super::glossary_parse::split_term;
 
 #[cfg(test)]
 #[path = "glossary_tests.rs"]

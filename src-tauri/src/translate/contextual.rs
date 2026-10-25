@@ -90,13 +90,12 @@ pub fn build_reference_prompt(lines: &[ScriptLine], source: &str, target: &str) 
 }
 
 /// Parse JSON tham chiếu. Thiếu trường → để trống (không chết). JSON hỏng → Err.
+///
+/// **Khoan dung** (TSK-FIX-BUG-H23): thuật ngữ / xưng hô nhận được **cả định dạng
+/// cũ** (chuỗi `"gốc => dịch"`) lẫn object; một phần hỏng **không** làm hỏng phần
+/// khác. Toàn bộ logic nằm ở `translate::glossary_parse` (file `glossary*.rs`).
 pub fn parse_reference(raw: &str) -> Result<ScriptReference, String> {
-    let start = raw.find('{').ok_or("khong tim thay JSON")?;
-    let end = raw.rfind('}').ok_or("JSON khong dong")?;
-    if end <= start {
-        return Err("JSON khong hop le".to_string());
-    }
-    serde_json::from_str::<ScriptReference>(&raw[start..=end]).map_err(|e| format!("JSON khong hop le: {e}"))
+    super::glossary_parse::parse_reference_lenient(raw)
 }
 
 /// Render bản tham chiếu thành block text để nhét vào prompt lượt 2.

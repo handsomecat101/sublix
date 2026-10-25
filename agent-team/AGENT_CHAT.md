@@ -1,5 +1,14 @@
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-25 11:45 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FIX-BUG-H23` — `glossary_suggest` chịu được JSON "dạng cũ" từ LLM; **chưa commit**).
+- **Sửa:** module mới `src-tauri/src/translate/glossary_parse.rs` — `thuat_ngu`/`terms` nhận **object HOẶC chuỗi** (`→` `=>` `->` `=` `:`), `xung_ho`/`pronouns` nhận object hoặc chuỗi `"Kaldares: gọi là anh, tự xưng tôi"`; phần tử hỏng ⇒ **bỏ qua + `tracing::warn!`**; **một phần hỏng không làm hỏng phần khác**; chịu được code fence + chữ thừa; chỉ `Err` khi JSON hỏng hẳn hoặc không lấy được gì.
+- **Nối:** `contextual.rs::parse_reference` (đúng 1 hàm) gọi parser mới ⇒ cả `glossary_suggest` lẫn lượt 1 của đường dịch đều hưởng lợi. File trong `glossary*.rs` đều < 300 dòng (`glossary.rs` 285, `glossary_parse.rs` 222).
+- **Verify:** `cargo test --lib` **242 pass / 0 fail** (10 test mới trong `glossary_parse_tests.rs`) · `cargo build --example bench_translate` OK · **test thật với Ollama `qwen2.5:3b`**: lần model trả định dạng cũ ⇒ *parse cứng* **FAIL**, *parse khoan dung* **OK** (cứu được 3 quy tắc xưng hô + 2 nhân vật + tóm tắt).
+- **ISSUE_LOG:** `BUG-H23` → ✅ Fixed (kèm phần chi tiết ở cuối file).
+
+---
+
 
 ### 2026-10-25 11:30 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-STUDIO-GLOSSARY` — gắn bảng thuật ngữ + xưng hô vào bước "Dịch" của Studio; **chưa commit**).
@@ -78,23 +87,6 @@
 - **3) MARKER ĐỊNH DẠNG CŨ:** `normalizeMarkers(raw)` trong `markers.ts` chịu được số giây thuần (`[12.5, 30]`), object thiếu `id`, thiếu `color`, `time` dạng chuỗi, key khác (`seconds`/`start`/`position`), bọc `{version, markers}`; dùng khi nạp project cache → **marker cũ không còn "mất tăm"**.
 - **Verify:** `node --test scripts/timeline-tests/` **107/107 PASS** (18 case mới) · `tsc` 0 lỗi · `npm run build` OK · GUI instance riêng (release build `npx tauri build --no-bundle` — **không** `cargo build --release`, CDP 9227, APPDATA riêng) **5/5 PASS**: marker cũ hiện đủ 3 vạch, nút ↷ disabled khi rỗng, Shift+Delete dồn câu sau 117,19px → 58,59px, Ctrl+Z rồi Ctrl+Shift+Z khôi phục đúng, menu chuột phải có mục ripple.
 - **⚠️ Lưu ý:** đường `undoStack` (general) giữ nguyên như cũ; redo lấy từ `future` của từng lớp. Instance verify đã tắt, app PO (1420) không bị đụng; chưa commit.
----
----
----
-
-### 2026-10-25 07:02 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-FIX-EXAMPLES` — 3 example Rust không build được từ commit `c9ccaad`; **chưa commit**).
-- **Fix:** `analyze_and_create_project` đã đổi **5 → 7 tham số** (`start_offset_sec` + `expected_speakers`) ⇒ thêm 2 `None` vào `test_dubbing_e2e.rs`, `test_dubbing_kokoro.rs`, `test_v2_diarization_e2e.rs` (giống hệt lệnh Tauri `dubbing_analyze` khi UI không gửi 2 tuỳ chọn này). **Không** đụng `src-tauri/src/**` hay `src/**`.
-- **Verify:** `cargo build --examples` **exit 0** — 7/7 example ra `.exe` (`CARGO_TARGET_DIR=%TEMP%\sublix-cc-target`), build lại là no-op ⇒ đã xoá đúng lỗi mà mcode #2 báo trong AGENT_CHAT. *(Verify lần 2 trên **bản sao HEAD + 3 file của tôi** — repo chính đang tạm **đỏ** vì worker khác sửa dở `src-tauri/src/**` (`proc_kill` chưa khai báo trong `lib.rs`), **không** phải lỗi của task này.)*
-
----
----
----
----
-
----
----
-
 ---
 ---
 ---

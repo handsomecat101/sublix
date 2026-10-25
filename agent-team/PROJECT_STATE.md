@@ -56,6 +56,7 @@
 |----|------|-------|----------|--------|----------------|
 | `TSK-FEAT-GLOSSARY-PRONOUN` | Bảng **thuật ngữ + xưng hô** do người dùng duyệt (thay bảng LLM tự bịa): lưu theo dự án + fallback config, lệnh `glossary_get/set/suggest`, ràng buộc CỨNG trong prompt, hậu kiểm vi phạm `glossary_violation`, component `GlossaryEditor` độc lập | **mcode #2 (Orca worker)** | 🔴 HIGH |  ✅ Xong 2026-10-25  | `src-tauri/src/translate/glossary*.rs` (mới) · `translate/contextual*.rs` · `translate/mod.rs` · `config.rs` · `lib.rs` · `src/components/glossary/**` (mới) · `src/lib/tauri.ts` · `src/lib/types.ts` |
 | `TSK-REFACTOR-GLOSSARY-300` | Tách 2 file > 300 dòng (không đổi hành vi): `glossary.rs` 366→272 (+ `glossary_prompt.rs`), `contextual_run.rs` 336→165 (+ `contextual_chunk.rs`, `contextual_verify.rs`) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src-tauri/src/translate/{glossary,glossary_prompt,contextual_run,contextual_chunk,contextual_verify}.rs` + `translate/mod.rs` — **chưa commit** |
+| `TSK-FIX-BUG-H23` | `glossary_suggest` chịu JSON "dạng cũ" của LLM (chuỗi `gốc => dịch`) — 1 phần hỏng không làm hỏng phần khác | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src-tauri/src/translate/glossary_parse.rs` (mới) + `glossary_parse_tests.rs` (mới) + `glossary.rs` (+`split_term`) + `contextual.rs` (`parse_reference` → parser khoan dung) + `translate/mod.rs` — **chưa commit** |
 
 
 ---
