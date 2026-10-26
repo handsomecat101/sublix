@@ -481,6 +481,120 @@ Các phím này phải chạy cả khi focus đang ở ô nhập (Ctrl+Tab trong
 
 **Component đề xuất:** `src/views/studio/tabs/StudioTabStrip.tsx` (+ `.css`, `StudioTab.tsx` bọc `React.memo` — tiến độ đổi chỉ render lại 1 tab; `tabStripModel.ts` thuần: tên rút gọn cắt giữa, khử trùng đường dẫn, thứ tự/di chuyển, chọn tab kế khi đóng (bên phải, hết thì bên trái), map phím → test `node --test`). Hộp hỏi dùng lại component xác nhận của Tiến trình.
 
+### 4.12 Kiểu phụ đề + làm mờ phụ đề cứng — v0.14 (mockup `v014-subtitle-style.html`)
+
+Phạm vi theo `docs/V0.14_PLAN.md` §1 + §2D. Hiện trạng (đã đọc code): modal Xuất (`SublixStudioView.tsx` ~9931) có Đường tiếng + Phụ đề (Softsub / Hardsub / Không); kiểu chữ (cỡ, 5 màu, vị trí, bóng) nằm ở tab **⚙ Thuộc tính** cột phải (~8673), thanh công cụ trên video có select Bản dịch/Gốc/Song ngữ (~7953). Không có gì về chữ nhảy hay chữ cứng.
+
+**Đặt ở đâu — 1 chỗ chính + lối tắt (theo §4.1 nguyên tắc 1)**
+
+| Nơi | Vai trò | Lý do |
+|---|---|---|
+| Tab **⚙ Thuộc tính** (cột phải) | **Chỗ chính**: thẻ "Kiểu phụ đề" (thay "Kiểu dáng phụ đề màn chiếu") + thẻ mới "Phụ đề cứng của video gốc" | Nằm ngay cạnh khung xem thử ⇒ chỉnh là thấy; kiểu chữ đã ở đây; chỉnh dải phải nhìn video, không thể làm trong modal |
+| Thanh công cụ video | 2 chip lối tắt: `Aa Nhảy chữ · Vàng nảy` (luôn hiện) và `▭ Làm mờ dải chữ cứng` (chỉ khi đã tích ô). Bấm = cột phải sang Thuộc tính, cuộn tới thẻ, nháy viền 1 lần | Thấy trạng thái đang áp mà không mở cột phải; không lặp control |
+| Modal **Xuất** | Chỉ **tóm tắt + "Đổi"** dưới 3 thẻ Phụ đề (như mẫu "Nhà cung cấp … — Đổi" ở §4.3). Ô chưa tích ⇒ 1 dòng mờ "Video gốc có chữ in sẵn? Làm mờ & đè tem ›" | Người chỉ nhận ra chữ cứng lúc xuất vẫn có lối vào; không có control thứ 2 |
+
+**A. Thẻ "Kiểu phụ đề"** (mockup B)
+
+```
+Aa Kiểu phụ đề
+[ Bình thường | Nhảy chữ ]                         ← segmented, mặc định Bình thường (giữ hành vi cũ)
+Bình thường:  Màu chữ ■■■■■ · Cỡ chữ ─●─ · Viền & bóng [●] · Vị trí [Dưới đáy|Ở giữa|Trên đỉnh]
+Nhảy chữ:     ┌ Vàng nảy ✓ ┐┌ Karaoke xanh ┐       ← 4 thẻ mẫu 2×2, cao 62 px, chữ "Xin chào các bạn" chạy thật
+              └ Hộp cam    ┘└ Hiện dần     ┘
+              Cỡ chữ · Viền & bóng · Vị trí (giữ)  ← mẫu thay ô màu; còn lại giữ nguyên
+              "Nhịp nhảy theo lời nói. Câu dịch chưa có mốc từng từ ⇒ chia theo số âm tiết."
+```
+
+| Mẫu | Hiệu ứng | ASS (thợ xác minh với libass) |
+|---|---|---|
+| **Vàng nảy** (mặc định) | từ đang nói đổi vàng `#FFC83D` + phóng 118 % rồi thu về; từ khác trắng | 1 event/từ, `\t(\fscx118\fscy118\c…)` |
+| **Karaoke xanh** | tô dần trái→phải, từ đã nói giữ xanh `#5FD3FF` | `\kf` — 1 event/câu, rẻ nhất |
+| **Hộp cam** | từ đang nói trong hộp `--ac`, chữ tối (kiểu CapCut) | lớp hộp riêng `BorderStyle=3` theo vị trí từ — **rủi ro**: phải đo được vị trí từ; không đạt ⇒ bỏ mẫu này, giữ 3 |
+| **Hiện dần** | từ chưa nói ẩn (vẫn giữ chỗ, không nhảy dòng), tới lượt thì bật ra | `\alpha&HFF&` + `\t` theo mốc từ |
+
+- Thẻ mẫu = nhóm radio (`←` `→` đổi). **Rê chuột lên mẫu ⇒ khung xem thử áp tạm** (nhãn "đang xem thử"), rời chuột ⇒ về mẫu đã chọn; bấm = chọn. Đây là cách "thấy trước khi xuất" rẻ nhất, không cần nút Xem thử.
+- **Song ngữ:** chỉ dòng Việt nhảy; dòng gốc nhỏ xám giữ bình thường. **Nguyên bản:** dùng word timestamp của Whisper nếu có, không có thì chia âm tiết.
+- Màu mẫu cố định (không cho chỉnh màu từng mẫu ở v0.14 — 4 mẫu là đủ, thêm chỉnh màu = thêm 4–6 control).
+- Font: font đi kèm app do nghiên cứu chọn; khung xem thử nạp **cùng file font** qua `@font-face` để xem thử = xuất.
+
+**B. Thẻ "Phụ đề cứng của video gốc"** (mockup A, C)
+
+```
+▭ Phụ đề cứng của video gốc
+☐ Video có phụ đề cứng — làm mờ & đè tem           ← mặc định TẮT; tắt thì chỉ 1 dòng + câu giải thích
+[trạng thái dò]                       [↻ Dò lại]
+▬▬ ▬▬▬▬ ▬ ▬▬▬▬▬▬ ▬▬▬                               ← dải thời gian có chữ (10 px), bấm 1 đoạn = tua tới
+Mức mờ        [Nhẹ | Vừa | Mạnh]                   ← mặc định Vừa
+Nền tem mờ đục [●]                                 ← mặc định BẬT (chỉ mờ thì bóng chữ cũ vẫn lộ)
+Làm mờ        [Chỉ lúc có chữ | Suốt video]        ← mặc định Chỉ lúc có chữ
+```
+
+- Mức mờ ⇒ `gblur sigma` ở 1080p: Nhẹ 6 · Vừa 12 · Mạnh 20 (nhân `cao_video/1080`). Xem thử: `backdrop-filter: blur(sigma × cao_hiển_thị/cao_video)` — thợ đo 1 khung so ảnh xuất, chỉnh hệ số nếu lệch.
+- Tem = hộp đen 55 % phủ đúng dải, **góc vuông** (vì `drawbox` của ffmpeg không bo góc ⇒ xem thử cũng không bo).
+- Có dải ⇒ chữ Việt **căn giữa dải**, control "Vị trí" khoá với chữ "Theo dải chữ cứng". Dải thấp hơn 1 dòng chữ ở cỡ hiện tại ⇒ dòng vàng "Dải thấp hơn cỡ chữ — chữ sẽ tràn ra ngoài dải".
+- "Chỉ lúc có chữ" ⇒ khung xem thử cũng chỉ mờ trong các khoảng đó (xem thử = xuất).
+
+**C. Trạng thái dò + hành vi** (mockup C, E)
+
+| Trạng thái | Thẻ hiện | Khung video | Khi bấm Xuất |
+|---|---|---|---|
+| **Tắt** (mặc định) | 1 dòng ô tích + giải thích | không gì | không làm mờ; modal có dòng mờ dẫn tới thẻ |
+| **Đang dò** | vòng quay · "Đang dò chữ cứng… 34 %" · "nửa dưới khung · còn ~20 giây" · thanh 3 px · ✕ huỷ | vệt quét chậm ở nửa dưới + nhãn % (không che, không chặn phát) | nút chính thành **"Xuất khi dò xong"**: việc xuất vào hàng đợi sau bước dò |
+| **Tìm thấy** | ✓ "Tìm thấy dải chữ · đáy khung" · "14 đoạn · 82 % thời lượng có chữ" · ↻ Dò lại · dải thời gian · 3 tuỳ chọn. Đã chỉnh tay ⇒ thêm "đã chỉnh tay · ↺ Về dải dò" | khung dải (mục D) | "Làm mờ vừa + tem · dải 81–93 % · 14 đoạn" |
+| **Tìm thấy ít** (< 5 % thời lượng hoặc dải không ổn định) | như trên nhưng chấm vàng + "kiểm lại dải trên video" | khung dải | vẫn xuất |
+| **Không thấy chữ** | ? vàng "Không thấy chữ ở nửa dưới khung hình" · "Đã xem 252 khung" · [Dò cả nửa trên] [▭ Tự đặt dải] · "Video không có chữ cứng thì bỏ tích" | không gì | dòng vàng "Không thấy chữ — sẽ không làm mờ"; vẫn xuất |
+| **Lỗi** | ! đỏ "Không dò được" + 1 dòng lỗi dễ hiểu (đủ trong nhật ký/tooltip) · nút theo loại: thiếu mô hình ⇒ "⬇ Tải mô hình · N MB" (dùng chung bộ tải của Cài đặt › Mô hình), khác ⇒ "↻ Thử lại" · luôn có [▭ Tự đặt dải] | không gì | như "Không thấy chữ" (có dải tự đặt thì dùng dải đó) |
+| **Chưa dò** (đã tích nhưng huỷ dò / dự án từ bản cũ / video nguồn đổi) | vòng nét đứt "Chưa dò" + [Dò ngay] | không gì | "Sẽ dò trước khi xuất" — việc xuất tự chạy bước dò trước (**không bao giờ chặn xuất**) |
+
+Quy tắc:
+- **Tích ô = dò ngay** (Zero-Button, không có nút "Dò" riêng). Bỏ tích = ẩn dải + tắt hiệu ứng nhưng **giữ** kết quả dò + chỉnh tay; tích lại = có ngay, không dò lại.
+- Kết quả lưu **theo dự án**, khoá theo đường dẫn + cỡ + thời lượng video; khoá đổi ⇒ về "Chưa dò".
+- Dò chạy nền, không khoá Studio; là việc nhẹ (1 khung/giây, CPU) nhưng vẫn đi qua hàng đợi việc của tab (§4.11) để tab hiện tiến độ đúng.
+- **Không tự bỏ tích** khi không thấy chữ (người dùng có thể biết rõ hơn máy).
+- **Dò lại khi dải đã chỉnh tay:** không hỏi; dò xong toast "Đã thay dải bạn chỉnh bằng dải mới · **Hoàn tác**" (6 s).
+- **Tự đặt dải:** dải mặc định 80–94 % cao, 4–96 % ngang, áp suốt video (không có khoảng thời gian ⇒ seg "Làm mờ" khoá ở "Suốt video").
+- Modal Xuất: khi kiểu = Nhảy chữ **hoặc** ô đang tích ⇒ **chọn sẵn "Khắc cứng"**. Chọn "Phụ đề mềm" ⇒ dòng ⚠ "Phụ đề mềm luôn là kiểu Bình thường, và không nằm vào dải mờ" (vẫn cho xuất). "Không nhúng phụ đề" + ô tích ⇒ chỉ làm mờ (video sạch chữ). "Đổi" = đóng modal, mở Thuộc tính, nháy thẻ.
+
+**D. Khung dải kéo chỉnh trên video** (mockup D)
+
+- **Hiện khung** (viền nét đứt `--ac` 1.5 px, ngoài dải tối 18 %, nhãn "▭ Dải chữ cứng · tự dò" góc trên-trái) khi tab Thuộc tính đang mở **hoặc** rê chuột lên dải. Lúc khác (tab Phụ đề / đang phát) chỉ thấy hiệu ứng thật.
+- **Tay nắm:** trên/dưới 34×9 px giữa mép (vùng bấm = cả mép, cao 12 px, con trỏ ↕); trái/phải 9×26 (↔, mặc định co đối xứng, giữ `Alt` = 1 bên); kéo thân = dời (✥). Tay nắm đang rê: nền `--ac` + quầng `--ac-soft`.
+- **Đang kéo:** số đọc mono "Trên 79,0 % · Dưới 96,0 % · cao 184 px" (px của video gốc); dải dò cũ hiện nét đứt mờ để so; **hút 4 px** vào mép dải dò và mép khung (vạch xanh `--ok` + chữ "mép dải dò"). Cao tối thiểu 3 % khung. Thả ⇒ nhãn "chỉnh tay", viền liền. `Esc` khi đang kéo = huỷ lần kéo.
+- **Phím:** `Tab` tới dải · `↑` `↓` dời 1 px video gốc (`Shift` ×10) · nhấp đúp = về dải dò · `Ctrl+Z` hoàn tác (chung ngăn hoàn tác dự án).
+- Lưu dải dưới dạng **tỉ lệ 0–1 của khung** (không phụ thuộc cỡ hiển thị / thu phóng 75–50 %); đổi sang px chỉ khi dựng filter ffmpeg.
+
+**E. Xem thử = video xuất**
+
+- Chữ nhảy: khung xem thử lấy mốc từng từ từ **cùng hàm thuần** sinh ASS (`splitWordTimings` — việc lõi trong V0.14_PLAN §3). Không dùng `animation-delay` CSS (sai khi tua/tạm dừng): mỗi `timeupdate`/rAF khi đang phát tính **chỉ số từ đang nói**, chỉ render lại khi chỉ số đổi; hiệu ứng từ = class CSS (transition 120 ms).
+- Mờ + tem: 1 lớp `backdrop-filter` + 1 hộp, đặt theo tỉ lệ dải; "Chỉ lúc có chữ" ⇒ bật/tắt lớp theo khoảng thời gian dò.
+
+**Kiểu dữ liệu đề xuất** (lưu theo dự án, cạnh các thiết lập phụ đề hiện có)
+
+```ts
+export type SubtitleStyleKind = "normal" | "kinetic";
+export type KineticPresetId = "pop-amber" | "karaoke-cyan" | "box-amber" | "reveal";
+export interface HardsubBand { top: number; bottom: number; left: number; right: number } // tỉ lệ 0–1 của khung
+export type HardsubDetect =
+  | { kind: "idle" }                                             // chưa dò / đã huỷ
+  | { kind: "running"; progress: number; etaSec?: number; area: "bottom" | "full" }
+  | { kind: "found"; band: HardsubBand; intervals: Array<[number, number]>; coverage: number; weak: boolean }
+  | { kind: "none"; area: "bottom" | "full"; framesScanned: number }
+  | { kind: "error"; code: "model_missing" | "ffmpeg" | "other"; message: string };
+export interface HardsubSettings {
+  enabled: boolean;                       // mặc định false
+  detect: HardsubDetect;
+  band: HardsubBand | null;               // dải đang dùng (dò hoặc tay)
+  bandSource: "auto" | "manual";
+  blur: "light" | "medium" | "strong";    // mặc định "medium"
+  tem: boolean;                           // mặc định true
+  span: "text-only" | "whole";            // mặc định "text-only"
+}
+```
+
+**Component đề xuất** — `src/views/studio/subtitleStyle/`: `SubtitleStyleCard.tsx` (thẻ A, thẻ mẫu bọc `React.memo`), `HardsubCard.tsx` (thẻ B, trạng thái C), `HardsubBandOverlay.tsx` (khung + kéo, đặt trong khung video), `KineticSubtitleLine.tsx` (dòng chữ nhảy cho khung xem thử), `bandDragModel.ts` thuần (kéo mép, hút, tối thiểu 3 %, phím → test `node --test`). Mỗi file < 300 dòng; `SublixStudioView.tsx` chỉ thêm state + truyền props (1 thợ/lúc như V0.14_PLAN §3).
+
+**Đếm control:** thẻ Kiểu phụ đề Bình thường 4 → 5 (thêm segmented); Nhảy chữ 5 (segmented + 4 thẻ mẫu thay 5 ô màu) + 3 giữ. Thẻ phụ đề cứng: tắt = 1; tìm thấy = 1 ô + Dò lại + dải thời gian + 3 tuỳ chọn = 6. Modal Xuất: +2 liên kết "Đổi", không thêm control chỉnh.
+
 ---
 
 ## 5. MOCKUP & ẢNH
@@ -495,6 +609,7 @@ Các phím này phải chạy cả khi focus đang ở ô nhập (Ctrl+Tab trong
 | `docs/ui-mockups/shots/voice-picker-all.png` | Ảnh 1920×1080 của `voice-picker.html` |
 | `docs/ui-mockups/studio-tabs.html` | Tab dự án Studio (§4.11): toàn cảnh 4 tab + thẻ hover, bảng trạng thái tab, 1 tab, rỗng, tràn + danh sách, kéo đổi thứ tự, menu chuột phải, hộp hỏi đóng tab đang chạy, đổi tên, thả file |
 | `docs/ui-mockups/shots/studio-tabs.png` | Ảnh 1920×2700 của `studio-tabs.html` |
+| `docs/ui-mockups/v014-subtitle-style.html` | Kiểu phụ đề + làm mờ phụ đề cứng (§4.12): toàn cảnh Studio, thẻ Kiểu phụ đề (Bình thường / Nhảy chữ, 4 mẫu chữ chạy thật — có 30 dòng JS sinh keyframes), 6 trạng thái dò, khung dải (nghỉ / chỉnh / đang kéo / đang dò / tự đặt), modal Xuất tóm tắt |
 | `docs/ui-mockups/shots/after-*.png` | Ảnh mockup (Edge headless 1920×1080) |
 | `docs/ui-mockups/shots/compare-*.png` | **Trước | Sau** đặt cạnh nhau cho Studio, Tải video, Cài đặt |
 

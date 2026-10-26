@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Kiểu phụ đề & làm mờ phụ đề cứng (mockup §4.12)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  body { height: auto; overflow: auto; }
+  .page { padding: 26px 28px 60px; display: flex; flex-direction: column; gap: 28px; }
+  h1 { font-size: 20px; margin: 0; } h2 { font-size: 14px; margin: 0 0 10px; color: var(--ac-txt); }
+  .lead { color: var(--t3); margin: 4px 0 0; max-width: 1200px; line-height: 1.5; }
+  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); }
+  .cap { margin-top: 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
+  .cap b { color: var(--t1); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+
+  /* ============ KHUNG STUDIO THU GỌN ============ */
+  .ws { display: flex; height: 770px; }
+  .ws .left { width: 300px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-side); border-right: 1px solid var(--line); }
+  .sk { border-radius: 8px; background: var(--bg-card); border: 1px solid var(--line-soft); }
+  .ws .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #0c0b0a; }
+  .vtool { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); }
+  .vtool .sel { height: 26px; font-size: 12px; }
+  .tchip { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg-card); font-size: 12px; font-weight: 600; color: var(--t2); white-space: nowrap; }
+  .tchip .aa { font-weight: 800; color: var(--ac-txt); }
+  .tchip.on { border-color: var(--ac-br); background: var(--ac-soft); color: var(--ac-txt); }
+  .vwrap { flex: 1; display: grid; place-items: center; }
+  .ws .right { width: 380px; border-left: 1px solid var(--line); background: var(--bg-side); display: flex; flex-direction: column; }
+  .rtabs { display: flex; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); }
+  .rtab { padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--t3); border-bottom: 2px solid transparent; }
+  .rtab.on { color: var(--t1); border-color: var(--ac); }
+  .rbody { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+
+  /* ============ VIDEO GIẢ ============ */
+  .vid { position: relative; overflow: hidden; border-radius: 6px; background:
+      radial-gradient(ellipse 30% 40% at 28% 38%, #6b4a33 0%, transparent 70%),
+      radial-gradient(ellipse 25% 35% at 70% 45%, #2d4a5e 0%, transparent 70%),
+      linear-gradient(180deg, #1d222a 0%, #2a2620 60%, #151311 100%); }
+  .vid::before { content: ""; position: absolute; left: 18%; top: 22%; width: 20%; height: 62%; border-radius: 40% 40% 8% 8%; background: linear-gradient(180deg, #8a6a4c, #3d2c20); opacity: .8; }
+  .vid::after { content: ""; position: absolute; left: 60%; top: 30%; width: 17%; height: 56%; border-radius: 40% 40% 8% 8%; background: linear-gradient(180deg, #4d6f86, #1e2e3a); opacity: .8; }
+  .v960 { width: 960px; height: 540px; }
+  .v600 { width: 600px; height: 338px; }
+  /* phụ đề cứng gốc (chữ Trung in sẵn) */
+  .hard { position: absolute; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; letter-spacing: .04em; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 2px 3px #000; z-index: 1; }
+  .v960 .hard { top: 84.5%; font-size: 30px; }
+  .v600 .hard { top: 84.5%; font-size: 19px; }
+  /* lớp làm mờ = backdrop-filter (xem thử) ⇔ crop+gblur+overlay (xuất) */
+  .blur { position: absolute; z-index: 2; backdrop-filter: blur(var(--b, 9px)); -webkit-backdrop-filter: blur(var(--b, 9px)); }
+  .tem { position: absolute; inset: 0; background: rgba(0,0,0,.55); }   /* góc vuông: drawbox của ffmpeg không bo góc ⇒ xem thử cũng không bo */
+  .vn { position: absolute; z-index: 3; left: 0; right: 0; display: flex; justify-content: center; align-items: center; }
+  .vn .kl { font-weight: 800; color: #fff; text-shadow: 0 0 3px #000, 0 2px 4px rgba(0,0,0,.9); white-space: nowrap; }
+  .v960 .vn .kl { font-size: 28px; }
+  .v600 .vn .kl { font-size: 18px; }
+  .kl i { font-style: normal; display: inline-block; margin-right: .26em; transform-origin: 50% 80%; border-radius: .18em; padding: 0 .06em; }
+  .kl i:last-child { margin-right: 0; }
+  .kl[data-fx="kara"] i { background-image: linear-gradient(90deg, #5fd3ff 50%, #fff 50%); background-size: 200% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.9)); }
+  /* khung dải chỉnh tay */
+  .band { position: absolute; z-index: 4; border: 1.5px dashed var(--ac); box-shadow: 0 0 0 9999px rgba(0,0,0,.18); }
+  .band.quiet { border-color: transparent; box-shadow: none; }
+  .band.manual { border-style: solid; }
+  .band .tag { position: absolute; left: -1px; top: -21px; height: 19px; display: flex; align-items: center; gap: 5px; padding: 0 7px; border-radius: 5px 5px 0 0; background: var(--ac); color: #1a1209; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+  .band .tag.m { background: #f3c57c; }
+  .hdl { position: absolute; background: #1a1209; border: 1.5px solid var(--ac); border-radius: 4px; }
+  .hdl.t, .hdl.b { left: 50%; width: 34px; height: 9px; margin-left: -17px; }
+  .hdl.t { top: -5px; } .hdl.b { bottom: -5px; }
+  .hdl.t::after, .hdl.b::after { content: ""; position: absolute; left: 9px; right: 9px; top: 2.5px; height: 1px; background: var(--ac); box-shadow: 0 2px 0 var(--ac); }
+  .hdl.l, .hdl.r { top: 50%; width: 9px; height: 26px; margin-top: -13px; }
+  .hdl.l { left: -5px; } .hdl.r { right: -5px; }
+  .hdl.hot { background: var(--ac); box-shadow: 0 0 0 4px var(--ac-soft); }
+  .cursor { position: absolute; z-index: 6; font-size: 15px; color: #fff; text-shadow: 0 0 2px #000; pointer-events: none; }
+  .readout { position: absolute; z-index: 6; padding: 3px 8px; border-radius: 6px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); box-shadow: 0 6px 18px rgba(0,0,0,.6); font: 11px/1.4 var(--font-mono); color: var(--t1); white-space: nowrap; }
+  .guide { position: absolute; z-index: 5; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(94,189,107,.9); }
+  .guide span { position: absolute; right: 6px; top: -16px; font-size: 10px; color: var(--ok-txt); font-weight: 700; }
+  .ghostband { position: absolute; z-index: 3; border: 1px dashed rgba(246,240,228,.35); }
+  .scan { position: absolute; z-index: 4; left: 0; right: 0; top: 50%; bottom: 0; background: linear-gradient(180deg, transparent, rgba(232,163,61,.08)); overflow: hidden; }
+  .scan::before { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--ac), transparent); box-shadow: 0 0 12px var(--ac); animation: sweep 1.8s ease-in-out infinite; }
+  .scan span { position: absolute; left: 10px; top: 8px; font-size: 11px; font-weight: 700; color: var(--ac-txt); background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 5px; }
+  @keyframes sweep { 0% { top: 0; } 100% { top: 100%; } }
+
+  /* ============ THẺ CÀI ĐẶT CỘT PHẢI ============ */
+  .pc { background: var(--bg-card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .pc.flash { box-shadow: 0 0 0 2px var(--ac-br); }
+  .pct { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 12.5px; }
+  .pct .n { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; background: var(--ac-soft); color: var(--ac-txt); font-size: 11px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--t2); min-height: 24px; }
+  .prow .k { color: var(--t3); font-size: 11.5px; font-weight: 600; }
+  .prow.off { opacity: .45; }
+  .slider { width: 130px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.12); position: relative; }
+  .slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 55%; background: var(--ac); border-radius: 2px; }
+  .slider i::after { content: ""; position: absolute; right: -6px; top: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--t1); }
+  .sw-row { display: flex; gap: 6px; }
+  .swc { width: 20px; height: 20px; border-radius: 6px; border: 2px solid transparent; }
+  .swc.on { border-color: var(--t1); box-shadow: 0 0 0 2px var(--bg); }
+  .seg.sm span { padding: 3px 8px; font-size: 11px; }
+  .chips { display: flex; gap: 4px; }
+  .chip { padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line); font-size: 11px; color: var(--t3); font-weight: 600; }
+  .chip.on { color: var(--ac-txt); border-color: var(--ac-br); background: var(--ac-soft); }
+  .cbx { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; font-weight: 600; color: var(--t1); line-height: 1.35; }
+  .cbx i { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--t4); flex: none; margin-top: 1px; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 900; }
+  .cbx i.on { background: var(--ac); border-color: var(--ac); color: #1a1209; }
+  .cbx i.on::before { content: "✓"; }
+  .cbx small { display: block; font-weight: 400; color: var(--t3); font-size: 11.5px; margin-top: 2px; }
+  .st { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line-soft); font-size: 12px; }
+  .st .grow b { font-weight: 700; }
+  .st .sub { display: block; font-size: 11px; color: var(--t3); margin-top: 1px; }
+  .st.ok { border-color: var(--ok-br); } .st.warn { border-color: rgba(228,179,60,.3); } .st.dang { border-color: var(--dang-br); }
+  .ico { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 900; flex: none; }
+  .ico.ok { background: var(--ok); color: #0c1a0e; } .ico.warn { background: var(--warn); color: #241a04; } .ico.dang { background: var(--dang); color: #1a0806; }
+  .ico.idle { border: 1.5px dashed var(--t4); }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.12); border-top-color: var(--ac); flex: none; animation: rot 1s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .pbar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 5px; }
+  .pbar i { display: block; height: 100%; background: var(--ac); }
+  .btn.sm { padding: 3px 9px; font-size: 11.5px; border-radius: 7px; }
+  .lane { position: relative; height: 10px; border-radius: 3px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .lane i { position: absolute; top: 0; bottom: 0; background: rgba(232,163,61,.75); }
+  .lane .ph { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--t1); }
+  .lane-k { display: flex; justify-content: space-between; font: 10px var(--font-mono); color: var(--t4); margin-top: 3px; }
+  .hint { font-size: 11px; color: var(--t4); line-height: 1.45; }
+  .warnline { font-size: 11px; color: var(--warn-txt); display: flex; gap: 6px; }
+
+  /* mẫu nhảy chữ (thẻ nhỏ trong cột phải) */
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ps { border-radius: 8px; border: 1px solid var(--line); background: var(--bg-inset); overflow: hidden; position: relative; }
+  .ps.on { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
+  .ps.hov { border-color: var(--ac-br); }
+  .ps .th { height: 62px; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 20%, #2a2f38, #121417 75%); }
+  .ps .th .kl { font-size: 14px; }
+  .ps .nm { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; font-size: 11.5px; font-weight: 600; color: var(--t2); }
+  .ps.on .nm { color: var(--ac-txt); }
+  .ps .ok { font-size: 10.5px; }
+  /* thẻ mẫu lớn */
+  .bigps { border-radius: 10px; border: 1px solid var(--line); background: var(--bg-card); overflow: hidden; }
+  .bigps .th { height: 190px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 26px; background: radial-gradient(ellipse at 50% 25%, #2f3540, #101215 75%); }
+  .bigps .th .kl { font-size: 26px; }
+  .bigps .d { padding: 10px 12px; font-size: 12px; color: var(--t3); line-height: 1.5; }
+  .bigps .d b { color: var(--t1); display: block; font-size: 13px; margin-bottom: 2px; }
+  .bigps .d code { font: 11px var(--font-mono); color: var(--ac-txt); }
+
+  /* modal xuất */
+  .scrim { background: rgba(8,6,4,.62); display: grid; place-items: center; padding: 22px; }
+  .dlg { width: 820px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.7); display: flex; flex-direction: column; }
+  .dlg .hd { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); font-weight: 700; font-size: 14px; }
+  .dlg .hd .x { margin-left: auto; color: var(--t4); }
+  .dlg .bd { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .dlg .ft { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line-soft); }
+  .sect { font-size: 12px; font-weight: 700; color: var(--t2); display: flex; justify-content: space-between; }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .opt { border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; font-size: 11.5px; color: var(--t3); line-height: 1.45; background: var(--bg-card-2); }
+  .opt b { display: flex; align-items: center; gap: 6px; color: var(--t1); font-size: 12px; margin-bottom: 3px; }
+  .opt b::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--t4); flex: none; }
+  .opt.on { border-color: var(--ac-br); background: var(--ac-soft); }
+  .opt.on b::before { border-color: var(--ac); background: radial-gradient(circle, var(--ac) 3px, transparent 3.5px); }
+  .opt .w { display: block; margin-top: 5px; color: var(--warn-txt); font-size: 11px; }
+  .sum { border: 1px solid var(--line-soft); border-radius: 9px; background: var(--bg-inset); }
+  .sumr { display: flex; align-items: center; gap: 10px; padding: 7px 11px; font-size: 12px; }
+  .sumr + .sumr { border-top: 1px solid var(--line-soft); }
+  .sumr .k { width: 104px; color: var(--t3); font-weight: 600; font-size: 11.5px; flex: none; }
+  .sumr .v { flex: 1; color: var(--t1); }
+  .sumr .v .muted { font-size: 11.5px; }
+
+  .tbl { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .tbl td, .tbl th { border-bottom: 1px solid var(--line-soft); padding: 7px 10px; text-align: left; vertical-align: top; line-height: 1.45; }
+  .tbl th { color: var(--t4); font-size: 11px; font-weight: 700; }
+  .tbl td:first-child { white-space: nowrap; font-weight: 700; color: var(--t1); }
+  .note { position: absolute; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <h1>Kiểu phụ đề (Bình thường / Nhảy chữ) + "Video có phụ đề cứng — làm mờ & đè tem" — mockup §4.12</h1>
+    <p class="lead">Chỗ chính: tab <b>⚙ Thuộc tính</b> ở cột phải Studio (nơi đang có "Kiểu dáng phụ đề", nằm ngay cạnh khung xem thử ⇒ chỉnh là thấy). Thanh công cụ trên video chỉ có <b>chip lối tắt</b> (bấm = nhảy tới thẻ). Modal Xuất chỉ <b>tóm tắt + "Đổi"</b>, không lặp control. Khung xem thử = video xuất: chữ nhảy theo cùng hàm chia thời gian, vùng mờ dùng <code>backdrop-filter</code> tương đương <code>gblur</code>, nền tem góc vuông như <code>drawbox</code>. Chữ trong mockup chạy thật (CSS + 30 dòng JS sinh keyframes).</p>
+  </div>
+
+  <!-- ===================== A. TOÀN CẢNH ===================== -->
+  <section>
+    <h2>A · Toàn cảnh: Nhảy chữ "Vàng nảy" + phụ đề cứng tìm thấy · đang mở tab Thuộc tính ⇒ khung dải hiện tay nắm</h2>
+    <div class="frame">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.14</span></div>
+        <nav class="tabs"><span class="tab on">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span></nav>
+        <div class="top-mid"></div>
+        <div class="top-right"><span class="icon-btn">↶</span><span class="btn primary">⤓ Xuất video</span></div>
+      </header>
+      <div class="ws">
+        <div class="left">
+          <div class="sk" style="height:34px"></div><div class="sk" style="height:44px"></div><div class="sk" style="height:44px"></div><div class="sk" style="height:44px"></div><div class="sk" style="height:180px"></div>
+          <div class="sk" style="margin-top:auto;height:40px"></div>
+        </div>
+        <div class="mid">
+          <div class="vtool">
+            <span class="sel">Bản dịch (Tiếng Việt)</span>
+            <span class="tchip"><span class="aa">Aa</span> Nhảy chữ · Vàng nảy</span>
+            <span class="tchip on">▭ Làm mờ dải chữ cứng</span>
+            <span style="margin-left:auto" class="sel">100% Fit</span>
+          </div>
+          <div class="vwrap">
+            <div class="vid v960">
+              <div class="hard">我们必须马上离开这里！</div>
+              <div class="blur" style="left:12%;right:12%;top:81%;height:12%;--b:9px"><div class="tem"></div></div>
+              <div class="vn" style="top:81%;height:12%"><span class="kl" data-fx="pop"><i>Chúng</i><i>ta</i><i>phải</i><i>rời</i><i>khỏi</i><i>đây</i><i>ngay!</i></span></div>
+              <div class="band" style="left:12%;right:12%;top:81%;height:12%">
+                <span class="tag">▭ Dải chữ cứng · tự dò</span>
+                <span class="hdl t"></span><span class="hdl b"></span><span class="hdl l"></span><span class="hdl r"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="rtabs"><span class="rtab">📑 Phụ đề</span><span class="rtab on">⚙ Thuộc tính</span></div>
+          <div class="rbody">
+            <div class="pc">
+              <div class="pct"><span class="n">Aa</span>Kiểu phụ đề</div>
+              <div class="seg"><span>Bình thường</span><span class="on">Nhảy chữ</span></div>
+              <div class="presets">
+                <div class="ps on"><div class="th"><span class="kl" data-fx="pop"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Vàng nảy <span class="ok">✓</span></div></div>
+                <div class="ps"><div class="th"><span class="kl" data-fx="kara"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Karaoke xanh</div></div>
+                <div class="ps"><div class="th"><span class="kl" data-fx="box"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Hộp cam</div></div>
+                <div class="ps"><div class="th"><span class="kl" data-fx="reveal"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Hiện dần</div></div>
+              </div>
+              <div class="prow"><span class="k">Cỡ chữ · 26</span><span class="slider"><i></i></span></div>
+              <div class="prow"><span class="k">Viền & bóng</span><span class="sw on"></span></div>
+              <div class="prow off"><span class="k">Vị trí</span><span class="muted" style="font-size:11.5px">Theo dải chữ cứng</span></div>
+            </div>
+            <div class="pc">
+              <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+              <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+              <div class="st ok"><span class="ico ok">✓</span><span class="grow"><b>Tìm thấy dải chữ</b> · đáy khung<span class="sub">14 đoạn · 82 % thời lượng có chữ</span></span><span class="btn sm">↻ Dò lại</span></div>
+              <div><div class="lane"><i style="left:3%;width:9%"></i><i style="left:14%;width:21%"></i><i style="left:38%;width:6%"></i><i style="left:46%;width:30%"></i><i style="left:79%;width:17%"></i><span class="ph" style="left:52%"></span></div><div class="lane-k"><span>0:00</span><span>bấm 1 đoạn = tua tới</span><span>4:12</span></div></div>
+              <div class="prow"><span class="k">Mức mờ</span><span class="seg sm"><span>Nhẹ</span><span class="on">Vừa</span><span>Mạnh</span></span></div>
+              <div class="prow"><span class="k">Nền tem mờ đục</span><span class="sw on"></span></div>
+              <div class="prow"><span class="k">Làm mờ</span><span class="seg sm"><span class="on">Chỉ lúc có chữ</span><span>Suốt video</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>①</b> Chip <b>"Aa Nhảy chữ · Vàng nảy"</b> và <b>"▭ Làm mờ dải chữ cứng"</b> (chip 2 chỉ hiện khi đã tích ô) là lối tắt: bấm → cột phải sang ⚙ Thuộc tính, cuộn tới thẻ, nháy viền 1 lần. <b>②</b> Khung dải nét đứt + 4 tay nắm chỉ hiện khi tab Thuộc tính đang mở hoặc rê chuột lên dải; lúc khác chỉ thấy <b>hiệu ứng thật</b> (mờ + tem + chữ Việt), đúng như video xuất. <b>③</b> Có dải ⇒ "Vị trí" khoá, chữ Việt căn giữa dải.</p>
+  </section>
+
+  <!-- ===================== B. KIỂU PHỤ ĐỀ ===================== -->
+  <section>
+    <h2>B · Thẻ "Kiểu phụ đề": Bình thường · Nhảy chữ (rê chuột lên mẫu = áp tạm lên khung xem thử) · 4 mẫu</h2>
+    <div class="grid3" style="grid-template-columns: 380px 380px 1fr; align-items: start">
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">Aa</span>Kiểu phụ đề</div>
+          <div class="seg"><span class="on">Bình thường</span><span>Nhảy chữ</span></div>
+          <div class="prow"><span class="k">Màu chữ</span><span class="sw-row"><span class="swc on" style="background:#e8a33d"></span><span class="swc" style="background:#fff"></span><span class="swc" style="background:#38bdf8"></span><span class="swc" style="background:#4ade80"></span><span class="swc" style="background:#f87171"></span></span></div>
+          <div class="prow"><span class="k">Cỡ chữ · 22</span><span class="slider"><i style="width:45%"></i></span></div>
+          <div class="prow"><span class="k">Viền & bóng</span><span class="sw on"></span></div>
+          <div class="prow"><span class="k">Vị trí</span><span class="chips"><span class="chip on">Dưới đáy</span><span class="chip">Ở giữa</span><span class="chip">Trên đỉnh</span></span></div>
+        </div>
+        <p class="cap"><b>Bình thường</b> = đúng control đang có (gom lại, đổi tên "Đổ bóng tương phản" → "Viền & bóng"). Không thêm gì.</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">Aa</span>Kiểu phụ đề</div>
+          <div class="seg"><span>Bình thường</span><span class="on">Nhảy chữ</span></div>
+          <div class="presets">
+            <div class="ps on"><div class="th"><span class="kl" data-fx="pop"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Vàng nảy <span class="ok">✓</span></div></div>
+            <div class="ps hov"><div class="th"><span class="kl" data-fx="kara"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Karaoke xanh <span class="pill ac">đang xem thử</span></div></div>
+            <div class="ps"><div class="th"><span class="kl" data-fx="box"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Hộp cam</div></div>
+            <div class="ps"><div class="th"><span class="kl" data-fx="reveal"><i>Xin</i><i>chào</i><i>các</i><i>bạn</i></span></div><div class="nm">Hiện dần</div></div>
+          </div>
+          <div class="prow"><span class="k">Cỡ chữ · 26</span><span class="slider"><i></i></span></div>
+          <div class="prow"><span class="k">Viền & bóng</span><span class="sw on"></span></div>
+          <div class="prow"><span class="k">Vị trí</span><span class="chips"><span class="chip on">Dưới đáy</span><span class="chip">Ở giữa</span><span class="chip">Trên đỉnh</span></span></div>
+          <div class="hint">Nhịp nhảy theo lời nói. Câu dịch chưa có mốc từng từ ⇒ chia theo số âm tiết.</div>
+        </div>
+        <p class="cap"><b>Nhảy chữ</b>: mẫu thay cho ô màu; cỡ chữ / viền / vị trí giữ. Rê chuột lên mẫu ⇒ khung xem thử áp tạm (nhãn "đang xem thử"), rời chuột ⇒ về mẫu đã chọn; bấm = chọn. Thẻ mẫu là nút radio: <span class="kbd">←</span><span class="kbd">→</span> đổi mẫu.</p>
+      </div>
+      <div class="grid2" style="gap:14px">
+        <div class="bigps"><div class="th"><span class="kl" data-fx="pop"><i>Đi</i><i>thôi,</i><i>trời</i><i>sắp</i><i>mưa</i><i>rồi!</i></span></div><div class="d"><b>Vàng nảy (mặc định)</b>Từ đang nói đổi vàng + phóng 118 % rồi thu về; từ khác trắng. ASS: <code>\t(\fscx118\fscy118\c&amp;H3DC8FF&amp;)</code> mỗi từ 1 event.</div></div>
+        <div class="bigps"><div class="th"><span class="kl" data-fx="kara"><i>Đi</i><i>thôi,</i><i>trời</i><i>sắp</i><i>mưa</i><i>rồi!</i></span></div><div class="d"><b>Karaoke xanh</b>Tô dần từ trái sang phải, từ đã nói giữ xanh. ASS: <code>\kf</code> — rẻ nhất, 1 event/câu.</div></div>
+        <div class="bigps"><div class="th"><span class="kl" data-fx="box"><i>Đi</i><i>thôi,</i><i>trời</i><i>sắp</i><i>mưa</i><i>rồi!</i></span></div><div class="d"><b>Hộp cam</b>Từ đang nói nằm trong hộp cam, chữ tối (kiểu CapCut). ASS: lớp hộp riêng <code>BorderStyle=3</code> theo từ — <b style="display:inline;color:var(--warn-txt);font-size:12px">thợ phải đo vị trí từ với libass</b>; không đạt thì bỏ mẫu này, giữ 3.</div></div>
+        <div class="bigps"><div class="th"><span class="kl" data-fx="reveal"><i>Đi</i><i>thôi,</i><i>trời</i><i>sắp</i><i>mưa</i><i>rồi!</i></span></div><div class="d"><b>Hiện dần</b>Từ chưa nói ẩn (vẫn giữ chỗ), tới lượt thì bật ra. ASS: <code>\alpha&amp;HFF&amp;</code> + <code>\t</code> theo mốc từ.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== C. TRẠNG THÁI Ô PHỤ ĐỀ CỨNG ===================== -->
+  <section>
+    <h2>C · Thẻ "Phụ đề cứng của video gốc": 6 trạng thái</h2>
+    <div class="grid3">
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i></i><span>Video có phụ đề cứng — làm mờ & đè tem<small>Tích khi video gốc đã in sẵn chữ (vd phụ đề Trung). App tự dò dải chữ, làm mờ rồi đặt phụ đề Việt lên đó.</small></span></div>
+        </div>
+        <p class="cap"><b>① Tắt (mặc định).</b> Không dò, không vẽ khung, "Vị trí" dùng bình thường. Chỉ 1 dòng + câu giải thích, không chiếm chỗ.</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+          <div class="st"><span class="spin"></span><span class="grow"><b>Đang dò chữ cứng…</b> 34 %<span class="sub">nửa dưới khung · còn ~20 giây</span><div class="pbar"><i style="width:34%"></i></div></span><span class="btn sm ghost">✕</span></div>
+          <div class="hint">Vẫn làm việc khác được. Dò xong khung dải tự hiện trên video.</div>
+        </div>
+        <p class="cap"><b>② Đang dò.</b> Tích ô = <b>dò ngay</b> (không cần nút). ✕ = huỷ ⇒ về ⑥ "Chưa dò". Mức mờ / tem ẩn tới khi có dải.</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+          <div class="st ok"><span class="ico ok">✓</span><span class="grow"><b>Tìm thấy dải chữ</b> · đáy khung<span class="sub">14 đoạn · 82 % thời lượng có chữ</span></span><span class="btn sm">↻ Dò lại</span></div>
+          <div><div class="lane"><i style="left:3%;width:9%"></i><i style="left:14%;width:21%"></i><i style="left:38%;width:6%"></i><i style="left:46%;width:30%"></i><i style="left:79%;width:17%"></i></div></div>
+          <div class="prow"><span class="k">Mức mờ</span><span class="seg sm"><span>Nhẹ</span><span class="on">Vừa</span><span>Mạnh</span></span></div>
+          <div class="prow"><span class="k">Nền tem mờ đục</span><span class="sw on"></span></div>
+          <div class="prow"><span class="k">Làm mờ</span><span class="seg sm"><span class="on">Chỉ lúc có chữ</span><span>Suốt video</span></span></div>
+        </div>
+        <p class="cap"><b>③ Tìm thấy.</b> Dải dò được ở trên video (mục D). Dải đã chỉnh tay ⇒ dòng phụ "đã chỉnh tay · <span class="link">↺ Về dải dò</span>".</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+          <div class="st warn"><span class="ico warn">?</span><span class="grow"><b>Không thấy chữ</b> ở nửa dưới khung hình<span class="sub">Đã xem 252 khung (1 khung/giây)</span></span></div>
+          <div class="row"><span class="btn sm">Dò cả nửa trên</span><span class="btn sm">▭ Tự đặt dải</span><span class="grow"></span></div>
+          <div class="hint">Video không có chữ cứng thì bỏ tích — xuất sẽ không làm mờ gì.</div>
+        </div>
+        <p class="cap"><b>④ Không thấy chữ.</b> Không tự bỏ tích (người dùng có thể biết rõ hơn máy). "Tự đặt dải" = dải mặc định 80–94 % chiều cao, khung chỉnh tay hiện ngay.</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+          <div class="st dang"><span class="ico dang">!</span><span class="grow"><b>Không dò được</b><span class="sub" title="chi tiết đầy đủ trong nhật ký">Thiếu mô hình dò chữ (text-det)</span></span></div>
+          <div class="row"><span class="btn sm">⬇ Tải mô hình · 4 MB</span><span class="btn sm">▭ Tự đặt dải</span></div>
+        </div>
+        <p class="cap"><b>⑤ Lỗi.</b> 1 dòng lỗi dễ hiểu (đầy đủ trong nhật ký, tooltip). Nút theo loại lỗi: thiếu mô hình ⇒ "Tải mô hình"; lỗi khác ⇒ "↻ Thử lại". Luôn có lối thoát "Tự đặt dải".</p>
+      </div>
+      <div>
+        <div class="pc">
+          <div class="pct"><span class="n">▭</span>Phụ đề cứng của video gốc</div>
+          <div class="cbx"><i class="on"></i><span>Video có phụ đề cứng — làm mờ & đè tem</span></div>
+          <div class="st"><span class="ico idle"></span><span class="grow"><b>Chưa dò</b><span class="sub">Đã huỷ dò · hoặc dự án mở từ bản cũ</span></span><span class="btn sm">Dò ngay</span></div>
+          <div class="hint">Bấm Xuất khi chưa dò ⇒ app tự dò trước rồi xuất.</div>
+        </div>
+        <p class="cap"><b>⑥ Chưa dò.</b> Ô đã tích nhưng chưa có kết quả. Không bao giờ chặn xuất: việc xuất tự chạy bước dò trước.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== D. KHUNG DẢI TRÊN VIDEO ===================== -->
+  <section>
+    <h2>D · Khung dải trên video: nghỉ · chỉnh · đang kéo mép dưới · đang dò · tự đặt</h2>
+    <div class="grid3">
+      <div>
+        <div class="vid v600">
+          <div class="hard">我们必须马上离开这里！</div>
+          <div class="blur" style="left:12%;right:12%;top:81%;height:12%;--b:6px"><div class="tem"></div></div>
+          <div class="vn" style="top:81%;height:12%"><span class="kl" data-fx="kara"><i>Chúng</i><i>ta</i><i>phải</i><i>rời</i><i>khỏi</i><i>đây</i><i>ngay!</i></span></div>
+        </div>
+        <p class="cap"><b>Nghỉ</b> (tab Phụ đề đang mở / đang phát): chỉ thấy kết quả — mờ + tem + chữ Việt. Không viền, không tay nắm. "Chỉ lúc có chữ" ⇒ ngoài các đoạn có chữ, khung xem thử không mờ (giống video xuất).</p>
+      </div>
+      <div>
+        <div class="vid v600">
+          <div class="hard">我们必须马上离开这里！</div>
+          <div class="blur" style="left:12%;right:12%;top:81%;height:12%;--b:6px"><div class="tem"></div></div>
+          <div class="vn" style="top:81%;height:12%"><span class="kl" data-fx="pop"><i>Chúng</i><i>ta</i><i>phải</i><i>rời</i><i>khỏi</i><i>đây</i><i>ngay!</i></span></div>
+          <div class="band" style="left:12%;right:12%;top:81%;height:12%"><span class="tag">▭ Dải chữ cứng · tự dò</span><span class="hdl t hot"></span><span class="hdl b"></span><span class="hdl l"></span><span class="hdl r"></span></div>
+          <span class="cursor" style="left:296px;top:262px">↕</span>
+        </div>
+        <p class="cap"><b>Chỉnh</b> (tab Thuộc tính mở hoặc rê chuột lên dải): viền nét đứt <code>--ac</code>, ngoài dải tối nhẹ 18 %. Tay nắm trên/dưới 34×9 (vùng bấm cao 12 px suốt mép, con trỏ ↕); trái/phải 9×26 (↔); kéo thân dải = dời (✥).</p>
+      </div>
+      <div>
+        <div class="vid v600">
+          <div class="hard">我们必须马上离开这里！</div>
+          <div class="ghostband" style="left:12%;right:12%;top:81%;height:12%"></div>
+          <div class="blur" style="left:12%;right:12%;top:79%;height:17%;--b:6px"><div class="tem"></div></div>
+          <div class="band manual" style="left:12%;right:12%;top:79%;height:17%"><span class="tag m">▭ Dải chữ cứng · chỉnh tay</span><span class="hdl t"></span><span class="hdl b hot"></span><span class="hdl l"></span><span class="hdl r"></span></div>
+          <div class="guide" style="top:93%"><span>mép dải dò</span></div>
+          <div class="readout" style="left:250px;top:236px">Trên 79,0 % · Dưới 96,0 % · cao 184 px</div>
+          <span class="cursor" style="left:296px;top:318px">↕</span>
+        </div>
+        <p class="cap"><b>Đang kéo mép dưới</b>: số đọc (theo % khung + px của video gốc), dải dò cũ mờ nét đứt để so; mép hút 4 px vào mép dải dò + mép khung (vạch xanh). Thả ⇒ nhãn đổi "chỉnh tay" (viền liền). <span class="kbd">Esc</span> khi đang kéo = huỷ.</p>
+      </div>
+      <div>
+        <div class="vid v600">
+          <div class="hard">我们必须马上离开这里！</div>
+          <div class="scan"><span>Đang dò chữ cứng… 34 %</span></div>
+        </div>
+        <p class="cap"><b>Đang dò</b>: nửa dưới khung có vệt quét chậm + nhãn % (nhẹ, không che video, không chặn phát). Dò "cả nửa trên" thì vệt phủ cả khung.</p>
+      </div>
+      <div>
+        <div class="vid v600">
+          <div class="blur" style="left:4%;right:4%;top:80%;height:14%;--b:6px"><div class="tem"></div></div>
+          <div class="vn" style="top:80%;height:14%"><span class="kl" data-fx="pop"><i>Chúng</i><i>ta</i><i>phải</i><i>rời</i><i>khỏi</i><i>đây</i><i>ngay!</i></span></div>
+          <div class="band manual" style="left:4%;right:4%;top:80%;height:14%"><span class="tag m">▭ Dải tự đặt · kéo để khớp chữ cứng</span><span class="hdl t"></span><span class="hdl b"></span><span class="hdl l"></span><span class="hdl r"></span></div>
+        </div>
+        <p class="cap"><b>Tự đặt</b> (sau "Không thấy chữ" / lỗi): dải mặc định 80–94 % cao, 4–96 % ngang, áp <b>suốt video</b> (không có khoảng thời gian dò được ⇒ seg "Làm mờ" khoá ở "Suốt video").</p>
+      </div>
+      <div>
+        <table class="tbl">
+          <tr><th>Thao tác</th><th>Việc</th></tr>
+          <tr><td>Kéo mép trên / dưới</td><td>chỉnh cao dải (tối thiểu 3 % khung)</td></tr>
+          <tr><td>Kéo mép trái / phải</td><td>chỉnh rộng (mặc định đối xứng; giữ <span class="kbd">Alt</span> = 1 bên)</td></tr>
+          <tr><td>Kéo thân dải</td><td>dời dải</td></tr>
+          <tr><td>Nhấp đúp dải</td><td>về dải dò</td></tr>
+          <tr><td><span class="kbd">Tab</span> tới dải, <span class="kbd">↑</span><span class="kbd">↓</span></td><td>dời 1 px video gốc (<span class="kbd">Shift</span> ×10)</td></tr>
+          <tr><td><span class="kbd">Ctrl+Z</span></td><td>hoàn tác chỉnh dải (chung ngăn hoàn tác dự án)</td></tr>
+          <tr><td><span class="kbd">Esc</span></td><td>đang kéo ⇒ huỷ lần kéo này</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== E. MODAL XUẤT ===================== -->
+  <section>
+    <h2>E · Modal Xuất — phần Phụ đề: chỉ tóm tắt + "Đổi" (không lặp control)</h2>
+    <div class="grid2">
+      <div>
+        <div class="frame scrim">
+          <div class="dlg">
+            <div class="hd">🎬 Xuất video <span class="x">✕</span></div>
+            <div class="bd">
+              <div class="sect"><span>💬 Phụ đề</span><span class="muted" style="font-weight:400">luôn kèm file .srt rời</span></div>
+              <div class="opts">
+                <div class="opt"><b>Phụ đề mềm</b>Bật/tắt trong VLC/TV.<span class="w">⚠ Phụ đề mềm luôn là kiểu Bình thường, và không nằm vào dải mờ.</span></div>
+                <div class="opt on"><b>Khắc cứng vào video</b>In thẳng vào khung hình — cần cho Nhảy chữ & đè tem.</div>
+                <div class="opt"><b>Không nhúng phụ đề</b>Video sạch chữ Việt (dải chữ cứng vẫn được làm mờ).</div>
+              </div>
+              <div class="sum">
+                <div class="sumr"><span class="k">Kiểu phụ đề</span><span class="v">Nhảy chữ · Vàng nảy <span class="muted">· cỡ 26</span></span><span class="link">Đổi</span></div>
+                <div class="sumr"><span class="k">Phụ đề cứng</span><span class="v">Làm mờ vừa + tem <span class="muted">· dải 81–93 % · 14 đoạn (chỉ lúc có chữ)</span></span><span class="link">Đổi</span></div>
+              </div>
+            </div>
+            <div class="ft"><span class="btn ghost">Huỷ</span><span class="btn primary">🎬 Bắt đầu xuất video</span></div>
+          </div>
+        </div>
+        <p class="cap">Mở modal khi kiểu = Nhảy chữ <b>hoặc</b> ô phụ đề cứng đang tích ⇒ <b>chọn sẵn "Khắc cứng"</b> (vẫn đổi được). Chọn "Phụ đề mềm" ⇒ hiện dòng ⚠ trên thẻ đó. "Đổi" = đóng modal, cột phải sang ⚙ Thuộc tính, nháy thẻ tương ứng. Phần Đường tiếng giữ nguyên (không vẽ lại ở đây).</p>
+      </div>
+      <div>
+        <div class="frame scrim">
+          <div class="dlg">
+            <div class="hd">🎬 Xuất video <span class="x">✕</span></div>
+            <div class="bd">
+              <div class="sect"><span>💬 Phụ đề</span><span class="muted" style="font-weight:400">luôn kèm file .srt rời</span></div>
+              <div class="opts">
+                <div class="opt"><b>Phụ đề mềm</b>Bật/tắt trong VLC/TV.</div>
+                <div class="opt on"><b>Khắc cứng vào video</b>In thẳng vào khung hình.</div>
+                <div class="opt"><b>Không nhúng phụ đề</b>Video sạch chữ Việt.</div>
+              </div>
+              <div class="sum">
+                <div class="sumr"><span class="k">Kiểu phụ đề</span><span class="v">Bình thường</span><span class="link">Đổi</span></div>
+                <div class="sumr"><span class="k">Phụ đề cứng</span><span class="v row" style="gap:8px"><span class="spin"></span>Đang dò… 60 % <span class="muted">· xuất sẽ chờ dò xong</span></span><span class="link">Đổi</span></div>
+              </div>
+              <div class="sum">
+                <div class="sumr"><span class="k">Phụ đề cứng</span><span class="v" style="color:var(--warn-txt)">Không thấy chữ — sẽ không làm mờ <span class="muted">· hoặc tự đặt dải</span></span><span class="link">Đổi</span></div>
+              </div>
+              <div class="sum">
+                <div class="sumr"><span class="k">Phụ đề cứng</span><span class="v muted">Video gốc có chữ in sẵn? <span class="link">Làm mờ & đè tem ›</span></span></div>
+              </div>
+            </div>
+            <div class="ft"><span class="btn ghost">Huỷ</span><span class="btn primary">🎬 Xuất khi dò xong</span></div>
+          </div>
+        </div>
+        <p class="cap">Biến thể dòng "Phụ đề cứng": <b>đang dò</b> ⇒ nút chính đổi "Xuất khi dò xong" (việc xuất vào hàng đợi sau bước dò, tab hiện "chờ"); <b>chưa dò</b> ⇒ "Sẽ dò trước khi xuất"; <b>không thấy chữ</b> ⇒ dòng vàng, vẫn xuất; <b>ô chưa tích</b> ⇒ 1 dòng mờ dẫn tới thẻ (lối tắt cho người chỉ nhận ra chữ cứng lúc xuất).</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* Sinh keyframes cho từng từ: mỗi từ chiếm D giây, cả câu lặp lại sau N*D + HOLD.
+   Code thật KHÔNG dùng cách này — khung xem thử lấy mốc từ cùng hàm chia âm tiết với file ASS (xem §4.12). */
+(function () {
+  var D = 0.42, HOLD = 1.3, css = [], done = {};
+  var f = function (x) { return Math.min(100, Math.max(0, x)).toFixed(2) + "%"; };
+  var FX = {
+    pop: function (s, e) { return f(0) + "," + f(s) + "{color:#fff;transform:none}" + f(s + .01) + "{color:#ffc83d;transform:translateY(-10%) scale(1.18)}" + f((s + e) / 2) + "{color:#ffc83d;transform:scale(1.07)}" + f(e) + "{color:#ffc83d;transform:none}" + f(e + .01) + "," + f(100) + "{color:#fff;transform:none}"; },
+    kara: function (s, e, L) { return f(0) + "," + f(s) + "{background-position:100% 0}" + f(e) + "," + f(L) + "{background-position:0 0}" + f(L + 1) + "," + f(100) + "{background-position:100% 0}"; },
+    box: function (s, e) { return f(0) + "," + f(s) + "{background-color:transparent;color:#fff}" + f(s + .01) + "," + f(e) + "{background-color:#e8a33d;color:#1a1209;text-shadow:none}" + f(e + .01) + "," + f(100) + "{background-color:transparent;color:#fff}"; },
+    reveal: function (s, e, L) { return f(0) + "," + f(s) + "{opacity:0;transform:scale(.6)}" + f(s + (e - s) * .5) + "{opacity:1;transform:scale(1.14)}" + f(e) + "," + f(L) + "{opacity:1;transform:none}" + f(L + 2) + "," + f(100) + "{opacity:0;transform:none}"; }
+  };
+  document.querySelectorAll(".kl[data-fx]").forEach(function (line) {
+    var fx = line.getAttribute("data-fx"), words = line.querySelectorAll("i"), n = words.length;
+    var T = n * D + HOLD, L = (n * D + HOLD * .75) / T * 100;
+    words.forEach(function (w, i) {
+      var name = "k_" + fx + "_" + n + "_" + i;
+      if (!done[name]) { done[name] = 1; css.push("@keyframes " + name + "{" + FX[fx](i * D / T * 100, (i + 1) * D / T * 100, L) + "}"); }
+      w.style.animation = name + " " + T + "s linear infinite";
+    });
+  });
+  var st = document.createElement("style"); st.textContent = css.join("\n"); document.head.appendChild(st);
+})();
+</script>
+</body>
+</html>
