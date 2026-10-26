@@ -1,0 +1,6 @@
+{
+  "name": "sublix-studio-v014-tests",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts"
+}
