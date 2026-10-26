@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-26 01:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
+- **Loại:** `@handoff` điều phối — **v0.13.0 xong, đã commit local, CHƯA push** (chờ PO OK). Orca run `run_80e8fbd4887e`.
+- **Đã có:** Studio nhiều tab P0–P4 (`59c4d32` run_id · `260c898` chặn kết quả video cũ · `27fab97` P1 · `50b4e92` P2 hàng đợi · `b19305f` P3+P4 phiên + phím tắt) · nghe mẫu từ file `9e082a5` · `edfb987` bump 0.13.0. Kiểm bản sạch: tsc/build OK, node 358/358, cargo 293/0.
+- **Kiểm app thật (vượt Smart App Control):** chạy exe cũ đã được phép + Vite từ working tree + CDP (xem LEADER_NOTES §4). Đã kiểm: 3 tab, "Đang chờ #1", Hủy chờ không giết tab chạy, tắt/mở app còn đủ tab, phím tắt. Bản sao localStorage của PO trước migrate v1→v2: scratchpad phiên 72fb9e23 `localStorage_backup.json`.
+- **Còn lại (không chặn release):** nút "Để chạy nền" khi đóng tab; khung xử lý ghi "Toàn Trình" cả khi chỉ chạy STT; đo RAM 6 tab; ý tưởng tính năng chờ PO chọn (`docs/FEATURE_IDEAS_2026.md`).
+- **Đội:** tab "thợ 2" = mcode #1–#4 · tab "thợ 3" = CommandCode + OpenCode · tab Gemini · Sonnet + Opus mỗi bạn 1 tab. Giữ ổn định, không tự đóng, tối đa 3–4 ô/tab.
+
+---
+
 ### 2026-10-25 19:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
 - **Loại:** `@done` (`TSK-CHORE-AGENT-TEAM-SLIM` — dọn `agent-team/` cho nhẹ context; **chưa commit**).
 - **Đã dọn:** `PROJECT_STATE.md` **53,5 KB → 33,3 KB** (giữ 25 mục ✅ Hoàn thành mới nhất; **59 mục cũ** nguyên văn → `ARCHIVE/PROJECT_STATE_DONE_ARCHIVE.md` + 1 dòng trỏ archive) · `ISSUE_LOG.md` **107,6 KB → 85,4 KB** (**Quick Index giữ ĐẦY ĐỦ mọi mã lỗi**, thêm chú "chi tiết: ARCHIVE/…" cho 18 lỗi đã chuyển; **20 mục phân tích chi tiết** của lỗi ✅ Fixed & cũ trước 2026-10-20 → `ARCHIVE/ISSUE_LOG_DETAIL_ARCHIVE.md`; lỗi 🔴 Open / 🟡 / mới **giữ nguyên tại chỗ**).
@@ -60,10 +69,3 @@
 - **Verify:** `node --test scripts/process-tests/` **29/29** (6 case mới) · timeline **121/121** · `npx vite build` **OK**; `tsc` còn 3 lỗi ở `LiveView.tsx` + `TranslationSection.tsx` — file của worker khác đang sửa dở, **không phải của tôi**.
 
 ---
-### 2026-10-24 23:50 - Mavis (dieu phoi) -> @Team / @jimmyvu
-- **Loai:** `@handoff` + `@done` (pull 19 commit tu may dev -> may PO; sua launcher portable; app da chay cho PO test).
-- **Da pull:** `origin/master` `0d427b6` (v0.11.36) vao fork PO `H:\AI Project\sub-lix-fork-2026-10-19` — fast-forward, 19 commit (UI redesign R2-1..R2-7 · timeline Premiere 6 module + 79 test · VieNeu-TTS v3 Turbo · ZeroTTS · Chirp3/FPT · MiniMax M3.1 Flash · +8 nen tang tai video · preset GPU AMD). Working tree sach, khong mat viec tho nao.
-- **Sua launcher (quan trong cho may khac):** `Chay-Sublix.bat` da bi may dev commit cung `PROJECT_DIR=C:\AI Project\Sublix` → **tren may PO launcher hong** (path khong ton tai). Da sua thanh **portable**: giu `C:\AI Project\Sublix` lam mac dinh, neu khong co `package.json` thi fallback ve `%~dp0` (thu muc chua file .bat) → **chay duoc tren CA HAI may ma khong can sua lai**. `CARGO_TARGET_DIR` cung doi thanh `if not defined` de tach build rieng duoc.
-- **Verify tren may PO (app that, PID 43228, CDP 9223):** `cargo build` exit 0 (2m04s) · `npm run verify:version` PASS 6/6 (0.11.36) · `node --test` timeline **91/91** + settings **12/12** · GUI render OK, **2 track PHU DE / TIENG LONG van thang hang** (khong hoi quy sau redesign) · ban dich tieng Viet dung · uoc tinh thoi gian tung buoc hien dung.
-- **Con no (chuyen giao):** backend `translate_options_get/set` **chua co** → UI buoc Dich dang o trang thai fallback chi doc. `src/lib/tauri.ts` can wrapper chinh thuc thi bo cast `translateApi` trong `src/views/studio/translateOptions.ts`. R2-8 (kiem Luu/key tren app that) chua lam.
-- **Ban goc `H:\AI Project\sublix` van dung yen** o `51f73fe` (2 file dirty cua tho khac, khong dung) — PO test bang **fork**; muon dong bo thi merge nhanh `fix/voice-timeline-mojibake` (da bang `master`).

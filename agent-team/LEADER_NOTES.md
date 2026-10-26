@@ -53,6 +53,12 @@
 - Danh tính commit (máy dev chưa cấu hình git): không sửa config; `git -c user.name="Claude Code (dieu phoi)" -c user.email="claude@sublix.local" commit --author="<thợ đã viết> <x@local>" -F msg.txt`. PO = `Anh Tuấn <tuan@sublix.local>`.
 - **Commit chủ động** theo từng task (không cần hỏi PO). **Push 1 lần** khi xong cả đợt + kiểm tra tổng (PO pull về máy nhà RTX 3090 để test).
 - Mỗi mốc: ghi `@handoff` của người điều phối (3–7 dòng) lên đầu `AGENT_CHAT.md` + commit `agent-team/`.
+- **Kiểm giao diện trên app THẬT dù Smart App Control chặn exe mới** (2026-10-25 — bắt được P1 tab hỏng nặng mà 345 test vẫn xanh):
+  - Vite từ working tree: `node node_modules/vite/bin/vite.js --port 1420 --strictPort` (Start-Process -PassThru, ghi PID).
+  - `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9226'` rồi chạy **exe cũ đã từng chạy được** (vd `%TEMP%\sublix-cc-target\debug\sublix.exe`). Exe nạp devUrl `localhost:1420` ⇒ thấy giao diện mới nhất.
+  - Điều khiển qua CDP (Node ≥ 22: `fetch` + `WebSocket`, chọn trang URL có `1420` và KHÔNG có `overlay`). Chụp ảnh, đo kích thước, bắt lỗi console.
+  - Giới hạn: lệnh backend mới hơn exe thì không có; app dùng config thật của PO ⇒ không bấm Lưu/ô key; đổi khoá localStorage ⇒ sao lưu trước. Xong chỉ tắt PID mình tạo (kể cả tiến trình con của Vite).
+- Thợ (mcode, CommandCode, OpenCode, Gemini) **không build/chạy app** — ghi rõ trong spec để khỏi mất hàng giờ vì SAC. Script verify gọi cargo bằng đường dẫn đầy đủ (`%USERPROFILE%\.cargo\bin\cargo.exe`) — PowerShell con không có cargo trong PATH và `$LASTEXITCODE` cũ từng làm "lỗi" thành "pass".
 
 ## 5. Bẫy môi trường máy dev (Ryzen AI Max 390, không NVIDIA)
 
