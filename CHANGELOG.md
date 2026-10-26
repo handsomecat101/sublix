@@ -1,3 +1,25 @@
+## v0.13.0 — 2026-10-26
+### Studio làm nhiều video cùng lúc · Không còn lẫn kết quả giữa các video
+
+**Bối cảnh:** bản này đổi cách làm việc trong Studio: bạn mở được **nhiều dự án cùng lúc** (mỗi video một tab) thay vì phải đóng video này mới mở được video khác, và kết quả chạy nền không còn lẫn sang video khác.
+
+**1. Studio nhiều tab (tối đa 6 tab)**
+- Mỗi video là **một tab** trên thanh tab ở đầu Studio — mở tối đa **6 tab**, chuyển qua lại không mất phần đang làm (phụ đề, bản dịch, phân vai, timeline…).
+- Tab đang **ẩn vẫn chạy tiếp**; nhưng chỉ **một việc nặng** chạy tại một lúc để máy không bị chậm: tab khác bấm chạy sẽ hiện **“Đang chờ #n”**. Bấm **Hủy chờ** chỉ bỏ lượt chờ của tab đó, **không ảnh hưởng** tab đang chạy.
+- Mở video thứ 7: app hỏi đóng tab cũ nhất (chọn tab đang rảnh); đóng một tab **đang chạy việc** thì app hỏi trước.
+- **Nhớ các tab khi tắt/mở app**: mở lại app vẫn còn đủ tab và đúng tab đang chọn (riêng **tiếng lồng cần tạo lại**, app có nhắc).
+- **Phím tắt**: Ctrl+Tab / Ctrl+Shift+Tab chuyển tab, Ctrl+T mở tab mới, Ctrl+W đóng tab, Ctrl+1…9 nhảy tới tab (Ctrl+9 = tab cuối).
+- Tab **Tiến trình** → nút **“Mở lại trong Studio”** mở đúng tab/dự án của tác vụ đó (trước đây chỉ chuyển sang Studio).
+
+**2. Sửa lỗi**
+- **Không còn lẫn kết quả giữa các video**: đang chạy một việc mà đổi sang video khác thì kết quả của video cũ **không ghi đè** lên video mới (app bỏ kết quả đến muộn và báo cho bạn biết).
+- **Xuất video xong vẫn báo đường dẫn file** kể cả khi bạn đã đổi sang video khác (trước đó thông báo có thể bị nuốt mất).
+
+**3. Lồng tiếng**
+- **Nghe mẫu giọng từ lần thứ 2 phát tức thì**: mẫu đã tạo được phát thẳng từ file thay vì truyền lại qua app, nên bấm nghe là có tiếng ngay.
+
+
+---
 ## v0.12.0 — 2026-10-25
 ### Dịch hay & nhất quán hơn · Nhận giọng nói EN/ZH nhanh hơn nhiều lần · Giao diện Studio mới
 
