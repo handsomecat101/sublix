@@ -50,6 +50,9 @@ pub mod voice_samples;
 pub mod ducking;
 pub mod ducking_export;
 
+// TSK-V014-BURN-FILTER: đồ thị filter ffmpeg — làm mờ dải phụ đề cứng + đè tem + in ASS.
+pub mod subtitle_burn;
+
 #[cfg(test)]
 #[path = "tts_real_tests.rs"]
 mod tts_real_tests;
