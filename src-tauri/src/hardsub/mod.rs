@@ -25,3 +25,12 @@
 //! `Band`, `BandOptions`, `FrameBoxes`, `HardsubResult`, `Region`, `TextBox`).
 
 pub mod band;
+
+pub mod boxes;
+pub mod commands;
+pub mod detect;
+pub mod model;
+
+#[cfg(test)]
+#[path = "detect_tests.rs"]
+mod detect_tests;

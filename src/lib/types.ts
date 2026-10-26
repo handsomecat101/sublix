@@ -55,6 +55,51 @@ export interface TranslateProgress {
   run_id?: string;
 }
 
+/** v0.14: vùng khung hình để dò phụ đề cứng. */
+export type HardsubRegion = "bottom" | "top" | "any";
+
+/** Dải phụ đề cứng (pixel khung gốc). */
+export interface HardsubBand {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Kết quả `hardsub_detect`. `band = null` ⇒ không thấy phụ đề cứng. */
+export interface HardsubDetection {
+  band: HardsubBand | null;
+  /** Các khoảng có chữ `[bắt đầu, kết thúc]` (giây). */
+  spans: [number, number][];
+  frames_with_text: number;
+  frames_total: number;
+  frame_width: number;
+  frame_height: number;
+  elapsed_ms: number;
+}
+
+/** Sự kiện `hardsub:progress`. `run_id` chỉ có khi frontend truyền vào lệnh. */
+export interface HardsubProgress {
+  percent: number;
+  message: string;
+  run_id?: string;
+}
+
+/** `hardsub_model_status`: chọn thẻ "Tải mô hình · 4 MB" / "Cài thư viện" / sẵn sàng. */
+export interface HardsubModelStatus {
+  model_installed: boolean;
+  model_bytes: number;
+  deps_ready: boolean;
+}
+
+/** Mã lỗi đứng đầu chuỗi lỗi của lệnh dò (`"<MÃ>: <thông điệp>"`). */
+export type HardsubErrorCode =
+  | "HARDSUB_MODEL_MISSING"
+  | "HARDSUB_DEPS_MISSING"
+  | "HARDSUB_VIDEO_UNREADABLE"
+  | "HARDSUB_CANCELLED"
+  | "HARDSUB_FAILED";
+
 /** 1 model trong danh sách lựa chọn dịch. */
 export interface TranslateModelOption {
   /** "minimax" | "openrouter" | "deepseek" | "ollama" | "local" (GGUF) */

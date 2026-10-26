@@ -15,7 +15,7 @@ pub mod config;
 pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
-mod hardsub;
+pub mod hardsub;
 pub mod model_download;
 pub mod overlay;
 pub mod proc_kill;
@@ -361,6 +361,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             list_audio_devices,
+            hardsub::commands::hardsub_detect,
+            hardsub::commands::hardsub_cancel,
+            hardsub::commands::hardsub_model_status,
+            hardsub::commands::hardsub_model_download,
+            hardsub::commands::hardsub_install_deps,
             capture_test,
             transcribe_test,
             translate_test,

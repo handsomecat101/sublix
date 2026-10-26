@@ -5,6 +5,11 @@ import type {
   ContextualLine,
   Glossary,
   GlossarySuggestion,
+  HardsubDetection,
+  HardsubErrorCode,
+  HardsubModelStatus,
+  HardsubProgress,
+  HardsubRegion,
   ScriptLine,
   TranslateModelOption,
   TranslateOptions,
@@ -13,6 +18,11 @@ import type {
 export type {
   ContextualLine,
   Glossary,
+  HardsubDetection,
+  HardsubErrorCode,
+  HardsubModelStatus,
+  HardsubProgress,
+  HardsubRegion,
   GlossarySuggestion,
   ScriptLine,
   TranslateModelOption,
@@ -938,7 +948,51 @@ export const sublix = {
   async voiceSamplesPrepareCancel(): Promise<void> {
     return await invoke<void>("voice_samples_prepare_cancel");
   },
+
+  /**
+   * v0.14: dò phụ đề cứng thật. Phát `hardsub:progress` {percent, message, run_id?}.
+   * Lỗi là chuỗi `"<MÃ>: <thông điệp>"` — dùng `hardsubErrorCode()` để tách mã.
+   */
+  async hardsubDetect(
+    filePath: string,
+    region?: HardsubRegion,
+    runId?: string,
+    fps?: number,
+  ): Promise<HardsubDetection> {
+    return await invoke<HardsubDetection>("hardsub_detect", {
+      filePath,
+      region: region ?? null,
+      runId: runId ?? null,
+      fps: fps ?? null,
+    });
+  },
+
+  /** Huỷ lượt dò phụ đề cứng đang chạy. */
+  async hardsubCancel(): Promise<void> {
+    return await invoke<void>("hardsub_cancel");
+  },
+
+  /** Model dò chữ + thư viện Python đã sẵn sàng chưa. */
+  async hardsubModelStatus(): Promise<HardsubModelStatus> {
+    return await invoke<HardsubModelStatus>("hardsub_model_status");
+  },
+
+  /** Tải model dò chữ (4 MB) — tiến trình qua `model:download-progress` (model_id `hardsub-ppocrv4-det`). */
+  async hardsubModelDownload(): Promise<void> {
+    return await invoke<void>("hardsub_model_download");
+  },
+
+  /** Cài onnxruntime + numpy cho Python khi `deps_ready = false`. */
+  async hardsubInstallDeps(): Promise<void> {
+    return await invoke<void>("hardsub_install_deps");
+  },
 };
+
+/** Tách mã lỗi (`HARDSUB_*`) khỏi lỗi của `hardsubDetect`; không phải lỗi dò ⇒ `null`. */
+export function hardsubErrorCode(err: unknown): HardsubErrorCode | null {
+  const m = /^(HARDSUB_[A-Z_]+):/.exec(String(err));
+  return m ? (m[1] as HardsubErrorCode) : null;
+}
 
 export interface VoicePreset {
   id: string;
