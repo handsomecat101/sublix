@@ -10,7 +10,7 @@
 
 export type SubStyleMode = "normal" | "kinetic";
 export type KineticPresetId = "pop-amber" | "karaoke-cyan" | "box-amber" | "reveal";
-export type SubPosition = "bottom" | "middle" | "top";
+export type SubPosition = "bottom" | "center" | "top";
 
 export interface SubStyle {
   mode: SubStyleMode;
@@ -23,7 +23,7 @@ export interface SubStyle {
 }
 
 export type HardsubBlur = "light" | "medium" | "strong";
-export type HardsubScope = "text-only" | "whole";
+export type HardsubScope = "text_only" | "whole";
 
 /** Dải chữ cứng, **pixel video gốc** (cùng hệ toạ độ với `hardsub_detect`). */
 export interface BandPx {
@@ -61,7 +61,7 @@ export const DEFAULT_HARDSUB: HardsubSettings = {
   spans: [],
   blur: "medium",
   stamp: true,
-  scope: "text-only",
+  scope: "text_only",
   bandSource: "auto",
 };
 
@@ -177,6 +177,9 @@ export interface DetectionLike {
   spans: [number, number][];
   frames_with_text: number;
   frames_total: number;
+  /** Kích thước video gốc mà dải được đo trên đó. */
+  frame_width?: number;
+  frame_height?: number;
 }
 
 export type HardsubCardState =
@@ -237,4 +240,106 @@ function foundState(i: CardStateInput, d: DetectionLike | null): HardsubCardStat
 
 function clampPct(v: number): number {
   return Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 0;
+}
+
+// ───────────────────────── Nối với DubbingProject (serde snake_case của Rust) ─────────────────────────
+
+/** `DubbingProject.sub_style` (khớp `SubStyle` trong `src/lib/tauri.ts` / Rust). */
+export interface ProjectSubStyle {
+  mode: string;
+  preset: string;
+  font_size: number;
+  position: string;
+}
+
+/** `DubbingProject.hardsub` (khớp `HardSubConfig`). */
+export interface ProjectHardsub {
+  enabled: boolean;
+  band: BandPx | null;
+  spans: [number, number][];
+  blur: string;
+  stamp: boolean;
+  scope: string;
+}
+
+/** Cỡ chữ UI tính ở 1080p ⇒ px trong PlayRes = kích thước video thật. */
+export function toProjectSubStyle(s: SubStyle, videoH: number): ProjectSubStyle {
+  const kinetic = s.mode === "kinetic";
+  return {
+    mode: s.mode,
+    preset: kinetic ? s.preset : "normal",
+    font_size: Math.max(0, Math.round(s.fontSize * ((videoH > 0 ? videoH : 1080) / 1080))),
+    position: s.position,
+  };
+}
+
+export function toProjectHardsub(h: HardsubSettings): ProjectHardsub {
+  return {
+    enabled: h.enabled && !!h.band,
+    band: h.band,
+    spans: h.spans,
+    blur: h.blur,
+    stamp: h.stamp,
+    scope: h.spans.length === 0 ? "whole" : h.scope,
+  };
+}
+
+/** Dữ liệu v0.14 lưu theo tab (sessionStore). */
+export interface PersistedV014 {
+  subStyle: SubStyle;
+  hardsub: HardsubSettings;
+  /** Video mà kết quả dò thuộc về — đổi video ⇒ bỏ kết quả. */
+  detectedFor: string;
+  detection: DetectionLike | null;
+}
+
+const isRec = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const pick = <T extends string>(v: unknown, ok: readonly T[], d: T): T => (ok.includes(v as T) ? (v as T) : d);
+const finite = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+
+function readBand(v: unknown): BandPx | null {
+  if (!isRec(v)) return null;
+  const b = { x: finite(v.x, NaN), y: finite(v.y, NaN), w: finite(v.w, NaN), h: finite(v.h, NaN) };
+  return [b.x, b.y, b.w, b.h].some(Number.isNaN) || b.w <= 0 || b.h <= 0 ? null : b;
+}
+
+/** Đọc dữ liệu lưu (có thể thiếu / hỏng / phiên cũ không có v0.14) ⇒ luôn trả giá trị hợp lệ. */
+export function restoreV014(raw: unknown): PersistedV014 {
+  const r = isRec(raw) ? raw : {};
+  const s = isRec(r.subStyle) ? r.subStyle : {};
+  const h = isRec(r.hardsub) ? r.hardsub : {};
+  const d = isRec(r.detection) ? r.detection : null;
+  const spans = (v: unknown): [number, number][] =>
+    Array.isArray(v)
+      ? v.filter((x): x is [number, number] => Array.isArray(x) && typeof x[0] === "number" && typeof x[1] === "number")
+      : [];
+  return {
+    subStyle: {
+      mode: pick(s.mode, ["normal", "kinetic"], DEFAULT_SUB_STYLE.mode),
+      preset: pick(s.preset, PRESETS.map((p) => p.id), DEFAULT_SUB_STYLE.preset),
+      fontSize: Math.min(96, Math.max(24, finite(s.fontSize, DEFAULT_SUB_STYLE.fontSize))),
+      position: pick(s.position, ["bottom", "center", "top"], DEFAULT_SUB_STYLE.position),
+      outline: s.outline !== false,
+    },
+    hardsub: {
+      enabled: h.enabled === true,
+      band: readBand(h.band),
+      spans: spans(h.spans),
+      blur: pick(h.blur, ["light", "medium", "strong"], "medium"),
+      stamp: h.stamp !== false,
+      scope: pick(h.scope, ["text_only", "whole"], "text_only"),
+      bandSource: h.bandSource === "manual" ? "manual" : "auto",
+    },
+    detectedFor: typeof r.detectedFor === "string" ? r.detectedFor : "",
+    detection: d
+      ? {
+          band: readBand(d.band),
+          spans: spans(d.spans),
+          frames_with_text: finite(d.frames_with_text, 0),
+          frames_total: finite(d.frames_total, 0),
+          frame_width: finite(d.frame_width, 0),
+          frame_height: finite(d.frame_height, 0),
+        }
+      : null,
+  };
 }

@@ -93,7 +93,7 @@ export function HardsubCard(p: HardsubCardProps) {
           <div className="v14-row">
             <label>Làm mờ</label>
             <div className="v14-seg" role="radiogroup" aria-label="Phạm vi làm mờ">
-              <button type="button" role="radio" aria-checked={p.scope === "text-only" && !noSpans} disabled={noSpans} title={noSpans ? "Dải tự đặt không có khoảng thời gian" : undefined} onClick={() => p.onScope("text-only")}>
+              <button type="button" role="radio" aria-checked={p.scope === "text_only" && !noSpans} disabled={noSpans} title={noSpans ? "Dải tự đặt không có khoảng thời gian" : undefined} onClick={() => p.onScope("text_only")}>
                 Chỉ lúc có chữ
               </button>
               <button type="button" role="radio" aria-checked={p.scope === "whole" || noSpans} onClick={() => p.onScope("whole")}>

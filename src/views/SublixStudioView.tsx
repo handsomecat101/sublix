@@ -156,6 +156,16 @@ import { isForeignRun } from "../lib/studio/runRouting";
 import { saveSessionTab, type PersistedTab } from "../lib/studio/sessionStore";
 // [TSK-TABS-3.5] Chặn kết quả của video cũ ghi đè video mới (logic thuần, test được).
 import { projectDisplayName, staleProjectNotice } from "../lib/studio/resultGuard";
+// [TSK-V014-WIRE-STUDIO] Kiểu phụ đề (Bình thường / Nhảy chữ) + làm mờ phụ đề cứng.
+import { SubStyleCard } from "./studio/v014/SubStyleCard";
+import { HardsubCard } from "./studio/v014/HardsubCard";
+import { StageLayer } from "./studio/v014/StageLayer";
+import { useV014State } from "./studio/v014/useV014State";
+import { bandShorterThanText } from "./studio/v014/bandGeometry";
+import type { KineticSegment } from "./studio/v014/KineticPreview";
+import type { KineticPresetId } from "./studio/v014/logic";
+/** Hộp cam bị bỏ: libass không vẽ được hộp từng từ (xem docs/V0.14_PLAN.md). */
+const V014_PRESETS: readonly KineticPresetId[] = ["pop-amber", "karaoke-cyan", "reveal"];
 
 export interface StudioTaskUpdatePayload {
   id?: string;
@@ -825,6 +835,8 @@ interface HeavyImpls {
   voice: (forceRange?: boolean, overrideSegs?: SubtitleItem[], onlyIds?: Set<number>) => Promise<void>;
   analysis: (forceRange?: boolean, dubImmediately?: boolean, forceTranslate?: boolean) => Promise<void>;
   exportVideo: () => Promise<void>;
+  /** [TSK-V014-WIRE-STUDIO] Dò phụ đề cứng (nhẹ, nhưng đi chung hàng đợi để tab hiện tiến độ đúng). */
+  hardsubDetect: (region?: "bottom" | "top" | "any") => Promise<void>;
 }
 
 export default function SublixStudioView({
@@ -1285,10 +1297,7 @@ export default function SublixStudioView({
   const [rightTab, setRightTab] = useState<"subtitles" | "properties">("subtitles");
 
   // Subtitle styling properties (driven by Thuộc tính tab)
-  const [subFontSize, setSubFontSize] = useState<number>(16);
   const [subFontColor, setSubFontColor] = useState<string>("#e8a33d");
-  const [subPosition, setSubPosition] = useState<"bottom" | "center" | "top">("bottom");
-  const [subShowShadow, setSubShowShadow] = useState<boolean>(true);
 
   // ROUND-8: Timeline In/Out Loop Range & Custom Range Selection (Khoanh vùng phạm vi)
   const [inPoint, setInPoint] = useState<number | null>(null);
@@ -1402,6 +1411,20 @@ export default function SublixStudioView({
     return false;
   };
 
+  // [TSK-V014-WIRE-STUDIO] State v0.14 của tab (kiểu phụ đề, phụ đề cứng, dò, huỷ, tải model).
+  const [videoNatural, setVideoNatural] = useState<{ w: number; h: number } | null>(null);
+  const v14 = useV014State({
+    filePath,
+    filePathRef,
+    mediaDuration,
+    videoSize: videoNatural,
+    restored: restoredTab?.v014,
+    showToast,
+  });
+  // Cỡ / vị trí / bóng chữ xem thử Bình thường lấy từ thẻ Kiểu phụ đề (v0.14) — một nguồn duy nhất.
+  const subFontSize = Math.round(v14.subStyle.fontSize * 0.4);
+  const subPosition = v14.subStyle.position;
+  const subShowShadow = v14.subStyle.outline !== false;
   // Load config on mount
   useEffect(() => {
     sublix.getConfig().then((cfg: AppConfig) => {
@@ -1487,11 +1510,12 @@ export default function SublixStudioView({
         targetLang,
         currentTime: 0,
         hadAudio: lostAudioRef.current,
+        v014: v14.persisted,
       });
       if (!res.ok) console.warn("Studio auto-save (sessionStore) thất bại:", res.error);
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [tabId, filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers]);
+  }, [tabId, filePath, fileName, mediaDuration, segments, speakers, sttLang, targetLang, markers, v14.persisted]);
 
   // [TSK-TABS-P3] Tab khôi phục từng có tiếng lồng: nhắc 1 lần khi tab được xem lần đầu.
   useEffect(() => {
@@ -1721,6 +1745,11 @@ export default function SublixStudioView({
         setMediaDuration(dur);
       }
       setVideoPlayError(false);
+      {
+        const vw = videoRef.current.videoWidth;
+        const vh = videoRef.current.videoHeight;
+        if (vw > 0 && vh > 0) setVideoNatural((p) => (p && p.w === vw && p.h === vh ? p : { w: vw, h: vh }));
+      }
       // [TSK-TABS-P1] Quay lại tab ⇒ nạp lại <video> và nhảy về vị trí đã xem.
       const resumeAt = releasedVideoTimeRef.current;
       if (resumeAt > 0 && Number.isFinite(resumeAt)) {
@@ -5739,6 +5768,20 @@ export default function SublixStudioView({
   const handleRunVoiceOnly = runHeavy("voice", runVoiceOnlyImpl, (i) => i.voice, undefined, queuedBusyHooks);
   const handleRunAnalysis = runHeavy("analyze", runAnalysisImpl, (i) => i.analysis, undefined, queuedBusyHooks);
 
+  // [TSK-V014-WIRE-STUDIO] Dò phụ đề cứng đi qua hàng đợi (cùng slot ⇒ không chạy chồng với xuất/lồng tiếng).
+  // Gọi lồng trong job đang giữ slot (vd. tự dò trước khi xuất) ⇒ chạy thẳng.
+  const handleHardsubDetect = runHeavy("hardsub", v14.runDetectImpl, (i) => i.hardsubDetect, undefined, {
+    onQueued: () => v14.markQueued(),
+    onDropped: () => v14.clearRunning(),
+  });
+  v14.triggerRef.current = handleHardsubDetect;
+  /** Huỷ dò: đang xếp hàng ⇒ bỏ khỏi hàng; đang chạy ⇒ báo backend dừng sidecar dò (không đụng việc khác). */
+  const handleCancelHardsubDetect = () => {
+    const queued = jobQueue.getState().queued.filter((j) => j.tabId === jobTabKey && j.kind === "hardsub");
+    for (const j of queued) jobQueue.cancel(j.runId);
+    if (queued.length === 0) v14.cancelDetect();
+  };
+
   /**
    * Dừng việc CỦA TAB NÀY: job còn xếp hàng ⇒ chỉ bỏ khỏi hàng (KHÔNG gọi `dubbingCancel`);
    * job đang chạy ⇒ `jobQueue.cancel` gọi `dubbingCancel` đúng 1 lần (xem setCancelHandler).
@@ -6198,6 +6241,21 @@ export default function SublixStudioView({
     (s) => s.start <= currentTime && currentTime <= s.end
   ) || segments.find((s) => s.id === selectedSegId);
 
+  // [TSK-V014-WIRE-STUDIO] Câu cho chữ nhảy: chỉ câu đang phát theo thời gian; object ổn định giữa các khung
+  // (đổi khi sang câu khác / sửa chữ) để KineticPreview không dựng lại wordTimings mỗi lần currentTime đổi.
+  const kineticSegRef = useRef<(KineticSegment & { id: number }) | null>(null);
+  {
+    const s = segments.find((x) => x.start <= currentTime && currentTime <= x.end);
+    const text = s ? (subtitleDisplayMode === "original" ? s.original : s.translated) : "";
+    const cur = kineticSegRef.current;
+    if (!s || !text) {
+      if (cur) kineticSegRef.current = null;
+    } else if (!cur || cur.id !== s.id || cur.text !== text || cur.start !== s.start || cur.end !== s.end) {
+      kineticSegRef.current = { id: s.id, text, start: s.start, end: s.end };
+    }
+  }
+  const v14Kinetic = v14.subStyle.mode === "kinetic" || v14.previewPreset !== null;
+
   // Timeline Action Handlers (EZMAX Standard)
   const handleSelectSegment = (seg: SubtitleItem) => {
     selectedTrackTypeRef.current = "subtitles";
@@ -6376,7 +6434,25 @@ export default function SublixStudioView({
       showToast("⚠️ Vui lòng mở hoặc kéo thả video trước khi xuất video");
       return;
     }
+    // [TSK-V014-WIRE-STUDIO] Chữ nhảy hoặc làm mờ phụ đề cứng chỉ có khi KHẮC CỨNG ⇒ chọn sẵn.
+    if (v14.subStyle.mode === "kinetic" || v14.hardsub.enabled) setExportSubMode("hardsub");
     setShowExportModal(true);
+  };
+
+  /** [TSK-V014-WIRE-STUDIO] Lối tắt: mở tab Thuộc tính, cuộn tới thẻ và nháy viền 1 lần. */
+  const goToV14Cards = () => {
+    setShowExportModal(false);
+    setRightTab("properties");
+    window.setTimeout(() => {
+      const el = document.getElementById("v14-cards");
+      const first = el?.firstElementChild as HTMLElement | null;
+      first?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      for (const c of Array.from(el?.children ?? [])) {
+        c.classList.remove("v14-flash");
+        void (c as HTMLElement).offsetWidth;
+        c.classList.add("v14-flash");
+      }
+    }, 60);
   };
 
   const runExportImpl = async (): Promise<void> => {
@@ -6394,6 +6470,13 @@ export default function SublixStudioView({
 
     let unlisten: (() => void) | null = null;
     try {
+      // [TSK-V014-WIRE-STUDIO] Đã tích làm mờ mà chưa dò ⇒ tự dò trước khi xuất (không bao giờ chặn xuất:
+      // dò lỗi thì xuất tiếp, không làm mờ). Gọi lồng trong slot đang giữ ⇒ chạy thẳng.
+      if (v14.needsDetectBeforeExport()) {
+        setExportMessage("Đang dò phụ đề cứng của video gốc...");
+        await handleHardsubDetect("bottom");
+      }
+      const v14Cfg = v14.exportConfig();
       const project: DubbingProject = {
         input_path: filePath,
         media_duration_sec: mediaDuration,
@@ -6423,6 +6506,8 @@ export default function SublixStudioView({
         sub_export_mode: exportSubMode,
         audio_export_mode: exportAudioMode,
         target_lang: targetLang || "vi",
+        sub_style: v14Cfg.sub_style,
+        hardsub: v14Cfg.hardsub,
       };
 
       unlisten = await listen<DubbingProgress>("dubbing:progress", (event) => {
@@ -6474,6 +6559,7 @@ export default function SublixStudioView({
     voice: runVoiceOnlyImpl,
     analysis: runAnalysisImpl,
     exportVideo: runExportImpl,
+    hardsubDetect: v14.runDetectImpl,
   };
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -7970,6 +8056,27 @@ export default function SublixStudioView({
                 <option value={75}>75%</option>
                 <option value={50}>50%</option>
               </select>
+              {/* [TSK-V014-WIRE-STUDIO] Chip lối tắt tới thẻ Kiểu phụ đề / Phụ đề cứng (§4.12). */}
+              <button
+                type="button"
+                className="studio-filter-chip"
+                onClick={goToV14Cards}
+                title="Kiểu phụ đề đang áp — bấm để chỉnh"
+              >
+                Aa {v14.subStyle.mode === "kinetic"
+                  ? `Nhảy chữ · ${v14.subStyle.preset === "pop-amber" ? "Vàng nảy" : v14.subStyle.preset === "karaoke-cyan" ? "Karaoke xanh" : "Hiện dần"}`
+                  : "Bình thường"}
+              </button>
+              {v14.hardsub.enabled && (
+                <button
+                  type="button"
+                  className="studio-filter-chip"
+                  onClick={goToV14Cards}
+                  title="Làm mờ phụ đề cứng của video gốc — bấm để chỉnh dải"
+                >
+                  ▭ Làm mờ dải chữ cứng
+                </button>
+              )}
             </div>
 
             <div className="studio-video-toolbar-right">
@@ -8454,7 +8561,23 @@ export default function SublixStudioView({
               )}
 
               {/* Subtitle Box Overlay */}
-              {filePath && activeSubtitle && (
+              {filePath && (
+                <StageLayer
+                  videoRef={videoRef}
+                  videoSize={v14.videoSize}
+                  subStyle={v14.subStyle}
+                  previewPreset={v14.previewPreset}
+                  availablePresets={V014_PRESETS}
+                  hardsub={v14.hardsub}
+                  detectedBand={v14.detection?.band ?? null}
+                  editing={rightTab === "properties"}
+                  scanning={v14.running && v14.hardsub.enabled ? { percent: v14.running.percent } : null}
+                  segment={kineticSegRef.current}
+                  onBandChange={v14.setManualBand}
+                  onBandReset={v14.resetBand}
+                />
+              )}
+              {filePath && activeSubtitle && !v14Kinetic && (
                 <div
                   className="studio-video-subtitle-overlay"
                   style={{
@@ -8671,84 +8794,70 @@ export default function SublixStudioView({
         </>
       ) : (
         <div className="studio-properties-panel">
-          <div className="studio-prop-card">
-            <div className="studio-prop-title">
-              <span>🔤 Kiểu Dáng Phụ Đề Màn Chiếu</span>
-            </div>
-
-            <div className="studio-prop-row">
-              <span>Cỡ chữ: {subFontSize}px</span>
-              <input
-                type="range"
-                min={12}
-                max={28}
-                value={subFontSize}
-                onChange={(e) => setSubFontSize(Number(e.target.value))}
-                style={{ width: 110, cursor: "pointer" }}
-              />
-            </div>
-
-            <div className="studio-prop-row">
-              <span>Màu chữ:</span>
-              <div className="studio-prop-swatches">
-                {[
-                  { name: "Vàng", color: "#e8a33d" },
-                  { name: "Trắng", color: "#ffffff" },
-                  { name: "Xanh", color: "#38bdf8" },
-                  { name: "Xanh lá", color: "#4ade80" },
-                  { name: "Đỏ", color: "#f87171" },
-                ].map((c) => (
-                  <div
-                    key={c.color}
-                    className={`studio-prop-swatch ${subFontColor === c.color ? "active" : ""}`}
-                    style={{ background: c.color }}
-                    onClick={() => {
-                      setSubFontColor(c.color);
-                      showToast(`Đã chọn màu phụ đề: ${c.name}`);
-                    }}
-                    title={c.name}
-                  />
-                ))}
+          <div id="v14-cards" style={{ display: "contents" }}>
+            <SubStyleCard
+              value={v14.subStyle}
+              onChange={v14.setSubStyle}
+              availablePresets={V014_PRESETS}
+              onPreviewPreset={v14.setPreviewPreset}
+              positionLocked={v14.hardsub.enabled && !!v14.hardsub.band}
+            />
+            {v14.subStyle.mode === "normal" && (
+              <div className="studio-prop-card">
+                <div className="studio-prop-row">
+                  <span>Màu chữ:</span>
+                  <div className="studio-prop-swatches">
+                    {[
+                      { name: "Vàng", color: "#e8a33d" },
+                      { name: "Trắng", color: "#ffffff" },
+                      { name: "Xanh", color: "#38bdf8" },
+                      { name: "Xanh lá", color: "#4ade80" },
+                      { name: "Đỏ", color: "#f87171" },
+                    ].map((c) => (
+                      <div
+                        key={c.color}
+                        className={`studio-prop-swatch ${subFontColor === c.color ? "active" : ""}`}
+                        style={{ background: c.color }}
+                        onClick={() => {
+                          setSubFontColor(c.color);
+                          showToast(`Đã chọn màu phụ đề: ${c.name}`);
+                        }}
+                        title={c.name}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="studio-prop-row">
-              <span>Vị trí:</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                {[
-                  { id: "bottom", label: "Dưới đáy" },
-                  { id: "center", label: "Ở giữa" },
-                  { id: "top", label: "Trên đỉnh" },
-                ].map((pos) => (
-                  <button
-                    key={pos.id}
-                    type="button"
-                    className={`studio-filter-chip ${subPosition === pos.id ? "active" : ""}`}
-                    onClick={() => {
-                      setSubPosition(pos.id as any);
-                      showToast(`Vị trí phụ đề: ${pos.label}`);
-                    }}
-                  >
-                    {pos.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="studio-prop-row">
-              <span>Đổ bóng tương phản:</span>
-              <label className="studio-switch">
-                <input
-                  type="checkbox"
-                  checked={subShowShadow}
-                  onChange={(e) => {
-                    setSubShowShadow(e.target.checked);
-                    showToast(e.target.checked ? "Đã bật bóng chữ" : "Đã tắt bóng chữ");
-                  }}
-                />
-                <span className="studio-slider" />
-              </label>
-            </div>
+            )}
+            <HardsubCard
+              enabled={v14.hardsub.enabled}
+              state={v14.cardState}
+              blur={v14.hardsub.blur}
+              stamp={v14.hardsub.stamp}
+              scope={v14.hardsub.scope}
+              spans={v14.hardsub.spans}
+              durationSec={mediaDuration}
+              bandTooShort={
+                !!v14.hardsub.band &&
+                !!v14.videoSize &&
+                bandShorterThanText(v14.hardsub.band, v14.subStyle.fontSize, v14.videoSize.h)
+              }
+              modelDownloadPct={v14.modelPct}
+              modelMb={4}
+              bandManual={v14.bandIsManual}
+              onToggle={v14.setEnabled}
+              onRedetect={() => void handleHardsubDetect(v14.lastRegion)}
+              onCancel={handleCancelHardsubDetect}
+              onDownloadModel={() => void v14.downloadModel()}
+              onInstallDeps={() => void v14.installDeps()}
+              onDetectOtherHalf={() => void handleHardsubDetect("any")}
+              onManualBand={v14.placeDefaultBand}
+              onResetBand={v14.resetBand}
+              onBlur={(blur) => v14.patchHardsub({ blur })}
+              onStamp={(stamp) => v14.patchHardsub({ stamp })}
+              onScope={(scope) => v14.patchHardsub({ scope })}
+              onSeek={(sec) => handleSeek(sec)}
+            />
           </div>
 
           <div className="studio-prop-card">
@@ -10080,6 +10189,43 @@ export default function SublixStudioView({
                     </p>
                   </div>
                 </div>
+
+                {/* [TSK-V014-WIRE-STUDIO] Tóm tắt kiểu phụ đề + phụ đề cứng (chỉnh ở tab Thuộc tính, không lặp control) */}
+                <div className="v14-export-sum">
+                  <div className="ln">
+                    <span>
+                      Kiểu chữ: {v14.subStyle.mode === "kinetic" ? "Nhảy chữ" : "Bình thường"}
+                    </span>
+                    <button type="button" onClick={goToV14Cards}>Đổi</button>
+                  </div>
+                  {v14.hardsub.enabled ? (
+                    <div className="ln">
+                      <span>
+                        {v14.running
+                          ? "Làm mờ phụ đề cứng: đang dò — sẽ xuất khi dò xong"
+                          : v14.hardsub.band
+                            ? `Làm mờ ${v14.hardsub.blur === "light" ? "nhẹ" : v14.hardsub.blur === "strong" ? "mạnh" : "vừa"}${v14.hardsub.stamp ? " + tem" : ""}${
+                                v14.videoSize
+                                  ? ` · dải ${Math.round((v14.hardsub.band.y / v14.videoSize.h) * 100)}–${Math.round(((v14.hardsub.band.y + v14.hardsub.band.h) / v14.videoSize.h) * 100)} %`
+                                  : ""
+                              }${v14.hardsub.spans.length ? ` · ${v14.hardsub.spans.length} đoạn` : ""}`
+                            : v14.cardState.kind === "idle"
+                              ? "Sẽ dò phụ đề cứng trước khi xuất"
+                              : "Không có dải phụ đề cứng — sẽ không làm mờ"}
+                      </span>
+                      <button type="button" onClick={goToV14Cards}>Đổi</button>
+                    </div>
+                  ) : (
+                    <div className="ln dim">
+                      <button type="button" onClick={goToV14Cards}>Video gốc có chữ in sẵn? Làm mờ &amp; đè tem ›</button>
+                    </div>
+                  )}
+                  {exportSubMode === "softsub" && (v14.subStyle.mode === "kinetic" || v14.hardsub.enabled) && (
+                    <div className="wr">
+                      ⚠ Phụ đề mềm luôn là kiểu Bình thường và không nằm vào dải mờ — chọn “Khắc cứng” để dùng chữ nhảy / làm mờ.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -10097,7 +10243,7 @@ export default function SublixStudioView({
                 onClick={handleConfirmExportVideo}
                 style={{ display: "flex", alignItems: "center", gap: 6 }}
               >
-                <IconClapper size={14} /> Bắt đầu xuất video
+                <IconClapper size={14} /> {v14.running && v14.hardsub.enabled ? "Xuất khi dò xong" : "Bắt đầu xuất video"}
               </button>
             </div>
           </div>

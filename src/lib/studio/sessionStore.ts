@@ -79,6 +79,8 @@ export interface PersistedTab {
   currentTime: number;
   /** true = tab từng có tiếng lồng (đã bị bỏ khi lưu) ⇒ UI nhắc 'Cần tạo lại giọng'. */
   hadAudio?: boolean;
+  /** v0.14: kiểu phụ đề + phụ đề cứng của tab (JSON tự do, đọc lại bằng restoreV014). Thiếu ở phiên cũ. */
+  v014?: unknown;
 }
 
 /** Dữ liệu 1 tab lúc **ghi** (còn `audioUrl` / `sampleAudio` — sẽ được bỏ khi lưu). */
@@ -95,6 +97,8 @@ export interface SessionTabInput {
   currentTime: number;
   /** Tab đã khôi phục mà chưa tạo lại giọng — giữ cờ qua các lần lưu. */
   hadAudio?: boolean;
+  /** v0.14: xem PersistedTab.v014. */
+  v014?: unknown;
 }
 
 /** Manifest của phiên. */
@@ -266,6 +270,7 @@ export function toPersistedTab(input: SessionTabInput | PersistedTab): Persisted
     targetLang: input.targetLang,
     currentTime: num(input.currentTime),
     ...(hadAudio ? { hadAudio: true } : {}),
+    ...(input.v014 !== undefined ? { v014: input.v014 } : {}),
   };
 }
 
@@ -304,6 +309,7 @@ function normalizePersistedTab(raw: unknown, tabId: string): PersistedTab | null
     targetLang: typeof raw.targetLang === "string" ? raw.targetLang : undefined,
     currentTime: num(raw.currentTime),
     ...(raw.hadAudio === true ? { hadAudio: true } : {}),
+    ...(raw.v014 !== undefined ? { v014: raw.v014 } : {}),
   };
 }
 

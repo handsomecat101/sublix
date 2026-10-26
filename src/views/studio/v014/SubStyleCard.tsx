@@ -6,7 +6,7 @@ import "./v014.css";
 const SAMPLE = ["Xin", "chào", "các", "bạn"];
 const POSITIONS: { id: SubPosition; label: string }[] = [
   { id: "bottom", label: "Dưới đáy" },
-  { id: "middle", label: "Ở giữa" },
+  { id: "center", label: "Ở giữa" },
   { id: "top", label: "Trên đỉnh" },
 ];
 

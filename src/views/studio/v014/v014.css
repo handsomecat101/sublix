@@ -34,7 +34,7 @@
 
 .v14-preview-tag { position: absolute; top: 6px; right: 6px; z-index: 6; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: rgba(0,0,0,.6); color: var(--ac-txt); pointer-events: none; }
 .v14-kinetic { position: absolute; left: 4%; right: 4%; z-index: 5; pointer-events: none; display: flex; justify-content: center; }
-.v14-kinetic[data-pos="bottom"] { bottom: 6%; } .v14-kinetic[data-pos="middle"] { top: 50%; transform: translateY(-50%); } .v14-kinetic[data-pos="top"] { top: 6%; }
+.v14-kinetic[data-pos="bottom"] { bottom: 6%; } .v14-kinetic[data-pos="center"] { top: 50%; transform: translateY(-50%); } .v14-kinetic[data-pos="top"] { top: 6%; }
 
 /* Thẻ phụ đề cứng */
 .v14-status { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); background: var(--bg-inset); }
@@ -78,3 +78,12 @@
 .v14-scan span { position: absolute; left: 10px; top: 8px; font-size: 11px; font-weight: 700; color: var(--ac-txt); background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; }
 @keyframes v14-sweep { 0% { top: 0; } 100% { top: 100%; } }
 @media (prefers-reduced-motion: reduce) { .v14-spin, .v14-scan::before { animation: none; } .v14-kw { transition: none; } }
+
+/* Chip lối tắt + tóm tắt trong modal Xuất */
+.v14-flash { animation: v14-flash 1.1s ease-out 1; }
+@keyframes v14-flash { 0% { box-shadow: 0 0 0 0 var(--ac-br); } 40% { box-shadow: 0 0 0 4px var(--ac-soft), 0 0 0 1px var(--ac); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.v14-export-sum { margin-top: 12px; border: 1px solid var(--line-soft); background: var(--bg-inset); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--t2); }
+.v14-export-sum .ln { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.v14-export-sum .dim { color: var(--t4); }
+.v14-export-sum .wr { color: var(--warn-txt); }
+.v14-export-sum button { border: 0; background: transparent; color: var(--ac-txt); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }

@@ -202,3 +202,61 @@ test("số đọc lúc kéo + cảnh báo dải thấp hơn dòng chữ", () => 
   assert.ok(bandShorterThanText({ ...BAND, h: 40 }, 42, 1080));
   assert.ok(!bandShorterThanText({ ...BAND, h: 100 }, 42, 1080));
 });
+
+// ───── Nối project / lưu phiên ─────
+import { restoreV014, toProjectHardsub, toProjectSubStyle, DEFAULT_HARDSUB, DEFAULT_SUB_STYLE } from "../../src/views/studio/v014/logic.ts";
+
+test("xuất: sub_style quy cỡ chữ theo cao video, mẫu chỉ khi Nhảy chữ", () => {
+  assert.deepEqual(toProjectSubStyle({ ...DEFAULT_SUB_STYLE, mode: "kinetic", fontSize: 40 }, 1080), {
+    mode: "kinetic", preset: "pop-amber", font_size: 40, position: "bottom",
+  });
+  assert.equal(toProjectSubStyle({ ...DEFAULT_SUB_STYLE, fontSize: 40 }, 2160).font_size, 80);
+  assert.equal(toProjectSubStyle(DEFAULT_SUB_STYLE, 720).preset, "normal");
+});
+
+test("xuất: hardsub chỉ bật khi có dải; không có khoảng ⇒ suốt video", () => {
+  assert.equal(toProjectHardsub({ ...DEFAULT_HARDSUB, enabled: true }).enabled, false);
+  const h = toProjectHardsub({ ...DEFAULT_HARDSUB, enabled: true, band: BAND, spans: [] });
+  assert.ok(h.enabled);
+  assert.equal(h.scope, "whole");
+  assert.equal(toProjectHardsub({ ...DEFAULT_HARDSUB, enabled: true, band: BAND, spans: [[1, 2]] }).scope, "text_only");
+});
+
+test("phiên: dữ liệu thiếu / hỏng / phiên cũ ⇒ về mặc định hợp lệ", () => {
+  for (const raw of [undefined, null, "x", 5, [], {}, { subStyle: 3, hardsub: "a" }]) {
+    const r = restoreV014(raw);
+    assert.equal(r.hardsub.enabled, false);
+    assert.equal(r.subStyle.mode, "normal");
+    assert.equal(r.detection, null);
+  }
+  const r = restoreV014({
+    subStyle: { mode: "kinetic", preset: "nope", fontSize: 999, position: "center" },
+    hardsub: { enabled: true, band: { x: 1, y: 2, w: 3, h: 4 }, spans: [[1, 2], "bad"], blur: "strong", stamp: false, scope: "whole", bandSource: "manual" },
+    detectedFor: "a.mp4",
+  });
+  assert.equal(r.subStyle.preset, "pop-amber");
+  assert.equal(r.subStyle.fontSize, 96);
+  assert.deepEqual(r.hardsub.spans, [[1, 2]]);
+  assert.deepEqual(r.hardsub.band, { x: 1, y: 2, w: 3, h: 4 });
+  assert.equal(r.hardsub.stamp, false);
+  assert.equal(restoreV014({ hardsub: { band: { x: 1, y: 2, w: 0, h: 4 } } }).hardsub.band, null);
+});
+
+import { toPersistedTab, readSessionTab, saveSessionTab } from "../../src/lib/studio/sessionStore.ts";
+
+test("sessionStore: v014 đi qua lưu → đọc; phiên cũ không có v014 vẫn đọc được", () => {
+  const mem = new Map<string, string>();
+  const storage = {
+    getItem: (k: string) => mem.get(k) ?? null,
+    setItem: (k: string, v: string) => void mem.set(k, v),
+    removeItem: (k: string) => void mem.delete(k),
+  };
+  const v014 = { hardsub: { enabled: true } };
+  const base = { tabId: "t1", filePath: "a.mp4", fileName: "a", mediaDuration: 5, segments: [], speakers: [], currentTime: 0 };
+  assert.equal(toPersistedTab({ ...base, v014 }).v014, v014);
+  assert.ok(!("v014" in toPersistedTab(base)));
+  assert.ok(saveSessionTab(storage, { ...base, v014 }).ok);
+  assert.deepEqual(readSessionTab(storage, "t1")?.v014, v014);
+  assert.ok(saveSessionTab(storage, { ...base, tabId: "t2" }).ok);
+  assert.equal(readSessionTab(storage, "t2")?.v014, undefined);
+});

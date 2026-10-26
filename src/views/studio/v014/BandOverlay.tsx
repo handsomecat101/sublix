@@ -131,6 +131,7 @@ export function BandOverlay(props: BandOverlayProps) {
           onPointerUp={end}
           onPointerCancel={() => setDrag(null)}
           onDoubleClick={onReset}
+          onClick={(e) => e.stopPropagation()}
         >
           <span className="v14-bo-tag">▭ Dải chữ cứng · {manual || drag ? "chỉnh tay" : "tự dò"}</span>
           {EDGES.map((h) => (
