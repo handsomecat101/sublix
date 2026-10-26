@@ -13,6 +13,7 @@
 
 **Môi trường của dự án này:** điều phối nhiều agent qua **Orca** (app quản lý terminal/agent). Bạn ra lệnh cho thợ bằng CLI `orca` từ shell của bạn. Máy dev Windows 11, PowerShell 5.1, Ryzen AI Max 390 (không NVIDIA), **Smart App Control bật** (chặn exe mới build — cách vượt để kiểm giao diện ở §4, bẫy máy ở §5).
 
+0. **Leader KHÔNG phải Claude Code** (vd GPT qua Codex CLI / OpenCode): mọi thứ cần biết đều nằm trong repo — file này + @handoff đầu AGENT_CHAT.md + 	ools/. Trí nhớ riêng của leader cũ không cần.
 1. **Nạp hướng dẫn Orca đúng phiên bản:** `orca skills get orchestration` (và `orca skills get orca-cli` khi cần lệnh terminal). Đọc lướt phần dispatch / check / worker-done.
 2. **Đọc boot dự án:** `AGENTS.md` → SOUL → PROJECT_STATE → **tin `@handoff` mới nhất của điều phối ở đầu `AGENT_CHAT.md`** (Orca Run id, commit chưa push, ai đang làm gì, việc còn lại) → ISSUE_LOG Quick Index.
 3. **Xem đội đang có:** `orca terminal list --json` (tiêu đề tab/ô cho biết thợ nào; **không mở thêm nếu đã có** — xem §2 "Đội hình"). Hộp thư: `orca orchestration check --run <run_id> --json` (đọc xong phải `--ack <deliveryId>`).
@@ -97,3 +98,31 @@
 - `cargo.exe` chạy lâu = app dev của PO (`cargo run`), không phải build của thợ — đừng chờ nó.
 - API key (MiniMax `sk-cp-`, OpenRouter) nằm trong `%APPDATA%\com.sublix.desktop\sublix-config.json` (key TTS cloud ở `sublix-tts-keys.json`) — **không in ra** log/terminal/báo cáo. Màn hình Cài đặt cũ giữ state key rỗng → bấm Lưu có thể xoá key (đang sửa bằng `translate_options_set` + `configMerge`).
 - Không tạo thư mục trong repo khi verify (đã có sự cố thư mục `%D%` chứa junction trỏ node_modules thật).
+
+## 6. Lời khuyên vận hành (rút từ thực tế — đọc 1 lần, áp dụng mãi)
+
+**Giao việc**
+- **Spec càng rõ, thợ rẻ càng làm tốt.** Mỗi spec: mục tiêu 1 câu · file được/cấm sửa · mục docs phải đọc · ca test bắt buộc · lệnh tự kiểm · "không build/chạy app, không commit, không heartbeat". Thiếu danh sách file ⇒ thợ sửa lan sang file người khác.
+- **Tách "lõi thuần" ra trước.** Việc lớn trên 1 file to (vd view 9.000 dòng) phải làm tuần tự — nhưng phần logic thuần (module mới + test node) giao song song cho thợ khác ngay. Khi file to rảnh, phần còn lại chỉ là "nối".
+- **Việc vài dòng thì leader tự sửa** — giao + kiểm còn tốn hơn.
+- **Thợ đang làm dở thì để làm nốt**; chuyển việc giữa chừng tốn hơn đợi. Thợ chậm/quá tải ⇒ việc MỚI giao thợ khác.
+- **Đặt "không chạy app" vào spec** nếu máy có rào cản — thợ từng mất 2,5 giờ cố chụp ảnh bị chặn.
+
+**Kiểm chứng**
+- **"Xong" của thợ ≠ đúng.** Lỗi hay lọt nhất (test không bắt): ghi nhầm file khi người dùng đổi dự án giữa lúc chờ (debounce), cache "dính" dữ liệu lần đầu, vòng gọi lặp vô hạn khi state cập nhật, dùng tuỳ chọn công cụ đã bị bỏ ở bản mới, cờ "đang chạy" kẹt ở một nhánh `return` sớm, listener chạy cả khi màn hình đang ẩn.
+- **Test xanh ≠ giao diện đúng.** Đụng UI ⇒ chạy app thật, **đo kích thước + chụp ảnh + bắt lỗi console** (từng có: cả màn hình bị kéo dài 33.000 px vì thiếu `min-width: 0` — 345 test vẫn xanh).
+- **Kiểm trên bản sạch của index**, không trên working tree (working tree luôn lẫn việc dở của thợ khác).
+- **Báo cáo nghiên cứu của model Flash phải soát nguồn**: từng gặp link chỉ là trang chủ, số liệu gán nhầm cột, con số không có nguồn. Tự tra 2–3 số quan trọng nhất trước khi đưa PO.
+- Script kiểm **phải chặn khi exit code ≠ 0** và in số liệu thật (số test pass/fail) — đừng chỉ in "OK".
+
+**Token & chi phí**
+- **Không heartbeat; chờ bằng 1 lệnh `check --wait` chạy nền** (không poll định kỳ — PO từng thấy báo cáo 10 phút/lần toàn tin cũ, vô ích).
+- **Leader không gõ code tính năng** — chỉ spec, đọc code then chốt, kiểm, commit. Model mạnh đáng tiền nhất ở 2 đầu: spec chính xác trước và review sau.
+- **Nghỉ lâu ⇒ phiên leader mới** (bộ đệm hội thoại chỉ sống ~1 giờ; gọi lại phiên dài sau khi ngủ = đọc lại toàn bộ với giá đầy đủ). Muốn vậy, `@handoff` phải đủ để phiên mới làm tiếp — viết nó ở mỗi mốc.
+- Đọc file lớn bằng tìm kiếm / đọc đoạn, không đọc cả file.
+
+**Con người & giao tiếp**
+- PO thường không đọc code ⇒ báo cáo bằng **kết quả người dùng thấy** ("bấm Dừng thì về Sẵn sàng"), không bằng tên hàm.
+- **Trung thực về giới hạn:** cái gì chưa kiểm được (không chạy được app, chưa đo RAM, số liệu chưa có nguồn) phải nói rõ.
+- **Không tự quyết việc một chiều** (tắt tính năng bảo mật, xoá dữ liệu, push/release, công khai repo) — hỏi PO 1 câu ngắn kèm đề xuất.
+- Nhận xét của PO về cách làm việc ⇒ ghi ngay vào mục 1 của file này (không chỉ nhớ trong đầu).

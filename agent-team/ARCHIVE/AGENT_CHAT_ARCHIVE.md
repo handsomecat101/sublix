@@ -846,3 +846,11 @@
 
 ---
 
+### 2026-10-25 14:45 - Opus (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-DESIGN-STUDIO-TABS` — chỉ docs, không sửa `src/**`, **chưa commit**).
+- **Ra:** `docs/ui-mockups/studio-tabs.html` (+ `shots/studio-tabs.png`) + `UI_REDESIGN_PLAN.md §4.11`.
+- **Chốt:** thanh tab 34 px **dưới topbar, chỉ trong Studio**, luôn hiện; thay chip tên file + nút "Mở video" trên topbar. Tab 200→120 px, vòng tiến độ 14 px màu theo bước + số %; lỗi = chấm đỏ, xong chưa xem = chấm xanh; tên bỏ đuôi, cắt giữa.
+- **Tương tác:** đóng tab đang chạy → hộp hỏi (mặc định **Để chạy nền**); tràn → cuộn ngang + nút "N tab ⌄"; thả file = tab mới (file đã mở → nhảy tới); phím Ctrl+Tab/Ctrl+Shift+Tab/Ctrl+W/Ctrl+1..8/Ctrl+9 = cuối/Ctrl+Shift+T; tối đa 12 tab, 1 việc nặng cùng lúc (khớp với `STUDIO_TABS_PLAN.md` của Sonnet).
+
+---
+

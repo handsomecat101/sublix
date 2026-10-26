@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-26 15:10 - Claude Code (Opus 5.5, điều phối) -> @Leader-tiếp-theo / @jimmyvu
+- **Loại:** `@handoff` — **Claude Code sắp hết hạn mức; leader khác tiếp quản.** Đọc `agent-team/LEADER_NOTES.md` mục 0 (+ mục 6 lời khuyên). Orca run `run_80e8fbd4887e`. **13 commit local CHƯA push** (`3a851a5`..`80e7456`); push chỉ khi PO đồng ý.
+- **v0.14 (PO chốt, `docs/V0.14_PLAN.md`):** đã xong + kiểm app thật — dò phụ đề cứng (PP-OCRv4 det sidecar), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ: libass không làm được), giao diện Thuộc tính + khung dải + xem thử, bump 0.14.0. Ảnh bằng chứng: `docs/ui-mockups/shots/v014-*.png`.
+- **ĐANG LÀM (việc duy nhất còn chặn release):** mcode #1 (`term_05c6d215`, task `TSK-V014-EXPORT-FIX`, dispatch `ctx_cea3fc4b4c58`) sửa lỗi xuất video "Đa đường tiếng" + phụ đề cứng ⇒ ffmpeg `Filter 'anull:default' has output 0 (final_audio) unconnected`. Sửa dở chưa commit trong `src-tauri/src/dubbing/export_video_graph.rs` + `mod.rs`; yêu cầu: chạy mọi tổ hợp chế độ âm thanh × burn × có/không câu, test ffmpeg thật. Nếu thợ đứng: gõ "TIẾP TỤC TSK-V014-EXPORT-FIX".
+- **Khi mcode #1 báo xong:** đọc diff → `git add` 2 file (+test) → `agent-team/tools/verify-clean.ps1 -Rust` → `cargo build --bin sublix` (CARGO_TARGET_DIR=%TEMP%\sublix-cc-target; exe mới chạy được hôm nay) → `agent-team/tools/gui-app.ps1 start` → trong app: tab "hardsub_zh_30s.mp4" (đã dò dải) → Xuất video (mặc định Đa đường tiếng + Khắc cứng) phải ra mp4; trích 1 khung ở giây 6 xem dải mờ → `gui-app.ps1 stop` → commit (author Mavis/mcode) → `@handoff` → hỏi PO push.
+- **Đội (rảnh, giữ nguyên — không tự đóng, tối đa 3–4 ô/tab):** mcode #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20` (handle đổi nếu Orca khởi động lại — tra theo tiêu đề bằng `orca terminal list`).
+
+---
+
 ### 2026-10-26 14:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
 - **Loại:** `@handoff` — **TẠM DỪNG theo lệnh PO** (về nhà làm tiếp). v0.14 gần xong; 12 commit local **chưa push** (từ `3a851a5` tới `b9a791f`). Orca run `run_80e8fbd4887e`.
 - **Đã xong + kiểm app thật:** dò phụ đề cứng (PP-OCRv4 det, 60 s video ~3 s), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ — libass không làm được), giao diện Thuộc tính + khung dải + xem thử chữ nhảy, bump 0.14.0.
@@ -62,12 +71,5 @@
 - **Verify:** `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · `node --test` **259 test / 0 fail** (thêm 2 test cho mục 14 + sửa 1 kỳ vọng test cũ đang khẳng định lỗi chính tả "Bắt Đầu Live") · `cargo check --lib` OK · **chụp ảnh app thật** xác nhận: nút Quét, option không cờ, "Nâng cao", hint "Dịch sang Tiếng Việt", thẻ Luồng thoại cao 772 px + rỗng căn giữa.
 
 ---
-
----
-### 2026-10-25 14:45 - Opus (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-DESIGN-STUDIO-TABS` — chỉ docs, không sửa `src/**`, **chưa commit**).
-- **Ra:** `docs/ui-mockups/studio-tabs.html` (+ `shots/studio-tabs.png`) + `UI_REDESIGN_PLAN.md §4.11`.
-- **Chốt:** thanh tab 34 px **dưới topbar, chỉ trong Studio**, luôn hiện; thay chip tên file + nút "Mở video" trên topbar. Tab 200→120 px, vòng tiến độ 14 px màu theo bước + số %; lỗi = chấm đỏ, xong chưa xem = chấm xanh; tên bỏ đuôi, cắt giữa.
-- **Tương tác:** đóng tab đang chạy → hộp hỏi (mặc định **Để chạy nền**); tràn → cuộn ngang + nút "N tab ⌄"; thả file = tab mới (file đã mở → nhảy tới); phím Ctrl+Tab/Ctrl+Shift+Tab/Ctrl+W/Ctrl+1..8/Ctrl+9 = cuối/Ctrl+Shift+T; tối đa 12 tab, 1 việc nặng cùng lúc (khớp với `STUDIO_TABS_PLAN.md` của Sonnet).
 
 ---
