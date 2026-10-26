@@ -70,6 +70,8 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
+| `TSK-V014-SUB-STYLE` | v0.14: chọn kiểu phụ đề **Bình thường / Nhảy chữ** (ASS theo từ, chia thời gian theo âm tiết, xem thử = xuất) | (chưa giao) | 🔴 HIGH | PO chốt 2026-10-26 — `docs/V0.14_PLAN.md` |
+| `TSK-V014-HARDSUB-BLUR` | v0.14: ô tích **"phụ đề cứng → làm mờ & đè tem"** (mặc định tắt; dò dải sub cứng, blur, đè phụ đề Việt; kéo chỉnh dải) — KHÔNG inpainting | (chưa giao) | 🔴 HIGH | PO chốt 2026-10-26 — `docs/V0.14_PLAN.md` |
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-012` | ~~Phase V2: Phân vai thật (sherpa-onnx diarization offline)~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành ở v0.10.0 (S1 sidecar + S2 Rust backend + S3 UI roster + S4 E2E deliverables) |
 | `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning (Phase V3) | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng chuẩn bị ở Phase V3) |

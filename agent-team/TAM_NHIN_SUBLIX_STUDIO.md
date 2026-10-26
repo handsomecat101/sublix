@@ -21,13 +21,18 @@
 - **Trên mỗi ô câu:** bấm = sửa chữ · kéo mép = sửa thời gian · chuột phải = **"Đọc lại câu này"** / đổi giọng chỉ câu đó · kéo sang làn khác = đổi người nói.
 - Sửa xong phát thử ngay tại chỗ; mọi thao tác có **Hoàn tác (Undo)**.
 
+## 3b. HƯỚNG DÀI HẠN (PO chốt 2026-10-26)
+**Từ "Studio dịch" → "Studio làm video AI".** Dịch + lồng tiếng là nền; bước tiếp là làm video **hút người xem suốt từ đầu đến cuối** (phụ đề động, dựng nhanh) — tự động hoá những chuỗi thao tác nhiều bước mà creator đang phải làm tay trong CapCut, nhưng **chỉ chạy khi người dùng chọn** (ô tích / nút), không áp cho mọi video.
+- Gần: **v0.14** — chọn kiểu phụ đề (Bình thường / **Nhảy chữ**) + ô tích **"phụ đề cứng → làm mờ & đè tem"** (KHÔNG xoá bằng AI). Kế hoạch: `docs/V0.14_PLAN.md`.
+- Xa hơn (ý tưởng đã nghiên cứu, chưa chốt): cắt khoảng lặng 1 nút, dịch vừa nhịp nói, dựng dọc 9:16 bám người nói, tách nhạc tốt hơn — `docs/FEATURE_IDEAS_2026.md`.
+
 ## 4. LỘ TRÌNH (đảo: timeline lên đầu)
 | GĐ | Nội dung | Nghiệm thu (LUẬT CHẠY THẬT) |
 |---|---|---|
 | **GĐ1** | Studio 1 màn hình + timeline XEM/SỬA cơ bản: hiện đúng những gì AI đã làm (phụ đề + làn nhân vật + giọng), sửa chữ/thời gian/đổi làn | Video 2 người nói → thấy 2 làn 2 màu đúng người → sửa 1 câu trên timeline → thấy ngay |
 | **GĐ2** | Ô chọn giọng GỘP mọi nguồn (local/Edge/API/clone): tìm kiếm, badge nguồn, nghe thử, gán giọng theo làn nhân vật | Bấm ô giọng → thấy đủ danh sách → nghe thử → gán, làn nhân vật đổi thẻ giọng |
 | **GĐ3** | Tinh chỉnh nâng cao: đọc lại từng câu, Undo, nghe thử tại chỗ | Sửa 1 câu + bấm đọc lại → chỉ câu đó đổi, câu khác giữ nguyên |
-| **GĐ4** | OCR bóc sub từ chữ trên video + xóa/làm mờ sub cũ theo vùng | Video có sub sẵn → bóc được chữ → hoặc blur mờ được |
+| **GĐ4** (v0.14) | **Phụ đề hút mắt + xử lý sub cứng:** chọn kiểu phụ đề Bình thường / Nhảy chữ (từng từ, mẫu màu); ô tích (mặc định tắt) **tự dò dải sub cứng → làm mờ → đè phụ đề Việt** ("đè tem"), kéo chỉnh dải được. KHÔNG xoá bằng AI. OCR bóc chữ để sau | Video có sub cứng → tích ô → xuất ra dải cũ mờ + phụ đề Việt đè đúng chỗ; chọn Nhảy chữ → từng từ sáng theo nhịp, xem thử = video xuất |
 | **GĐ5** | Dựng cơ bản (cắt/tách/ghép, thêm chữ/ảnh, filter, đổi tỷ lệ) + Batch Mode cả danh sách | Cắt 1 đoạn + thêm 1 dòng chữ → xuất video đúng |
 | GĐ6 (sau) | Tóm tắt / Review AI (kịch bản, ghép cảnh) — tính năng "ăn tiền" của EZMAX | — |
 
