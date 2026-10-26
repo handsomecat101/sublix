@@ -13,8 +13,10 @@
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 /// Dải phụ đề cứng cần làm mờ (toạ độ pixel trong khung hình).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlurBand {
     /// Y của mép trên dải (px).
     pub y: u32,
@@ -157,8 +159,12 @@ pub fn build_video_burn_graph(opt: &BurnOptions, in_label: &str, out_label: &str
     let x = band.x;
     let y = band.y;
     let radius = opt.blur_radius.max(1);
+    // ffmpeg ≥ 8 (kể cả 9) yêu cầu `chroma_radius < luma_radius` ⇒ đặt tường minh.
+    let chroma_radius = radius.saturating_sub(1);
 
-    let mut chain = format!("crop=w={w}:h={h}:x={x}:y={y},boxblur=luma_radius={radius}:luma_power=2");
+    let mut chain = format!(
+        "crop=w={w}:h={h}:x={x}:y={y},boxblur=luma_radius={radius}:luma_power=2:chroma_radius={chroma_radius}:chroma_power=1"
+    );
     if let Some(opacity) = opt.stamp_opacity {
         // "Đè tem": hộp đen mờ đục phủ lên dải đã làm mờ (research §4.1).
         let o = opacity.clamp(0.0, 1.0);

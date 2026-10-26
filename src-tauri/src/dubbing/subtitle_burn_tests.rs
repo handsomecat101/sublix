@@ -44,7 +44,10 @@ fn chi_blur_khong_span_lam_moi_ca_video() {
     let g = build_video_burn_graph(&o, "0:v", "vsub");
     assert!(g.contains("[0:v]split=2[v_main][v_crop];"), "{g}");
     assert!(g.contains("crop=w=1920:h=120:x=0:y=800"), "{g}");
-    assert!(g.contains("boxblur=luma_radius=15:luma_power=2"), "{g}");
+    assert!(
+        g.contains("boxblur=luma_radius=15:luma_power=2:chroma_radius=14:chroma_power=1"),
+        "{g}"
+    );
     assert!(g.contains("overlay=x=0:y=800"), "{g}");
     // Không có spans ⇒ KHÔNG có `enable` (làm mờ cả video).
     assert!(!g.contains("enable"), "{g}");

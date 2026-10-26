@@ -53,6 +53,9 @@ pub mod ducking_export;
 // TSK-V014-BURN-FILTER: đồ thị filter ffmpeg — làm mờ dải phụ đề cứng + đè tem + in ASS.
 pub mod subtitle_burn;
 
+// TSK-V014-EXPORT-BURN: ghép đồ thị video (burn phụ đề) + đồ thị audio (smart ducking).
+pub mod export_video_graph;
+
 #[cfg(test)]
 #[path = "tts_real_tests.rs"]
 mod tts_real_tests;
@@ -298,6 +301,68 @@ pub struct DubbingProject {
     /// Ngôn ngữ target (ISO code: "vi", "en",...)
     #[serde(default)]
     pub target_lang: Option<String>,
+    /// [TSK-V014] Kiểu dáng phụ đề khi in (preset, cỡ chữ, vị trí).
+    #[serde(default)]
+    pub sub_style: SubStyle,
+    /// [TSK-V014] Làm mờ phụ đề CỨNG + in phụ đề khi xuất video.
+    #[serde(default)]
+    pub hardsub: HardSubConfig,
+}
+
+/// [TSK-V014] Kiểu dáng phụ đề (chọn khi xuất video có in phụ đề).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SubStyle {
+    /// "normal" (1 dòng/câu) | "kinetic" (nhảy chữ theo từ).
+    pub mode: String,
+    /// Tên preset dáng: "normal" | "pop-amber" | "karaoke-cyan" | "reveal".
+    pub preset: String,
+    /// Cỡ chữ (px trong hệ PlayRes của ASS). 0 = dùng mặc định.
+    pub font_size: u32,
+    /// Vị trí: "bottom" | "center" | "top" | "band" (đặt trong dải phụ đề cứng).
+    pub position: String,
+}
+
+impl Default for SubStyle {
+    fn default() -> Self {
+        Self {
+            mode: "normal".to_string(),
+            preset: "normal".to_string(),
+            font_size: 0,
+            position: "bottom".to_string(),
+        }
+    }
+}
+
+/// [TSK-V014] Làm mờ phụ đề cứng (dải) khi xuất video.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HardSubConfig {
+    /// Bật làm mờ dải phụ đề cứng.
+    pub enabled: bool,
+    /// Dải phụ đề cứng (toạ độ px trong khung hình).
+    pub band: Option<subtitle_burn::BlurBand>,
+    /// Các khoảng thời gian (giây) cần làm mờ. Rỗng = làm mờ cả video.
+    pub spans: Vec<(f64, f64)>,
+    /// Mức làm mờ: "light" | "medium" | "strong".
+    pub blur: String,
+    /// Phủ hộp đen mờ đục ("đè tem") lên dải đã làm mờ.
+    pub stamp: bool,
+    /// Phạm vi: "text_only" (chỉ lúc có phụ đề) | "whole" (cả video).
+    pub scope: String,
+}
+
+impl Default for HardSubConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            band: None,
+            spans: Vec::new(),
+            blur: "medium".to_string(),
+            stamp: false,
+            scope: "text_only".to_string(),
+        }
+    }
 }
 
 fn default_dubbing_mode() -> String {
@@ -3019,7 +3084,10 @@ pub fn analyze_and_create_project_full(
         sub_export_mode: Some("softsub".to_string()),
         audio_export_mode: Some("multitrack".to_string()),
         target_lang: target_lang.clone(),
-    })
+    
+        sub_style: crate::dubbing::SubStyle::default(),
+        hardsub: crate::dubbing::HardSubConfig::default(),
+        })
 }
 
 fn render_amix_chunk(
@@ -3721,19 +3789,62 @@ pub fn export_dubbed_video(
         }
     };
 
+    // [TSK-V014-EXPORT-BURN] Nối nhánh VIDEO (làm mờ phụ đề cứng + in ASS) vào
+    // đồ thị audio (smart ducking) — cùng MỘT `-filter_complex` để nhãn khớp.
+    // Không bật burn ⇒ đồ thị/argv Y HỆT CŨ (chỉ đồ thị audio, video copy thẳng).
+    let burn_requested = sub_mode == "hardsub" || project.hardsub.enabled;
+    let burn_prepared = if burn_requested {
+        export_video_graph::prepare_burn_ass(&project, &temp_dir, &ffmpeg_bin)
+    } else {
+        None
+    };
+    // "whole" ⇒ không giới hạn khoảng thời gian (làm mờ cả video).
+    let burn_spans: Vec<(f64, f64)> = if project.hardsub.scope.trim().to_lowercase() == "whole" {
+        Vec::new()
+    } else {
+        project.hardsub.spans.clone()
+    };
+    let burn_options = burn_prepared.as_ref().map(|(ass_path, fonts_dir)| {
+        subtitle_burn::BurnOptions {
+            band: project.hardsub.band,
+            spans: &burn_spans,
+            blur_radius: export_video_graph::blur_radius_for(&project.hardsub.blur),
+            stamp_opacity: if project.hardsub.stamp {
+                Some(export_video_graph::STAMP_OPACITY)
+            } else {
+                None
+            },
+            ass_path: Some(ass_path.as_path()),
+            fonts_dir: fonts_dir.as_ref().map(|p| p.as_path()),
+        }
+    });
+    let export_graph = export_video_graph::build_export_graph(&export_video_graph::ExportGraphInput {
+        audio_graph: &mix_filter,
+        burn: burn_options,
+        video_in: "0:v",
+        video_out: export_video_graph::VIDEO_OUT_LABEL,
+    });
+
     // BUG-H12: `-filter_complex_script` đã bị FFMPEG 8+ gỡ bỏ (ffmpeg 9 chỉ còn
     // `-filter_complex`). Truyền graph trực tiếp qua argv — Rust không qua shell
     // nên không lỗi quoting. Đường ducking của video dài có thể vượt giới hạn dòng
     // lệnh Windows (~32K) → graph quá ngưỡng ghi ra file, đọc bằng `-/filter_complex <file>` (FFmpeg ≥ 7).
     let mix_filter_file = temp_dir.join("mix_filter.txt");
-    if mix_filter.len() > ducking_export::FILTER_FILE_THRESHOLD && fs::write(&mix_filter_file, &mix_filter).is_ok() {
+    if export_graph.filter_complex.len() > ducking_export::FILTER_FILE_THRESHOLD
+        && fs::write(&mix_filter_file, &export_graph.filter_complex).is_ok()
+    {
         remux.arg("-/filter_complex").arg(&mix_filter_file);
     } else {
-        remux.arg("-filter_complex").arg(&mix_filter);
+        remux.arg("-filter_complex").arg(&export_graph.filter_complex);
     }
 
     // Video mapping & encoding
-    if sub_mode == "hardsub" && srt_path_opt.is_some() {
+    if export_graph.video_remapped {
+        // Có nhánh burn ⇒ video đi qua nhãn [vout] (đã encode lại bằng libx264).
+        remux.arg("-map").arg(format!("[{}]", export_video_graph::VIDEO_OUT_LABEL));
+        remux.arg("-c:v").arg("libx264").arg("-preset").arg("fast").arg("-crf").arg("22");
+    } else if burn_requested && sub_mode == "hardsub" && srt_path_opt.is_some() {
+        // Dựng ASS lỗi ⇒ vẫn in phụ đề bằng đường cũ (subtitles filter) để không mất phụ đề.
         let srt_file = srt_path_opt.as_ref().unwrap();
         let srt_escaped = srt_file.to_string_lossy().replace('\\', "/").replace(':', "\\:");
         remux.arg("-vf").arg(format!("subtitles='{}'", srt_escaped));
@@ -4336,7 +4447,10 @@ mod tests {
             sub_export_mode: Some("none".to_string()),
             audio_export_mode: Some("mixed".to_string()),
             target_lang: Some("vi".to_string()),
-        };
+        
+            sub_style: crate::dubbing::SubStyle::default(),
+            hardsub: crate::dubbing::HardSubConfig::default(),
+            };
 
         let res = export_dubbed_video(None, project, Some(out_file.to_string_lossy().to_string()), None);
         if let Ok(path) = res {

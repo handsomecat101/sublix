@@ -1045,6 +1045,38 @@ export interface DubbingProject {
   /** v0.11.33: "multitrack" (mặc định - VLC chọn Track 1: Gốc, Track 2: Thuyết minh) | "mixed" | "original" */
   audio_export_mode?: "multitrack" | "mixed" | "original";
   target_lang?: string;
+  /** [TSK-V014] Kiểu dáng phụ đề khi in (preset, cỡ chữ, vị trí). */
+  sub_style?: SubStyle;
+  /** [TSK-V014] Làm mờ phụ đề cứng + in phụ đề khi xuất video. */
+  hardsub?: HardSubConfig;
+}
+
+/** [TSK-V014] Kiểu dáng phụ đề (chọn khi xuất video có in phụ đề). */
+export interface SubStyle {
+  /** "normal" (1 dòng/câu) | "kinetic" (nhảy chữ theo từ). */
+  mode?: string;
+  /** "normal" | "pop-amber" | "karaoke-cyan" | "reveal". */
+  preset?: string;
+  /** Cỡ chữ (px trong hệ PlayRes của ASS). 0 = dùng mặc định. */
+  font_size?: number;
+  /** "bottom" | "center" | "top" | "band". */
+  position?: string;
+}
+
+/** [TSK-V014] Làm mờ phụ đề cứng (dải) khi xuất video. */
+export interface HardSubConfig {
+  /** Bật làm mờ dải phụ đề cứng. */
+  enabled?: boolean;
+  /** Dải phụ đề cứng (toạ độ px trong khung hình). */
+  band?: { y: number; h: number; x: number; w: number } | null;
+  /** Các khoảng thời gian (giây) cần làm mờ. Rỗng = làm mờ cả video. */
+  spans?: Array<[number, number]>;
+  /** Mức làm mờ: "light" | "medium" | "strong". */
+  blur?: string;
+  /** Phủ hộp đen mờ đục ("đè tem") lên dải đã làm mờ. */
+  stamp?: boolean;
+  /** Phạm vi: "text_only" | "whole". */
+  scope?: string;
 }
 
 /** v0.11.32: phụ đề có sẵn cạnh video — source "youtube" nếu do app tải từ YouTube. */

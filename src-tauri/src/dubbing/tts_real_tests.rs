@@ -157,7 +157,10 @@ fn tts_real_export_mp4_with_vieneu() {
         sub_export_mode: Some("softsub".to_string()),
         audio_export_mode: Some("multitrack".to_string()),
         target_lang: Some("vi".to_string()),
-    };
+    
+        sub_style: crate::dubbing::SubStyle::default(),
+        hardsub: crate::dubbing::HardSubConfig::default(),
+        };
     let out = out_dir("export").join("vieneu_dubbed.mp4");
     let _ = std::fs::remove_file(&out);
     let path = export_dubbed_video(None, project, Some(out.to_string_lossy().to_string()), None).expect("xuất video");
