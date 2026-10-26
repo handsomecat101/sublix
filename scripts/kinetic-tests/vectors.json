@@ -1,0 +1,374 @@
+{
+  "algorithm": "v1: tokens = tách khoảng trắng | CJK từng chữ (dấu câu dính chữ trước) | nguyên chuỗi; trọng số 1 (+0.6 nếu kết thúc bằng dấu câu); totalCs = round((end-start)*100); durCs = floor(totalCs*w/W), phần dư cộng vào từ cuối; offsetCs cộng dồn",
+  "vectors": [
+    {
+      "text": "Xin chào các bạn",
+      "start": 0,
+      "end": 2,
+      "expected": [
+        {
+          "word": "Xin",
+          "offsetCs": 0,
+          "durCs": 50
+        },
+        {
+          "word": "chào",
+          "offsetCs": 50,
+          "durCs": 50
+        },
+        {
+          "word": "các",
+          "offsetCs": 100,
+          "durCs": 50
+        },
+        {
+          "word": "bạn",
+          "offsetCs": 150,
+          "durCs": 50
+        }
+      ]
+    },
+    {
+      "text": "Vậy hai cô gái làm múa khỏe thân này đang dính vào một vụ rắc rối lớn.",
+      "start": 0,
+      "end": 6.48,
+      "expected": [
+        {
+          "word": "Vậy",
+          "offsetCs": 0,
+          "durCs": 36
+        },
+        {
+          "word": "hai",
+          "offsetCs": 36,
+          "durCs": 36
+        },
+        {
+          "word": "cô",
+          "offsetCs": 72,
+          "durCs": 36
+        },
+        {
+          "word": "gái",
+          "offsetCs": 108,
+          "durCs": 36
+        },
+        {
+          "word": "làm",
+          "offsetCs": 144,
+          "durCs": 36
+        },
+        {
+          "word": "múa",
+          "offsetCs": 180,
+          "durCs": 36
+        },
+        {
+          "word": "khỏe",
+          "offsetCs": 216,
+          "durCs": 36
+        },
+        {
+          "word": "thân",
+          "offsetCs": 252,
+          "durCs": 36
+        },
+        {
+          "word": "này",
+          "offsetCs": 288,
+          "durCs": 36
+        },
+        {
+          "word": "đang",
+          "offsetCs": 324,
+          "durCs": 36
+        },
+        {
+          "word": "dính",
+          "offsetCs": 360,
+          "durCs": 36
+        },
+        {
+          "word": "vào",
+          "offsetCs": 396,
+          "durCs": 36
+        },
+        {
+          "word": "một",
+          "offsetCs": 432,
+          "durCs": 36
+        },
+        {
+          "word": "vụ",
+          "offsetCs": 468,
+          "durCs": 36
+        },
+        {
+          "word": "rắc",
+          "offsetCs": 504,
+          "durCs": 36
+        },
+        {
+          "word": "rối",
+          "offsetCs": 540,
+          "durCs": 36
+        },
+        {
+          "word": "lớn.",
+          "offsetCs": 576,
+          "durCs": 72
+        }
+      ]
+    },
+    {
+      "text": "Thời điểm này, Heather khoảng 18 tuổi, sống ở Lawrenceville.",
+      "start": 6.48,
+      "end": 13.11,
+      "expected": [
+        {
+          "word": "Thời",
+          "offsetCs": 0,
+          "durCs": 56
+        },
+        {
+          "word": "điểm",
+          "offsetCs": 56,
+          "durCs": 56
+        },
+        {
+          "word": "này,",
+          "offsetCs": 112,
+          "durCs": 89
+        },
+        {
+          "word": "Heather",
+          "offsetCs": 201,
+          "durCs": 56
+        },
+        {
+          "word": "khoảng",
+          "offsetCs": 257,
+          "durCs": 56
+        },
+        {
+          "word": "18",
+          "offsetCs": 313,
+          "durCs": 56
+        },
+        {
+          "word": "tuổi,",
+          "offsetCs": 369,
+          "durCs": 89
+        },
+        {
+          "word": "sống",
+          "offsetCs": 458,
+          "durCs": 56
+        },
+        {
+          "word": "ở",
+          "offsetCs": 514,
+          "durCs": 56
+        },
+        {
+          "word": "Lawrenceville.",
+          "offsetCs": 570,
+          "durCs": 93
+        }
+      ]
+    },
+    {
+      "text": "  ",
+      "start": 1,
+      "end": 2,
+      "expected": []
+    },
+    {
+      "text": "Một",
+      "start": 3.333,
+      "end": 4,
+      "expected": [
+        {
+          "word": "Một",
+          "offsetCs": 0,
+          "durCs": 67
+        }
+      ]
+    },
+    {
+      "text": "你好，世界！",
+      "start": 10,
+      "end": 11.5,
+      "expected": [
+        {
+          "word": "你",
+          "offsetCs": 0,
+          "durCs": 28
+        },
+        {
+          "word": "好，",
+          "offsetCs": 28,
+          "durCs": 46
+        },
+        {
+          "word": "世",
+          "offsetCs": 74,
+          "durCs": 28
+        },
+        {
+          "word": "界！",
+          "offsetCs": 102,
+          "durCs": 48
+        }
+      ]
+    },
+    {
+      "text": "我们今天去哪里",
+      "start": 0,
+      "end": 1.4,
+      "expected": [
+        {
+          "word": "我",
+          "offsetCs": 0,
+          "durCs": 20
+        },
+        {
+          "word": "们",
+          "offsetCs": 20,
+          "durCs": 20
+        },
+        {
+          "word": "今",
+          "offsetCs": 40,
+          "durCs": 20
+        },
+        {
+          "word": "天",
+          "offsetCs": 60,
+          "durCs": 20
+        },
+        {
+          "word": "去",
+          "offsetCs": 80,
+          "durCs": 20
+        },
+        {
+          "word": "哪",
+          "offsetCs": 100,
+          "durCs": 20
+        },
+        {
+          "word": "里",
+          "offsetCs": 120,
+          "durCs": 20
+        }
+      ]
+    },
+    {
+      "text": "Hello world, this is fine!",
+      "start": 2.005,
+      "end": 4,
+      "expected": [
+        {
+          "word": "Hello",
+          "offsetCs": 0,
+          "durCs": 32
+        },
+        {
+          "word": "world,",
+          "offsetCs": 32,
+          "durCs": 51
+        },
+        {
+          "word": "this",
+          "offsetCs": 83,
+          "durCs": 32
+        },
+        {
+          "word": "is",
+          "offsetCs": 115,
+          "durCs": 32
+        },
+        {
+          "word": "fine!",
+          "offsetCs": 147,
+          "durCs": 53
+        }
+      ]
+    },
+    {
+      "text": "a b c d e f g h",
+      "start": 0,
+      "end": 0.05,
+      "expected": [
+        {
+          "word": "a",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "b",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "c",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "d",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "e",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "f",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "g",
+          "offsetCs": 0,
+          "durCs": 0
+        },
+        {
+          "word": "h",
+          "offsetCs": 0,
+          "durCs": 5
+        }
+      ]
+    },
+    {
+      "text": "Đúng rồi... Đi thôi!",
+      "start": 120.25,
+      "end": 121.75,
+      "expected": [
+        {
+          "word": "Đúng",
+          "offsetCs": 0,
+          "durCs": 28
+        },
+        {
+          "word": "rồi...",
+          "offsetCs": 28,
+          "durCs": 46
+        },
+        {
+          "word": "Đi",
+          "offsetCs": 74,
+          "durCs": 28
+        },
+        {
+          "word": "thôi!",
+          "offsetCs": 102,
+          "durCs": 48
+        }
+      ]
+    }
+  ]
+}
