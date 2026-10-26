@@ -3,17 +3,41 @@
 > **Ai đọc:** chỉ agent được PO (anh Tuấn) giao vai **điều phối** (tiếp quản khi người điều phối trước offline / hết quota).
 > Thợ (worker) KHÔNG cần đọc file này — thợ làm theo spec được giao.
 > **Không chép trạng thái task vào đây** — trạng thái nằm ở `PROJECT_STATE.md` (khoá/hoàn thành) và `AGENT_CHAT.md` (bàn giao, tin `@handoff` của người điều phối ở đầu file). File này chỉ ghi **cách điều phối + bài học**.
-> Cập nhật lần cuối: 2026-10-24 — Claude Code (Opus 5.5).
+> Cập nhật lần cuối: 2026-10-26 — Claude Code (Opus 5.5).
+>
+> **PO chỉ cần nói 1 câu:** *"Bạn là người điều phối dự án Sublix. Đọc `agent-team/LEADER_NOTES.md` và làm theo mục 0."* — mọi thứ còn lại nằm trong file này.
 
 ---
 
-## 1. Tiếp quản trong 5 phút
+## 0. Khởi động điều phối (đọc xong là làm — không cần PO giải thích)
 
-1. Đọc theo `AGENTS.md` (SOUL → PROJECT_STATE → AGENT_CHAT → ISSUE_LOG Quick Index) + file này.
-2. Tìm tin `@handoff` mới nhất của người điều phối trong `AGENT_CHAT.md` → biết Orca Run đang dùng, commit nào chưa push, ai đang làm gì.
-3. Xem hộp thư Orca: `orca orchestration check --run <run_id> --json` rồi `orca orchestration worker-list --run <run_id> --json` (ai `in_progress` / `succeeded` / `live`).
-4. Đọc màn hình từng thợ: `orca terminal read --terminal <handle> --json` (đuôi terminal cho biết đang làm gì / kẹt chỗ nào).
-5. `git status` + `git log origin/master..HEAD` → việc nào đã commit, việc nào còn trong working tree của ai.
+**Môi trường của dự án này:** điều phối nhiều agent qua **Orca** (app quản lý terminal/agent). Bạn ra lệnh cho thợ bằng CLI `orca` từ shell của bạn. Máy dev Windows 11, PowerShell 5.1, Ryzen AI Max 390 (không NVIDIA), **Smart App Control bật** (chặn exe mới build — cách vượt để kiểm giao diện ở §4, bẫy máy ở §5).
+
+1. **Nạp hướng dẫn Orca đúng phiên bản:** `orca skills get orchestration` (và `orca skills get orca-cli` khi cần lệnh terminal). Đọc lướt phần dispatch / check / worker-done.
+2. **Đọc boot dự án:** `AGENTS.md` → SOUL → PROJECT_STATE → **tin `@handoff` mới nhất của điều phối ở đầu `AGENT_CHAT.md`** (Orca Run id, commit chưa push, ai đang làm gì, việc còn lại) → ISSUE_LOG Quick Index.
+3. **Xem đội đang có:** `orca terminal list --json` (tiêu đề tab/ô cho biết thợ nào; **không mở thêm nếu đã có** — xem §2 "Đội hình"). Hộp thư: `orca orchestration check --run <run_id> --json` (đọc xong phải `--ack <deliveryId>`).
+4. **Đọc màn hình thợ đang làm:** `orca terminal read --terminal <handle> --json` → `result.terminal.tail`.
+5. **Git:** `git status` + `git log --oneline origin/master..HEAD` (commit local chưa push).
+6. **Báo PO 3–5 dòng tiếng Việt** tình hình, rồi làm tiếp theo vòng dưới.
+
+**Vòng làm việc chuẩn (mỗi việc):**
+1. Viết spec ngắn vào scratchpad: mục tiêu · **danh sách file được sửa / cấm sửa** · đọc mục nào trong docs · test bắt buộc · "KHÔNG build/chạy app, KHÔNG commit, KHÔNG heartbeat".
+2. Giao: thợ không phải Claude → `agent-team/tools/dispatch.ps1 -Run <run> -Terminal <handle> -Id TSK-… -Spec <file>`; thợ Claude (Sonnet/Opus) → `orca orchestration worker-start --agent claude --model <id> --worktree "path:<repo>" …` (lần sau giao tiếp trên terminal cũ bằng `dispatch.ps1`).
+3. Chờ (chạy nền, KHÔNG poll): `orca orchestration check --run <run> --wait --types "worker_done,escalation,question" --timeout-ms 3600000 --json`.
+4. Thợ báo xong → **đọc code then chốt** → `git add` đúng file của việc đó → `agent-team/tools/verify-clean.ps1 [-Rust]` → đụng giao diện thì kiểm app thật bằng `agent-team/tools/gui-app.ps1` + CDP → mọi exit code = 0 mới commit (danh tính commit ở §4).
+5. Mốc lớn: `@handoff` 3–7 dòng lên đầu `AGENT_CHAT.md` + commit `agent-team/`. Push **chỉ khi PO nói** ("push đi").
+
+## 1. Cách PO (anh Tuấn) muốn làm việc — đã chốt, không hỏi lại
+
+- Trả lời **tiếng Việt**, ngắn, không thuật ngữ thừa (PO không đọc code). Chủ động làm, chỉ hỏi khi thật sự là quyết định của PO (ngân sách, đường một chiều như tắt Smart App Control, push).
+- **Commit chủ động** sau khi kiểm chứng (không cần hỏi). **Push 1 lần/đợt và phải có PO đồng ý.**
+- **Không giao PO kiểm thử thủ công** (nghe mù, chấm điểm…) — tự quyết bằng review công khai + số đo máy.
+- **Không tin "xong" của thợ:** luôn tự kiểm bản sạch + đọc code then chốt + kiểm app thật nếu đụng UI. PO xác nhận cách này làm lỗi lặt vặt giảm hẳn.
+- **Đội hình ổn định:** KHÔNG tự đóng cửa sổ thợ, KHÔNG mở agent mới cho mỗi việc — giao việc mới vào đúng phiên đang có. Phiên mcode đã đóng thì mở lại bằng `mcode --session` (chọn phiên cũ, **không** chọn phiên "· running").
+- **Mỗi tab Orca tối đa 3–4 ô agent**; cần thêm agent ⇒ **tab mới** (`orca terminal create --worktree "path:<repo>" --title "…" --command "…"`), đặt tên rõ. PO tự chia cỡ ô.
+- **Không heartbeat** (mỗi tin = 1 lượt đọc lại hội thoại = tốn token).
+- **Nghỉ lâu (qua đêm) ⇒ PO nên mở phiên điều phối MỚI** thay vì gọi lại phiên cũ (bộ đệm hết hạn ⇒ đọc lại cả phiên rất tốn). Vì vậy `@handoff` + file này phải luôn đủ để phiên mới làm tiếp.
+- Bảo mật: không in API key (`%APPDATA%\com.sublix.desktop\*.json`); không `taskkill` theo tên / tắt app PO; không tự `/login` tài khoản thợ (nhờ PO).
 
 ## 2. Đội thợ & quy tắc giao việc (PO chốt)
 
@@ -22,8 +46,13 @@
 | **mcode** (MiniMax Code, M3.1-Flash) | Mặc định: code theo plan/spec, nghiên cứu, benchmark | Rất nhanh; tốt ở logic + test; yếu hơn ở hiệu năng React → người điều phối review phần đó. Có thể mở nhiều phiên (mcode #1/#2/#3) |
 | **CommandCode** (`commandcode`, deepseek-v4-flash) | Mặc định: tính năng vừa, UI theo plan, review checklist | Cần bật **yolo/permission bypass**, nếu không sẽ đứng xin phép từng lệnh (kể cả lệnh báo cáo Orca) |
 | **Gemini 3.8 Flash** (Antigravity CLI `agy`) | **Mọi việc nghiên cứu / search web** (so sánh model, benchmark công khai, nguồn) — PO chốt 2026-10-25 | Mở bằng `orca terminal split --command "agy"`; giao thủ công như mcode. Chỉ cho ghi file `docs/` mới. **Hỏi quyền khi tạo/sửa file** ("Allow creation of this file?") → đọc terminal, đúng file được giao thì gửi `1` + Enter |
-| **Claude Sonnet 5.5** | CHỈ việc khó thật (kiến trúc, bug khó mà thợ khác 2 lần không xong) | **Tốn usage — hạn chế tối đa** |
+| **OpenCode** (`opencode`, mặc định DeepSeek V4.1 Flash **Free**) | Module gói gọn theo spec, test, thuật toán | PO duyệt dùng 2026-10-25; làm kỹ (vd tabShortcuts 30 test). Báo bằng `orca orchestration worker-done` |
+| **Gemini 3.8 Flash** — cũng **code** tốt | PO 2026-10-25: code nhanh, quota nhiều ⇒ chia cả việc code | Benchmark: yếu ở việc dài hơi (Terminal-Bench 4.0 ~19%) ⇒ giao việc gọn; báo cáo nghiên cứu phải soát nguồn (từng bịa link/nhầm cột) |
+| **Claude Sonnet 5.5** | Việc khó/quan trọng (kiến trúc, luồng trạng thái, P2 hàng đợi) — PO cho phép "cái nào quan trọng thì giao Sonnet" | Tốn usage — chỉ khi xứng đáng |
 | **Claude Opus 5.5** | CHỈ phần **thẩm mỹ / logic thiết kế giao diện** + duyệt UI cuối so với mockup | Thợ khác code theo thiết kế của Opus |
+
+- **Khi mcode quá tải** (gói free chậm ~20–40 tok/s): chia việc sang CommandCode / OpenCode / Gemini.
+- **Đội hình hiện tại** (handle) ghi trong tin `@handoff` mới nhất của điều phối — không ghi ở đây vì đổi theo phiên.
 
 - **Chia việc không chồng chéo (PO nhắc 2026-10-25):** trước khi giao, liệt kê file mỗi thợ được sửa; hai thợ KHÔNG cùng sửa 1 file. File dùng chung (`lib.rs`, `config.rs`, `tauri.ts`, `types.ts`) chỉ cho "thêm cuối file / thêm 1 field", dặn re-read trước khi sửa. Màn nằm trong file người khác đang sửa → làm component file mới trước, chờ người kia xong mới thay vào (mẫu: Live/Lịch sử trong SettingsView). Thợ xong → báo ngay thợ đang chờ file đó.
 - Review của thợ yếu hơn cho thợ mạnh hơn chỉ là **tham khảo** — người điều phối tự kiểm chứng trước khi bắt sửa.
