@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-26 14:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
+- **Loại:** `@handoff` — **TẠM DỪNG theo lệnh PO** (về nhà làm tiếp). v0.14 gần xong; 12 commit local **chưa push** (từ `3a851a5` tới `b9a791f`). Orca run `run_80e8fbd4887e`.
+- **Đã xong + kiểm app thật:** dò phụ đề cứng (PP-OCRv4 det, 60 s video ~3 s), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ — libass không làm được), giao diện Thuộc tính + khung dải + xem thử chữ nhảy, bump 0.14.0.
+- **CÒN 1 LỖI (đang sửa dở):** xuất video "Đa đường tiếng" + phụ đề cứng ⇒ ffmpeg `final_audio unconnected`. Giao mcode #1 (`TSK-V014-EXPORT-FIX`, dispatch `ctx_cea3fc4b4c58`) — đã ngắt bằng Esc; **sửa dở chưa commit** trong `src-tauri/src/dubbing/export_video_graph.rs` + `mod.rs`. Làm tiếp: gõ "TIẾP TỤC TSK-V014-EXPORT-FIX" vào terminal mcode #1.
+- **Kiểm lại sau khi sửa:** `agent-team/tools/verify-clean.ps1 -Rust` → build `cargo build --bin sublix` (target `%TEMP%\sublix-cc-target`) → `tools/gui-app.ps1 start` → xuất thật video thử chữ Trung (tab "hardsub_zh_30s.mp4" đã có trong phiên app; file thử ở scratchpad phiên `552b7175…\fixtures\`) → ổn thì PO duyệt push.
+- **Đội (handle sau khi Orca khởi động lại):** mcode #1 `term_05c6d215` · #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20` — đều đang rảnh.
+
+---
+
 ### 2026-10-26 01:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
 - **Loại:** `@handoff` điều phối — **v0.13.0 xong, đã commit local, CHƯA push** (chờ PO OK). Orca run `run_80e8fbd4887e`.
 - **Đã có:** Studio nhiều tab P0–P4 (`59c4d32` run_id · `260c898` chặn kết quả video cũ · `27fab97` P1 · `50b4e92` P2 hàng đợi · `b19305f` P3+P4 phiên + phím tắt) · nghe mẫu từ file `9e082a5` · `edfb987` bump 0.13.0. Kiểm bản sạch: tsc/build OK, node 358/358, cargo 293/0.
@@ -60,12 +69,5 @@
 - **Ra:** `docs/ui-mockups/studio-tabs.html` (+ `shots/studio-tabs.png`) + `UI_REDESIGN_PLAN.md §4.11`.
 - **Chốt:** thanh tab 34 px **dưới topbar, chỉ trong Studio**, luôn hiện; thay chip tên file + nút "Mở video" trên topbar. Tab 200→120 px, vòng tiến độ 14 px màu theo bước + số %; lỗi = chấm đỏ, xong chưa xem = chấm xanh; tên bỏ đuôi, cắt giữa.
 - **Tương tác:** đóng tab đang chạy → hộp hỏi (mặc định **Để chạy nền**); tràn → cuộn ngang + nút "N tab ⌄"; thả file = tab mới (file đã mở → nhảy tới); phím Ctrl+Tab/Ctrl+Shift+Tab/Ctrl+W/Ctrl+1..8/Ctrl+9 = cuối/Ctrl+Shift+T; tối đa 12 tab, 1 việc nặng cùng lúc (khớp với `STUDIO_TABS_PLAN.md` của Sonnet).
-
----
-### 2026-10-25 14:15 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-FIX-BUG-R2-8-01` — sửa React key trùng `dubbing_active`; **chưa commit**).
-- **Đã làm:** `processLogic.ts` thêm 3 hàm thuần — `makeTaskRunId` (id lần chạy `dubbing_<ts>_<rand>`), `dedupeHistoryIds` (lịch sử cũ trùng id → giữ mục mới nhất, mục cũ gắn hậu tố `_2/_3` ⇒ **không mất mục**), `upsertHistoryItem` (mục cùng id bị **thay** ⇒ 1 lần chạy = 1 mục, cập nhật tiến độ không sinh mục mới).
-- **Wiring:** `SublixStudioView.notifyTaskUpdate` sinh id **mới khi bắt đầu lượt chạy** (`running` + `workflowType`), tiến độ cùng lượt giữ nguyên id; `SettingsView` đọc lịch sử → khử trùng, lưu → upsert, `handleStudioTaskUpdate` + listener `dubbing:progress` dùng **chung id lần chạy**; listener `file_sub:progress` cũng bỏ id cứng `file_sub_active` (nếu không `upsert` sẽ nuốt mất lịch sử tạo phụ đề).
-- **Verify:** `node --test scripts/process-tests/` **29/29** (6 case mới) · timeline **121/121** · `npx vite build` **OK**; `tsc` còn 3 lỗi ở `LiveView.tsx` + `TranslationSection.tsx` — file của worker khác đang sửa dở, **không phải của tôi**.
 
 ---

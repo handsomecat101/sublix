@@ -838,3 +838,11 @@
 - **Con no (chuyen giao):** backend `translate_options_get/set` **chua co** → UI buoc Dich dang o trang thai fallback chi doc. `src/lib/tauri.ts` can wrapper chinh thuc thi bo cast `translateApi` trong `src/views/studio/translateOptions.ts`. R2-8 (kiem Luu/key tren app that) chua lam.
 - **Ban goc `H:\AI Project\sublix` van dung yen** o `51f73fe` (2 file dirty cua tho khac, khong dung) — PO test bang **fork**; muon dong bo thi merge nhanh `fix/voice-timeline-mojibake` (da bang `master`).
 
+### 2026-10-25 14:15 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-FIX-BUG-R2-8-01` — sửa React key trùng `dubbing_active`; **chưa commit**).
+- **Đã làm:** `processLogic.ts` thêm 3 hàm thuần — `makeTaskRunId` (id lần chạy `dubbing_<ts>_<rand>`), `dedupeHistoryIds` (lịch sử cũ trùng id → giữ mục mới nhất, mục cũ gắn hậu tố `_2/_3` ⇒ **không mất mục**), `upsertHistoryItem` (mục cùng id bị **thay** ⇒ 1 lần chạy = 1 mục, cập nhật tiến độ không sinh mục mới).
+- **Wiring:** `SublixStudioView.notifyTaskUpdate` sinh id **mới khi bắt đầu lượt chạy** (`running` + `workflowType`), tiến độ cùng lượt giữ nguyên id; `SettingsView` đọc lịch sử → khử trùng, lưu → upsert, `handleStudioTaskUpdate` + listener `dubbing:progress` dùng **chung id lần chạy**; listener `file_sub:progress` cũng bỏ id cứng `file_sub_active` (nếu không `upsert` sẽ nuốt mất lịch sử tạo phụ đề).
+- **Verify:** `node --test scripts/process-tests/` **29/29** (6 case mới) · timeline **121/121** · `npx vite build` **OK**; `tsc` còn 3 lỗi ở `LiveView.tsx` + `TranslationSection.tsx` — file của worker khác đang sửa dở, **không phải của tôi**.
+
+---
+
