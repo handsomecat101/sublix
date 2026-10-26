@@ -23,10 +23,46 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.14.0",
+    date: "26/10/2026",
+    title: "Phụ đề \"nhảy chữ\" theo nhịp nói · Làm mờ phụ đề cứng của video gốc",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Kiểu phụ đề: Bình thường hoặc Nhảy chữ",
+        icon: "\u{1F524}",
+        items: [
+          "Chọn trong tab Thuộc tính của Studio: Bình thường (như trước) hoặc Nhảy chữ với 3 mẫu — Vàng nảy (mặc định), Karaoke xanh, Hiện dần.",
+          "Vàng nảy: từ đang nói sáng vàng và phóng nhẹ rồi thu về. Karaoke xanh: màu chạy dần từ trái sang phải, từ đã nói giữ xanh. Hiện dần: từ hiện ra đúng lúc tới lượt, các từ sau còn ẩn nhưng vẫn giữ chỗ nên dòng chữ không bị nhảy.",
+          "Rê chuột lên mẫu là xem thử ngay trên video — không cần bấm nút xem thử; bấm chuột mới là chọn mẫu.",
+          "Xem thử giống hệt video xuất: cùng một cách chia thời gian từng từ. Câu dịch chưa có mốc từng từ nên app chia thời lượng câu theo số âm tiết.",
+          "Font tiếng Việt đẹp đi kèm app (Be Vietnam Pro và Montserrat, giấy phép mở) nên dấu tiếng Việt không bị vỡ khi in vào video."
+        ]
+      },
+      {
+        category: "Video gốc có phụ đề cứng (làm mờ & đè tem)",
+        icon: "\u{1F32B}\uFE0F",
+        items: [
+          "Tích ô Video có phụ đề cứng — làm mờ & đè tem (mặc định TẮT): app tự dò dải chữ cũ, làm mờ đúng dải đó rồi in phụ đề Việt vào giữa dải, có thể kèm nền tem mờ để che chữ cũ.",
+          "Dò nhanh — vài giây cho video 1 phút. Kéo chỉnh dải ngay trên khung xem thử nếu app dò lệch; chọn làm mờ chỉ lúc có chữ hoặc suốt video.",
+          "Chỉ chạy khi bạn tích ô; bỏ tích thì video xuất ra như cũ (không làm mờ gì).",
+          "Lần đầu dùng sẽ tải mô hình dò chữ (~4,7 MB) — có thanh tiến độ trong app."
+        ]
+      },
+      {
+        category: "Ghi chú",
+        icon: "\u{1F4DD}",
+        items: [
+          "Mẫu Hộp cam trong bản thiết kế chưa có (sẽ bổ sung sau); bản này có 3 mẫu như trên."
+        ]
+      }
+    ]
+  },
+  {
     version: "v0.13.0",
     date: "26/10/2026",
     title: "Studio làm nhiều video cùng lúc · Không còn lẫn kết quả giữa các video",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Studio nhiều tab (tối đa 6 tab)",

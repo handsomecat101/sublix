@@ -1,3 +1,29 @@
+## v0.14.0 — 2026-10-26
+### Phụ đề "nhảy chữ" theo nhịp nói · Làm mờ phụ đề cứng của video gốc
+
+**Bối cảnh:** bản này thêm 2 thứ cho khâu xuất video: **kiểu phụ đề nhảy chữ** (từng từ sáng lên theo lời nói, kiểu TikTok/CapCut) và ô tích **"video có phụ đề cứng"** để app tự làm mờ dải chữ cũ rồi in phụ đề Việt lên đúng chỗ.
+
+**1. Kiểu phụ đề: Bình thường hoặc Nhảy chữ**
+- Chọn trong tab **Thuộc tính** của Studio: **Bình thường** (như trước) hoặc **Nhảy chữ** với 3 mẫu:
+  - **Vàng nảy** (mặc định): từ đang nói sáng vàng và phóng nhẹ rồi thu về.
+  - **Karaoke xanh**: màu chạy dần từ trái sang phải, từ đã nói giữ xanh.
+  - **Hiện dần**: từ hiện ra đúng lúc tới lượt; các từ phía sau còn ẩn nhưng vẫn giữ chỗ nên dòng chữ không bị nhảy.
+- **Rê chuột lên mẫu là xem thử ngay trên video** — không cần bấm nút xem thử; bấm chuột mới là chọn mẫu.
+- **Xem thử giống hệt video xuất**: cùng một cách chia thời gian từng từ.
+- Câu dịch chưa có mốc thời gian từng từ nên app chia thời lượng câu theo **số âm tiết**.
+- **Font tiếng Việt đẹp đi kèm app** (Be Vietnam Pro và Montserrat, giấy phép mở) nên dấu tiếng Việt không bị vỡ khi in vào video.
+
+**2. Video gốc có phụ đề cứng ("làm mờ & đè tem")**
+- Tích ô **Video có phụ đề cứng — làm mờ & đè tem** (mặc định **TẮT**): app tự **dò dải chữ cũ** (nhanh — vài giây cho video 1 phút), **làm mờ đúng dải đó** rồi in phụ đề Việt **vào giữa dải**, có thể kèm nền "tem" mờ để che chữ cũ.
+- **Kéo chỉnh dải** ngay trên khung xem thử nếu app dò lệch; chọn làm mờ **chỉ lúc có chữ** hoặc **suốt video**.
+- Chỉ chạy khi bạn tích ô; bỏ tích thì video xuất ra như cũ (không làm mờ gì).
+- **Lần đầu dùng sẽ tải mô hình dò chữ (~4,7 MB)** — có thanh tiến độ trong app.
+
+**3. Ghi chú**
+- Mẫu **"Hộp cam"** trong bản thiết kế **chưa có** (sẽ bổ sung sau); bản này có 3 mẫu như trên.
+
+
+---
 ## v0.13.0 — 2026-10-26
 ### Studio làm nhiều video cùng lúc · Không còn lẫn kết quả giữa các video
 
