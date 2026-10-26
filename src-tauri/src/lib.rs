@@ -15,10 +15,12 @@ pub mod config;
 pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
+mod hardsub;
 pub mod model_download;
 pub mod overlay;
 pub mod proc_kill;
 pub mod stt;
+pub mod subtitles;
 pub mod translate;
 pub mod voice_models;
 
