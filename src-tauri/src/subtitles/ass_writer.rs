@@ -1,136 +1,36 @@
-//! TSK-V014-KINETIC-RS — sinh nội dung file ASS (libass) cho phụ đề Studio.
+//! TSK-V014-ASS-PRESETS — sinh nội dung ASS (libass) cho phụ đề Studio.
 //!
 //! Đầu ra dùng cho `ffmpeg -vf ass=...` khi xuất video và cho khung xem thử.
-//! **Không nhúng file font** — font phải có sẵn trong máy (xem [`DEFAULT_FONT`]).
+//! Font **không nhúng trong file ASS**: chép `.ttf` vào
+//! `src-tauri/resources/fonts/` và truyền `fontsdir=` cho ffmpeg.
 //!
-//! ## Vì sao dùng `\k` + `\1c` / `\2c`
-//! - `\k<cs>` là thẻ **karaoke** của ASS: libass tự tô từng cụm theo thời gian,
-//!   nên hiệu ứng "từ đang nói sáng lên" chạy đúng nhịp mà **không** phải cắt
-//!   video thành nhiều dòng Dialogue.
-//! - Với `\k`: màu "đã đọc" là **PrimaryColour** (`\1c`), màu "chưa đọc" là
-//!   **SecondaryColour** (`\2c`). Vì vậy mỗi dòng Kinetic đảo màu ngay trên
-//!   dòng sự kiện: `\1c` = màu highlight, `\2c` = màu gốc ⇒ từ vừa đọc xong
-//!   giữ màu highlight, từ chưa đọc vẫn màu gốc.
-//! - Không dùng `\t` / `\fscx` để "nảy" vì mỗi từ sẽ phải sinh một transform
-//!   riêng; bản này giữ đúng phạm vi "chia thời gian + đổi màu theo từ".
+//! ## Cách dựng từng mẫu (docs/UI_REDESIGN_PLAN.md §4.12)
+//! | Mẫu | Cách làm | Thẻ ASS |
+//! |---|---|---|
+//! | Vàng nảy (mặc định) | mỗi từ **một event**, cả câu vẽ lại, từ đang nói vàng + phóng 118 % rồi thu về | `\1c` + `\t(\fscx100\fscy100)` |
+//! | Karaoke xanh | **một event/câu**, quét màu trái→phải, từ đã nói giữ xanh | `\kf` |
+//! | Hiện dần | mỗi từ một event, từ chưa nói `\alpha&HFF&` (vẫn giữ chỗ), tới lượt thì hiện | `\alpha` + `\t` |
 //!
-//! ## Màu
-//! [`AssStyle`] nhận màu dạng `#RRGGBB` (dễ đọc trong mã nguồn); khi ghi ASS
-//! mới đổi sang `&HAABBGGRR` (thứ tự **BGR** của ASS). Màu sai định dạng ⇒
-//! fallback trắng + cảnh báo qua `tracing`.
+//! Vì sao "mỗi từ một event" cho Vàng nảy/Hiện dần: mỗi event vẽ **cả câu** nên
+//! câu không bị xuống dòng lại và hiệu ứng khớp tuyệt đối mốc từ, không phụ
+//! thuộc trạng thái karaoke nội bộ của libass (dễ kiểm bằng ảnh render).
+//!
+//! Mẫu **"Hộp cam"** của §4.12 **không làm được với libass**: `BorderStyle=3`
+//! chỉ vẽ **một hộp cho cả dòng**, không theo từng từ (bằng chứng:
+//! `docs/ui-mockups/shots/v014-ass-box-libass-khong-dat.png`).
+//!
+//! Kiểu dáng/màu nằm ở [`super::ass_style`], tái xuất ở đây để nơi gọi cũ
+//! (`ass_writer::AssStyle`, …) không phải đổi.
 
-use tracing::warn;
-
+use super::ass_effects::{highlight_line, karaoke_line};
 use super::kinetic_timing::time_words;
 
-/// Font mặc định — "Be Vietnam Pro" (font tiếng Việt có dấu, đang được kiểm
-/// tra khả năng render của libass; **không** nhúng file font vào bản build).
-pub const DEFAULT_FONT: &str = "Be Vietnam Pro";
-
-/// Kiểu phụ đề: bình thường (1 dòng/câu) hoặc nhảy chữ (karaoke theo từ).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubMode {
-    /// Mỗi câu một dòng Dialogue.
-    Normal,
-    /// Karaoke `\k` theo từng từ (dùng [`time_words`]).
-    Kinetic,
-}
-
-/// Kiểu dáng phụ đề (đơn vị px theo `PlayResX/PlayResY` = kích thước video).
-#[derive(Debug, Clone, PartialEq)]
-pub struct AssStyle {
-    /// Tên font (phải có sẵn trong máy).
-    pub font: String,
-    /// Cỡ chữ (px trong hệ PlayRes).
-    pub size: u32,
-    /// Màu chữ thường `#RRGGBB`.
-    pub primary: String,
-    /// Màu từ đang nói (chỉ dùng ở chế độ [`SubMode::Kinetic`]).
-    pub highlight: String,
-    /// Màu viền `#RRGGBB`.
-    pub outline: String,
-    /// Độ dày viền (px).
-    pub outline_w: f32,
-    /// Lề dưới (px) — khoảng cách từ đáy khung hình tới dòng phụ đề.
-    pub margin_v: u32,
-    /// Lề trái (px).
-    pub margin_l: u32,
-    /// Lề phải (px).
-    pub margin_r: u32,
-    /// Chữ đậm.
-    pub bold: bool,
-}
-
-impl AssStyle {
-    /// Trắng, viền đen dày — đọc rõ trên mọi nền.
-    ///
-    /// `highlight` để trắng như `primary` ⇒ chế độ Kinetic với preset này
-    /// **không đổi màu** (chỉ có nhịp karaoke); muốn thấy hiệu ứng màu thì
-    /// dùng [`AssStyle::tiktok_yellow`] hoặc [`AssStyle::neon`].
-    pub fn classic() -> Self {
-        Self {
-            font: DEFAULT_FONT.to_string(),
-            size: 64,
-            primary: "#FFFFFF".to_string(),
-            highlight: "#FFFFFF".to_string(),
-            outline: "#000000".to_string(),
-            outline_w: 4.0,
-            margin_v: 120,
-            margin_l: 60,
-            margin_r: 60,
-            bold: false,
-        }
-    }
-
-    /// Kiểu TikTok/CapCut: trắng, viền đen, **từ đang nói vàng** (`#FFD400`).
-    pub fn tiktok_yellow() -> Self {
-        Self {
-            size: 68,
-            highlight: "#FFD400".to_string(),
-            outline_w: 5.0,
-            margin_v: 180,
-            bold: true,
-            ..Self::classic()
-        }
-    }
-
-    /// Neon: chữ trắng-xanh nhạt, viền **tím** (`#B026FF`), từ đang nói **xanh cyan**
-    /// (`#00E5FF`).
-    pub fn neon() -> Self {
-        Self {
-            size: 62,
-            primary: "#F2F7FF".to_string(),
-            highlight: "#00E5FF".to_string(),
-            outline: "#B026FF".to_string(),
-            outline_w: 4.5,
-            margin_v: 170,
-            bold: true,
-            ..Self::classic()
-        }
-    }
-}
-
-impl Default for AssStyle {
-    fn default() -> Self {
-        Self::classic()
-    }
-}
-
-/// `#RRGGBB` → `&H00BBGGRR` (ASS dùng thứ tự BGR). Sai định dạng ⇒ trắng.
-pub fn ass_color(hex: &str) -> String {
-    let raw = hex.trim().trim_start_matches('#');
-    if raw.len() == 6 && raw.is_ascii() {
-        let part = |range: std::ops::Range<usize>| u8::from_str_radix(&raw[range], 16).ok();
-        if let (Some(r), Some(g), Some(b)) = (part(0..2), part(2..4), part(4..6)) {
-            return format!("&H00{b:02X}{g:02X}{r:02X}");
-        }
-    }
-    warn!(color = hex, "màu ASS không hợp lệ, dùng màu trắng");
-    "&H00FFFFFF".to_string()
-}
+pub use super::ass_style::{
+    ass_color, AssStyle, KineticPreset, SubMode, FONT_BODY, FONT_DISPLAY,
+};
 
 /// Thoát ký tự đặc biệt của ASS: `\` `{` `}` và xuống dòng → `\N`.
-fn escape_ass(text: &str) -> String {
+pub(crate) fn escape_ass(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 8);
     for ch in text.chars() {
         match ch {
@@ -146,42 +46,43 @@ fn escape_ass(text: &str) -> String {
     out
 }
 
-/// `giây` → `H:MM:SS.cc` (làm tròn tới centi-giây, thời gian âm ⇒ 0).
-fn ass_time(seconds: f64) -> String {
+/// Giây → centi-giây (làm tròn, thời gian âm/không hữu hạn ⇒ 0).
+fn seconds_to_cs(seconds: f64) -> u64 {
     let safe = if seconds.is_finite() { seconds.max(0.0) } else { 0.0 };
-    let cs = (safe * 100.0).round() as u64;
-    let hours = cs / 360_000;
-    let minutes = (cs / 6_000) % 60;
-    let secs = (cs / 100) % 60;
-    format!("{hours}:{minutes:02}:{secs:02}.{:02}", cs % 100)
+    (safe * 100.0).round() as u64
 }
 
-/// Dòng chữ của chế độ Kinetic: karaoke `\k` từng từ + đảo màu bằng `\1c`/`\2c`.
-fn kinetic_text(text: &str, start: f64, end: f64, primary: &str, highlight: &str) -> String {
-    let words = time_words(text, start, end);
-    if words.is_empty() {
-        return String::new();
-    }
-    // Câu gốc có khoảng trắng ⇒ hiển thị cách nhau 1 dấu cách; CJK ⇒ dính liền.
-    let separator = if text.chars().any(char::is_whitespace) { " " } else { "" };
+/// Centi-giây → `H:MM:SS.cc`.
+fn ass_time_cs(cs: u64) -> String {
+    format!(
+        "{}:{:02}:{:02}.{:02}",
+        cs / 360_000,
+        (cs / 6_000) % 60,
+        (cs / 100) % 60,
+        cs % 100
+    )
+}
 
-    let mut line = format!("{{\\1c{highlight}&\\2c{primary}&}}");
-    let last = words.len() - 1;
-    for (i, word) in words.iter().enumerate() {
-        line.push_str(&format!("{{\\k{}}}{}", word.dur_cs, escape_ass(&word.word)));
-        if i < last {
-            line.push_str(separator);
-        }
+/// Một dòng `Dialogue` (không kèm `\n`).
+fn push_event(out: &mut String, start_cs: u64, end_cs: u64, band: &Option<String>, text: &str) {
+    out.push_str(&format!(
+        "Dialogue: 0,{},{},Default,,0,0,0,,",
+        ass_time_cs(start_cs),
+        ass_time_cs(end_cs)
+    ));
+    if let Some(prefix) = band {
+        out.push_str(prefix);
     }
-    line
+    out.push_str(text);
+    out.push('\n');
 }
 
 /// Sinh nội dung file ASS hoàn chỉnh.
 ///
 /// - `segments`: `(start, end, text)` theo giây; câu rỗng bị bỏ qua.
-/// - `band`: `Some((y, h))` ⇒ đặt phụ đề vào **giữa dải** này (dùng cho video có
-///   phụ đề cứng đã làm mờ) bằng `\an5\pos(...)`; `None` ⇒ căn đáy theo `margin_v`.
-/// - Mọi giờ in theo `H:MM:SS.cc`; dòng ngăn cách bằng `\n` (libass chấp nhận LF).
+/// - `mode`: `Normal` = 1 dòng/câu; `Kinetic` = hiệu ứng theo [`AssStyle::preset`].
+/// - `band`: `Some((y, h))` ⇒ đặt phụ đề vào **giữa dải** này (video có phụ đề
+///   cứng đã làm mờ) bằng `\an5\pos(...)`; `None` ⇒ căn đáy theo `margin_v`.
 pub fn build_ass(
     segments: &[(f64, f64, String)],
     mode: SubMode,
@@ -197,11 +98,13 @@ pub fn build_ass(
     let outline = ass_color(&style.outline);
     let bold = if style.bold { -1 } else { 0 };
 
-    let mut out = String::with_capacity(768 + segments.len() * 96);
+    let mut out = String::with_capacity(1024 + segments.len() * 256);
     out.push_str("[Script Info]\n");
     out.push_str("; Sublix — phụ đề sinh tự động (ASS)\n");
     out.push_str("ScriptType: v4.00+\n");
-    out.push_str("WrapStyle: 2\n");
+    // WrapStyle 0 = tự động xuống dòng thông minh (2 = KHÔNG xuống dòng ⇒ câu dài
+    // tràn ra ngoài khung hình, đã thấy khi render 1280×720).
+    out.push_str("WrapStyle: 0\n");
     out.push_str("ScaledBorderAndShadow: yes\n");
     out.push_str("YCbCr Matrix: TV.709\n");
     out.push_str(&format!("PlayResX: {width}\nPlayResY: {height}\n\n"));
@@ -237,23 +140,52 @@ pub fn build_ass(
         if text.trim().is_empty() {
             continue;
         }
-        let content = match mode {
-            SubMode::Normal => escape_ass(text.trim()),
-            SubMode::Kinetic => kinetic_text(text, *start, *end, &primary, &highlight),
-        };
-        if content.is_empty() {
+        let base_cs = seconds_to_cs(*start);
+        if mode == SubMode::Normal {
+            push_event(
+                &mut out,
+                base_cs,
+                seconds_to_cs(*end),
+                &band_prefix,
+                &escape_ass(text.trim()),
+            );
             continue;
         }
-        out.push_str(&format!(
-            "Dialogue: 0,{},{},Default,,0,0,0,,",
-            ass_time(*start),
-            ass_time(*end)
-        ));
-        if let Some(prefix) = &band_prefix {
-            out.push_str(prefix);
+
+        let words = time_words(text, *start, *end);
+        if words.is_empty() {
+            continue;
         }
-        out.push_str(&content);
-        out.push('\n');
+        // Câu gốc có khoảng trắng ⇒ hiển thị cách nhau 1 dấu cách; CJK ⇒ dính liền.
+        let separator = if text.chars().any(char::is_whitespace) { " " } else { "" };
+
+        if style.preset == KineticPreset::KaraokeCyan {
+            let content = karaoke_line(&words, separator, &primary, &highlight);
+            push_event(
+                &mut out,
+                base_cs,
+                seconds_to_cs(*end),
+                &band_prefix,
+                &content,
+            );
+            continue;
+        }
+
+        // Vàng nảy / Hiện dần: mỗi từ một event, cả câu vẽ lại với 1 từ được nhấn.
+        for (index, word) in words.iter().enumerate() {
+            let start_cs = base_cs + u64::from(word.offset_cs);
+            let end_cs = start_cs + u64::from(word.dur_cs);
+            let content = highlight_line(
+                &words,
+                index,
+                style.preset,
+                &primary,
+                &highlight,
+                separator,
+                u32::from(word.dur_cs) * 10,
+            );
+            push_event(&mut out, start_cs, end_cs, &band_prefix, &content);
+        }
     }
 
     out
