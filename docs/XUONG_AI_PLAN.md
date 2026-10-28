@@ -32,8 +32,8 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 ### Giai đoạn 0 — Chuẩn bị (song song, không chồng file)
 - [ ] **D1** Opus — thiết kế tab Xưởng AI: thư viện mẫu, trình hướng dẫn 3 bước, trình sửa lời bình (đánh dấu giữ thoại gốc, đếm thời lượng ước tính), màn tiến trình phân tích, nút "Mở trong Studio" → `docs/ui-mockups/v016-lab*.html` + ảnh + `UI_REDESIGN_PLAN.md §4.14`
 - [ ] **C1** OpenCode — lõi thuần Rust `lab/`: `recap_script.rs` (kiểu + kiểm luật dựng) + `junk_filter.rs` + `allocate.rs` + test
-- [ ] **R1** Gemini — so sánh bộ dựng video bằng code (Remotion / Revideo / Motion Canvas / HyperFrames / MoviePy): giấy phép, tốc độ, dung lượng, chạy với Tauri trên Windows, font Việt + dựng thử thẻ 5 s → `docs/LAB_RENDER_ENGINES.md`
-- [ ] **R2** Gemini — Việt hoá + chỉnh cho game 3 prompt NarratoAI (phân tích cốt truyện / lời bình / khớp cảnh), giữ ghi công MIT → `src-tauri/src/lab/prompts/*.md`
+- [x] **R1** Gemini — so sánh bộ dựng video bằng code → `docs/LAB_RENDER_ENGINES.md`. **Kết luận: v0.16 dùng ffmpeg + ASS** (thẻ 5 s dựng 0,73 s, không thêm dung lượng); Remotion vướng giấy phép công ty > 3 người + kèm Chromium ~300 MB; **HyperFrames (HeyGen, Apache-2.0, viết cho AI agent)** để dành khi làm mẫu Top 10 / đồ hoạ động.
+- [x] **R2** Gemini — Việt hoá + chỉnh cho game 3 prompt NarratoAI → `src-tauri/src/lab/prompts/recap_{analyze,narration,match}.md` + `LICENSE-NarratoAI.txt` (ghi công MIT)
 
 ### Giai đoạn 1 — Phân tích (sau C1)
 - [ ] **C2** đo đặc trưng cutscene bằng ffmpeg (dải đen `cropdetect`, cảnh `scdet`, im lặng `silencedetect`) + `cutscene.rs` chấm điểm + test video thử
