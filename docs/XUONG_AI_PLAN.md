@@ -41,7 +41,7 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
 - [ ] **C4** lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
-- [ ] **U1** (Gemini — phần giao diện với dữ liệu giả trước, nối lệnh sau C3/C4) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
+- [~] **U1** (Gemini — ✅ giao diện + dữ liệu giả `c6c3442`, kiểm app thật 4 bước; còn nối lệnh thật sau C3/C4) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
 
 ### Giai đoạn 3 — Kiểm & phát hành
 - [ ] Điều phối: bản sạch + app thật với **gameplay thật 20–40 phút** → ra dự án Studio xem được, lời bình hợp lý, luật dựng đúng
