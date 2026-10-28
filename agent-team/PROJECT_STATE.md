@@ -54,7 +54,6 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| TSK-LAB-RESEARCH | Xưởng AI (R1+R2): so sánh render engine code + Việt hoá 3 prompt NarratoAI cho game | Antigravity | 🔴 HIGH | 🟡 Đang nghiên cứu | docs/LAB_RENDER_ENGINES.md, src-tauri/src/lab/prompts/* |
 
 
 ---
@@ -78,8 +77,8 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-V015-DISC-UI` | Tab con Khám phá: chip Douyin, Bilibili hot/xếp hạng/tìm, tìm YouTube, Tải về / Tải & mở Studio | mcode #1 | 2026-10-28 | ✅ `26ebe2d` — kiểm app thật: tải clip 21 s → tự mở tab Studio; ảnh `shots/v015-app-*.png` |
 | `TSK-V015-DISC-CMD` | Nối Khám phá: gọi mạng + 5 lệnh Tauri + mã lỗi + wrapper TS | mcode #1 | 2026-10-28 | ✅ `b8cf7d9` — 437 Rust + 418 node; mạng thật OK (Bilibili hot, Douyin, tìm 原神) |
-| `TSK-V015-DISC-UI` | Giao diện tab con Khám phá theo §4.13 (chip Douyin, lưới thẻ, Tải về / Tải & mở Studio, trạng thái lỗi) | **mcode #1 (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `src/views/discovery/**` (mới) · `DownloaderView.tsx/.css` (tối thiểu: tab con) · `scripts/discovery-tests/` |
 | `TSK-LAB-DESIGN` (D1) | Thiết kế tab Xưởng AI (thư viện mẫu, 3 bước, sửa lời bình) | **Opus (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `docs/ui-mockups/v016-lab*` · `docs/UI_REDESIGN_PLAN.md` §4.14 |
 | `TSK-LAB-CORE` (C1) | Lõi thuần `lab/`: kịch bản recap + luật dựng + lọc rác + khớp cảnh theo TTS | **OpenCode (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `src-tauri/src/lab/*.rs` (mới) · `src-tauri/src/lib.rs` (+1 dòng) |
 | `TSK-LAB-RESEARCH` (R1+R2) | So sánh bộ dựng video bằng code + Việt hoá prompt NarratoAI cho game | **Gemini (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `docs/LAB_RENDER_ENGINES.md` · `src-tauri/src/lab/prompts/*` |
