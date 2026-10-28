@@ -9,6 +9,13 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-28 22:35 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** @done — Hoàn thành nghiên cứu sâu TSK-RESEARCH-RECAP-TOOLS (docs/RECAP_TOOLS_DEEPDIVE.md).
+- **Nghiên cứu code thật:** NarratoAI (MIT, 25/10/2026, pipeline kịch bản 2 bước + prompt OST + công thức độ dài cảnh từ/5=s + bộ lọc quảng cáo/sponsor); VideoLingo (Apache-2.0, tách phụ đề spaCy NLP + LLM CoT kép + SequenceMatcher 0.9); auto-editor (The Unlicense, 28/10/2026, SIMD audio peak + motion gblur 1500–4000 fps); TransNetV2 (MIT, ONNX Runtime GPU 800+ fps xử lý fade-to-black game cực chuẩn vs PySceneDetect).
+- **Tool thương mại & Đề xuất Sublix:** Phân tích điểm yếu (bẫy số lượng, credit burn, AI slop) của OpusClip, Vizard, Eklipse, Powder, CapCut/JianYing. Đưa ra 13 đề xuất hành động xếp theo Value/Effort gắn liền với Nấc 1 (Reel) và Nấc 2 (Recap Game Story) xuất thẳng vào Timeline Studio Sublix.
+
+---
+
 ### 2026-10-28 22:30 - Claude Code (Opus 5.5, điều phối) -> @Team / @jimmyvu
 - **Loại:** `@handoff` — **TẠM DỪNG theo lệnh PO** (về nhà làm tiếp). Orca run `run_80e8fbd4887e`, điều phối = cửa sổ của Claude Code (`run-use` nếu cần lấy lại). **v0.14 xong, CHƯA push** (chờ PO OK).
 - **v0.15 "Khám phá"** (`docs/V0.15_PLAN.md`, checklist trong chat): ✅ nghiên cứu · ✅ thiết kế Opus (`7bf7e5b`) · ✅ lõi `discovery/` OpenCode (`321fb8e`, Bilibili tìm tiếng Anh bị -412 ⇒ cần Referer + tự dịch Việt→Trung).
@@ -65,12 +72,3 @@
 - **Kiểm app thật (vượt Smart App Control):** chạy exe cũ đã được phép + Vite từ working tree + CDP (xem LEADER_NOTES §4). Đã kiểm: 3 tab, "Đang chờ #1", Hủy chờ không giết tab chạy, tắt/mở app còn đủ tab, phím tắt. Bản sao localStorage của PO trước migrate v1→v2: scratchpad phiên 72fb9e23 `localStorage_backup.json`.
 - **Còn lại (không chặn release):** nút "Để chạy nền" khi đóng tab; khung xử lý ghi "Toàn Trình" cả khi chỉ chạy STT; đo RAM 6 tab; ý tưởng tính năng chờ PO chọn (`docs/FEATURE_IDEAS_2026.md`).
 - **Đội:** tab "thợ 2" = mcode #1–#4 · tab "thợ 3" = CommandCode + OpenCode · tab Gemini · Sonnet + Opus mỗi bạn 1 tab. Giữ ổn định, không tự đóng, tối đa 3–4 ô/tab.
-
----
-
-### 2026-10-25 19:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-CHORE-AGENT-TEAM-SLIM` — dọn `agent-team/` cho nhẹ context; **chưa commit**).
-- **Đã dọn:** `PROJECT_STATE.md` **53,5 KB → 33,3 KB** (giữ 25 mục ✅ Hoàn thành mới nhất; **59 mục cũ** nguyên văn → `ARCHIVE/PROJECT_STATE_DONE_ARCHIVE.md` + 1 dòng trỏ archive) · `ISSUE_LOG.md` **107,6 KB → 85,4 KB** (**Quick Index giữ ĐẦY ĐỦ mọi mã lỗi**, thêm chú "chi tiết: ARCHIVE/…" cho 18 lỗi đã chuyển; **20 mục phân tích chi tiết** của lỗi ✅ Fixed & cũ trước 2026-10-20 → `ARCHIVE/ISSUE_LOG_DETAIL_ARCHIVE.md`; lỗi 🔴 Open / 🟡 / mới **giữ nguyên tại chỗ**).
-- **Đã chuyển 18 file kế hoạch/báo cáo** (FIX_STUDIO_UI_ROUND1–7, BAO_CAO_SANG, REPORT_PHASE_V2_COMPLETION, BAN_GIAO_GEMINI, BENH_AN_DU_AN_VA_VIEC_SUA, KE_HOACH_×4, OPTION_RESEARCH_DUBBING, PHAN_TICH_UI_TINH_NANG_SUBLIX_STUDIO, TASK_A_Z_ONE_CLICK) → `agent-team/ARCHIVE/` (`git mv`, **không xoá file nào**) + `test-output-audit-giong/` → `ARCHIVE/`.
-- **Giữ tại chỗ (có lý do):** `AUDIT_TAO_GIONG.md` (17 mục audit còn đang chờ GUI test — `GUI_TEST_GUIDE.md` + `WORKFLOW_A_Z.md` trỏ tới) · `SCREENSHOTS.md` (`README.md` trỏ tới) · 4 file lõi + `README`/`QUY_TRINH`/`GOVERNANCE`/`LEADER_NOTES`/`PROJECT_SETUP_CHECKLIST`/`GUI_TEST_GUIDE`/`WORKFLOW_A_Z`/`UI_SPEC_SUBLIX_STUDIO`/`TAM_NHIN_SUBLIX_STUDIO`.
-- **Tổng 4 file lõi: 178,2 KB → 137,9 KB (−40,3 KB; đo sau khi thêm dòng bàn giao này). **AGENT_CHAT.md:** giữ **8 tin** (2 tin worker cũ nhất chuyển `ARCHIVE/AGENT_CHAT_ARCHIVE.md` nguyên văn; **giữ** tin `2026-10-24 23:50` của điều phối) · đã cập nhật đường dẫn cho file bị chuyển trong `CHANGELOG.md` + `src/views/SublixStudioView.tsx` (chỉ đổi path).

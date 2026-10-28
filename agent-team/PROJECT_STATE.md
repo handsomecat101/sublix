@@ -55,7 +55,6 @@
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
 | `TSK-V015-DISC-CMD` | Nối lõi Khám phá: gọi mạng (reqwest, Referer search.bilibili.com) + 5 lệnh Tauri + mã lỗi + wrapper TS | **mcode #1 (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `src-tauri/src/discovery/{fetch,commands}.rs` (+tests) · `discovery/mod.rs` (+2 dòng) · `src-tauri/src/lib.rs` (generate_handler) · `src/lib/tauri.ts` (thêm) · `scripts/discovery-tests/` |
-| TSK-RESEARCH-RECAP-TOOLS | Nghiên cứu sâu các tool recap/review: Sublix tận dụng được gì | Antigravity | 🔴 HIGH | 🟡 Đang nghiên cứu | docs/RECAP_TOOLS_DEEPDIVE.md |
 
 
 ---
@@ -80,6 +79,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| TSK-RESEARCH-RECAP-TOOLS | Nghiên cứu sâu các tool recap/review: Sublix tận dụng được gì | Antigravity | 2026-10-28 | ✅ docs/RECAP_TOOLS_DEEPDIVE.md — Mổ xẻ NarratoAI (MIT, prompt OST, công thức từ/5), VideoLingo, auto-editor (The Unlicense), TransNetV2 ONNX, 13 đề xuất |
 | `TSK-V015-DISC-CORE` | Lõi thuần Rust `discovery/` (parser Bilibili/Douyin/yt-dlp + cache TTL) | OpenCode | 2026-10-28 | ✅ `321fb8e` — 37 test JSON mẫu thật; phát hiện Bilibili tìm tiếng Anh bị -412 |
 | `TSK-DESIGN-V015-DISCOVERY` | Thiết kế tab Khám phá (mockup 8 khu + 8 ảnh + §4.13) | Opus | 2026-10-28 | ✅ `7bf7e5b` — tab con trong Tải video, chip Douyin, Tải & mở Studio |
 | `TSK-RESEARCH-GAME-RECAP-R2` | Sửa báo cáo Game Recap: cập nhật model 2025-2026, RT-DETR Apache-2.0, Gemini 3.8 | Antigravity | 2026-10-28 | ✅ `docs/GAME_RECAP_RESEARCH.md` — Qwen2.5-VL/MiniCPM-o 2.6 local, Gemini 3.8 Flash ($0.035-$0.07/h), RT-DETR |
