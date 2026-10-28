@@ -30,18 +30,18 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 ## 4. Checklist (điều phối cập nhật)
 
 ### Giai đoạn 0 — Chuẩn bị (song song, không chồng file)
-- [ ] **D1** Opus — thiết kế tab Xưởng AI: thư viện mẫu, trình hướng dẫn 3 bước, trình sửa lời bình (đánh dấu giữ thoại gốc, đếm thời lượng ước tính), màn tiến trình phân tích, nút "Mở trong Studio" → `docs/ui-mockups/v016-lab*.html` + ảnh + `UI_REDESIGN_PLAN.md §4.14`
-- [ ] **C1** OpenCode — lõi thuần Rust `lab/`: `recap_script.rs` (kiểu + kiểm luật dựng) + `junk_filter.rs` + `allocate.rs` + test
+- [x] **D1** Opus (✅ `4bccb28` — mockup 8 khu + 9 ảnh + §4.14) — thiết kế tab Xưởng AI: thư viện mẫu, trình hướng dẫn 3 bước, trình sửa lời bình (đánh dấu giữ thoại gốc, đếm thời lượng ước tính), màn tiến trình phân tích, nút "Mở trong Studio" → `docs/ui-mockups/v016-lab*.html` + ảnh + `UI_REDESIGN_PLAN.md §4.14`
+- [x] **C1** OpenCode (✅ `af3a7f8` — 35 test) — lõi thuần Rust `lab/`: `recap_script.rs` (kiểu + kiểm luật dựng) + `junk_filter.rs` + `allocate.rs` + test
 - [x] **R1** Gemini — so sánh bộ dựng video bằng code → `docs/LAB_RENDER_ENGINES.md`. **Kết luận: v0.16 dùng ffmpeg + ASS** (thẻ 5 s dựng 0,73 s, không thêm dung lượng); Remotion vướng giấy phép công ty > 3 người + kèm Chromium ~300 MB; **HyperFrames (HeyGen, Apache-2.0, viết cho AI agent)** để dành khi làm mẫu Top 10 / đồ hoạ động.
 - [x] **R2** Gemini — Việt hoá + chỉnh cho game 3 prompt NarratoAI → `src-tauri/src/lab/prompts/recap_{analyze,narration,match}.md` + `LICENSE-NarratoAI.txt` (ghi công MIT)
 
 ### Giai đoạn 1 — Phân tích (sau C1)
-- [ ] **C2** đo đặc trưng cutscene bằng ffmpeg (dải đen `cropdetect`, cảnh `scdet`, im lặng `silencedetect`) + `cutscene.rs` chấm điểm + test video thử
+- [ ] **C2** (OpenCode — đang làm) đo đặc trưng cutscene bằng ffmpeg (dải đen `cropdetect`, cảnh `scdet`, im lặng `silencedetect`) + `cutscene.rs` chấm điểm + test video thử
 - [ ] **C3** lệnh Tauri `lab_analyze` (STT + OCR + cutscene + lọc rác → tóm tắt chương bằng LLM theo prompt R2), có tiến trình + huỷ
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
 - [ ] **C4** lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
-- [ ] **U1** giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
+- [ ] **U1** (Gemini — phần giao diện với dữ liệu giả trước, nối lệnh sau C3/C4) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
 
 ### Giai đoạn 3 — Kiểm & phát hành
 - [ ] Điều phối: bản sạch + app thật với **gameplay thật 20–40 phút** → ra dự án Studio xem được, lời bình hợp lý, luật dựng đúng
