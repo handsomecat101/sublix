@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Xưởng AI (mockup §4.14 · v0.16)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  body { height: auto; overflow: auto; }
+  /* ---------- khung trình bày (giống v015-discovery.html) ---------- */
+  .page { padding: 26px 28px 60px; display: flex; flex-direction: column; gap: 30px; }
+  h1 { font-size: 20px; margin: 0; } h2 { font-size: 14px; margin: 0 0 10px; color: var(--ac-txt); }
+  .lead { color: var(--t3); margin: 4px 0 0; max-width: 1240px; line-height: 1.55; }
+  .lead b { color: var(--t1); }
+  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .cap { margin-top: 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
+  .cap b { color: var(--t1); }
+  .tbl { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .tbl td, .tbl th { border-bottom: 1px solid var(--line-soft); padding: 7px 10px; text-align: left; vertical-align: top; }
+  .tbl th { color: var(--t4); font-size: 11px; font-weight: 700; }
+  .tbl td:first-child { white-space: nowrap; }
+  .note { max-width: 300px; }
+
+  /* ================= TOPBAR: tab Xưởng AI ================= */
+  .beta { font-size: 9px; font-weight: 800; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--t4); letter-spacing: .02em; line-height: 14px; }
+  .tab.on .beta { border-color: var(--ac-br); color: var(--ac-txt); }
+  .tsep { width: 1px; height: 18px; background: var(--line); align-self: center; margin: 0 2px; }
+  .ring { width: 14px; height: 14px; border-radius: 50%; flex: none; display: inline-block; position: relative; background: conic-gradient(var(--ac) calc(var(--p) * 1%), rgba(255,255,255,.12) 0); }
+  .ring::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #191511; }
+  .ring.lg { width: 22px; height: 22px; } .ring.lg::after { inset: 4px; }
+  .pct { font-family: var(--font-mono); font-size: 10.5px; color: var(--t3); }
+  .dotok { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; }
+
+  /* ================= KHUNG XƯỞNG AI ================= */
+  .lab { display: flex; flex-direction: column; height: calc(100% - 48px); }
+  .lh { height: 58px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: #0f0d0b; border-bottom: 1px solid var(--line); }
+  .back { color: var(--t3); font-size: 12px; font-weight: 600; display: flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line); white-space: nowrap; }
+  .ttl { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; width: 300px; }
+  .ttl small { color: var(--t4); font-size: 11px; } .ttl b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steps { margin: 0 auto; display: flex; align-items: center; }
+  .sp { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 8px; border-radius: 10px; }
+  .sp .c { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; border: 1.5px solid var(--line); color: var(--t4); flex: none; }
+  .sp .l { display: flex; flex-direction: column; line-height: 1.2; }
+  .sp .l b { font-size: 12.5px; color: var(--t3); white-space: nowrap; } .sp .l small { font-size: 10.5px; color: var(--t4); white-space: nowrap; }
+  .sp.done .c { background: var(--ok-soft); border-color: var(--ok-br); color: var(--ok-txt); } .sp.done .l b { color: var(--t2); }
+  .sp.on { background: var(--ac-soft); box-shadow: inset 0 0 0 1px var(--ac-br); }
+  .sp.on .c { background: var(--ac); border-color: var(--ac); color: #1a1209; } .sp.on .l b { color: var(--ac-txt); }
+  .sp.run .c { border: none; background: conic-gradient(var(--ac) calc(var(--p) * 1%), rgba(255,255,255,.12) 0); position: relative; color: var(--ac-txt); }
+  .sp.run .c::after { content: attr(data-k); position: absolute; inset: 3px; border-radius: 50%; background: #0f0d0b; display: grid; place-items: center; }
+  .sp.err .c { background: var(--dang-soft); border-color: var(--dang-br); color: var(--dang-txt); }
+  .sline { width: 36px; height: 1.5px; background: var(--line); flex: none; } .sline.done { background: var(--ok-br); }
+  .lh-r { display: flex; align-items: center; gap: 8px; width: 300px; justify-content: flex-end; font-size: 11.5px; color: var(--t4); }
+  .lbody { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
+  .lf { height: 62px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 24px; border-top: 1px solid var(--line); background: #0f0d0b; }
+  .lf .info { color: var(--t3); font-size: 12px; display: flex; gap: 14px; align-items: center; }
+  .lf .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn.dang { color: var(--dang-txt); border-color: var(--dang-br); background: var(--dang-soft); }
+  .btn.dis { opacity: .45; }
+  .btn.sm { padding: 3px 9px; font-size: 11.5px; border-radius: 7px; }
+  .kf { box-shadow: 0 0 0 2px #12100e, 0 0 0 4px var(--ac-txt) !important; }
+  .sec-t { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--t4); text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .sec-t .grow { height: 1px; background: var(--line-soft); }
+  .box { background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; }
+  .bx-h { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--line-soft); font-weight: 700; font-size: 13px; }
+  .bx-h .r { margin-left: auto; font-weight: 500; font-size: 11.5px; color: var(--t3); display: flex; gap: 8px; align-items: center; }
+  .bx-b { padding: 12px 14px; }
+  .spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,.15); border-top-color: var(--ac); display: inline-block; flex: none; }
+  .bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #e8a33d, #f0d9a8); border-radius: 2px; }
+  .ostc { --o: var(--step-sub); }
+  .mono11 { font-family: var(--font-mono); font-size: 11px; }
+
+  /* ảnh minh hoạ cảnh (giả) */
+  .th { position: relative; overflow: hidden; border-radius: 7px; flex: none; background: #1a1410; }
+  .th .gl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; opacity: .22; }
+  .th .tc { position: absolute; right: 4px; bottom: 4px; font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; background: rgba(0,0,0,.78); color: #fff; padding: 0 4px; border-radius: 3px; }
+  .th .lb { position: absolute; left: 4px; top: 4px; font-size: 9px; font-weight: 800; padding: 0 4px; border-radius: 3px; background: rgba(232,163,61,.85); color: #1a1209; }
+  .th.letter::before, .th.letter::after { content: ""; position: absolute; left: 0; right: 0; height: 11%; background: #000; z-index: 1; }
+  .th.letter::before { top: 0; } .th.letter::after { bottom: 0; }
+
+  /* ================= A. THƯ VIỆN ================= */
+  .lib { height: calc(100% - 48px); display: grid; grid-template-columns: 1fr 420px; gap: 28px; padding: 26px 32px 24px; }
+  .lib-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .lib-h { display: flex; align-items: flex-end; gap: 14px; }
+  .lib-h h3 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
+  .lib-h h3 .beta { font-size: 10.5px; line-height: 18px; padding: 0 7px; }
+  .lib-h p { margin: 0; color: var(--t3); font-size: 13px; }
+  .bnr { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 10px; border: 1px dashed var(--line); color: var(--t3); font-size: 12px; }
+  .bnr b { color: var(--t2); } .bnr .x { margin-left: auto; color: var(--t4); }
+  .tpl-big { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .tpl { border-radius: 14px; border: 1px solid var(--line); background: var(--bg-card); overflow: hidden; display: flex; flex-direction: column; }
+  .tpl.hov { border-color: var(--ac-br); background: rgba(232,163,61,.04); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .ill { height: 262px; position: relative; overflow: hidden; border-bottom: 1px solid var(--line-soft); }
+  .tb { padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 11px; }
+  .tb h4 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .tb .one { color: var(--t2); font-size: 13px; margin: -4px 0 0; }
+  .facts { display: grid; grid-template-columns: 74px 1fr; gap: 5px 12px; font-size: 12px; }
+  .facts dt { color: var(--t4); font-weight: 600; } .facts dd { margin: 0; color: var(--t2); }
+  .tb-f { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+  .tb-f .dim { font-size: 11.5px; }
+  .soon { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .sc { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px dashed var(--line); opacity: .62; }
+  .sc .ic { width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; font-size: 20px; background: rgba(255,255,255,.04); flex: none; }
+  .sc b { font-size: 13.5px; display: flex; gap: 8px; align-items: center; } .sc p { margin: 2px 0 0; font-size: 11.5px; color: var(--t3); }
+  .drafts { display: flex; flex-direction: column; min-height: 0; }
+  .dr { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
+  .dr:last-child { border-bottom: none; }
+  .dr .m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .dr .m b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dr .m span { font-size: 11.5px; color: var(--t3); display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .dr.hov { background: var(--hover); }
+  /* minh hoạ Recap */
+  .ill.recap { background: radial-gradient(ellipse at 30% 0%, rgba(232,163,61,.16), transparent 60%), linear-gradient(180deg, #1b1510, #120e0b); }
+  .strip { position: absolute; left: 26px; right: 26px; top: 28px; display: flex; gap: 8px; }
+  .strip .th { flex: 1; height: 92px; }
+  .wave { position: absolute; left: 26px; right: 26px; top: 136px; height: 28px; display: flex; align-items: center; gap: 2px; }
+  .wave i { flex: 1; background: rgba(244,236,222,.18); border-radius: 1px; }
+  .wave i.o { background: var(--step-sub); opacity: .75; }
+  .narr { position: absolute; left: 26px; right: 120px; bottom: 26px; padding: 10px 14px; border-radius: 10px; background: rgba(0,0,0,.45); border: 1px solid var(--line); font-size: 13px; color: var(--t1); line-height: 1.45; }
+  .narr small { display: block; font-size: 10.5px; color: var(--t4); margin-bottom: 2px; font-weight: 700; letter-spacing: .04em; }
+  .ostchip { position: absolute; right: 26px; bottom: 30px; font-size: 11px; font-weight: 700; color: #bae6fd; background: rgba(56,189,248,.14); border: 1px solid rgba(56,189,248,.35); border-radius: 12px; padding: 3px 9px; }
+  /* minh hoạ Reel */
+  .ill.reel { background: radial-gradient(ellipse at 70% 0%, rgba(167,139,250,.10), transparent 60%), linear-gradient(180deg, #17131a, #110e10); display: flex; align-items: center; justify-content: center; gap: 22px; }
+  .ph9 { width: 118px; height: 210px; border-radius: 12px; position: relative; overflow: hidden; border: 1px solid var(--line); }
+  .ph9 .k { position: absolute; left: 8px; right: 8px; bottom: 34px; text-align: center; font-weight: 900; font-size: 12px; line-height: 1.2; color: #fff; text-shadow: 0 2px 4px #000; }
+  .ph9 .k em { font-style: normal; color: #ffc83d; }
+  .ph9 .t { position: absolute; left: 6px; top: 6px; font-family: var(--font-mono); font-size: 9.5px; background: rgba(0,0,0,.7); padding: 0 4px; border-radius: 3px; color: var(--t2); }
+
+  /* ================= B. NGUỒN & TUỲ CHỌN ================= */
+  .src { flex: 1; min-width: 0; padding: 22px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .src-h { display: flex; align-items: center; gap: 10px; }
+  .src-h h3 { margin: 0; font-size: 15px; } .src-h .muted { font-size: 12.5px; }
+  .src-h .r { margin-left: auto; display: flex; gap: 8px; }
+  .vr { display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-card); }
+  .vr .hd { color: var(--t4); font-size: 14px; width: 14px; text-align: center; cursor: grab; }
+  .vr .no { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 800; color: var(--t3); background: rgba(255,255,255,.06); }
+  .vr .m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .vr .m b { font-size: 13.5px; } .vr .m span { font-size: 12px; color: var(--t3); display: flex; gap: 8px; align-items: center; }
+  .vr .x { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--t4); }
+  .vr.drag { border-color: var(--ac-br); background: #221b14; box-shadow: 0 12px 30px rgba(0,0,0,.5); transform: translateX(10px) rotate(-.4deg); }
+  .dropline { height: 2px; background: var(--ac); border-radius: 2px; margin: -8px 40px; }
+  .dz { border: 1.5px dashed var(--line); border-radius: 12px; padding: 18px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--t3); font-size: 12.5px; }
+  .est { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--bg-inset); border: 1px solid var(--line-soft); font-size: 12.5px; color: var(--t2); }
+  .est.warn { background: var(--warn-soft); border-color: rgba(228,179,60,.3); color: var(--warn-txt); }
+  .opt { width: 560px; flex: none; border-left: 1px solid var(--line); background: var(--bg-side); padding: 22px 26px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+  .opt h3 { margin: 0; font-size: 15px; }
+  .of { display: flex; flex-direction: column; gap: 7px; }
+  .of .lbl { font-size: 12px; color: var(--t2); display: flex; align-items: center; gap: 8px; }
+  .of .lbl .r { margin-left: auto; color: var(--t4); font-weight: 500; }
+  .of .hint { font-size: 11.5px; color: var(--t4); }
+  .inp.lg { height: 36px; font-size: 13.5px; }
+  .seg.lg span { padding: 7px 6px; font-size: 12.5px; }
+  .vp { display: flex; gap: 6px; }
+  .vp .b { flex: 1; height: 36px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 13px; }
+  .vp .b .g { color: var(--t3); } .vp .b .s { color: var(--ac); } .vp .b .e { margin-left: auto; font-size: 10.5px; color: var(--t3); display: flex; gap: 5px; align-items: center; }
+  .vp .b .e::after { content: "▾"; color: var(--t4); margin-left: 4px; }
+  .vp .p { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--bg-card); color: var(--t2); }
+  .slw { display: flex; align-items: center; gap: 16px; }
+  .sl { position: relative; height: 34px; flex: 1; }
+  .sl .tk { position: absolute; top: 11px; left: 0; right: 0; height: 6px; border-radius: 3px; background: rgba(255,255,255,.09); }
+  .sl .bd { position: absolute; top: 8px; height: 12px; left: 33.33%; width: 33.33%; border-radius: 3px; background: var(--ok-soft); border: 1px dashed var(--ok-br); }
+  .sl .fl { position: absolute; top: 11px; left: 0; height: 6px; border-radius: 3px; background: var(--ac); }
+  .sl .kn { position: absolute; top: 5px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: #f6f0e4; border: 3px solid var(--ac); box-shadow: 0 0 0 4px var(--ac-soft); }
+  .sl .tks { position: absolute; top: 24px; left: 0; right: 0; font-family: var(--font-mono); font-size: 10px; color: var(--t4); }
+  .sl .tks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .slv { width: 70px; text-align: right; font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--ac-txt); }
+  .okline { font-size: 11.5px; color: var(--ok-txt); display: flex; gap: 6px; align-items: center; }
+  .sumr { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t3); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-soft); }
+  .sumr b { color: var(--t2); font-weight: 600; }
+
+  /* ================= C. PHÂN TÍCH ================= */
+  .an-run { flex: 1; display: flex; justify-content: center; padding: 30px; overflow: hidden; }
+  .an-col { width: 980px; display: flex; flex-direction: column; gap: 16px; }
+  .an-top { display: flex; align-items: flex-end; gap: 16px; }
+  .an-top h3 { margin: 0; font-size: 20px; } .an-top .r { margin-left: auto; text-align: right; font-size: 12px; color: var(--t3); }
+  .an-top .r b { color: var(--t1); font-family: var(--font-mono); font-size: 13px; }
+  .stg { display: grid; grid-template-columns: 30px 210px 1fr 150px 56px; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+  .stg:last-child { border-bottom: none; }
+  .stg .ic { display: grid; place-items: center; }
+  .stg b { font-weight: 700; } .stg .d { color: var(--t3); font-size: 12px; }
+  .stg .p { font-family: var(--font-mono); font-size: 11.5px; text-align: right; color: var(--t3); }
+  .stg.done b { color: var(--t2); } .stg.wait { opacity: .55; }
+  .stg.on { background: rgba(232,163,61,.05); }
+  .ck { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--ok-soft); color: var(--ok-txt); border: 1px solid var(--ok-br); }
+  .ck.w { background: transparent; border: 1.5px dashed var(--line); color: var(--t4); }
+  .ck.e { background: var(--dang-soft); color: var(--dang-txt); border-color: var(--dang-br); }
+  .ck.p { background: transparent; border: 1.5px solid var(--warn); color: var(--warn-txt); }
+  .tl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; align-items: center; font-size: 11.5px; }
+  .tl .n { color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .tl .n b { color: var(--t2); }
+  .tlb { position: relative; height: 24px; border-radius: 5px; background: rgba(255,255,255,.035); overflow: hidden; }
+  .tlb .chp { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 6px; font-size: 10px; font-weight: 800; color: var(--t3); border-right: 1px solid #12100e; }
+  .tlb .chp:nth-child(odd) { background: #2b231b; } .tlb .chp:nth-child(even) { background: #241d17; }
+  .tlb .jk { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, rgba(224,91,75,.55) 0 4px, rgba(224,91,75,.18) 4px 8px); }
+  .tlb .cs { position: absolute; top: 3px; bottom: 3px; width: 4px; border-radius: 2px; background: var(--ac); }
+  .tlb .scan { position: absolute; top: 0; bottom: 0; right: 0; background: rgba(18,16,14,.75); border-left: 2px solid var(--ac); }
+  .lg { display: flex; gap: 16px; font-size: 11px; color: var(--t3); align-items: center; }
+  .lg i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+  .an-res { flex: 1; display: grid; grid-template-columns: 1fr 600px; gap: 22px; padding: 20px 26px; overflow: hidden; min-height: 0; }
+  .an-l, .an-r { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
+  .chr { display: grid; grid-template-columns: 22px 30px 1fr 128px; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line-soft); align-items: start; }
+  .chr:last-child { border-bottom: none; }
+  .cb { width: 16px; height: 16px; border-radius: 4px; background: var(--ac); display: grid; place-items: center; color: #1a1209; font-size: 11px; font-weight: 900; margin-top: 2px; }
+  .cb.off { background: transparent; border: 1.5px solid var(--line); }
+  .chr .no { font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--ac-txt); }
+  .chr .m b { font-size: 13px; display: block; margin-bottom: 3px; } .chr .m p { margin: 0; font-size: 12px; color: var(--t2); line-height: 1.5; }
+  .chr .s { font-size: 11.5px; color: var(--t3); text-align: right; line-height: 1.55; } .chr .s b { color: var(--t2); font-family: var(--font-mono); font-weight: 600; }
+  .chr.off { opacity: .5; }
+  .pp { display: grid; grid-template-columns: 34px 1fr 64px; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+  .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #1a1209; }
+  .pp .m b { font-size: 12.5px; display: flex; gap: 8px; align-items: center; } .pp .m span { color: var(--t3); font-size: 11.5px; }
+  .pp .n { text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--t4); }
+  .pp .fix { font-size: 10.5px; color: var(--ok-txt); font-weight: 600; }
+  .pp.edit .nm { background: var(--bg-inset); border: 1px solid var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); padding: 1px 6px; border-radius: 5px; }
+  .jr { display: grid; grid-template-columns: 112px 1fr auto; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+  .jr:last-child { border-bottom: none; }
+  .jt { font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 4px; background: var(--dang-soft); color: var(--dang-txt); border: 1px solid var(--dang-br); white-space: nowrap; text-align: center; }
+  .jr .m { min-width: 0; } .jr .m b { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--t2); } .jr .m span { display: block; color: var(--t4); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jr .a { display: flex; gap: 6px; }
+  .jr.rest { background: var(--ok-soft); } .jr.rest .jt { background: var(--ok-soft); color: var(--ok-txt); border-color: var(--ok-br); }
+
+  /* ================= D. LỜI BÌNH ================= */
+  .ed { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .ed-tb { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 28px; border-bottom: 1px solid var(--line-soft); font-size: 12px; color: var(--t3); }
+  .ed-tb b { color: var(--t2); } .ed-tb .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .ed-list { flex: 1; overflow: hidden; padding: 16px 28px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .chh { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; font-size: 12px; color: var(--t3); max-width: 1000px; }
+  .chh b { color: var(--ac-txt); font-size: 12.5px; } .chh .grow { height: 1px; background: var(--line-soft); }
+  .pg { max-width: 1000px; display: grid; grid-template-columns: 16px 30px 1fr 96px; gap: 10px; padding: 9px 14px 9px 8px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--bg-card); position: relative; }
+  .pg .hd { color: var(--t4); font-size: 13px; padding-top: 2px; text-align: center; visibility: hidden; }
+  .pg .no { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--t4); padding-top: 3px; }
+  .pg .tx { font-size: 14px; line-height: 1.58; color: var(--t1); }
+  .pg .mt { text-align: right; font-size: 11px; color: var(--t4); display: flex; flex-direction: column; gap: 3px; align-items: flex-end; padding-top: 2px; }
+  .pg .mt .s { font-family: var(--font-mono); font-size: 12px; color: var(--t2); font-weight: 600; }
+  .pg .tools { grid-column: 3 / 5; display: flex; gap: 6px; margin-top: 4px; }
+  .pg.hov { background: var(--hover); border-color: var(--line); } .pg.hov .hd { visibility: visible; }
+  .pg.edit { border-color: var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); background: #1a1511; }
+  .pg.edit .tx { outline: none; }
+  .caret { display: inline-block; width: 1.5px; height: 18px; background: var(--ac-txt); vertical-align: -4px; }
+  .pg .ed-badge { font-size: 10px; font-weight: 700; color: var(--t3); border: 1px solid var(--line); padding: 0 5px; border-radius: 4px; }
+  .pg.ost { grid-template-columns: 16px 30px 1fr 96px; background: rgba(56,189,248,.045); border-color: rgba(56,189,248,.22); border-left: 3px solid var(--step-sub); padding-left: 6px; }
+  .pg.ost .who { font-size: 11px; font-weight: 800; color: #7dd3fc; letter-spacing: .03em; display: flex; gap: 8px; align-items: center; }
+  .pg.ost .who span { color: var(--t4); font-weight: 600; letter-spacing: 0; font-family: var(--font-mono); }
+  .pg.ost .en { font-size: 13.5px; color: var(--t1); font-style: italic; margin-top: 3px; } .pg.ost .vi { font-size: 12px; color: var(--t3); font-style: normal; }
+  .pg.ost .mt .s { color: #7dd3fc; }
+  .pg.warn { border-color: rgba(228,179,60,.45); }
+  .pg .wb { position: absolute; left: -26px; top: 10px; width: 18px; height: 18px; border-radius: 50%; background: var(--warn); color: #1a1209; display: grid; place-items: center; font-size: 11px; font-weight: 900; }
+  #paras > :first-child { margin-top: -84px; } height: 22px; margin: -4px 0; display: flex; align-items: center; gap: 10px; padding-left: 54px; }
+  .ins::before { content: ""; flex: 1; height: 1.5px; background: var(--ac-br); order: 3; }
+  .ins span { font-size: 11px; font-weight: 700; color: var(--ac-txt); padding: 1px 8px; border-radius: 10px; border: 1px solid var(--ac-br); background: #1a1511; white-space: nowrap; }
+  .ins span.o { color: #7dd3fc; border-color: rgba(56,189,248,.4); }
+  .side { width: 380px; flex: none; border-left: 1px solid var(--line); background: var(--bg-side); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .dur-big { display: flex; align-items: baseline; gap: 8px; } .dur-big b { font-family: var(--font-mono); font-size: 26px; } .dur-big span { color: var(--t3); font-size: 12px; }
+  .dmeter { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,.07); margin: 8px 0 4px; overflow: visible; }
+  .dmeter .n { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px; background: var(--ac); }
+  .dmeter .o { position: absolute; top: 0; bottom: 0; background: var(--step-sub); opacity: .8; }
+  .dmeter .tg { position: absolute; top: -4px; bottom: -4px; border-left: 1px dashed var(--t3); border-right: 1px dashed var(--t3); background: rgba(244,236,222,.05); }
+  .dleg { display: flex; justify-content: space-between; font-size: 11px; color: var(--t3); }
+  .dleg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .rule { display: grid; grid-template-columns: 20px 1fr; gap: 8px; padding: 7px 0; font-size: 12px; border-bottom: 1px solid var(--line-soft); }
+  .rule:last-child { border-bottom: none; }
+  .rule .m { color: var(--t2); } .rule .m span { display: block; color: var(--t4); font-size: 11px; margin-top: 1px; }
+  .rule .m .link { font-size: 11px; }
+  .rule.ok .m { color: var(--t3); }
+  .wk { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 900; }
+  .wk.w { background: var(--warn); color: #1a1209; } .wk.k { background: var(--ok-soft); color: var(--ok-txt); border: 1px solid var(--ok-br); }
+  .oc { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px; font-size: 12px; color: var(--t3); }
+  .oc b { font-family: var(--font-mono); color: var(--ac-txt); width: 16px; } .oc .t { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t2); }
+  .oc .d { font-family: var(--font-mono); font-size: 11px; } .oc.on { background: var(--hover); }
+  .oc .w { color: var(--warn-txt); font-size: 11px; }
+  .pop { position: absolute; z-index: 30; width: 420px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+  .pop .h { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12.5px; } .pop .h .r { margin-left: auto; color: var(--t4); font-weight: 500; }
+  .chs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chs span { padding: 3px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--t2); font-size: 11.5px; }
+  .chs span.on { border-color: var(--ac-br); background: var(--ac-soft); color: var(--ac-txt); }
+  .pop .inp { height: 32px; }
+  .pop .res { padding: 10px 12px; border-radius: 9px; background: var(--bg-inset); border: 1px solid var(--line-soft); font-size: 13px; line-height: 1.55; color: var(--t1); }
+  .pop .res .old { display: block; font-size: 11.5px; color: var(--t4); text-decoration: line-through; margin-bottom: 6px; line-height: 1.45; }
+  .pop .ft { display: flex; align-items: center; gap: 8px; } .pop .ft .r { margin-left: auto; display: flex; gap: 6px; }
+
+  /* ================= E. DỰNG NHÁP ================= */
+  .bd-res { flex: 1; display: grid; grid-template-columns: 1fr 560px; min-height: 0; }
+  .seglist { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .sg-h { display: grid; grid-template-columns: 34px 120px 1fr 190px 74px 26px; gap: 14px; padding: 9px 26px; font-size: 11px; font-weight: 700; color: var(--t4); border-bottom: 1px solid var(--line-soft); }
+  .sg { display: grid; grid-template-columns: 34px 120px 1fr 190px 74px 26px; gap: 14px; padding: 9px 26px; align-items: center; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+  .sg .no { font-family: var(--font-mono); font-size: 11px; color: var(--t4); font-weight: 700; }
+  .sg .tx { line-height: 1.45; min-width: 0; } .sg .tx .pic { display: block; font-size: 11px; color: var(--t4); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sg .tx .clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sg.ost .tx .clip { font-style: italic; color: #bae6fd; }
+  .sg .sr { font-family: var(--font-mono); font-size: 11px; color: var(--t3); line-height: 1.5; }
+  .sg .du { font-family: var(--font-mono); font-size: 12px; color: var(--t2); text-align: right; } .sg .du small { display: block; color: var(--t4); font-size: 10px; }
+  .sg.on { background: var(--ac-soft); box-shadow: inset 3px 0 0 var(--ac); }
+  .sg.ost { box-shadow: inset 3px 0 0 var(--step-sub); }
+  .sg.on.ost { box-shadow: inset 3px 0 0 var(--ac); }
+  .pv { border-left: 1px solid var(--line); background: var(--bg-side); padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .pv .scr { aspect-ratio: 16 / 9; border-radius: 10px; position: relative; overflow: hidden; }
+  .pv .scr .sub { position: absolute; left: 0; right: 0; bottom: 14%; text-align: center; font-weight: 800; font-size: 16px; color: #fff; text-shadow: 0 2px 4px #000, 0 0 2px #000; padding: 0 30px; z-index: 2; }
+  .pv .scr .sub em { font-style: normal; color: #ffc83d; }
+  .pvctl { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--t3); }
+  .pvctl .pb { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.1); position: relative; } .pvctl .pb i { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--ac); border-radius: 2px; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; font-size: 12px; } .kv dt { color: var(--t4); } .kv dd { margin: 0; color: var(--t2); }
+  .toast { position: absolute; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: #1e1915; border: 1px solid var(--ok-br); box-shadow: 0 14px 40px rgba(0,0,0,.6); font-size: 12.5px; }
+  .toast .ok { color: var(--ok-txt); font-weight: 800; }
+  .menu { position: absolute; z-index: 30; width: 300px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 5px; font-size: 12px; }
+  .mi { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 9px; border-radius: 6px; color: var(--t2); }
+  .mi small { display: block; color: var(--t4); font-size: 11px; }
+  .mi.hot2 { background: var(--ac-soft); color: var(--ac-txt); }
+  .ms { height: 1px; background: var(--line-soft); margin: 4px 2px; }
+
+  /* ================= F. TRẠNG THÁI ================= */
+  .stc { height: 350px; display: flex; flex-direction: column; }
+  .stc .lh { height: 46px; padding: 0 16px; gap: 10px; }
+  .stc .lbody { padding: 22px 26px; flex-direction: column; gap: 12px; }
+  .stc .lf { height: 54px; padding: 0 16px; }
+  .es { display: flex; gap: 14px; align-items: flex-start; }
+  .es .big { font-size: 26px; line-height: 1; width: 34px; text-align: center; flex: none; }
+  .es h4 { margin: 0 0 4px; font-size: 14.5px; } .es p { margin: 0; color: var(--t3); font-size: 12.5px; line-height: 1.55; }
+  .es .det { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); margin-top: 6px; }
+  .mstg { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg-inset); border: 1px solid var(--line-soft); font-size: 12px; }
+  .mstg div { display: flex; align-items: center; gap: 9px; } .mstg .ck { width: 17px; height: 17px; font-size: 9.5px; }
+  .mstg .r { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--t4); }
+  .th .tc, .th .lb { z-index: 2; }
+  .mini .ttl, .mini .lh-r, .mini .back { display: none; }
+  .mini .steps .sp .l small { display: none; }
+  .mini .sp { padding: 4px 8px 4px 5px; gap: 6px; } .mini .sp .c { width: 20px; height: 20px; font-size: 10px; } .mini .sline { width: 16px; }
+
+  /* ================= G. 1024 ================= */
+  .w1024 { width: 1024px; }
+  .w1024 .topbar { gap: 10px; padding: 0 10px; }
+  .w1024 .tabs { margin-left: 2px; }
+  .w1024 .tab { padding: 6px 8px; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; background: var(--bg-side); border-left: 1px solid var(--line); box-shadow: -14px 0 40px rgba(0,0,0,.5); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; z-index: 20; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <h1>Xưởng AI — mockup §4.14 (v0.16 · thử nghiệm)</h1>
+    <p class="lead">Tab lớn mới <b>✦ Xưởng AI</b>: thư viện mẫu video → mẫu <b>Recap cốt truyện game</b> chạy theo 3 bước có người duyệt (<b>A Phân tích → B Lời bình → C Dựng nháp</b>) rồi <b>mở thành tab dự án Studio</b>. Nguyên tắc từ NarratoAI / OpusClip / CapCut: <b>không hộp đen 1 bấm</b>, ít kết quả mà chất, bước nào cũng xem/sửa được. Kích thước thật 1:1 ở 1920 px. Dữ liệu giả về game cốt truyện hư cấu <i>"Vương Miện Tro Tàn"</i> (3 video gameplay, tổng 3 giờ 56 phút, đích 10 phút).</p>
+  </div>
+
+  <!-- ===================== A. THƯ VIỆN ===================== -->
+  <section id="a">
+    <h2>A · Toàn cảnh 1920×1080 — tab "Xưởng AI" trên topbar + thư viện mẫu + bản nháp gần đây (rê chuột thẻ Recap)</h2>
+    <div class="frame" style="height:1080px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.16</span></div>
+        <nav class="tabs">
+          <span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span><span class="tsep"></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình <span class="badge">1</span></span><span class="tab">⚙ Cài đặt</span>
+        </nav>
+        <div class="top-mid"></div>
+        <div class="top-right">
+          <span class="status-pill"><span class="ring" style="--p:34"></span>Xưởng AI · phân tích 34 %</span>
+          <span class="icon-btn" title="Overlay (Ctrl+Shift+O)">👁</span>
+        </div>
+      </header>
+      <div class="lib">
+        <div class="lib-main">
+          <div class="lib-h">
+            <h3>✦ Xưởng AI <span class="beta">Thử nghiệm</span></h3>
+            <p>AI dựng bản nháp từ video của bạn — bạn duyệt từng bước, rồi mở sang Studio chỉnh như dự án thường.</p>
+          </div>
+          <div class="bnr">🧪 <span><b>Đang thử nghiệm:</b> AI có thể kể sai chi tiết cốt truyện — mỗi bước đều dừng chờ bạn duyệt, không có gì tự xuất.</span><span class="dim">Ẩn tab: Cài đặt › Chung</span><span class="x">✕</span></div>
+          <div class="sec-t">Mẫu dùng được <span class="grow"></span></div>
+          <div class="tpl-big">
+            <div class="tpl hov kf">
+              <div class="ill recap">
+                <div class="strip" id="illStrip"></div>
+                <div class="wave" id="illWave"></div>
+                <div class="narr"><small>LỜI BÌNH AI · BẠN SỬA ĐƯỢC</small>Một tu viện cháy rụi, một hiệp sĩ tỉnh dậy giữa đống tro — và thứ duy nhất anh còn nhớ là một cái tên…</div>
+                <span class="ostchip">🔊 xen thoại gốc 30 %</span>
+              </div>
+              <div class="tb">
+                <h4>🎮 Recap cốt truyện game</h4>
+                <p class="one">Kể lại cốt truyện từ video gameplay dài bằng lời bình tiếng Việt, xen câu thoại gốc đắt giá.</p>
+                <dl class="facts">
+                  <dt>Ra</dt><dd>video ngang 5 / 10 / 15 / 20 phút</dd>
+                  <dt>Cần</dt><dd>video gameplay có cốt truyện (1 hoặc nhiều phần) · hoặc dự án Studio đã nhận dạng thoại</dd>
+                  <dt>Chạy</dt><dd>nhận dạng + đọc chữ trên máy · AI viết lời: nhà cung cấp ở Cài đặt › Dịch thuật</dd>
+                </dl>
+                <div class="tb-f"><span class="btn primary">Bắt đầu ›</span><span class="dim">4 giờ video ≈ 40 phút phân tích</span></div>
+              </div>
+            </div>
+            <div class="tpl">
+              <div class="ill reel">
+                <div class="ph9 th" style="background:linear-gradient(160deg,#4a2c1c,#140d09)"><span class="t">0:42</span><span class="gl" style="font-size:40px">⚔</span><div class="k">CÚ <em>PHẢN ĐÒN</em> CUỐI CÙNG</div></div>
+                <div class="ph9 th" style="background:linear-gradient(160deg,#23324a,#0b0e14)"><span class="t">1:18:05</span><span class="gl" style="font-size:40px">🐉</span><div class="k">KHÔNG AI <em>NGỜ</em> TỚI</div></div>
+                <div class="ph9 th" style="background:linear-gradient(160deg,#3b2346,#0f0a12)"><span class="t">2:03:40</span><span class="gl" style="font-size:40px">👑</span><div class="k">VƯƠNG MIỆN <em>TỈNH GIẤC</em></div></div>
+              </div>
+              <div class="tb">
+                <h4>⚡ Reel highlight</h4>
+                <p class="one">Chọn 3–6 khoảnh khắc hay nhất, cắt thành clip dọc 9:16 có phụ đề nhảy chữ.</p>
+                <dl class="facts">
+                  <dt>Ra</dt><dd>3–6 clip dọc, 30–60 giây mỗi clip</dd>
+                  <dt>Cần</dt><dd>video gameplay hoặc stream (có thoại / tiếng người chơi)</dd>
+                  <dt>Chạy</dt><dd>cùng bước Phân tích với Recap · không cần giọng đọc</dd>
+                </dl>
+                <div class="tb-f"><span class="btn">Bắt đầu ›</span><span class="dim">chung khung 3 bước</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="sec-t">Sắp có <span class="grow"></span></div>
+          <div class="soon">
+            <div class="sc" title="Sắp có — chưa bấm được"><span class="ic">🏆</span><div><b>Top 10 <span class="pill">Sắp có</span></b><p>Đếm ngược 10 khoảnh khắc / boss / vũ khí, có thẻ số thứ tự.</p></div></div>
+            <div class="sc" title="Sắp có — chưa bấm được"><span class="ic">📜</span><div><b>Lore nhân vật <span class="pill">Sắp có</span></b><p>Kể tiểu sử 1 nhân vật xuyên suốt nhiều phần game.</p></div></div>
+            <div class="sc" title="Sắp có — chưa bấm được"><span class="ic">⚖</span><div><b>So sánh <span class="pill">Sắp có</span></b><p>Đặt 2 phiên bản / 2 lựa chọn cạnh nhau, lời bình so sánh.</p></div></div>
+          </div>
+        </div>
+        <div class="drafts box">
+          <div class="bx-h">Bản nháp gần đây <span class="r">4</span></div>
+          <div id="drafts"></div>
+          <div style="margin-top:auto;padding:12px 14px;border-top:1px solid var(--line-soft);font-size:11.5px;color:var(--t4);display:flex;gap:8px">Mỗi bản nháp tự lưu sau từng bước · <span class="link">Mở thư mục</span></div>
+        </div>
+      </div>
+      <div class="note" data-n="1" style="left:40px;top:870px;max-width:340px">Tab mới đặt <b>ngay sau Tải video</b>: 3 tab "làm ra video" đứng cạnh nhau theo đúng luồng Tải → Xưởng AI → Studio; vạch ngăn mảnh tách nhóm tab theo dõi/cài đặt. Nhãn "Thử nghiệm" 9 px viền mờ — không màu mới.</div>
+      <div class="note" data-n="2" style="left:1110px;top:870px;max-width:320px">Việc Xưởng AI đang chạy hiện ở chip trạng thái topbar (bấm = tới bản nháp) và tab Tiến trình — giống việc của tab Studio.</div>
+      <div class="note" data-n="3" style="left:750px;top:870px;max-width:330px">Thẻ mẫu: ảnh minh hoạ + 1 dòng + "Ra / Cần / Chạy" — người dùng biết <b>trước</b> phải chuẩn bị gì. Cả thẻ bấm được; nút chính chỉ hiện ở thẻ đang rê/focus.</div>
+      <div class="note" data-n="4" style="left:410px;top:870px;max-width:310px">"Sắp có" = viền đứt + mờ 62 %, không bấm, không hứa ngày.</div>
+      <div class="note" data-n="5" style="left:1500px;top:470px">Phân tích 4 giờ video mất ~40 phút ⇒ bản nháp là thứ quay lại nhiều nhất; luôn ở cột phải, kèm bước + tiến độ.</div>
+    </div>
+  </section>
+
+  <!-- ===================== B. NGUỒN & TUỲ CHỌN ===================== -->
+  <section id="b">
+    <h2>B · Bước chuẩn bị "Nguồn &amp; tuỳ chọn" — 3 video, đang kéo đổi thứ tự, thanh tỷ lệ tiếng gốc</h2>
+    <div class="frame" style="height:1080px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.16</span></div>
+        <nav class="tabs"><span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span><span class="tsep"></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span></nav>
+        <div class="top-mid"></div><div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="lab">
+        <div class="lh" data-step="0"></div>
+        <div class="lbody">
+          <div class="src">
+            <div class="src-h"><h3>Video nguồn</h3><span class="muted">3 video · tổng <b style="color:var(--t1)">3 giờ 56 phút</b> · thứ tự trên → dưới = thứ tự cốt truyện</span>
+              <span class="r"><span class="btn">＋ Thêm video <span class="kbd">Ctrl+O</span></span><span class="btn">🎬 Chọn dự án Studio</span></span></div>
+            <div class="vr"><span class="hd">⠿</span><span class="no">1</span><div class="th letter" style="width:128px;height:72px;background:linear-gradient(135deg,#4a2c1c,#120d0a)"><span class="gl">🏚</span><span class="tc">1:48:20</span></div>
+              <div class="m"><b>AshenCrown_P1.mp4</b><span>1:48:20 · 1920×1080 · 60 fps · 6,1 GB <span class="pill ok">✓ đã có phụ đề — dự án Studio "AshenCrown_P1"</span></span><span class="dim" style="font-size:11.5px">Bỏ qua nhận dạng thoại cho video này (dùng lại 1.204 câu đã sửa tay)</span></div><span class="x">✕</span></div>
+            <div class="vr drag"><span class="hd" style="color:var(--ac-txt)">⠿</span><span class="no">3</span><div class="th" style="width:128px;height:72px;background:linear-gradient(135deg,#3b2346,#0f0a12)"><span class="gl">👑</span><span class="tc">47:12</span></div>
+              <div class="m"><b>AshenCrown_P3_Ending.mp4</b><span>47:12 · 1920×1080 · 60 fps · 2,6 GB</span></div><span class="x">✕</span></div>
+            <div class="dropline"></div>
+            <div class="vr"><span class="hd">⠿</span><span class="no">2</span><div class="th" style="width:128px;height:72px;background:linear-gradient(135deg,#23324a,#0b0e14)"><span class="gl">🌊</span><span class="tc">1:21:05</span></div>
+              <div class="m"><b>AshenCrown_P2.mp4</b><span>1:21:05 · 1920×1080 · 60 fps · 4,4 GB</span></div><span class="x">✕</span></div>
+
+            <div class="dz">⬇ Thả thêm video vào đây · nhiều file cùng lúc được · <span class="dim">mp4 · mkv · mov · webm</span></div>
+            <div class="est warn">⏱ <span><b>Video dài (≈ 4 giờ):</b> phân tích ước <b>~41 phút</b> trên máy này, cần ~3 GB trống ở ổ tạm. Có thể rời tab — việc chạy nền, tab Xưởng AI hiện vòng tiến độ.</span></div>
+            <div class="cap" style="margin:0">Kéo ⠿ hoặc <span class="kbd">Alt+↑</span><span class="kbd">Alt+↓</span> để đổi thứ tự. Đổi video sau khi đã phân tích ⇒ chỉ phân tích lại video mới/đổi chỗ (bước A giữ kết quả theo từng file).</div>
+          </div>
+          <div class="opt">
+            <h3>Tuỳ chọn</h3>
+            <div class="of"><span class="lbl">Tên game <span class="r">để AI dùng đúng tên nhân vật, địa danh</span></span>
+              <div class="inp lg">Vương Miện Tro Tàn (Ashen Crown)</div>
+              <div class="row" style="font-size:12px;color:var(--t2)"><span class="sw on"></span>Tra bối cảnh trên mạng <span class="dim">— tóm tắt công khai, danh sách nhân vật</span></div></div>
+            <div class="of"><span class="lbl">Độ dài đích</span>
+              <div class="seg lg"><span>5 phút</span><span class="on">10 phút</span><span>15 phút</span><span>20 phút</span></div>
+              <span class="hint">AI viết lời bình theo độ dài này; bước B đếm thời lượng ước tính so với đích.</span></div>
+            <div class="of"><span class="lbl">Giọng đọc <span class="r">ô chọn giọng §4.10</span></span>
+              <div class="vp"><div class="b"><span class="g">♂</span>Adam bựa <span class="s">★</span><span class="e"><span class="dotok"></span>VieNeu</span></div><span class="p" title="Nghe 1 câu lời bình thật">▶</span></div></div>
+            <div class="of"><span class="lbl">Tỷ lệ tiếng gốc <span class="r">phần thời lượng để nghe thoại nhân vật</span></span>
+              <div class="slw"><div class="sl"><div class="tk"></div><div class="bd"></div><div class="fl" style="width:50%"></div><div class="kn" style="left:50%"></div>
+                <div class="tks"><span style="left:0;transform:none">0 %</span><span style="left:33.33%">20</span><span style="left:50%;color:var(--ac-txt)">30</span><span style="left:66.66%">40</span><span style="left:100%;transform:translateX(-100%)">60 %</span></div></div>
+                <div class="slv">30 %</div></div>
+              <span class="okline" style="margin-top:6px">▮ 20–40 % hợp kênh recap game · ≈ 3 phút thoại gốc trong bản 10 phút</span></div>
+            <div class="sumr">✦ AI viết lời: <b>MiniMax-M3</b> · tiếng Việt <span class="grow"></span><span class="link">Đổi ›</span></div>
+            <div class="note" data-n="2" style="position:static;max-width:none;margin-top:auto">Chỉ 5 tuỳ chọn. Văn phong, nhạc nền, kiểu phụ đề… để ở Studio (đã có) — không lặp control.</div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">💾 Bản nháp tự lưu · 22:41</span><span class="r"><span class="btn ghost">Huỷ bản nháp</span><span class="btn primary lg">Bắt đầu phân tích › <span class="kbd" style="background:rgba(0,0,0,.18);color:#1a1209;border-color:transparent">Ctrl+Enter</span></span></span></div>
+      </div>
+      <div class="note" data-n="1" style="left:690px;top:110px">Thanh bước luôn ở đỉnh: bước xong = ✓ xanh, bấm để quay lại; bước chưa tới mờ, không bấm được.</div>
+      <div class="note" data-n="3" style="left:1000px;top:268px">Đang kéo: thẻ nổi + vạch cam chỗ thả (như kéo tab §4.11).</div>
+    </div>
+  </section>
+
+  <!-- ===================== C. PHÂN TÍCH ===================== -->
+  <section id="c">
+    <h2>C · Bước A "Phân tích" — đang chạy (trên) · kết quả: dải thời gian, chương, nhân vật, đoạn bị lọc (dưới)</h2>
+    <div class="frame" style="height:640px">
+      <div class="lab" style="height:100%">
+        <div class="lh" data-step="1r"></div>
+        <div class="lbody">
+          <div class="an-run">
+            <div class="an-col">
+              <div class="an-top"><div><h3>Đang phân tích 3 video</h3><span class="muted" style="font-size:12.5px">Có thể rời tab hoặc mở Studio — việc chạy nền và báo khi xong.</span></div>
+                <div class="r">đã chạy <b>14:02</b> · còn khoảng <b>27 phút</b><div class="bar" style="width:320px;margin-top:8px"><i style="width:34%"></i></div></div></div>
+              <div class="box">
+                <div class="stg done"><span class="ic"><span class="ck">✓</span></span><b>Nhận dạng thoại</b><span class="d">P1 dùng lại phụ đề Studio · P2, P3 Whisper large-v3 (GPU) · 2.113 câu</span><span></span><span class="p">xong</span></div>
+                <div class="stg on"><span class="ic"><span class="ring lg" style="--p:62"></span></span><b>Đọc chữ trong game</b><span class="d">phụ đề in sẵn + tên nhân vật trên màn hình · P2 khung 2.940 / 4.865</span><span class="bar"><i style="width:62%"></i></span><span class="p">62 %</span></div>
+                <div class="stg wait"><span class="ic"><span class="ck w"></span></span><b>Tìm cutscene</b><span class="d">dải đen, mất HUD, thoại dày, chuyển cảnh</span><span></span><span class="p">chờ</span></div>
+                <div class="stg wait"><span class="ic"><span class="ck w"></span></span><b>Lọc rác</b><span class="d">intro / outro, quảng cáo, loading, menu, cảm ơn donate, AFK</span><span></span><span class="p">chờ</span></div>
+                <div class="stg wait"><span class="ic"><span class="ck w"></span></span><b>Tóm tắt chương</b><span class="d">AI (MiniMax-M3) lập bảng nhân vật + chương · cần mạng</span><span></span><span class="p">chờ</span></div>
+              </div>
+              <div class="sec-t">Thấy đến giờ <span class="grow"></span><span style="text-transform:none;letter-spacing:0;font-weight:500">2.113 câu thoại · 386 dòng chữ trong game</span></div>
+              <div class="tl" id="tlRun"></div>
+            </div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">Tắt app giữa chừng ⇒ mở lại tiếp từ giai đoạn đang dở (giai đoạn xong được giữ)</span><span class="r"><span class="btn dang">■ Huỷ phân tích</span><span class="btn primary lg dis">Viết lời bình ›</span></span></div>
+      </div>
+      <div class="note" data-n="1" style="left:1480px;top:200px">5 giai đoạn hiện rõ — biết máy đang làm gì, không phải 1 thanh % mù. % và "còn ~" là của giai đoạn đang chạy; thanh tổng ở trên.</div>
+      <div class="note" data-n="2" style="left:1480px;top:520px">Dải thời gian điền dần theo kết quả từng giai đoạn (vùng tối = chưa quét).</div>
+    </div>
+
+    <div class="frame" style="height:1080px;margin-top:22px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.16</span></div>
+        <nav class="tabs"><span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span><span class="tsep"></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span></nav>
+        <div class="top-mid"></div><div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="lab">
+        <div class="lh" data-step="1"></div>
+        <div class="lbody">
+          <div class="an-res">
+            <div class="an-l">
+              <div class="box" style="flex:none"><div class="bx-h">Dải thời gian <span class="r"><span class="lg"><span><i style="background:#2b231b;border:1px solid var(--line)"></i>chương</span><span><i style="background:var(--ac)"></i>cutscene (23)</span><span><i style="background:repeating-linear-gradient(135deg,rgba(224,91,75,.55) 0 3px,rgba(224,91,75,.18) 3px 6px)"></i>bị lọc (7)</span></span></span></div>
+                <div class="bx-b"><div class="tl" id="tlDone"></div></div></div>
+              <div class="box" style="flex:1;min-height:0;overflow:hidden">
+                <div class="bx-h">Chương <span class="muted" style="font-weight:500">6 · bỏ tích = không kể trong recap</span><span class="r">tóm tắt sửa được — AI viết lời bình dựa trên đây</span></div>
+                <div id="chapters"></div>
+              </div>
+            </div>
+            <div class="an-r">
+              <div class="box" style="flex:none">
+                <div class="bx-h">Nhân vật <span class="muted" style="font-weight:500">5</span><span class="r">nhấp đúp tên để sửa — áp cho cả lời bình</span></div>
+                <div id="people"></div>
+              </div>
+              <div class="box" style="flex:1;min-height:0;overflow:hidden">
+                <div class="bx-h">Đã lọc bỏ <span class="muted" style="font-weight:500">7 đoạn · 14 phút 29 giây</span><span class="r">không dùng hình / thoại của các đoạn này</span></div>
+                <div id="junk"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">✓ Phân tích xong sau 41 phút · 2.113 câu thoại · 23 cutscene · lưu 23:22</span><span class="r"><span class="btn">↻ Phân tích lại…</span><span class="btn primary lg">Viết lời bình (10 phút) › <span class="kbd" style="background:rgba(0,0,0,.18);color:#1a1209;border-color:transparent">Ctrl+Enter</span></span></span></div>
+      </div>
+      <div class="note" data-n="1" style="left:60px;top:850px">Bấm 1 đoạn trên dải = xem nhanh đoạn đó (cửa sổ xem thử nổi, không rời bước).</div>
+      <div class="note" data-n="2" style="left:400px;top:850px">Sửa tên ở đây trước khi AI viết lời ⇒ lời bình đúng tên ngay. "đã gộp" = AI nhận ra nhận dạng sai cùng 1 người.</div>
+      <div class="note" data-n="3" style="left:740px;top:850px">Lọc tự động có thể nhầm ⇒ mọi đoạn đều <b>▶ xem lại</b> + <b>Khôi phục</b> (1 bấm, hoàn tác được).</div>
+    </div>
+  </section>
+
+  <!-- ===================== D. LỜI BÌNH ===================== -->
+  <section id="d">
+    <h2>D · Bước B "Lời bình" — trình sửa theo đoạn: đoạn đang sửa, rê chuột (chèn thoại gốc), viết lại 1 đoạn bằng AI, cảnh báo luật dựng</h2>
+    <div class="frame" style="height:1080px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.16</span></div>
+        <nav class="tabs"><span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span><span class="tsep"></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span></nav>
+        <div class="top-mid"></div><div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="lab">
+        <div class="lh" data-step="2"></div>
+        <div class="lbody">
+          <div class="ed">
+            <div class="ed-tb"><b>46 đoạn</b> · 31 lời bình · 15 thoại gốc · <span>bạn đã sửa 4</span>
+              <span class="r"><span class="btn ghost sm" title="Ctrl+Z">↶</span><span class="btn ghost sm" title="Ctrl+Y">↷</span><span class="btn sm">✦ Viết lại toàn bộ…</span></span></div>
+            <div class="ed-list" id="paras"></div>
+          </div>
+          <div class="side">
+            <div class="box"><div class="bx-b">
+              <div class="sec-t" style="margin-bottom:6px">Thời lượng ước tính</div>
+              <div class="dur-big"><b>10:24</b><span>/ đích 10:00 · <span style="color:var(--ok-txt)">+24 s, trong ±10 %</span></span></div>
+              <div class="dmeter"><div class="tg" style="left:81.8%;width:18.2%"></div><div class="n" style="width:65%"></div><div class="o" style="left:65%;width:29.5%"></div></div>
+              <div class="dleg"><span><i style="background:var(--ac)"></i>Lời bình 7:09</span><span><i style="background:var(--step-sub)"></i>Thoại gốc 3:15 · 31 %</span></div>
+              <div class="dim" style="font-size:11px;margin-top:8px">Ước theo số âm tiết ÷ nhịp giọng Adam bựa (4,1 âm tiết/s). Bước C đổi thành số đo thật.</div>
+            </div></div>
+            <div class="box"><div class="bx-b" style="padding-bottom:6px">
+              <div class="sec-t" style="margin-bottom:2px">Luật dựng <span class="grow"></span><span style="text-transform:none;letter-spacing:0;color:var(--warn-txt)">2 cảnh báo</span></div>
+              <div class="rule"><span class="wk w">!</span><div class="m">3 đoạn thoại gốc liền nhau (10–12) <span>tối đa 2 — thêm 1 câu lời bình xen giữa · <span class="link">Tới đoạn 10</span></span></div></div>
+              <div class="rule"><span class="wk w">!</span><div class="m">Đổi sang video P2 ở đoạn 27 chưa có câu nối <span>người xem sẽ hụt mạch · <span class="link">Tới đoạn 27</span> · <span class="link">✦ Viết câu nối</span></span></div></div>
+              <div class="rule ok"><span class="wk k">✓</span><div class="m">Mở đầu bằng lời bình gây tò mò</div></div>
+              <div class="rule ok"><span class="wk k">✓</span><div class="m">Tổng thời lượng trong ±10 % đích</div></div>
+            </div></div>
+            <div class="box" style="flex:1;min-height:0;overflow:hidden"><div class="bx-b">
+              <div class="sec-t" style="margin-bottom:6px">Chương <span class="grow"></span></div>
+              <div class="oc"><b>1</b><span class="t">Tỉnh dậy giữa tro</span><span class="d">1:38</span></div>
+              <div class="oc on"><b>2</b><span class="t">Người dẫn đường không mắt</span><span class="d">2:05</span></div>
+              <div class="oc"><b>3</b><span class="t">Thành phố chìm</span><span class="w">⚠</span><span class="d">1:52</span></div>
+              <div class="oc"><b>4</b><span class="t">Lò rèn cuối cùng</span><span class="w">⚠</span><span class="d">1:41</span></div>
+              <div class="oc"><b>5</b><span class="t">Lời thú tội của Ilva</span><span class="d">1:30</span></div>
+              <div class="oc"><b>6</b><span class="t">Vương miện tro tàn</span><span class="d">1:38</span></div>
+            </div></div>
+          </div>
+          <div class="pop" id="rewritePop" style="left:1040px;top:520px">
+            <div class="h">✦ Viết lại đoạn 7 <span class="r"><span class="kbd">Esc</span> đóng</span></div>
+            <div class="chs"><span class="on">Ngắn hơn</span><span class="on">Kịch tính hơn</span><span>Dễ hiểu hơn</span><span>Thêm câu nối</span></div>
+            <div class="inp">Yêu cầu thêm… vd "nhắc là thanh kiếm ăn tro"</div>
+            <div class="res"><span class="old">Họ rời tu viện vào lúc rạng sáng. Trên đường đi, Kael chiến đấu với nhiều kẻ thù và khám phá ra rằng thanh kiếm của anh có thể hấp thụ tro để trở nên mạnh hơn, điều này sẽ rất quan trọng về sau.</span>Rạng sáng, họ rời tu viện. Và Kael sớm phát hiện thanh kiếm của mình biết… ăn tro — càng nhiều tro, lưỡi kiếm càng rực sáng.</div>
+            <div class="ft"><span class="mono11" style="color:var(--t3)">~9 s <span class="dim">(cũ 15 s)</span></span><span class="r"><span class="btn sm">↻ Thử lại</span><span class="btn sm primary">Dùng bản này <span class="kbd" style="background:rgba(0,0,0,.18);color:#1a1209;border-color:transparent">Enter</span></span></span></div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">💾 Tự lưu · 23:40 · lời bình là văn bản thuần — chưa gắn mốc thời gian</span><span class="r"><span class="btn ghost">‹ Phân tích</span><span class="btn primary lg">Dựng nháp › <span class="kbd" style="background:rgba(0,0,0,.18);color:#1a1209;border-color:transparent">Ctrl+Enter</span></span></span></div>
+      </div>
+      <div class="note" data-n="1" style="left:1080px;top:176px">Sửa như sửa văn: bấm vào đoạn là gõ được, không có ô nhập riêng. Đoạn đã sửa có nhãn "đã sửa" — "Viết lại toàn bộ" sẽ hỏi có giữ các đoạn này không.</div>
+      <div class="note" data-n="2" style="left:1080px;top:350px">Rê giữa 2 đoạn ⇒ vạch chèn: <b>＋ Lời bình</b> · <b>🔊 Thoại gốc ở đây</b> (AI chọn câu thoại hay nhất quanh vị trí đó; "Đổi câu ▾" để chọn câu khác).</div>
+      <div class="note" data-n="3" style="left:1080px;top:440px">Thoại gốc = viền trái xanh <span class="mono">--step-sub</span> (màu bước "Phụ đề gốc") — chỉ chọn câu, không sửa chữ được.</div>
+      <div class="note" data-n="4" style="left:1080px;top:540px">Cảnh báo luật <b>không chặn</b> "Dựng nháp" — bước C kiểm lại lần cuối.</div>
+    </div>
+  </section>
+
+  <!-- ===================== E. DỰNG NHÁP ===================== -->
+  <section id="e">
+    <h2>E · Bước C "Dựng nháp" — đang dựng (trên) · kết quả: danh sách đoạn (ảnh cảnh + câu) + xem thử + Mở trong Studio (dưới)</h2>
+    <div class="frame" style="height:560px">
+      <div class="lab" style="height:100%">
+        <div class="lh" data-step="3r"></div>
+        <div class="lbody">
+          <div class="an-run" style="padding-top:26px">
+            <div class="an-col" style="width:900px">
+              <div class="an-top"><div><h3>Đang dựng bản nháp</h3><span class="muted" style="font-size:12.5px">Đọc giọng từng câu để đo thời lượng thật, rồi mới khớp cảnh.</span></div>
+                <div class="r">còn khoảng <b>4 phút</b><div class="bar" style="width:300px;margin-top:8px"><i style="width:41%"></i></div></div></div>
+              <div class="box">
+                <div class="stg on" style="grid-template-columns:30px 170px 1fr 150px 56px"><span class="ic"><span class="ring lg" style="--p:61"></span></span><b>Đọc giọng</b><span class="d">Adam bựa · VieNeu · câu 19 / 31 · đo được 4:18</span><span class="bar"><i style="width:61%"></i></span><span class="p">61 %</span></div>
+                <div class="stg wait" style="grid-template-columns:30px 170px 1fr 150px 56px"><span class="ic"><span class="ck w"></span></span><b>Khớp cảnh</b><span class="d">chọn đoạn video đủ dài theo thứ tự cốt truyện, không lặp cảnh, bỏ đoạn rác</span><span></span><span class="p">chờ</span></div>
+                <div class="stg wait" style="grid-template-columns:30px 170px 1fr 150px 56px"><span class="ic"><span class="ck w"></span></span><b>Kiểm luật</b><span class="d">mở đầu · thoại gốc liền nhau · câu nối khi đổi video · tỷ lệ tiếng gốc</span><span></span><span class="p">chờ</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">Câu đã đọc được giữ — dựng lại chỉ đọc câu đã đổi</span><span class="r"><span class="btn dang">■ Huỷ</span><span class="btn primary lg dis">🎬 Mở trong Studio</span></span></div>
+      </div>
+    </div>
+
+    <div class="frame" style="height:1080px;margin-top:22px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.16</span></div>
+        <nav class="tabs"><span class="tab">🎬 Studio</span><span class="tab">⬇ Tải video</span><span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span><span class="tsep"></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span></nav>
+        <div class="top-mid"></div><div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="lab">
+        <div class="lh" data-step="3"></div>
+        <div class="lbody">
+          <div class="bd-res">
+            <div class="seglist">
+              <div class="ed-tb" style="padding:0 26px"><b>Bản nháp 10:12</b> · 46 đoạn · tiếng gốc 30 % · 3 video nguồn · 41 cảnh khác nhau
+                <span class="r"><span class="pill ok">✓ Kiểm luật 3/4</span><span class="pill warn">! 1 cảnh báo</span></span></div>
+              <div class="sg-h"><span>#</span><span>Cảnh</span><span>Câu</span><span>Nguồn</span><span style="text-align:right">Thời lượng</span><span></span></div>
+              <div id="segs"></div>
+            </div>
+            <div class="pv">
+              <div class="scr th letter" style="background:linear-gradient(135deg,#4a3a2a,#1a120c 70%)"><span class="gl" style="font-size:80px">🗡</span><div class="sub">Và Kael sớm phát hiện thanh kiếm của mình biết… <em>ăn tro</em></div></div>
+              <div class="pvctl"><span class="btn sm">▶ Xem đoạn 7</span><span class="mono11">0:03</span><div class="pb"><i></i></div><span class="mono11">0:09</span><span class="kbd">Space</span></div>
+              <dl class="kv">
+                <dt>Đoạn 7 · lời bình</dt><dd>Rạng sáng, họ rời tu viện. Và Kael sớm phát hiện thanh kiếm của mình biết… ăn tro — càng nhiều tro, lưỡi kiếm càng rực sáng.</dd>
+                <dt>Hình (AI chọn)</dt><dd>Kael vung kiếm, tro bay vào lưỡi kiếm phát sáng — P1 · 00:44:10–00:44:19</dd>
+                <dt>Giọng</dt><dd>Adam bựa · đo thật 8,7 s (ước 9 s)</dd>
+                <dt>Tiếng game</dt><dd>hạ còn 20 % dưới giọng (ducking như Studio)</dd>
+              </dl>
+              <div class="box"><div class="bx-b" style="padding-bottom:6px">
+                <div class="sec-t" style="margin-bottom:2px">Kiểm luật <span class="grow"></span></div>
+                <div class="rule ok"><span class="wk k">✓</span><div class="m">Mở đầu bằng lời bình</div></div>
+                <div class="rule ok"><span class="wk k">✓</span><div class="m">Không quá 2 thoại gốc liền nhau <span>thoại gốc "By someone who prayed…" đã dời ra sau đoạn 12</span></div></div>
+                <div class="rule ok"><span class="wk k">✓</span><div class="m">Không ghép lời bình vào đoạn rác</div></div>
+                <div class="rule"><span class="wk w">!</span><div class="m">Đổi video P2 ở đoạn 27 chưa có câu nối <span><span class="link">Sửa ở Lời bình ›</span> · hoặc bỏ qua, sửa trong Studio</span></div></div>
+              </div></div>
+            </div>
+          </div>
+        </div>
+        <div class="lf"><span class="info">Dựng xong lúc 23:58 · chưa mở trong Studio</span><span class="r"><span class="btn ghost">‹ Lời bình</span><span class="btn">↻ Dựng lại ▾</span><span class="btn primary lg kf">🎬 Mở trong Studio <span class="kbd" style="background:rgba(0,0,0,.18);color:#1a1209;border-color:transparent">Ctrl+Enter</span></span></span></div>
+      </div>
+      <div class="menu" style="left:1438px;top:860px">
+        <div class="mi hot2">↻ Khớp cảnh lại <small style="margin-left:auto">giữ giọng đã đọc</small></div>
+        <div class="mi">🗣 Đọc lại giọng + khớp cảnh <small style="margin-left:auto">~4 phút</small></div>
+        <div class="ms"></div>
+        <div class="mi"><span>Bản nháp mới tạo dự án Studio <b>mới</b>; tab Studio đã mở trước đó giữ nguyên chỉnh tay.</span></div>
+      </div>
+      <div class="note" data-n="1" style="left:620px;top:470px;max-width:360px">Mỗi đoạn = ảnh cảnh thật đã khớp + câu + mốc nguồn + <b>thời lượng đo thật</b> (dưới: số ước ở bước B). Bấm dòng ⇒ xem thử bên phải. Chỉnh chi tiết (đổi cảnh, kéo dài) làm ở Studio — không làm lại timeline ở đây.</div>
+      <div class="note" data-n="2" style="left:1010px;top:925px;max-width:330px">Mở trong Studio ⇒ <b>tab dự án mới</b> (§4.11) "Recap — Vương Miện Tro Tàn" và chuyển sang Studio (người dùng chủ động bấm). Làn: video · giọng · thoại gốc · phụ đề.</div>
+    </div>
+  </section>
+
+  <!-- ===================== F. TRẠNG THÁI ===================== -->
+  <section id="f">
+    <h2>F · Trạng thái — thiếu mô hình, thiếu AI, lỗi giữa chừng, đã huỷ, video quá dài, mất file nguồn</h2>
+    <div class="grid3">
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="0m"></div><div class="lbody">
+          <div class="es"><span class="big">⬇</span><div><h4>Cần mô hình nhận dạng thoại</h4><p>Bước A dùng Whisper large-v3 để nghe thoại game (P2, P3 chưa có phụ đề). Chưa có trên máy.</p></div></div>
+          <div class="mstg"><div><span class="ck w"></span>Whisper large-v3 · 1,5 GB<span class="r">chưa tải</span></div><div><span class="ck">✓</span>Đọc chữ (OCR v0.14) · 12 MB<span class="r">có</span></div><div><span class="ck">✓</span>Giọng VieNeu · Adam bựa<span class="r">có</span></div></div>
+          <p class="cap" style="margin:0">Dùng chung bộ tải của Cài đặt › Mô hình (1 hàng đợi, tiếp tục được). Tải xong ⇒ nút trở lại "Bắt đầu phân tích".</p>
+        </div><div class="lf"><span class="r"><span class="btn primary">⬇ Tải mô hình (1,5 GB) rồi phân tích</span></span></div></div>
+        <p class="cap"><b>Thiếu mô hình</b> hiện ngay ở bước Nguồn (kiểm khi mở mẫu), không đợi chạy mới báo lỗi.</p>
+      </div>
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="0m"></div><div class="lbody">
+          <div class="es"><span class="big">🔑</span><div><h4>Chưa có AI để tóm tắt &amp; viết lời bình</h4><p>Cần 1 nhà cung cấp ở Cài đặt › Dịch thuật: <b style="color:var(--t2)">MiniMax</b> (cần key) hoặc <b style="color:var(--t2)">Ollama</b> (chạy trên máy, cần mô hình ≥ 14B cho tiếng Việt tốt).</p></div></div>
+          <div class="mstg"><div><span class="ck e">!</span>MiniMax-M3 · chưa có key<span class="r">—</span></div><div><span class="ck w"></span>Ollama · không chạy<span class="r">localhost:11434</span></div></div>
+          <p class="cap" style="margin:0">Không cho bắt đầu: 3 giai đoạn đầu chạy được trên máy nhưng kết quả không dùng được nếu thiếu bước tóm tắt — tránh chờ 40 phút rồi mới báo.</p>
+        </div><div class="lf"><span class="r"><span class="btn">↻ Kiểm lại</span><span class="btn primary">⚙ Mở Cài đặt › Dịch thuật</span></span></div></div>
+        <p class="cap"><b>Thiếu LLM</b>: nút chính thay bằng lối sang Cài đặt; quay lại tab tự kiểm lại.</p>
+      </div>
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="1e"></div><div class="lbody">
+          <div class="es"><span class="big" style="color:var(--dang)">!</span><div><h4>Dừng ở "Tóm tắt chương"</h4><p>MiniMax từ chối vì vượt giới hạn gọi (thử lại sau ít phút, hoặc đổi nhà cung cấp).</p><div class="det">HTTP 429 · rate_limit_exceeded · chương 4/6 · 23:12:08</div></div></div>
+          <div class="mstg"><div><span class="ck">✓</span>Nhận dạng · Đọc chữ · Cutscene · Lọc rác<span class="r">giữ nguyên</span></div><div><span class="ck">✓</span>Tóm tắt chương 1–3<span class="r">giữ nguyên</span></div><div><span class="ck e">!</span>Tóm tắt chương 4–6<span class="r">lỗi</span></div></div>
+        </div><div class="lf"><span class="info"><span class="link">Đổi nhà cung cấp</span></span><span class="r"><span class="btn primary">↻ Thử lại từ chương 4</span></span></div></div>
+        <p class="cap"><b>Lỗi giữa chừng</b>: không bao giờ chạy lại từ đầu — mỗi giai đoạn (và mỗi chương) lưu riêng. Thanh bước: ô A đỏ "!".</p>
+      </div>
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="1c"></div><div class="lbody">
+          <div class="es"><span class="big">⏸</span><div><h4>Đã huỷ ở "Đọc chữ trong game" (62 %)</h4><p>Phần đã xong vẫn giữ trong bản nháp. Tiếp tục sẽ chạy lại từ giai đoạn đọc chữ của video P2.</p></div></div>
+          <div class="mstg"><div><span class="ck">✓</span>Nhận dạng thoại<span class="r">2.113 câu</span></div><div><span class="ck p">‖</span>Đọc chữ — P1 xong, P2 dở<span class="r">62 %</span></div><div><span class="ck w"></span>Cutscene · Lọc rác · Tóm tắt<span class="r">chưa chạy</span></div></div>
+        </div><div class="lf"><span class="info"><span class="link">Bắt đầu lại từ đầu…</span></span><span class="r"><span class="btn primary">▶ Tiếp tục phân tích</span></span></div></div>
+        <p class="cap"><b>Huỷ</b> = nút đỏ ở chân + hộp hỏi 1 lần ("Huỷ phân tích? Phần đã xong được giữ" · Huỷ phân tích / Tiếp tục chạy = mặc định). Esc không huỷ.</p>
+      </div>
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="0m"></div><div class="lbody">
+          <div class="es"><span class="big" style="color:var(--warn)">⏱</span><div><h4>7 giờ 12 phút video — xử lý lâu</h4><p>Phân tích ước <b style="color:var(--warn-txt)">~1 giờ 20 phút</b>, cần ~6 GB trống ở ổ tạm (C: còn 41 GB). Bản 10 phút từ 7 giờ ⇒ AI phải bỏ nhiều — cân nhắc đích 15–20 phút.</p></div></div>
+          <div class="est warn" style="font-size:12px">💡 Bỏ bớt video phần chơi phụ / farm đồ trước khi phân tích sẽ nhanh và kể gọn hơn.</div>
+          <p class="cap" style="margin:0">Không chặn. Ngưỡng: &gt; 3 giờ = dòng vàng · &gt; 8 giờ = thêm hộp xác nhận khi bấm Bắt đầu. Máy không tự ngủ khi đang phân tích.</p>
+        </div><div class="lf"><span class="r"><span class="btn">Đổi đích 15 phút</span><span class="btn primary">Vẫn bắt đầu phân tích ›</span></span></div></div>
+        <p class="cap"><b>Video quá dài</b>: báo ước thời gian + ổ đĩa ngay khi thêm video.</p>
+      </div>
+      <div>
+        <div class="frame stc mini"><div class="lh" data-step="2m"></div><div class="lbody">
+          <div class="es"><span class="big" style="color:var(--dang)">⚠</span><div><h4>Không tìm thấy video nguồn P2</h4><p>File đã bị chuyển hoặc xoá. Lời bình vẫn còn, nhưng không dựng nháp được khi thiếu hình.</p><div class="det">D:\Gameplay\AshenCrown_P2.mp4</div></div></div>
+          <p class="cap" style="margin:0">Chọn lại file: khớp theo thời lượng + cỡ khung — đúng file cũ ⇒ không phân tích lại. Khác file ⇒ hỏi "Phân tích lại P2?".</p>
+        </div><div class="lf"><span class="info"><span class="link">Bỏ P2 khỏi recap</span></span><span class="r"><span class="btn primary">📁 Chọn lại file…</span></span></div></div>
+        <p class="cap"><b>Mất file nguồn</b> (mở lại bản nháp cũ): kiểm khi mở, chặn bước C, không chặn sửa lời bình.</p>
+      </div>
+    </div>
+    <p class="cap"><b>Chờ lượt</b> (không vẽ riêng): việc nặng chạy lần lượt như §4.11 — Studio đang lồng tiếng ⇒ giai đoạn đầu hiện vòng nét đứt "Chờ sau Tap_07 (~4 phút)"; bước Tóm tắt / Viết lời (gọi AI qua mạng) không phải chờ.</p>
+  </section>
+
+  <!-- ===================== G. 1024 ===================== -->
+  <section id="g">
+    <h2>G · Cửa sổ 1024 px — bước B Lời bình: cột phải gấp thành ngăn kéo, thanh bước rút gọn, topbar chỉ còn biểu tượng</h2>
+    <div class="frame w1024" style="height:720px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div></div>
+        <nav class="tabs"><span class="tab" title="Studio">🎬</span><span class="tab" title="Tải video">⬇</span><span class="tab on">✦ Xưởng AI <span class="beta">β</span></span><span class="tsep"></span><span class="tab" title="Live">🎙</span><span class="tab" title="Lịch sử">🕘</span><span class="tab" title="Tiến trình">⚡</span><span class="tab" title="Cài đặt">⚙</span></nav>
+        <div class="top-mid"></div><div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="lab">
+        <div class="lh" style="padding:0 14px;gap:10px"><span class="back">‹</span>
+          <div class="steps" style="margin:0"><div class="sp done"><span class="c">✓</span></div><span class="sline done" style="width:14px"></span><div class="sp done"><span class="c">A</span></div><span class="sline done" style="width:14px"></span><div class="sp on"><span class="c">B</span><div class="l"><b>Lời bình</b></div></div><span class="sline" style="width:14px"></span><div class="sp"><span class="c">C</span></div></div>
+          <span class="lh-r" style="width:auto;margin-left:auto"><span class="pill ok">10:24 / 10:00</span><span class="btn sm" style="color:var(--warn-txt)">! 2 luật · chương ▸</span></span></div>
+        <div class="lbody">
+          <div class="ed"><div class="ed-list" id="paras2" style="padding:14px 18px"></div></div>
+          <div class="drawer">
+            <div class="row between"><b>Luật dựng &amp; chương</b><span class="kbd">Esc</span></div>
+            <div class="rule"><span class="wk w">!</span><div class="m">3 đoạn thoại gốc liền nhau (10–12)<span><span class="link">Tới đoạn 10</span></span></div></div>
+            <div class="rule"><span class="wk w">!</span><div class="m">Đổi video P2 ở đoạn 27 chưa có câu nối<span><span class="link">Tới đoạn 27</span></span></div></div>
+            <div class="oc"><b>1</b><span class="t">Tỉnh dậy giữa tro</span><span class="d">1:38</span></div>
+            <div class="oc on"><b>2</b><span class="t">Người dẫn đường không mắt</span><span class="d">2:05</span></div>
+            <div class="oc"><b>3</b><span class="t">Thành phố chìm</span><span class="d">1:52</span></div>
+          </div>
+        </div>
+        <div class="lf" style="padding:0 14px"><span class="info">💾 23:40</span><span class="r"><span class="btn ghost">‹</span><span class="btn primary">Dựng nháp ›</span></span></div>
+      </div>
+    </div>
+    <p class="cap">Ngưỡng: <b>&lt; 1440 px</b> cột phải (380) gấp thành pill "10:24 / 10:00" + nút "! 2 luật · chương ▸" mở ngăn kéo 340 px đè lên (Esc đóng) · bước chưa/đã xong chỉ còn ô chữ, bước đang mở giữ nhãn · <b>&lt; 1280 px</b> topbar: tab không mở chỉ còn biểu tượng (tooltip), "Thử nghiệm" thành "β" · bước A kết quả: 2 cột thành 1 cột (Nhân vật + Đã lọc xuống dưới Chương) · bước C: khung xem thử thu 400 px. Không cuộn ngang trang.</p>
+  </section>
+
+  <!-- ===================== H. BÀN PHÍM ===================== -->
+  <section id="h">
+    <h2>H · Bàn phím + tab trên topbar</h2>
+    <div class="grid2">
+      <div class="frame" style="padding:6px 8px">
+        <table class="tbl">
+          <tr><th>Phím</th><th>Ở đâu</th><th>Việc</th></tr>
+          <tr><td><span class="kbd">Ctrl+Enter</span></td><td>mọi bước (kể cả khi đang gõ)</td><td>nút chính của bước: Bắt đầu phân tích · Viết lời bình · Dựng nháp · Mở trong Studio</td></tr>
+          <tr><td><span class="kbd">Alt+←</span> <span class="kbd">Alt+→</span></td><td>trình hướng dẫn</td><td>bước trước / sau (chỉ tới bước đã mở khoá)</td></tr>
+          <tr><td><span class="kbd">Ctrl+O</span> · <span class="kbd">Alt+↑↓</span></td><td>Nguồn</td><td>thêm video · đổi thứ tự video đang chọn</td></tr>
+          <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span></td><td>Lời bình (không gõ)</td><td>đi giữa các đoạn (roving focus, Tab dừng 1 lần ở danh sách)</td></tr>
+          <tr><td><span class="kbd">Enter</span> · <span class="kbd">Esc</span></td><td>Lời bình</td><td>sửa đoạn đang chọn · xong sửa (giữ chữ, về chế độ chọn)</td></tr>
+          <tr><td><span class="kbd">Alt+↑</span> <span class="kbd">Alt+↓</span></td><td>Lời bình (không gõ)</td><td>dời đoạn lên / xuống (thay kéo ⠿)</td></tr>
+          <tr><td><span class="kbd">R</span> · <span class="kbd">G</span> · <span class="kbd">Delete</span></td><td>Lời bình (không gõ)</td><td>✦ viết lại đoạn · chèn/bỏ 🔊 thoại gốc sau đoạn · xoá đoạn (toast Hoàn tác)</td></tr>
+          <tr><td><span class="kbd">Ctrl+Z</span> <span class="kbd">Ctrl+Y</span></td><td>Phân tích · Lời bình</td><td>hoàn tác / làm lại (sửa chữ, đổi thứ tự, khôi phục đoạn lọc, sửa tên)</td></tr>
+          <tr><td><span class="kbd">Enter</span> · <span class="kbd">Esc</span></td><td>ô Viết lại</td><td>dùng bản mới · đóng, giữ bản cũ</td></tr>
+          <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span> · <span class="kbd">Space</span></td><td>Dựng nháp</td><td>chọn đoạn · xem thử / dừng</td></tr>
+          <tr><td><span class="kbd">F2</span></td><td>Phân tích (nhân vật)</td><td>sửa tên nhân vật đang chọn</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="frame" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+          <div class="sec-t">Tab "Xưởng AI" trên topbar <span class="grow"></span></div>
+          <div class="row" style="gap:16px;flex-wrap:wrap">
+            <span class="tab" style="border:1px solid var(--line-soft)">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span>
+            <span class="tab on">✦ Xưởng AI <span class="beta">Thử nghiệm</span></span>
+            <span class="tab" style="border:1px solid var(--line-soft)">✦ Xưởng AI <span class="ring" style="--p:34"></span><span class="pct">34%</span></span>
+            <span class="tab" style="border:1px solid var(--line-soft)">✦ Xưởng AI <span class="dotok"></span></span>
+            <span class="tab" style="border:1px solid var(--line-soft)">✦ Xưởng AI <span class="dot" style="background:var(--dang)"></span></span>
+          </div>
+          <p class="cap" style="margin:0">nghỉ · đang mở · <b>đang chạy</b> (vòng + % giai đoạn, thay nhãn Thử nghiệm) · <b>xong chưa xem</b> (chấm xanh + toast "Xong phân tích Vương Miện Tro Tàn · Mở") · <b>lỗi</b>. Cùng ngôn ngữ trạng thái tab Studio §4.11.</p>
+        </div>
+        <p class="cap">Đã đối chiếu: <span class="kbd">Ctrl+Tab</span>/<span class="kbd">Ctrl+1..9</span>/<span class="kbd">Ctrl+W</span> chỉ thuộc Studio (§4.11) · <span class="kbd">Alt+1..3</span> chỉ trong VoicePicker khi ô đang mở (§4.10) · <span class="kbd">/</span> <span class="kbd">Ctrl+F</span> F5 thuộc Khám phá (§4.13). Phím chữ đơn <span class="kbd">R</span> <span class="kbd">G</span> chỉ chạy ở chế độ chọn đoạn (không gõ) — thợ grep lại <span class="mono">src/</span> trước khi gắn <span class="kbd">Ctrl+Enter</span>, <span class="kbd">Alt+←→</span>.</p>
+        <div class="toast" style="position:static;display:inline-flex;margin-top:6px"><span class="ok">✓</span>Xong phân tích "Vương Miện Tro Tàn" · 6 chương · 5 nhân vật<span class="btn sm primary">Mở</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* Chỉ để sinh phần lặp cho mockup — không phải code app. */
+const G = ["linear-gradient(135deg,#4a2c1c,#120d0a)", "linear-gradient(135deg,#3a3026,#14100c)", "linear-gradient(135deg,#23324a,#0b0e14)", "linear-gradient(135deg,#3b2346,#0f0a12)", "linear-gradient(135deg,#2a3a2c,#0c120d)", "linear-gradient(135deg,#4a3a2a,#1a120c)"];
+const th = (w, h, g, gl, tc, o = {}) => `<div class="th${o.lb ? " letter" : ""}" style="width:${w}px;height:${h}px;background:${G[g]}"><span class="gl">${gl}</span>${o.cs ? '<span class="lb">CUTSCENE</span>' : ""}${tc ? `<span class="tc">${tc}</span>` : ""}</div>`;
+
+/* thanh bước */
+const STEPS = [["Nguồn & tuỳ chọn", "3 video · 10 phút"], ["Phân tích", "6 chương · 5 nhân vật"], ["Lời bình", "46 đoạn · 10:24"], ["Dựng nháp", "Studio"]];
+const KEYS = ["", "A", "B", "C"];
+function stepbar(el) {
+  const v = el.dataset.step, cur = parseInt(v), mode = v.slice(1);
+  const sub = { 0: ["3 video · 10 phút", "chưa chạy", "", ""], 1: ["3 video · 10 phút", mode === "r" ? "đang chạy 34 %" : mode === "e" ? "lỗi ở tóm tắt" : mode === "c" ? "đã huỷ · 62 %" : "6 chương · 5 nhân vật", "", ""], 2: ["3 video · 10 phút", "6 chương · 5 nhân vật", "46 đoạn · 10:24", ""], 3: ["3 video · 10 phút", "6 chương · 5 nhân vật", "46 đoạn · 10:24", mode === "r" ? "đang dựng 41 %" : "10:12 · 46 đoạn"] }[cur];
+  let s = "";
+  STEPS.forEach((st, i) => {
+    let cls = i < cur ? "done" : i === cur ? "on" : "", c = i === 0 ? (i < cur ? "✓" : "●") : (i < cur ? "✓" : KEYS[i]);
+    if (i === cur && mode === "r") { cls = "on run"; }
+    if (i === cur && mode === "e") { cls = "on err"; c = "!"; }
+    if (i === cur && mode === "c") { cls = "on"; c = "‖"; }
+    const pct = i === 1 ? 34 : 41;
+    s += (i ? `<span class="sline${i <= cur ? " done" : ""}"></span>` : "") + `<div class="sp ${cls}" ${cls.includes("run") ? `style="--p:${pct}"` : ""}><span class="c" data-k="${KEYS[i]}">${cls.includes("run") ? "" : c}</span><div class="l"><b>${i ? KEYS[i] + " · " : ""}${st[0]}</b><small>${sub[i] || "&nbsp;"}</small></div></div>`;
+  });
+  el.innerHTML = `<span class="back">‹ Thư viện</span><div class="ttl"><small>🎮 Recap cốt truyện game</small><b>Vương Miện Tro Tàn — 10 phút</b></div><div class="steps">${s}</div><div class="lh-r">💾 đã lưu <span class="icon-btn" style="width:28px;height:28px" title="Nhân bản · Xoá bản nháp · Mở thư mục">⋯</span></div>`;
+}
+document.querySelectorAll(".lh[data-step]").forEach(stepbar);
+
+/* minh hoạ thẻ Recap */
+document.getElementById("illStrip").innerHTML = [[0, "🏚", "00:03:52"], [3, "👁", "00:41:12", 1], [2, "🌊", "01:20:05"], [5, "🗡", "00:44:10"]].map(([g, gl, tc, cs]) => th(0, 92, g, gl, tc, { cs, lb: cs }).replace("width:0px;", "")).join("");
+document.getElementById("illWave").innerHTML = Array.from({ length: 90 }, (_, i) => { const o = (i > 30 && i < 40) || (i > 66 && i < 72); const h = 6 + Math.round(Math.abs(Math.sin(i * 1.7) * 18 + Math.sin(i * .37) * 6)); return `<i class="${o ? "o" : ""}" style="height:${Math.min(h, 28)}px"></i>`; }).join("");
+
+/* bản nháp gần đây */
+const DR = [
+  { t: "Vương Miện Tro Tàn — Recap 10 phút", s: '<span class="pill ac">B · Lời bình</span>sửa 12 phút trước', g: 0, gl: "🏚", hov: 1 },
+  { t: "Hollow Tide — Recap 15 phút", s: '<span class="ring" style="--p:34"></span><b style="color:var(--ac-txt)">A · Phân tích 34 %</b> · còn ~27 phút', g: 2, gl: "🌊" },
+  { t: "Ember Saga ch.1 — Reel highlight", s: '<span class="dotok"></span>Đã mở trong Studio · hôm qua', g: 5, gl: "🔥" },
+  { t: "Mira's Lantern — Recap 5 phút", s: '<span class="dot" style="background:var(--dang)"></span><span style="color:var(--dang-txt)">Lỗi ở Tóm tắt chương</span> · 2 ngày', g: 4, gl: "🏮" },
+];
+document.getElementById("drafts").innerHTML = DR.map((d) => `<div class="dr${d.hov ? " hov" : ""}">${th(104, 58, d.g, d.gl, "")}<div class="m"><b>${d.t}</b><span>${d.s}</span></div>${d.hov ? '<span class="icon-btn" style="width:26px;height:26px">⋯</span>' : ""}</div>`).join("");
+
+/* dải thời gian */
+const V = [
+  { n: "P1", d: "1:48:20", ch: [[3.4, 28.8, "1"], [28.8, 67.2, "2"], [67.2, 100, "3"]], jk: [[0, 3.4], [53.6, 55.0], [83.3, 84.1]], cs: [5, 12, 24, 31, 40, 49, 62, 75, 96] },
+  { n: "P2", d: "1:21:05", ch: [[0, 24.8, "3"], [24.8, 80.6, "4"], [80.6, 100, "5"]], jk: [[54.7, 59.1], [93.3, 94.3]], cs: [8, 27, 38, 47, 66, 72, 79, 88] },
+  { n: "P3", d: "47:12", ch: [[0, 26.8, "5"], [26.8, 95.3, "6"]], jk: [[11.0, 14.9], [95.3, 100]], cs: [4, 22, 31, 52, 70, 84] },
+];
+function tl(scan) {
+  return V.map((v, i) => {
+    const showCh = !scan, sc = scan ? [100, 62, 0][i] : 100;
+    const ch = showCh ? v.ch.map(([a, b, n]) => `<span class="chp" style="left:${a}%;width:${b - a}%">${n}</span>`).join("") : "";
+    const jk = showCh ? v.jk.map(([a, b]) => `<span class="jk" style="left:${a}%;width:${b - a}%"></span>`).join("") : "";
+    const cs = showCh ? v.cs.map((x) => `<span class="cs" style="left:${x}%"></span>`).join("") : "";
+    const bg = scan ? `<span class="chp" style="left:0;width:100%;background:repeating-linear-gradient(90deg,rgba(244,236,222,.16) 0 2px,transparent 2px 9px),#2b231b"></span>` : "";
+    return `<span class="n"><b>${v.n}</b> · ${v.d}</span><div class="tlb">${bg}${ch}${jk}${cs}${sc < 100 ? `<span class="scan" style="width:${100 - sc}%"></span>` : ""}</div>`;
+  }).join("");
+}
+document.getElementById("tlRun").innerHTML = tl(true);
+document.getElementById("tlDone").innerHTML = tl(false);
+
+/* chương */
+const CH = [
+  ["Tỉnh dậy giữa tro", "Kael tỉnh dậy trong tu viện cháy rụi, không nhớ gì ngoài cái tên khắc trên chuôi kiếm. Bích hoạ trong hầm mộ vẽ một hiệp sĩ giống hệt anh quỳ dưới chân vua Aldric.", "P1 0:03:40–0:31:10", "27:30", 3, 212],
+  ["Người dẫn đường không mắt", "Seris — pháp sư mù sống sót duy nhất — gọi đúng tên Kael và ra điều kiện: mỗi mảnh vương miện tìm được đổi lấy một ký ức.", "P1 0:31:10–1:12:45", "41:35", 4, 388],
+  ["Thành phố chìm", "Hai người vượt thành Varn ngập nước. Seris tiết lộ Varn không tự chìm mà bị dìm — cùng đêm tu viện bốc cháy.", "P1 1:12:45 → P2 0:20:05", "56:10", 2, 341],
+  ["Lò rèn cuối cùng", "Bren hy sinh để rèn lại thanh kiếm; Kael nhớ ra mình từng là cận vệ của vua Aldric và chính tay mang vương miện tới tu viện.", "P2 0:20:05–1:05:30", "45:25", 5, 402],
+  ["Lời thú tội của Ilva", "Mẹ Bề Trên Ilva lộ mặt: bà đốt tu viện để chôn bí mật vương miện giam linh hồn Aldric.", "P2 1:05:30 → P3 0:12:40", "28:30", 3, 296],
+  ["Vương miện tro tàn", "Kael đội vương miện để giải thoát Aldric, đánh đổi chính những ký ức vừa tìm lại. Kết: Seris gọi tên anh, anh không đáp.", "P3 0:12:40–0:44:58", "32:18", 6, 274],
+];
+document.getElementById("chapters").innerHTML = CH.map((c, i) => `<div class="chr"><span class="cb">✓</span><span class="no">${i + 1}</span><div class="m"><b>${c[0]}</b><p>${c[1]}</p></div><div class="s"><b>${c[3]}</b><br>${c[2]}<br>${c[4]} cutscene · ${c[5]} câu</div></div>`).join("");
+
+/* nhân vật */
+const PP = [
+  ["K", "Kael", "nhân vật chính · hiệp sĩ mất trí nhớ", "#e8a33d", "812 câu", 'đã gộp "Cale" ×14'],
+  ["S", "Seris", "pháp sư mù, người dẫn đường · biết quá khứ Kael", "#7dd3fc", "488 câu"],
+  ["A", "Vua Aldric", "vị vua đã chết, linh hồn bị giam trong vương miện", "#c4b5fd", "164 câu"],
+  ["I", "Mẹ Bề Trên Ilva", "người đứng đầu tu viện · phản diện ngầm", "#f2a99f", "297 câu"],
+  ["B", "Bren", "thợ rèn lang thang, chết ở chương 4", "#a3ddaa", "171 câu"],
+];
+document.getElementById("people").innerHTML = PP.map((p, i) => `<div class="pp${i === 1 ? " edit" : ""}"><span class="av" style="background:${p[3]}">${p[0]}</span><div class="m"><b><span class="nm">${p[1]}${i === 1 ? '<span class="caret"></span>' : ""}</span>${p[5] ? `<span class="fix">✓ ${p[5]}</span>` : ""}</b><span>${p[2]}</span></div><span class="n">${p[4]}</span></div>`).join("");
+
+/* đoạn bị lọc */
+const JK = [
+  ["Intro kênh", "P1 0:00:00–0:03:40", 'thoại: "chào mừng quay lại kênh", "nhớ đăng ký"', 0],
+  ["Quảng cáo", "P1 0:58:02–0:59:31", 'thoại: "nhà tài trợ hôm nay", "mã giảm giá"', 0],
+  ["Màn hình chờ", "P1 1:30:10–1:31:02", 'không thoại · chữ "Loading" 52 giây', 0],
+  ["Menu / kho đồ", "P2 0:44:20–0:47:55", 'chữ trên màn hình: "Inventory", "Equip" dày đặc', 1],
+  ["Cảm ơn donate", "P2 1:15:40–1:16:30", 'thoại: "cảm ơn bạn … đã donate"', 0],
+  ["Đứng yên · AFK", "P3 0:05:12–0:07:01", "không tiếng · hình gần như không đổi", 0],
+  ["Outro kênh", "P3 0:44:58–0:47:12", 'thoại: "hẹn gặp lại các bạn"', 0],
+];
+document.getElementById("junk").innerHTML = JK.map((j) => `<div class="jr${j[3] ? " rest" : ""}"><span class="jt">${j[3] ? "✓ đã khôi phục" : j[0]}</span><div class="m"><b>${j[1]}</b>${j[3] ? " · " + j[0] : ""}<span>${j[2]}</span></div><span class="a">${j[3] ? '<span class="btn sm ghost">↶ Hoàn tác</span>' : '<span class="btn sm ghost">▶ Xem</span><span class="btn sm">Khôi phục</span>'}</span></div>`).join("");
+
+/* lời bình */
+const P = [
+  { h: [1, "Tỉnh dậy giữa tro", "1:38"] },
+  { n: 1, x: "Một tu viện cháy rụi, một hiệp sĩ tỉnh dậy giữa đống tro — và thứ duy nhất anh còn nhớ là cái tên khắc trên chuôi kiếm: Kael. Nhưng ai đã khắc nó, và vì sao cả tu viện chết cháy chỉ trong một đêm?", s: "~14 s", tag: "mở đầu" },
+  { n: 2, o: ["KAEL", "P1 · 00:12:48"], en: "“Who… who painted this?”", vi: "Ai… ai đã vẽ thứ này?", s: "3,1 s" },
+  { h: [2, "Người dẫn đường không mắt", "2:05"] },
+  { n: 3, x: "Tiếng chuông dẫn anh tới một người phụ nữ ngồi giữa sân đổ nát. Đôi mắt cô bị băng kín, vậy mà cô gọi đúng tên anh trước khi anh kịp mở lời.", s: "~11 s", hov: 1 },
+  { ins: 1 },
+  { n: 4, o: ["SERIS", "P1 · 00:41:12"], en: "“You don't even remember your own name, do you, Kael?”", vi: "Ngươi còn chẳng nhớ nổi tên mình, phải không, Kael?", s: "4,6 s" },
+  { n: 5, o: ["KAEL", "P1 · 00:41:18"], en: "“How do you know me?”", vi: "Sao cô biết tôi?", s: "2,0 s" },
+  { n: 6, x: "Seris là pháp sư mù của tu viện — người sống sót duy nhất ngoài Kael. Cô biết anh là ai, biết cả đêm hôm đó đã xảy ra chuyện gì, nhưng chỉ chịu kể từng mảnh: mỗi mảnh vương miện tìm được, cô trả lại cho anh một ký ức.<span class=\"caret\"></span>", s: "~16 s", edit: 1, ed: 1 },
+  { n: 7, x: "Họ rời tu viện vào lúc rạng sáng. Trên đường đi, Kael chiến đấu với nhiều kẻ thù và khám phá ra rằng thanh kiếm của anh có thể hấp thụ tro để trở nên mạnh hơn, điều này sẽ rất quan trọng về sau.", s: "~15 s", kf: 1 },
+  { n: 8, x: "Đích đến đầu tiên là Varn — thành phố đã chìm xuống hồ cùng toàn bộ dân cư, đúng cái đêm tu viện bốc cháy.", s: "~9 s" },
+  { h: [3, "Thành phố chìm", "1:52"] },
+  { n: 9, x: "Varn hiện ra dưới làn nước đục như một nghĩa địa dựng đứng. Và ở đây, lần đầu tiên, Seris để lộ điều cô giấu.", s: "~9 s" },
+  { n: 10, o: ["SERIS", "P1 · 01:31:40"], en: "“Varn didn't drown. It was drowned.”", vi: "Varn không tự chìm. Nó bị dìm.", s: "3,4 s", w: 1 },
+  { n: 11, o: ["KAEL", "P1 · 01:31:46"], en: "“By whom?”", vi: "Bởi ai?", s: "1,2 s", w: 1 },
+  { n: 12, o: ["SERIS", "P1 · 01:31:49"], en: "“By someone who prayed beside you every morning.”", vi: "Bởi kẻ sáng nào cũng cầu nguyện bên cạnh ngươi.", s: "3,8 s", w: 1 },
+];
+function para(p, narrow) {
+  if (p.h) return `<div class="chh"><b>Chương ${p.h[0]} · ${p.h[1]}</b><span class="grow"></span><span class="mono11">${p.h[2]}</span></div>`;
+  if (p.ins) return `<div class="ins"><span>＋ Lời bình</span><span class="o">🔊 Thoại gốc ở đây</span></div>`;
+  const cls = ["pg", p.o ? "ost" : "", p.hov ? "hov" : "", p.edit ? "edit" : "", p.w ? "warn" : "", p.kf ? "kf" : ""].join(" ");
+  const meta = `<div class="mt"><span class="s">${p.s}</span>${p.tag ? `<span>${p.tag}</span>` : ""}${p.ed ? '<span class="ed-badge">đã sửa</span>' : ""}</div>`;
+  const tools = p.hov ? `<div class="tools"><span class="btn sm">✦ Viết lại <span class="kbd">R</span></span><span class="btn sm">🔊 Giữ thoại gốc sau đoạn này <span class="kbd">G</span></span><span class="btn sm ghost">⋯</span></div>` : "";
+  const otools = p.o && !narrow && p.n === 6 ? "" : "";
+  const body = p.o ? `<div><div class="who">🔊 THOẠI GỐC · ${p.o[0]} <span>${p.o[1]}</span>${narrow ? "" : '<span class="link" style="font-family:var(--font-ui);margin-left:6px">Đổi câu ▾</span>'}</div><div class="en">${p.en} <span class="vi">— ${p.vi}</span></div></div>` : `<div class="tx">${p.x}</div>`;
+  return `<div class="${cls}">${p.w ? '<span class="wb">!</span>' : ""}<span class="hd">⠿</span><span class="no">${p.n}</span>${body}${meta}${tools}${otools}</div>`;
+}
+document.getElementById("paras").innerHTML = P.map((p) => para(p)).join("");
+document.getElementById("paras2").innerHTML = P.slice(3, 11).filter((p) => !p.ins).map((p) => para(Object.assign({}, p, { hov: 0 }), true)).join("");
+
+/* dựng nháp */
+const S = [
+  [1, 0, "🏚", "Một tu viện cháy rụi, một hiệp sĩ tỉnh dậy giữa đống tro — và thứ duy nhất anh còn nhớ là cái tên khắc trên chuôi kiếm: Kael…", "Kael nằm giữa đống tro, camera kéo lên", "P1 00:03:52–00:04:06", "14,2 s", "~14", 1],
+  [2, 1, "🖼", "“Who… who painted this?”", "Kael chạm tay vào bích hoạ vị vua", "P1 00:12:48–00:12:51", "3,1 s", "gốc", 1, 1],
+  [3, 3, "👁", "Tiếng chuông dẫn anh tới một người phụ nữ ngồi giữa sân đổ nát. Đôi mắt cô bị băng kín…", "Seris ngồi giữa sân, quay đầu về phía Kael", "P1 00:40:51–00:41:02", "10,8 s", "~11", 1],
+  [4, 3, "👁", "“You don't even remember your own name, do you, Kael?”", "cận mặt Seris", "P1 00:41:12–00:41:17", "4,6 s", "gốc", 1, 1],
+  [5, 3, "👁", "“How do you know me?”", "Kael lùi lại, tay đặt lên chuôi kiếm", "P1 00:41:18–00:41:20", "2,0 s", "gốc", 1, 1],
+  [6, 1, "🕯", "Seris là pháp sư mù của tu viện — người sống sót duy nhất ngoài Kael. Cô biết anh là ai…", "hai người đi qua hành lang nến", "P1 00:42:05–00:42:21", "16,3 s", "~16"],
+  [7, 5, "🗡", "Rạng sáng, họ rời tu viện. Và Kael sớm phát hiện thanh kiếm của mình biết… ăn tro — càng nhiều tro, lưỡi kiếm càng rực sáng.", "Kael vung kiếm, tro bay vào lưỡi kiếm phát sáng", "P1 00:44:10–00:44:19", "8,7 s", "~9", 0, 0, 1],
+  [8, 2, "🌊", "Đích đến đầu tiên là Varn — thành phố đã chìm xuống hồ cùng toàn bộ dân cư…", "toàn cảnh thành Varn dưới nước", "P1 01:14:30–01:14:39", "9,2 s", "~9", 1],
+  [9, 2, "🌊", "Varn hiện ra dưới làn nước đục như một nghĩa địa dựng đứng. Và ở đây, lần đầu tiên, Seris để lộ điều cô giấu.", "lặn qua cổng thành", "P1 01:18:02–01:18:11", "9,0 s", "~9"],
+  [10, 2, "🌊", "“Varn didn't drown. It was drowned.”", "cận mặt Seris dưới ánh lân tinh", "P1 01:31:40–01:31:43", "3,4 s", "gốc", 0, 1],
+  [11, 2, "🌊", "“By whom?”", "Kael quay phắt lại", "P1 01:31:46–01:31:47", "1,2 s", "gốc", 0, 1],
+  [12, 0, "🏚", "Và câu trả lời khiến Kael chết lặng: kẻ đó vẫn đang sống ngay trong tu viện.", "Mẹ Bề Trên Ilva quỳ cầu nguyện trong nhà nguyện", "P1 01:32:10–01:32:16", "5,9 s", "~6"],
+];
+document.getElementById("segs").innerHTML = S.map((s) => `<div class="sg${s[9] ? " ost" : ""}${s[10] ? " on" : ""}"><span class="no">${s[0]}</span>${th(120, 67, s[1], s[2], "", { cs: s[8], lb: s[8] })}<div class="tx"><span class="clip">${s[9] ? "🔊 " : ""}${s[3]}</span><span class="pic">Hình: ${s[4]}</span></div><span class="sr">${s[5]}</span><span class="du">${s[6]}<small>${s[7] === "gốc" ? "tiếng gốc" : "ước " + s[7] + " s"}</small></span><span class="dim">⋯</span></div>`).join("");
+
+const only = location.hash.slice(1);
+if (only) { document.querySelectorAll(".page > div, .page > section").forEach((el) => { if (el.id !== only) el.style.display = "none"; }); document.querySelector(".page").style.padding = "0"; document.querySelectorAll("#" + only + " > h2").forEach((h) => (h.style.display = "none")); }
+</script>
+</body>
+</html>

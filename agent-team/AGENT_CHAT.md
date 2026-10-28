@@ -9,6 +9,22 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-28 23:55 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-V015-DISC-UI`: dựng tab con "🔥 Khám phá" trong tab Tải video theo §4.13 (nấc A).
+- **File mới:** `src/views/discovery/` (12 file: `DiscoveryView`, `DiscoverySearchBar`, `HotTopicChips`, `DiscoveryListTabs`, `VideoGrid`, `VideoCard`, `DiscoveryStates`, `MiniQueueBar`, `DiscoveryContextMenu`, `DiscoveryToast`, `useDiscoveryList`, `discoveryModel` + `discoveryErrors` + `discovery.css`) · sửa `DownloaderView.tsx/.css` (chỉ thêm tab con + cầu nối hàng đợi) · `scripts/discovery-tests/discoveryModel.test.ts` — **chưa commit**.
+- **Dùng lại hàng đợi sẵn có** (không viết luồng tải thứ 2): `queueEntries()` + cờ `openInStudio`; trạng thái thẻ khớp theo **id video** (bvid / YouTube id) qua `videoIdOf()`.
+- **Kiểm:** `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** · `node --test scripts/discovery-tests/` **38/38 PASS** (thêm 30 test logic thuần).
+- **Điểm chưa chắc (cần điều phối kiểm app thật):** (1) "🎬 Tải & mở Studio" dùng cầu `onNavigateToStudio` sẵn có ⇒ **có chuyển tab Studio**; §4.13 muốn "không tự nhảy màn hình" — cần thêm prop mới ở `SettingsView` (ngoài phạm vi sửa của task này). (2) Ảnh `hdslb.com` đã thử `referrerPolicy="no-referrer"` + ô dự phòng, **cần xem thật** trong app. (3) YouTube nấc A chỉ tìm kiếm, danh sách "Đang hot" hiện 🔒 (chưa có API key).
+
+---
+
+### 2026-10-28 23:15 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** @done — Hoàn thành nhiệm vụ TSK-LAB-RESEARCH (R1 + R2) cho Xưởng AI v0.16.
+- **R1 (Render Video-as-Code):** Đã phân tích chi tiết Remotion, Revideo, Motion Canvas, HyperFrames, MoviePy tại docs/LAB_RENDER_ENGINES.md. Benchmark thẻ 5s: Native FFmpeg+ASS chỉ mất 0.73s (205 fps, 0MB bundle) so với Headless Chrome (>9s, >350MB). Kết luận: Chưa cần engine ngoài cho v0.16; nếu làm đồ họa động sau này nên chọn HyperFrames (Apache 2.0).
+- **R2 (Việt hoá 3 prompt NarratoAI):** Đã tạo src-tauri/src/lab/prompts/{recap_analyze,recap_narration,recap_match}.md kèm LICENSE-NarratoAI.txt (ghi công MIT). Khớp chuẩn JSON struct RecapItem trong docs/XUONG_AI_PLAN.md §2, tích hợp luật Hook mở đầu, lọc rác/ads, tỷ lệ giữ thoại gốc và công thức 4.5 âm tiết/giây.
+
+---
+
 ### 2026-10-28 22:45 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Xong `TSK-V015-DISC-CMD` (nối lõi Khám phá vào app): gọi mạng + 5 lệnh Tauri + wrapper TS.
 - **File mới:** `src-tauri/src/discovery/{fetch.rs,commands.rs,fetch/ytdlp.rs}` + `{fetch,commands,network}_tests.rs` · sửa `discovery/mod.rs` (+2 `pub mod`), `src-tauri/src/lib.rs` (+5 handler), `src/lib/tauri.ts` (+wrapper), `scripts/discovery-tests/` — **chưa commit**.
@@ -55,24 +71,6 @@
 - **Tài liệu đã tích:** `docs/V0.14_PLAN.md` §3 (7/7 ✅) · `PROJECT_STATE.md` (bảng khóa trống, v0.12/v0.14 sang ✅) · `TAM_NHIN_SUBLIX_STUDIO.md` GĐ4 ✅.
 - **Tiếp theo:** PO OK ⇒ `git push` (16 commit). Sau đó GĐ5 (dựng cơ bản + Batch) — cần PO chốt phạm vi trước khi giao.
 - **Đội (rảnh, giữ nguyên):** mcode #1 `term_05c6d215` · #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20`.
-
----
-
-### 2026-10-26 15:10 - Claude Code (Opus 5.5, điều phối) -> @Leader-tiếp-theo / @jimmyvu
-- **Loại:** `@handoff` — **Claude Code sắp hết hạn mức; leader khác tiếp quản.** Đọc `agent-team/LEADER_NOTES.md` mục 0 (+ mục 6 lời khuyên). Orca run `run_80e8fbd4887e`. **13 commit local CHƯA push** (`3a851a5`..`80e7456`); push chỉ khi PO đồng ý.
-- **v0.14 (PO chốt, `docs/V0.14_PLAN.md`):** đã xong + kiểm app thật — dò phụ đề cứng (PP-OCRv4 det sidecar), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ: libass không làm được), giao diện Thuộc tính + khung dải + xem thử, bump 0.14.0. Ảnh bằng chứng: `docs/ui-mockups/shots/v014-*.png`.
-- **ĐANG LÀM (việc duy nhất còn chặn release):** mcode #1 (`term_05c6d215`, task `TSK-V014-EXPORT-FIX`, dispatch `ctx_cea3fc4b4c58`) sửa lỗi xuất video "Đa đường tiếng" + phụ đề cứng ⇒ ffmpeg `Filter 'anull:default' has output 0 (final_audio) unconnected`. Sửa dở chưa commit trong `src-tauri/src/dubbing/export_video_graph.rs` + `mod.rs`; yêu cầu: chạy mọi tổ hợp chế độ âm thanh × burn × có/không câu, test ffmpeg thật. Nếu thợ đứng: gõ "TIẾP TỤC TSK-V014-EXPORT-FIX".
-- **Khi mcode #1 báo xong:** đọc diff → `git add` 2 file (+test) → `agent-team/tools/verify-clean.ps1 -Rust` → `cargo build --bin sublix` (CARGO_TARGET_DIR=%TEMP%\sublix-cc-target; exe mới chạy được hôm nay) → `agent-team/tools/gui-app.ps1 start` → trong app: tab "hardsub_zh_30s.mp4" (đã dò dải) → Xuất video (mặc định Đa đường tiếng + Khắc cứng) phải ra mp4; trích 1 khung ở giây 6 xem dải mờ → `gui-app.ps1 stop` → commit (author Mavis/mcode) → `@handoff` → hỏi PO push.
-- **Đội (rảnh, giữ nguyên — không tự đóng, tối đa 3–4 ô/tab):** mcode #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20` (handle đổi nếu Orca khởi động lại — tra theo tiêu đề bằng `orca terminal list`).
-
----
-
-### 2026-10-26 14:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
-- **Loại:** `@handoff` — **TẠM DỪNG theo lệnh PO** (về nhà làm tiếp). v0.14 gần xong; 12 commit local **chưa push** (từ `3a851a5` tới `b9a791f`). Orca run `run_80e8fbd4887e`.
-- **Đã xong + kiểm app thật:** dò phụ đề cứng (PP-OCRv4 det, 60 s video ~3 s), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ — libass không làm được), giao diện Thuộc tính + khung dải + xem thử chữ nhảy, bump 0.14.0.
-- **CÒN 1 LỖI (đang sửa dở):** xuất video "Đa đường tiếng" + phụ đề cứng ⇒ ffmpeg `final_audio unconnected`. Giao mcode #1 (`TSK-V014-EXPORT-FIX`, dispatch `ctx_cea3fc4b4c58`) — đã ngắt bằng Esc; **sửa dở chưa commit** trong `src-tauri/src/dubbing/export_video_graph.rs` + `mod.rs`. Làm tiếp: gõ "TIẾP TỤC TSK-V014-EXPORT-FIX" vào terminal mcode #1.
-- **Kiểm lại sau khi sửa:** `agent-team/tools/verify-clean.ps1 -Rust` → build `cargo build --bin sublix` (target `%TEMP%\sublix-cc-target`) → `tools/gui-app.ps1 start` → xuất thật video thử chữ Trung (tab "hardsub_zh_30s.mp4" đã có trong phiên app; file thử ở scratchpad phiên `552b7175…\fixtures\`) → ổn thì PO duyệt push.
-- **Đội (handle sau khi Orca khởi động lại):** mcode #1 `term_05c6d215` · #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20` — đều đang rảnh.
 
 ---
 

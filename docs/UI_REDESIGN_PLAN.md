@@ -691,6 +691,277 @@ Hàng đợi: `DiscoveryView` nhận từ cha 1 hàm `enqueue(url, { openInStudi
 
 **Đếm control (nấc A, màn mặc định):** 2 tab con + 2 nguồn + ô tìm + chip (1 vùng cuộn) + ↻ chip + 2 nút danh sách + ↻ danh sách + liên kết "Đổi" + "Xem ở Tải về" = **11 vùng tương tác**, mỗi thẻ 2 nút (chỉ hiện khi hover/focus).
 
+### 4.14 Xưởng AI (v0.16) (mockup `v016-lab.html`, ảnh `shots/v016-lab-*.png`)
+
+Phạm vi theo `docs/XUONG_AI_PLAN.md` §1–§2: tab lớn **Xưởng AI** (nhãn Thử nghiệm), thư viện mẫu, mẫu **Recap cốt truyện game** chạy 3 bước có người duyệt, rồi mở ra tab dự án Studio. Bài học từ `RECAP_TOOLS_DEEPDIVE.md` §2.1 và §3 được áp thành 4 quy tắc:
+1. **Không có hộp đen 1 bấm.** Mỗi bước dừng chờ người duyệt, theo kiểu NarratoAI: phân tích rồi viết văn bản thuần, sau đó mới khớp cảnh.
+2. **Ít mà chất.** Không tung 30 kết quả cho người dùng tự lọc như OpusClip. Ra 1 bản nháp, và người dùng sửa được từng đoạn.
+3. **Kết quả cuối là timeline sửa được**, kiểu CapCut "Mở trong Timeline". Xưởng AI không có trình dựng thứ hai.
+4. **Không có giao diện AI slop.** Không dùng màu mới, không có nút "✨ Magic". Chỉ dùng token Cinema Dark có sẵn.
+
+**Vị trí: tab topbar thứ 3, ngay sau "Tải video".**
+
+```
+topbar 48 │ 🎬 SUBLIX  Studio  Tải video  [✦ Xưởng AI ⌈Thử nghiệm⌉] │ Live  Lịch sử  Tiến trình  Cài đặt   ◔ Xưởng AI · phân tích 34 %  👁
+```
+
+- **Vì sao đặt ở đó:** 3 tab "làm ra video" đứng liền nhau theo đúng luồng *Tải video → Xưởng AI → Studio*. Một vạch ngăn 1 px tách nhóm tab theo dõi và cài đặt (Live / Lịch sử / Tiến trình / Cài đặt). Không đặt Xưởng AI làm tab con của Studio, vì PO chốt Xưởng AI là tab lớn riêng, và Studio đã có thanh tab dự án (§4.11) nên thêm tầng nữa sẽ rối.
+- **Nhãn "Thử nghiệm":** chữ 9 px/800, viền `--line`, chữ `--t4`. Khi tab đang mở thì viền `--ac-br` và chữ `--ac-txt`. Không dùng màu mới.
+- **Trạng thái trên tab** dùng cùng ngôn ngữ với tab Studio (§4.11):
+  - Đang chạy: vòng 14 px kèm "34%", thay chỗ nhãn Thử nghiệm.
+  - Xong chưa xem: chấm `--ok` và toast "Xong phân tích … · Mở".
+  - Lỗi: chấm `--dang`.
+- Việc đang chạy cũng hiện ở chip trạng thái topbar (bấm vào thì tới bản nháp) và ở tab Tiến trình.
+- **Ẩn được:** Cài đặt › Chung có tuỳ chọn "Hiện tab Xưởng AI (thử nghiệm)", mặc định bật. Banner trong thư viện chỉ ra chỗ này.
+- **Khi < 1280 px:** các tab không mở chỉ còn biểu tượng, kèm tooltip. "Thử nghiệm" rút thành "β".
+
+**Bố cục chung trong tab** (thư viện: mockup A; trình hướng dẫn: mockup B–E)
+
+```
+thanh bước 58 │ ‹ Thư viện  🎮 Recap cốt truyện game     (✓)Nguồn & tuỳ chọn ─ (A)Phân tích ─ (B)Lời bình ─ (C)Dựng nháp      💾 đã lưu ⋯
+              │                Vương Miện Tro Tàn — 10 phút     3 video · 10 phút   6 chương·5 NV  46 đoạn·10:24  Studio
+thân          │ (nội dung bước — không cuộn cả trang; từng vùng tự cuộn)
+chân 62       │ trạng thái lưu / ghi chú bước                                 [phụ] [phụ]  [NÚT CHÍNH ›  Ctrl+Enter]
+```
+
+**Kích thước & màu** (chỉ dùng token §4.1 / `_theme.css`)
+
+| Phần | Số đo |
+|---|---|
+| Thư viện | lưới `1fr 420px`, padding `26px 32px`. Tiêu đề 24/800. Thẻ mẫu lớn chia 2 cột, bo 14, ảnh minh hoạ cao 262, thân padding `16px 20px`, tên mẫu 18/800. Dòng "Ra / Cần / Chạy" là lưới `74px 1fr`, chữ 12 px. Thẻ "Sắp có" viền đứt, mờ 62 %, cao 70 |
+| Thẻ mẫu hover/focus | viền `--ac-br`, nền `rgba(232,163,61,.04)`, bóng `0 10px 30px rgba(0,0,0,.35)`. Vòng focus 2 px `--ac-txt` (giống thẻ Khám phá §4.13) |
+| Thanh bước | cao 58, nền `#0f0d0b`, viền dưới `--line`. Ô bước có vòng tròn 24 px và 2 dòng nhãn (12.5/700 + 10.5 `--t4`). Bước xong: ✓ `--ok`, bấm để quay lại. Bước đang mở: nền `--ac-soft` + viền trong `--ac-br`, vòng đặc `--ac`. Bước đang chạy: vòng conic `--ac` kèm %. Bước lỗi: `--dang`. Bước chưa tới: `--t4`, không bấm được. Nối giữa các bước bằng vạch 36×1.5 (`--ok-br` khi đã qua) |
+| Chân bước | cao 62. **1 nút chính** `--grad-ac` cỡ `lg` ở bên phải, kèm phím `Ctrl+Enter`. Nút phụ là nút trung tính. Huỷ dùng nút `dang` |
+| Thoại gốc | **viền trái 3 px `--step-sub`** + nền `rgba(56,189,248,.045)`. Đây là màu của bước "Phụ đề gốc", nên đúng nghĩa "lời nhân vật gốc", không phải màu mới. Lời bình giữ nền `--bg-card` |
+| Đoạn lời bình | rộng tối đa 1000 px (dễ đọc). Lưới `16 ⠿ · 30 số · 1fr chữ · 96 thời lượng`. Chữ 14/1.58. Bo 10, padding `9px 14px 9px 8px` |
+| Cột phải bước B | 380 px, nền `--bg-side`, gồm 3 hộp: Thời lượng / Luật dựng / Chương |
+| Dải thời gian | mỗi video 1 dải cao 24, bo 5. Chương là các khối `#2b231b` / `#241d17` xen kẽ, có số chương. Cutscene là vạch 4 px `--ac`. Đoạn bị lọc là sọc chéo `--dang` |
+| Tiến trình | khối giữa rộng 980. Mỗi giai đoạn 1 dòng, lưới `30 · 210 · 1fr · 150 · 56`. Giai đoạn đang chạy: nền `rgba(232,163,61,.05)` + vòng 22 px + thanh 4 px. Giai đoạn chờ: mờ 55 % |
+
+**Thư viện mẫu** (mockup A)
+
+- **Mẫu dùng được:**
+  - **🎮 Recap cốt truyện game**
+    - Ra: video ngang 5/10/15/20 phút.
+    - Cần: video gameplay có cốt truyện, hoặc dự án Studio đã nhận dạng thoại.
+    - Chạy: nhận dạng và đọc chữ trên máy; AI viết lời theo Cài đặt › Dịch thuật.
+  - **⚡ Reel highlight**
+    - Ra: 3–6 clip dọc 9:16 dài 30–60 giây.
+    - Dùng chung bước A. Không cần giọng đọc.
+    - Chỉ có chỗ trong khung 3 bước; luồng chi tiết của Reel thiết kế sau, không thuộc v0.16 theo `XUONG_AI_PLAN` §3.
+- **Sắp có:** Top 10 · Lore nhân vật · So sánh. Không bấm được, không hứa ngày ra.
+- **Thẻ mẫu:** bấm được cả thẻ. Nút "Bắt đầu ›" là nút chính khi thẻ đang được rê chuột hoặc focus; lúc nghỉ là nút phụ, để màn hình chỉ có 1 nút chính.
+- **Ảnh minh hoạ** vẽ bằng CSS, không dùng ảnh thương hiệu:
+  - Recap: dải 4 khung cảnh + sóng âm có đoạn `--step-sub` + câu lời bình mẫu.
+  - Reel: 3 khung dọc.
+- **Bản nháp gần đây** (cột phải) là thứ người dùng quay lại nhiều nhất, vì phân tích 4 giờ video mất khoảng 40 phút.
+  - Mỗi dòng có ảnh 104×58, tên bản nháp, bước hiện tại và trạng thái: pill bước / vòng % / ✓ đã mở trong Studio / ! lỗi.
+  - Menu ⋯ có: Mở · Nhân bản · Xoá (xoá xong có toast Hoàn tác).
+  - Chưa có bản nháp nào: hiện 1 dòng "Chưa có bản nháp — chọn 1 mẫu để bắt đầu".
+- **Banner thử nghiệm** (đóng được, nhớ lựa chọn): "AI có thể kể sai chi tiết cốt truyện — mỗi bước đều dừng chờ bạn duyệt, không có gì tự xuất."
+
+**Bước chuẩn bị — Nguồn & tuỳ chọn** (mockup B)
+
+- **Video nguồn** (cột trái):
+  - Thêm bằng `＋ Thêm video Ctrl+O`, bằng `🎬 Chọn dự án Studio` (danh sách tab và dự án gần đây), hoặc thả 1 hay nhiều file vào bất kỳ đâu trong bước.
+  - Mỗi dòng: ⠿ · số thứ tự · ảnh 128×72 · tên · `thời lượng · cỡ · fps · dung lượng`.
+  - Video lấy từ dự án Studio có phụ đề thì hiện pill `--ok` "đã có phụ đề — dự án Studio …". Bước A sẽ bỏ qua nhận dạng cho video đó và dùng lại các câu người dùng đã sửa tay.
+  - **Thứ tự trên → dưới là thứ tự cốt truyện.** Đổi thứ tự bằng kéo ⠿ (thẻ nổi + vạch `--ac` chỗ thả, như §4.11) hoặc `Alt+↑↓`.
+- **Ước thời gian xử lý** hiện ngay khi thêm video:
+  - ≤ 3 giờ: 1 dòng trung tính.
+  - \> 3 giờ: dòng `--warn`, kèm ước phút và dung lượng ổ tạm.
+  - \> 8 giờ: thêm hộp xác nhận khi bấm Bắt đầu.
+  - Không bao giờ chặn.
+- **Tuỳ chọn** (cột phải 560, đúng 5 mục):
+  1. **Tên game** (ô 36 px) + công tắc **Tra bối cảnh trên mạng** (mặc định bật). Nhà cung cấp AI không hỗ trợ tìm web thì công tắc tắt và có tooltip giải thích.
+  2. **Độ dài đích:** segmented 5 / 10 / 15 / 20 phút, mặc định 10.
+  3. **Giọng đọc:** dùng lại nguyên `VoicePicker` (§4.10) bản popover, kèm ▶ bên ngoài để nghe 1 câu lời bình thật.
+  4. **Tỷ lệ tiếng gốc:** thanh trượt 0–60 %, bước 5, mặc định 30 %.
+     - Vùng gợi ý 20–40 % là khung đứt `--ok-br` trên rãnh. Ngay dưới là dòng "▮ 20–40 % hợp kênh recap game · ≈ 3 phút thoại gốc trong bản 10 phút"; số phút tính theo độ dài đích.
+     - Giá trị đang chọn hiện số lớn mono 22 px `--ac-txt`.
+     - Phím: `←→` thay đổi 5 %, `PgUp/PgDn` thay đổi 10 %.
+  5. Dòng tóm tắt **"✦ AI viết lời: MiniMax-M3 · tiếng Việt — Đổi ›"**. Bấm Đổi thì sang Cài đặt › Dịch thuật; không lặp lại bộ chọn nhà cung cấp ở đây.
+- Văn phong, nhạc nền, kiểu phụ đề **không đặt ở đây**. Văn phong nằm trong hộp "Viết lại toàn bộ…" của bước B; nhạc nền và phụ đề chỉnh ở Studio.
+- **Nút chính:** "Bắt đầu phân tích ›". Thiếu điều kiện (mục Trạng thái) thì nút đổi thành lối sửa điều kiện đó.
+
+**Bước A — Phân tích** (mockup C)
+
+- **Đang chạy:** 5 giai đoạn, mỗi giai đoạn 1 dòng (biểu tượng, tên, chi tiết, thanh, %):
+  1. **Nhận dạng thoại:** Whisper; dùng lại phụ đề của dự án Studio nếu có.
+  2. **Đọc chữ trong game:** OCR v0.14, gồm phụ đề in sẵn và tên nhân vật trên màn hình.
+  3. **Tìm cutscene:** dải đen, mất HUD, thoại dày, chuyển cảnh.
+  4. **Lọc rác:** intro/outro, quảng cáo, loading, menu/kho đồ, cảm ơn donate, AFK.
+  5. **Tóm tắt chương:** AI, cần mạng.
+- Trên cùng có thanh tổng, "đã chạy 14:02 · còn khoảng 27 phút" và câu "Có thể rời tab hoặc mở Studio — việc chạy nền và báo khi xong".
+- **Dải thời gian "Thấy đến giờ"** điền dần theo từng giai đoạn: phần chưa quét tối, phần đã quét có vạch mật độ thoại. Có cutscene thì vạch cam hiện dần.
+- **Huỷ:** nút `■ Huỷ phân tích` ở chân, dạng `dang`. Bấm thì hỏi 1 lần: "Huỷ phân tích? Phần đã xong được giữ", với hai lựa chọn **Tiếp tục chạy** (mặc định, Enter) và Huỷ phân tích. `Esc` không huỷ.
+- **Tắt app giữa chừng:** mở lại thì chạy tiếp từ giai đoạn đang dở. Mỗi giai đoạn lưu kết quả **theo từng file video**, giai đoạn Tóm tắt lưu **theo từng chương**.
+- **Kết quả** (cột trái `1fr`, cột phải 600):
+  - **Dải thời gian:** 1 dải cho mỗi video, có chú giải. Bấm 1 đoạn trên dải thì mở cửa sổ xem thử nổi, không rời bước.
+  - **Chương:**
+    - Mỗi dòng: ô tích "dùng trong recap" · số · tên · tóm tắt 1–3 câu · thời lượng · khoảng nguồn (`P1 1:12:45 → P2 0:20:05`) · `N cutscene · N câu`.
+    - Tên chương và tóm tắt **sửa được** (bấm vào là gõ). AI viết lời bình dựa trên các tóm tắt này.
+    - Bỏ tích một chương thì chương đó không được kể, nhưng vẫn giữ để lấy cảnh nếu cần.
+  - **Nhân vật:**
+    - Mỗi dòng: ô chữ cái đầu 30 px (dùng 5 màu chữ sẵn có `--ac/#7dd3fc/#c4b5fd/--dang-txt/--ok-txt` theo thứ tự) · tên · vai trò 1 dòng · số câu thoại.
+    - **Nhấp đúp hoặc `F2` để sửa tên.** Tên mới áp cho cả lời bình và phụ đề.
+    - AI tự gộp tên do nhận dạng sai thì ghi rõ, vd "✓ đã gộp "Cale" ×14", để người dùng kiểm.
+  - **Đã lọc bỏ** (`N đoạn · tổng thời lượng`):
+    - Mỗi dòng: nhãn loại (nền `--dang-soft`) · video + khoảng thời gian · **lý do** (từ khoá đã thấy, hoặc "không tiếng · hình gần như không đổi") · `▶ Xem` · `Khôi phục`.
+    - Đoạn đã khôi phục chuyển nền `--ok-soft`, kèm "✓ đã khôi phục" và `↶ Hoàn tác`.
+- **Nút chính:** "Viết lời bình (10 phút) ›". Nút phụ: "↻ Phân tích lại…" mở hộp chọn chạy lại giai đoạn nào (mặc định chỉ giai đoạn Tóm tắt), để không mất 40 phút oan.
+
+**Bước B — Lời bình** (mockup D)
+
+- **Danh sách đoạn**, gom theo đầu mục chương (số chương, tên, tổng thời lượng). Có 2 loại đoạn:
+  - **Lời bình:** văn bản thuần. Bấm vào là sửa ngay trên chỗ đó (contenteditable 1 đoạn, không có ô nhập riêng). Sửa rồi thì có nhãn "đã sửa".
+  - **🔊 Thoại gốc:** dòng `🔊 THOẠI GỐC · KAEL  P1 · 00:12:48  Đổi câu ▾`, câu gốc in nghiêng, sau đó là "— bản dịch" `--t3`.
+    - Chữ **không sửa được** vì đó là tiếng gốc.
+    - "Đổi câu ▾" mở danh sách câu thoại ứng viên quanh vị trí đó (AI xếp hạng), có ▶ nghe và tên người nói.
+- **Thời lượng mỗi đoạn** ở cột phải của đoạn:
+  - Lời bình: số ước "~14 s", tính bằng **số âm tiết ÷ nhịp của giọng đang chọn** (mặc định 4,1 âm tiết/s; đo lại 1 lần cho mỗi giọng bằng câu mẫu, lưu cache).
+  - Thoại gốc: số thật lấy từ phụ đề, "3,1 s".
+  - Hàm thuần `estimateSeconds(text, syllablesPerSec)` sẽ có test.
+- **Rê chuột vào một đoạn** thì hiện:
+  - Tay nắm ⠿ để kéo đổi thứ tự (vạch `--ac` chỗ thả, chạy được qua chương khác).
+  - Hàng công cụ `✦ Viết lại  R` · `🔊 Giữ thoại gốc sau đoạn này  G` · `⋯` (Tách đoạn · Gộp với đoạn sau · Xoá · Chuyển sang chương…).
+- **Rê vào khe giữa 2 đoạn** thì hiện vạch chèn `＋ Lời bình` · `🔊 Thoại gốc ở đây`. Chèn thoại gốc thì AI chọn câu hay nhất quanh vị trí đó; người dùng đổi lại được bằng "Đổi câu".
+- **Viết lại 1 đoạn** (popover 420 px, cạnh đoạn, lật lên trên nếu thiếu chỗ):
+  - Chip yêu cầu chọn nhiều: Ngắn hơn · Kịch tính hơn · Dễ hiểu hơn · Thêm câu nối.
+  - Ô "Yêu cầu thêm…".
+  - Kết quả hiện chữ cũ gạch ngang mờ ở trên và chữ mới bên dưới, kèm "~9 s (cũ 15 s)".
+  - Nút `↻ Thử lại` và `Dùng bản này Enter`. `Esc` đóng và giữ bản cũ. Trong lúc AI chạy, chữ mới hiện dần (stream), các nút tắt.
+- **Viết lại toàn bộ…:**
+  - Mở hộp gồm văn phong (Kể chuyện kịch tính / Bình thản / Hài hước — 3 lựa chọn), độ dài đích, và ô tích **"Giữ N đoạn bạn đã sửa"** (mặc định bật).
+  - Luôn hoàn tác được bằng `Ctrl+Z` (chụp lại toàn bộ danh sách trước khi viết).
+- **Cột phải 380 px:**
+  1. **Thời lượng ước tính:**
+     - Số lớn `10:24`, kèm "/ đích 10:00 · +24 s, trong ±10 %".
+     - Thanh xếp chồng: lời bình `--ac` + thoại gốc `--step-sub`, với khung đứt đánh dấu vùng ±10 % quanh đích.
+     - Chú giải "Lời bình 7:09 · Thoại gốc 3:15 · 31 %".
+     - Màu chữ: trong ±10 % là `--ok-txt`; ±10–25 % là `--warn-txt`; ngoài ±25 % là `--dang-txt` + gợi ý "✦ Rút gọn còn 10 phút".
+  2. **Luật dựng:** các dòng ✓ / ! kèm liên kết "Tới đoạn N" (cuộn tới, nháy viền 1 lần) và, nếu có, nút sửa nhanh bằng AI ("✦ Viết câu nối"). Đoạn vi phạm có chấm `--warn` ở lề trái và viền `rgba(228,179,60,.45)`.
+  3. **Chương:** mục lục có thời lượng và ⚠ khi chương có vi phạm. Bấm để cuộn tới; chương đang trong tầm nhìn được tô nền.
+- **Luật dựng kiểm ngay khi sửa** (hàm thuần, cùng luật với `recap_script.rs` của C1). Đây là cảnh báo, **không chặn** Dựng nháp, vì bước C kiểm lại lần cuối:
+
+| Luật | Khi vi phạm |
+|---|---|
+| Mở đầu bằng lời bình (không mở bằng thoại gốc) | "Đoạn 1 là thoại gốc — mở đầu nên là câu gây tò mò" · Sửa nhanh: "Chuyển xuống sau đoạn 2" |
+| Không quá 2 thoại gốc liền nhau | "3 đoạn thoại gốc liền nhau (10–12)" · Tới đoạn |
+| Đổi video nguồn ⇒ có câu nối | "Đổi sang video P2 ở đoạn 27 chưa có câu nối" · Tới đoạn · ✦ Viết câu nối |
+| Thời lượng trong ±10 % đích | "Dài hơn đích 2:10" · ✦ Rút gọn |
+| (bước C) Không ghép lời bình vào đoạn rác | kiểm khi khớp cảnh |
+
+- **Nút chính:** "Dựng nháp ›". Lời bình tự lưu sau mỗi lần sửa (debounce 800 ms), giữ lịch sử hoàn tác trong phiên.
+
+**Bước C — Dựng nháp** (mockup E)
+
+- **Đang chạy:** 3 giai đoạn.
+  1. **Đọc giọng:** từng câu, hiện "câu 19 / 31 · đo được 4:18".
+  2. **Khớp cảnh:** chọn đoạn đủ dài theo thứ tự cốt truyện, không lặp cảnh, bỏ đoạn rác, chèn thoại gốc theo tỷ lệ.
+  3. **Kiểm luật.**
+- Câu đã đọc giọng được giữ lại. Dựng lại chỉ đọc lại những câu đã đổi.
+- **Kết quả** (danh sách `1fr`, khung xem thử 560):
+  - **Mỗi dòng đoạn:**
+    - Số · ảnh cảnh **thật đã khớp** 120×67 (nhãn CUTSCENE nếu là cutscene) · câu (thoại gốc có 🔊, in nghiêng, chữ `#bae6fd`) · dòng "Hình: …" (trường `picture` AI mô tả) · nguồn mono `P1 00:44:10–00:44:19` · **thời lượng đo thật**, kèm số ước của bước B nhỏ bên dưới.
+    - Dòng đang chọn: nền `--ac-soft` + vạch trái `--ac`. Dòng thoại gốc: vạch trái `--step-sub`.
+  - **Thanh tóm tắt:** "Bản nháp 10:12 · 46 đoạn · tiếng gốc 30 % · 3 video nguồn · 41 cảnh khác nhau" và pill "✓ Kiểm luật 3/4" / "! 1 cảnh báo".
+  - **Khung xem thử:** khung 16:9 kèm phụ đề kiểu đang đặt và nút `▶ Xem đoạn N` (`Space`), phát cắt video + giọng + tiếng game đã hạ. Bên dưới là bảng chi tiết (lời bình · hình AI chọn · giọng/đo thật · tiếng game) và hộp Kiểm luật.
+  - **Luật tự sửa** chỉ áp cho trường hợp không phải viết thêm chữ, vd dời thoại gốc thứ 3 ra sau câu lời bình kế tiếp; hộp Kiểm luật ghi rõ đã sửa gì. Luật cần viết chữ (câu nối) thì chỉ cảnh báo, kèm "Sửa ở Lời bình ›".
+  - **Không chỉnh timeline ở đây.** Đổi cảnh, kéo dài, nhạc nền đều làm trong Studio, để không có trình dựng thứ hai.
+- **Nút chính `🎬 Mở trong Studio`:**
+  - Tạo **tab dự án Studio mới** (§4.11) tên "Recap — Vương Miện Tro Tàn" và **chuyển sang Studio** (người dùng chủ động bấm, khác Khám phá §4.13).
+  - Studio có các làn: video · giọng đọc · thoại gốc · phụ đề (kiểu §4.12) · tiếng game đã hạ.
+  - Mở rồi thì nút thành "Tới tab Studio"; tab đã đóng thì mở lại.
+- **`↻ Dựng lại ▾`:** "Khớp cảnh lại" (giữ giọng đã đọc) · "Đọc lại giọng + khớp cảnh". Dựng lại tạo **dự án Studio mới**; tab Studio đã mở trước đó giữ nguyên các chỉnh tay.
+
+**Trạng thái** (mockup F)
+
+| Trạng thái | Hiện | Nút chính |
+|---|---|---|
+| Chưa có mô hình (Whisper / OCR / giọng) | kiểm khi mở mẫu, ở bước Nguồn: danh sách mô hình cần ✓/chưa tải + dung lượng | "⬇ Tải mô hình (1,5 GB) rồi phân tích" — dùng chung bộ tải Cài đặt › Mô hình |
+| Thiếu nhà cung cấp AI (MiniMax chưa có key, Ollama không chạy) | 🔑 giải thích + 2 dòng trạng thái thật | "⚙ Mở Cài đặt › Dịch thuật" + "↻ Kiểm lại"; quay lại tab thì tự kiểm. **Không cho bắt đầu**, vì không có bước tóm tắt thì kết quả vô dụng (tránh chờ 40 phút rồi mới báo) |
+| Lỗi giữa chừng (vd HTTP 429 ở chương 4/6) | ! đỏ + câu dễ hiểu + dòng mono chi tiết; danh sách giai đoạn: phần xong "giữ nguyên"; thanh bước: ô A đỏ | "↻ Thử lại từ chương 4" + liên kết "Đổi nhà cung cấp" — **không bao giờ chạy lại từ đầu** |
+| Đã huỷ | ⏸ "Đã huỷ ở "Đọc chữ" (62 %)", phần xong được giữ | "▶ Tiếp tục phân tích" + liên kết "Bắt đầu lại từ đầu…" |
+| Video quá dài (> 3 giờ / > 8 giờ) | ⏱ vàng: ước thời gian + ổ tạm + gợi ý bỏ phần chơi phụ hoặc đổi đích 15–20 phút | "Vẫn bắt đầu phân tích ›" (+ "Đổi đích 15 phút"); máy không tự ngủ khi đang phân tích |
+| Mất file nguồn (mở bản nháp cũ) | ⚠ "Không tìm thấy video nguồn P2" + đường dẫn mono | "📁 Chọn lại file…": khớp theo thời lượng + cỡ khung ⇒ không phân tích lại; khác file ⇒ hỏi. Chặn bước C, không chặn sửa lời bình |
+| Chờ lượt | việc nặng chạy lần lượt như §4.11: giai đoạn đầu hiện vòng nét đứt "Chờ sau Tap_07 (~4 phút)" | Huỷ. Giai đoạn gọi AI qua mạng không phải chờ |
+| AI trả kết quả hỏng (JSON sai, thiếu chương) | coi như lỗi giữa chừng của giai đoạn đó, tự thử lại 1 lần trước khi báo | như lỗi |
+
+**Bàn phím** (chỉ khi tab Xưởng AI đang mở; đã đối chiếu §4.10, §4.11, §4.13. Thợ grep lại `src/` trước khi gắn `Ctrl+Enter`, `Alt+←→`)
+
+| Phím | Ở đâu | Việc |
+|---|---|---|
+| `Ctrl+Enter` | mọi bước, kể cả khi đang gõ | nút chính của bước |
+| `Alt+←` `Alt+→` | trình hướng dẫn | bước trước / sau (chỉ tới bước đã mở khoá) |
+| `Ctrl+O` · `Alt+↑↓` | Nguồn | thêm video · đổi thứ tự video đang chọn |
+| `↑` `↓` | Lời bình, khi không gõ | đi giữa các đoạn (roving `tabIndex`, Tab chỉ dừng 1 lần ở danh sách) |
+| `Enter` · `Esc` | Lời bình | sửa đoạn đang chọn · xong sửa (giữ chữ, về chế độ chọn) |
+| `Alt+↑` `Alt+↓` | Lời bình, khi không gõ | dời đoạn lên / xuống |
+| `R` · `G` · `Delete` | Lời bình, khi không gõ | viết lại đoạn · chèn/bỏ thoại gốc sau đoạn · xoá đoạn (toast Hoàn tác) |
+| `Ctrl+Z` `Ctrl+Y` | Phân tích · Lời bình | hoàn tác / làm lại (sửa chữ, thứ tự, khôi phục đoạn lọc, sửa tên) |
+| `F2` | Phân tích, ở bảng nhân vật/chương | sửa tên |
+| `↑` `↓` · `Space` | Dựng nháp | chọn đoạn · xem thử / dừng |
+
+- Phím chữ đơn (`R` `G`) **chỉ chạy ở chế độ chọn đoạn**. Trong lúc gõ chữ, mọi phím là chữ.
+- ARIA:
+  - Thanh bước dùng `nav` + `aria-current="step"`.
+  - Danh sách lời bình dùng `role="list"`; mỗi đoạn có `aria-label` "Đoạn 7 · lời bình · 15 giây". Cảnh báo luật gắn bằng `aria-describedby`.
+  - Tiến trình dùng `role="progressbar"` cho từng giai đoạn + vùng `aria-live="polite"`, chỉ báo khi đổi giai đoạn, không báo mỗi %.
+
+**Cửa sổ hẹp (≥ 1024 px, mockup G)**
+
+- **< 1440 px:**
+  - Cột phải bước B (380) gấp lại thành pill "10:24 / 10:00" và nút "! 2 luật · chương ▸". Nút này mở ngăn kéo 340 px đè lên nội dung (`Esc` đóng).
+  - Thanh bước: bước đã xong hoặc chưa tới chỉ còn ô chữ (tooltip tên); bước đang mở giữ nhãn.
+- **< 1280 px:**
+  - Topbar: tab không mở chỉ còn biểu tượng; "Thử nghiệm" thành "β".
+  - Kết quả bước A: 2 cột thành 1 cột (Nhân vật và Đã lọc xuống dưới Chương).
+  - Bước C: khung xem thử thu còn 400.
+  - Thư viện: 2 thẻ mẫu xếp dọc; "Bản nháp gần đây" lên trên, còn 3 dòng.
+- Không có cuộn ngang toàn trang.
+
+**Component đề xuất:** `src/views/lab/`. Mỗi file < 300 dòng. Chỉ đụng Studio qua API "mở dự án", không sửa `SublixStudioView.tsx` ngoài lối mở tab.
+
+| File | Việc |
+|---|---|
+| `LabView.tsx` (+ `.css`) | gốc tab: thư viện ↔ trình hướng dẫn theo `draftId` đang mở; nhớ màn cuối (localStorage) |
+| `TemplateLibrary.tsx` | lưới thẻ mẫu + "Sắp có" + banner thử nghiệm |
+| `TemplateCard.tsx` | thẻ mẫu (ảnh CSS, Ra/Cần/Chạy, hover/focus) — `React.memo` |
+| `DraftList.tsx` | bản nháp gần đây (ảnh, bước, vòng %, ⋯ menu) |
+| `templates.ts` | khai báo mẫu: `{ id, title, oneLine, facts, enabled, steps }` — thêm mẫu = thêm 1 mục, không sửa UI |
+| `wizard/LabWizard.tsx` | khung: thanh bước + thân + chân; giữ `step`, mở khoá bước, `Ctrl+Enter`, `Alt+←→` |
+| `wizard/WizardStepBar.tsx` | thanh bước (done / on / run % / err / chưa tới) |
+| `wizard/StepFooter.tsx` | chân: trạng thái lưu + nút phụ + 1 nút chính |
+| `recap/SourceStep.tsx` | danh sách video (kéo thả, `Alt+↑↓`, chọn dự án Studio) + ước thời gian |
+| `recap/RecapOptions.tsx` | 5 tuỳ chọn; dùng lại `VoicePicker` (§4.10) |
+| `recap/OriginalRatioSlider.tsx` | thanh trượt 0–60 % + vùng gợi ý 20–40 + quy ra phút |
+| `recap/AnalyzeProgress.tsx` | 5 giai đoạn + thanh tổng + huỷ (dùng chung cho bước C với 3 giai đoạn) |
+| `recap/SourceTimeline.tsx` | dải thời gian mỗi video (chương / cutscene / bị lọc / phần chưa quét), bấm = xem nhanh |
+| `recap/AnalyzeResult.tsx` | ghép Chương + Nhân vật + Đã lọc |
+| `recap/ChapterList.tsx` · `CharacterTable.tsx` · `JunkList.tsx` | 3 bảng; sửa tên/tóm tắt, khôi phục |
+| `recap/NarrationEditor.tsx` | danh sách đoạn, roving focus, kéo đổi thứ tự, vạch chèn, chế độ chọn/gõ |
+| `recap/NarrationBlock.tsx` | 1 đoạn (lời bình / thoại gốc) — `React.memo`, props primitive ⇒ gõ 1 đoạn chỉ render lại 1 đoạn |
+| `recap/RewritePopover.tsx` | viết lại 1 đoạn (chip, ô yêu cầu, stream, dùng/thử lại) |
+| `recap/NarrationSidebar.tsx` | thời lượng + luật dựng + mục lục chương; ở < 1440 px thành ngăn kéo |
+| `recap/DraftResult.tsx` | danh sách đoạn đã dựng + `DraftPreview` + kiểm luật + Mở trong Studio / Dựng lại |
+| `recap/LabStates.tsx` | thiếu mô hình / thiếu AI / lỗi / đã huỷ / video dài / mất file / chờ lượt |
+| `useLabJob.ts` | gọi `lab_analyze` / `lab_write_narration` / `lab_build_draft` qua `src/lib/tauri.ts`, nghe sự kiện tiến độ, huỷ, tiếp tục; map lỗi → loại (`model_missing` / `no_llm` / `rate_limit` / `network` / `parse` / `source_missing`) |
+| `useLabDraft.ts` | nạp/lưu bản nháp (tự lưu debounce 800 ms), hoàn tác/làm lại trong phiên |
+| `labModel.ts` (thuần) | `estimateSeconds(text, sps)`, `syllableCount(vi)`, `checkRecapRules(items, target)` (cùng luật với `recap_script.rs` — test chéo bằng chung bộ ca), `ratioToMinutes`, `formatDur`, `processingEstimate(totalSec)`, `moveItem` · `insertOst` · `splitBlock`/`mergeBlock`, `narrationNav(index, key)` → test `node --test` |
+
+Kiểu dữ liệu phía frontend mirror `RecapItem` của C1 (`{ id, source_idx, start, end, picture, narration, keep_original }`). Ở bước B, `start`/`end` để trống cho lời bình; `keep_original=true` thì là đoạn thoại gốc và có sẵn mốc. Bản nháp lưu theo `draftId` trong thư mục dữ liệu app (`…\Sublix\lab\<draftId>\`), mỗi giai đoạn 1 file kết quả ⇒ tiếp tục / thử lại theo giai đoạn.
+
+**Đếm control** (màn chính của từng bước):
+
+| Màn | Control | Ghi chú |
+|---|---|---|
+| Thư viện | 2 thẻ mẫu + ✕ banner + bản nháp (mỗi dòng 1 vùng + ⋯) | |
+| Nguồn | ＋ Thêm · Chọn dự án Studio · danh sách (⠿ ✕ mỗi dòng) · 5 tuỳ chọn · 1 nút chính | |
+| Phân tích, kết quả | dải thời gian · ô tích chương ×6 · sửa tên/tóm tắt · ▶ Xem / Khôi phục mỗi đoạn lọc · Phân tích lại · 1 nút chính | |
+| Lời bình | ↶ ↷ · Viết lại toàn bộ · liên kết luật · mục lục · 1 nút chính + ‹ Phân tích | công cụ của từng đoạn chỉ hiện khi rê/focus |
+| Dựng nháp | danh sách · ▶ Xem · Dựng lại ▾ · 1 nút chính + ‹ Lời bình | |
+
 ---
 
 ## 5. MOCKUP & ẢNH
@@ -708,6 +979,8 @@ Hàng đợi: `DiscoveryView` nhận từ cha 1 hàm `enqueue(url, { openInStudi
 | `docs/ui-mockups/v014-subtitle-style.html` | Kiểu phụ đề + làm mờ phụ đề cứng (§4.12): toàn cảnh Studio, thẻ Kiểu phụ đề (Bình thường / Nhảy chữ, 4 mẫu chữ chạy thật — có 30 dòng JS sinh keyframes), 6 trạng thái dò, khung dải (nghỉ / chỉnh / đang kéo / đang dò / tự đặt), modal Xuất tóm tắt |
 | `docs/ui-mockups/v015-discovery.html` | Khám phá v0.15 (§4.13): toàn cảnh 1920×1080, thanh tìm + tự dịch (B) 5 trạng thái, chọn danh sách (Bilibili / YouTube chưa có key / có key), 12 thẻ đủ trạng thái + menu chuột phải, 6 trạng thái danh sách, cửa sổ 1024 px, phác nấc C, bảng phím. Có ~60 dòng JS chỉ để sinh thẻ lặp; `#a`…`#h` trên URL = chỉ hiện 1 khu (dùng khi chụp) |
 | `docs/ui-mockups/shots/v015-discovery-*.png` | Ảnh Edge headless: `-a-toan-canh` (1920×1080), `-b-thanh-tim`, `-c-danh-sach`, `-d-the-video`, `-e-trang-thai`, `-f-hep-1024`, `-g-trinh-duyet`, `-all` (1920×6300) |
+| `docs/ui-mockups/v016-lab.html` | Xưởng AI v0.16 (§4.14), dữ liệu giả về game hư cấu "Vương Miện Tro Tàn". 8 khu:<br>A. Thư viện mẫu 1920×1080, kèm tab topbar<br>B. Nguồn & tuỳ chọn (đang kéo đổi thứ tự, thanh tỷ lệ tiếng gốc)<br>C. Phân tích: đang chạy + kết quả (dải thời gian, chương, nhân vật, đoạn bị lọc)<br>D. Lời bình (đang sửa, chèn thoại gốc, popover viết lại, luật dựng)<br>E. Dựng nháp: đang chạy + kết quả + xem thử + Mở trong Studio<br>F. 6 trạng thái<br>G. Cửa sổ 1024 px<br>H. Bàn phím + trạng thái tab<br>JS chỉ để sinh phần lặp; `#a`…`#h` trên URL = chỉ hiện 1 khu |
+| `docs/ui-mockups/shots/v016-lab-*.png` | Ảnh Edge headless: `-a-thu-vien`, `-b-nguon`, `-d-loi-binh` (mỗi ảnh 1920×1080), `-c-phan-tich`, `-e-dung-nhap`, `-f-trang-thai`, `-g-hep-1024`, `-h-ban-phim`, `-all` (1920×8860) |
 | `docs/ui-mockups/shots/after-*.png` | Ảnh mockup (Edge headless 1920×1080) |
 | `docs/ui-mockups/shots/compare-*.png` | **Trước | Sau** đặt cạnh nhau cho Studio, Tải video, Cài đặt |
 
