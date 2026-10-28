@@ -67,10 +67,7 @@ fn nhieu_span_ghep_bang_dau_cong() {
     let spans = [(4.5, 12.3), (18.0, 30.5), (40.0, 41.25)];
     let o = opt(Some(band()), &spans, None, None);
     let g = build_video_burn_graph(&o, "0:v", "vsub");
-    assert!(
-        g.contains("enable='between(t,4.5,12.3)+between(t,18,30.5)+between(t,40,41.25)'"),
-        "{g}"
-    );
+    assert!(g.contains("enable='between(t,4.5,12.3)+between(t,18,30.5)+between(t,40,41.25)'"), "{g}");
 }
 
 #[test]
@@ -296,6 +293,6 @@ fn ffmpeg_that_chay_duoc_do_thi() {
     );
     assert!(
         out.exists() && std::fs::metadata(&out).map(|m| m.len() > 0).unwrap_or(false),
-        "khong tao duoc file mp4"
+        "khong tao duoc mp4"
     );
 }

@@ -54,6 +54,7 @@ pub mod ducking_export;
 pub mod subtitle_burn;
 
 // TSK-V014-EXPORT-BURN: ghép đồ thị video (burn phụ đề) + đồ thị audio (smart ducking).
+pub mod burn_ass;
 pub mod export_video_graph;
 
 #[cfg(test)]
@@ -3818,28 +3819,37 @@ pub fn export_dubbed_video(
             fonts_dir: fonts_dir.as_ref().map(|p| p.as_path()),
         }
     });
-    let export_graph = export_video_graph::build_export_graph(&export_video_graph::ExportGraphInput {
-        audio_graph: &mix_filter,
-        burn: burn_options,
-        video_in: "0:v",
-        video_out: export_video_graph::VIDEO_OUT_LABEL,
-    });
+    let export_plan = export_video_graph::plan_export(
+        audio_mode,
+        has_speech,
+        burn_options,
+        "0:v",
+        export_video_graph::VIDEO_OUT_LABEL,
+        &mix_filter,
+    );
+    // [TSK-V014-EXPORT-FIX] Không được tạo nhãn mà không map (ffmpeg báo unconnected).
+    let dangling = export_plan.dangling_labels();
+    if !dangling.is_empty() {
+        warn!("⚠️ Nhãn filter không được map: {}", dangling.join(", "));
+    }
 
     // BUG-H12: `-filter_complex_script` đã bị FFMPEG 8+ gỡ bỏ (ffmpeg 9 chỉ còn
     // `-filter_complex`). Truyền graph trực tiếp qua argv — Rust không qua shell
     // nên không lỗi quoting. Đường ducking của video dài có thể vượt giới hạn dòng
     // lệnh Windows (~32K) → graph quá ngưỡng ghi ra file, đọc bằng `-/filter_complex <file>` (FFmpeg ≥ 7).
     let mix_filter_file = temp_dir.join("mix_filter.txt");
-    if export_graph.filter_complex.len() > ducking_export::FILTER_FILE_THRESHOLD
-        && fs::write(&mix_filter_file, &export_graph.filter_complex).is_ok()
+    if export_plan.filter_complex.is_empty() {
+        // Không burn + không clip giọng + giữ tiếng gốc ⇒ không cần đồ thị nào.
+    } else if export_plan.filter_complex.len() > ducking_export::FILTER_FILE_THRESHOLD
+        && fs::write(&mix_filter_file, &export_plan.filter_complex).is_ok()
     {
         remux.arg("-/filter_complex").arg(&mix_filter_file);
     } else {
-        remux.arg("-filter_complex").arg(&export_graph.filter_complex);
+        remux.arg("-filter_complex").arg(&export_plan.filter_complex);
     }
 
     // Video mapping & encoding
-    if export_graph.video_remapped {
+    if export_plan.video_label.is_some() {
         // Có nhánh burn ⇒ video đi qua nhãn [vout] (đã encode lại bằng libx264).
         remux.arg("-map").arg(format!("[{}]", export_video_graph::VIDEO_OUT_LABEL));
         remux.arg("-c:v").arg("libx264").arg("-preset").arg("fast").arg("-crf").arg("22");
