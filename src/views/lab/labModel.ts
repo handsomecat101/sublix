@@ -3,6 +3,10 @@
 //! Khớp 100% luật dựng R1-R6 của Rust (`src-tauri/src/lab/recap_script.rs`).
 //! Tách riêng để kiểm thử bằng `node --test scripts/lab-tests/`.
 
+import type { AppConfig, LabAnalysis, LabProgressEvent, LabSourceInput } from "../../lib/tauri";
+import type { MockChapter, MockCharacter, MockJunkSegment, MockVideoSource } from "./labMock";
+import type { AnalyzeResult, AnalyzeStageProgress } from "./labApi";
+
 export type RuleCode = "R1" | "R2" | "R3" | "R4" | "R5" | "R6";
 
 export interface RuleViolation {
@@ -360,4 +364,176 @@ export function narrationNav(
   if (key === "ArrowUp") return Math.max(0, currentIndex - 1);
   if (key === "ArrowDown") return Math.min(total - 1, currentIndex + 1);
   return currentIndex;
+}
+
+// ───────────────────────────── v0.16 Xưởng AI Bước A: Pure Mappings & Utilities ─────────────────────────────
+
+/** Key lưu trạng thái Dev Mock Mode trong localStorage. */
+export const LAB_MOCK_STORAGE_KEY = "sublix.lab.useMock";
+
+/**
+ * Kiểm tra xem người dùng đã cấu hình Provider AI hay chưa.
+ * - local / ollama: luôn coi là sẵn sàng (không cần API key từ xa).
+ * - minimax: cần có `minimax_api_key`.
+ * - deepseek: cần có `deepseek_api_key`.
+ * - openrouter: cần có `openrouter_api_key`.
+ */
+export function isLlmConfigured(config?: AppConfig | null): boolean {
+  if (!config) return false;
+  const provider = config.translation_provider;
+  if (!provider) return false;
+  if (provider === "local" || provider === "ollama") return true;
+  if (provider === "minimax") return Boolean(config.minimax_api_key && config.minimax_api_key.trim().length > 0);
+  if (provider === "deepseek") return Boolean(config.deepseek_api_key && config.deepseek_api_key.trim().length > 0);
+  if (provider === "openrouter") return Boolean(config.openrouter_api_key && config.openrouter_api_key.trim().length > 0);
+  return false;
+}
+
+/**
+ * Kiểm tra trạng thái chế độ Mock (Dev / Demo) cho Xưởng AI:
+ * - Nếu có giá trị trong `localStorage("sublix.lab.useMock")` ⇒ dùng giá trị đó.
+ * - Nếu không có trong storage:
+ *   + Đang chạy trong Tauri app ⇒ false (dùng backend thật).
+ *   + Đang chạy ngoài browser dev ⇒ true (dùng dữ liệu mẫu).
+ */
+export function isLabMockMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const stored = window.localStorage?.getItem(LAB_MOCK_STORAGE_KEY);
+    if (stored !== null && stored !== undefined) {
+      return stored === "true" || stored === "1";
+    }
+  } catch {
+    // môi trường hạn chế localStorage
+  }
+
+  const inTauri = Boolean(
+    (window as unknown as { __TAURI_INTERNALS__?: unknown; __TAURI__?: unknown }).__TAURI_INTERNALS__ ||
+    (window as unknown as { __TAURI_INTERNALS__?: unknown; __TAURI__?: unknown }).__TAURI__
+  );
+  return !inTauri;
+}
+
+/** Đặt trạng thái Mock mode vào localStorage. */
+export function setLabMockMode(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage?.setItem(LAB_MOCK_STORAGE_KEY, enabled ? "true" : "false");
+  } catch {
+    // no-op
+  }
+}
+
+/**
+ * Ánh xạ sự kiện tiến trình phân tích backend (`LabProgressEvent`) sang `AnalyzeStageProgress` của UI.
+ * Khớp các nấc của `AnalyzeProgress.tsx`:
+ * - "stt" → 1: Nhận dạng thoại (Whisper)
+ * - "scenes" → 3: Phát hiện cutscene & góc quay
+ * - "junk" → 4: Lọc đoạn rác, loading & quảng cáo
+ * - "summary" → 5: Tóm tắt chương bằng AI
+ * - "done" → 5 (100%): Hoàn tất phân tích
+ * - "error" → 0: Lỗi phân tích
+ */
+export function mapLabStageToProgress(event: LabProgressEvent): AnalyzeStageProgress {
+  let stageIndex = 1;
+  let stageName = "Nhận dạng thoại (Whisper)";
+
+  switch (event.stage) {
+    case "stt":
+      stageIndex = 1;
+      stageName = "Nhận dạng thoại (Whisper)";
+      break;
+    case "scenes":
+      stageIndex = 3;
+      stageName = "Phát hiện cutscene & góc quay";
+      break;
+    case "junk":
+      stageIndex = 4;
+      stageName = "Lọc đoạn rác, loading & quảng cáo";
+      break;
+    case "summary":
+      stageIndex = 5;
+      stageName = "Tóm tắt chương bằng AI";
+      break;
+    case "done":
+      stageIndex = 5;
+      stageName = "Hoàn tất phân tích";
+      break;
+    case "error":
+      stageIndex = 0;
+      stageName = "Lỗi phân tích";
+      break;
+    default:
+      stageIndex = 1;
+      stageName = "Đang xử lý...";
+  }
+
+  const percent = Math.min(100, Math.max(0, Math.round(event.percent)));
+  const message = event.message || `Đang xử lý ${stageName}...`;
+
+  return {
+    stageIndex,
+    stageName,
+    percent,
+    message,
+  };
+}
+
+/**
+ * Ánh xạ kết quả phân tích backend `LabAnalysis` sang `AnalyzeResult` của UI.
+ *
+ * Điểm mấu chốt:
+ * - Backend trả về `junk: LabJunkSegment[]`, UI yêu cầu `junkSegments: MockJunkSegment[]`.
+ * - Bỏ qua hoặc giữ an toàn các trường mở rộng của LLM (`chapterType`, `motivation`, `subtitleName`).
+ */
+export function mapLabAnalysisToResult(analysis: LabAnalysis): AnalyzeResult {
+  const chapters: MockChapter[] = (analysis.chapters || []).map((ch) => ({
+    id: ch.id,
+    sourceIdx: ch.sourceIdx,
+    title: ch.title,
+    summary: ch.summary,
+    timeRange: ch.timeRange,
+    durationSec: ch.durationSec,
+    cutscenesCount: ch.cutscenesCount,
+    linesCount: ch.linesCount,
+    included: ch.included,
+  }));
+
+  const characters: MockCharacter[] = (analysis.characters || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    role: c.role,
+    linesCount: c.linesCount,
+    avatarColor: c.avatarColor || "#64748b",
+    mergedNotice: c.mergedNotice || undefined,
+  }));
+
+  const junkSegments: MockJunkSegment[] = (analysis.junk || []).map((j) => ({
+    id: j.id,
+    type: j.type,
+    sourceName: j.sourceName,
+    timeRange: j.timeRange,
+    reason: j.reason,
+    restored: Boolean(j.restored),
+  }));
+
+  return {
+    chapters,
+    characters,
+    junkSegments,
+    sources: analysis.sources,
+    scenes: analysis.scenes,
+    transcript: analysis.transcript,
+  };
+}
+
+/**
+ * Chuẩn bị danh sách `LabSourceInput` gửi xuống backend Rust từ danh sách `MockVideoSource`.
+ */
+export function prepareLabSourceInputs(sources: MockVideoSource[]): LabSourceInput[] {
+  return sources.map((s) => ({
+    path: s.path || s.name,
+    name: s.name,
+    studioProject: s.studioProjectName || null,
+  }));
 }

@@ -11,6 +11,7 @@ export interface MockVideoSource {
   resolution: string;
   hasSubtitles: boolean;
   studioProjectName?: string;
+  path?: string;
 }
 
 export interface MockChapter {

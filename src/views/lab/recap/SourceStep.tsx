@@ -6,6 +6,7 @@ import { OriginalRatioSlider } from "./OriginalRatioSlider";
 interface SourceStepProps {
   sources: MockVideoSource[];
   onAddSource: () => void;
+  onAddStudioProject?: () => void;
   onRemoveSource: (id: string) => void;
   onMoveSource: (fromIdx: number, toIdx: number) => void;
   gameName: string;
@@ -17,11 +18,17 @@ interface SourceStepProps {
   originalRatio: number;
   onChangeOriginalRatio: (ratio: number) => void;
   voiceName: string;
+  isLlmReady?: boolean;
+  llmProviderName?: string;
+  onOpenSettings?: () => void;
+  isMockMode?: boolean;
+  onToggleMockMode?: () => void;
 }
 
 export const SourceStep: React.FC<SourceStepProps> = ({
   sources,
   onAddSource,
+  onAddStudioProject,
   onRemoveSource,
   onMoveSource: _onMoveSource,
   gameName,
@@ -33,6 +40,11 @@ export const SourceStep: React.FC<SourceStepProps> = ({
   originalRatio,
   onChangeOriginalRatio,
   voiceName,
+  isLlmReady = true,
+  llmProviderName = "MiniMax-M3",
+  onOpenSettings,
+  isMockMode = false,
+  onToggleMockMode,
 }) => {
   const totalInputSec = sources.reduce((sum, s) => sum + s.durationSec, 0);
   const estimate = processingEstimate(totalInputSec);
@@ -51,56 +63,106 @@ export const SourceStep: React.FC<SourceStepProps> = ({
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="lab-btn-secondary" onClick={onAddSource}>
+            <button type="button" className="lab-btn-secondary" onClick={onAddSource} title="Chọn video từ máy tính">
               ＋ Thêm video
             </button>
+            {onAddStudioProject && (
+              <button
+                type="button"
+                className="lab-btn-secondary"
+                onClick={onAddStudioProject}
+                title="Sử dụng thoại và phụ đề đã nhận diện từ dự án Studio"
+              >
+                ＋ Từ Studio
+              </button>
+            )}
           </div>
         </div>
 
         <div className="lab-source-list">
-          {sources.map((src, idx) => (
-            <div key={src.id} className="lab-source-card">
-              <span style={{ color: "var(--t4)", cursor: "grab", textAlign: "center" }}>⠿</span>
-              <span style={{ fontWeight: 800, color: "var(--ac-txt)", fontSize: "12px" }}>
-                #{idx + 1}
-              </span>
-              <div className="lab-source-thumb">
-                <span>{src.resolution}</span>
+          {sources.length === 0 ? (
+            <div
+              style={{
+                padding: "36px 20px",
+                textAlign: "center",
+                color: "var(--t3)",
+                border: "1px dashed var(--line)",
+                borderRadius: "10px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <div style={{ fontSize: "28px" }}>📁</div>
+              <div style={{ fontWeight: 600 }}>Chưa có video nguồn nào</div>
+              <div style={{ fontSize: "12px", color: "var(--t4)" }}>
+                Nhấn <strong>＋ Thêm video</strong> để chọn file gameplay từ máy tính hoặc dự án Studio đã nhận dạng
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span className="lab-source-name" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {src.name}
-                  </span>
-                  {src.hasSubtitles && (
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        padding: "1px 6px",
-                        borderRadius: "4px",
-                        background: "rgba(74,222,128,0.12)",
-                        color: "var(--ok-txt)",
-                        border: "1px solid rgba(74,222,128,0.3)",
-                      }}
-                    >
-                      Đã có phụ đề
-                    </span>
-                  )}
-                </div>
-                <span className="lab-source-meta">
-                  {formatDur(src.durationSec)} · {(src.sizeMb / 1024).toFixed(1)} GB · {src.fps} fps
-                </span>
-              </div>
-              <button
-                type="button"
-                className="lab-banner-close"
-                onClick={() => onRemoveSource(src.id)}
-                title="Xoá video"
-              >
-                ✕
-              </button>
             </div>
-          ))}
+          ) : (
+            sources.map((src, idx) => (
+              <div key={src.id} className="lab-source-card">
+                <span style={{ color: "var(--t4)", cursor: "grab", textAlign: "center" }}>⠿</span>
+                <span style={{ fontWeight: 800, color: "var(--ac-txt)", fontSize: "12px" }}>
+                  #{idx + 1}
+                </span>
+                <div className="lab-source-thumb">
+                  <span>{src.resolution}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span
+                      className="lab-source-name"
+                      title={src.path || src.name}
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {src.name}
+                    </span>
+                    {src.studioProjectName && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          background: "rgba(56,189,248,0.12)",
+                          color: "var(--ac-txt)",
+                          border: "1px solid rgba(56,189,248,0.3)",
+                        }}
+                      >
+                        Dự án Studio
+                      </span>
+                    )}
+                    {src.hasSubtitles && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          background: "rgba(74,222,128,0.12)",
+                          color: "var(--ok-txt)",
+                          border: "1px solid rgba(74,222,128,0.3)",
+                        }}
+                      >
+                        Đã có thoại
+                      </span>
+                    )}
+                  </div>
+                  <span className="lab-source-meta">
+                    {formatDur(src.durationSec)} · {(src.sizeMb / 1024).toFixed(1)} GB · {src.fps} fps
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="lab-banner-close"
+                  onClick={() => onRemoveSource(src.id)}
+                  title="Xoá video"
+                >
+                  ✕
+                </button>
+              </div>
+            ))
+          )}
         </div>
 
         {/* ƯỚC LƯỢNG THỜI GIAN XỬ LÝ */}
@@ -134,11 +196,32 @@ export const SourceStep: React.FC<SourceStepProps> = ({
         </div>
       </div>
 
-      {/* CỘT PHẢI: 5 TUỲ CHỌN QUYẾT ĐỊNH */}
+      {/* CỘT PHẢI: TUỲ CHỌN DỰNG KỊCH BẢN */}
       <div className="lab-source-right">
-        <h3 style={{ fontSize: "15px", fontWeight: 800, margin: 0, color: "var(--t1)" }}>
-          Tuỳ chọn dựng kịch bản
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ fontSize: "15px", fontWeight: 800, margin: 0, color: "var(--t1)" }}>
+            Tuỳ chọn dựng kịch bản
+          </h3>
+          {onToggleMockMode && (
+            <button
+              type="button"
+              onClick={onToggleMockMode}
+              title="Chuyển đổi dữ liệu mẫu (mock) cho kiểm thử giao diện"
+              style={{
+                fontSize: "10.5px",
+                padding: "3px 8px",
+                borderRadius: "6px",
+                border: isMockMode ? "1px solid rgba(234, 179, 8, 0.4)" : "1px solid var(--line)",
+                background: isMockMode ? "rgba(234, 179, 8, 0.12)" : "transparent",
+                color: isMockMode ? "var(--warn-txt)" : "var(--t4)",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              {isMockMode ? "🧪 Mock: BẬT" : "⚡ Mock: TẮT"}
+            </button>
+          )}
+        </div>
 
         {/* 1. Tên Game & Tra cứu web */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -234,17 +317,32 @@ export const SourceStep: React.FC<SourceStepProps> = ({
             marginTop: "auto",
             padding: "10px 14px",
             borderRadius: "8px",
-            background: "rgba(0,0,0,0.25)",
-            border: "1px solid rgba(255,255,255,0.04)",
+            background: !isLlmReady && !isMockMode ? "rgba(239, 68, 68, 0.1)" : "rgba(0,0,0,0.25)",
+            border: `1px solid ${
+              !isLlmReady && !isMockMode
+                ? "var(--dang-br, rgba(239, 68, 68, 0.3))"
+                : "rgba(255,255,255,0.04)"
+            }`,
             fontSize: "12px",
-            color: "var(--t3)",
+            color: !isLlmReady && !isMockMode ? "var(--dang-txt)" : "var(--t3)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
           }}
         >
-          <span>✦ AI viết lời: <strong>MiniMax-M3 · tiếng Việt</strong></span>
-          <span style={{ color: "var(--ac-txt)", cursor: "pointer", fontSize: "11px" }}>Cài đặt ›</span>
+          <span>
+            {!isLlmReady && !isMockMode ? (
+              <>⚠ <strong>Chưa cấu hình AI:</strong> Cần MiniMax-M3 API key hoặc Ollama 27B</>
+            ) : (
+              <>✦ AI viết lời: <strong>{llmProviderName} · tiếng Việt</strong></>
+            )}
+          </span>
+          <span
+            style={{ color: "var(--ac-txt)", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}
+            onClick={onOpenSettings}
+          >
+            Cài đặt ›
+          </span>
         </div>
       </div>
     </div>

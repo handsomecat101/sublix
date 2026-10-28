@@ -5,9 +5,10 @@ import "./lab.css";
 
 interface LabViewProps {
   onNavigateToStudio?: (projectName?: string) => void;
+  onOpenSettings?: () => void;
 }
 
-export const LabView: React.FC<LabViewProps> = ({ onNavigateToStudio }) => {
+export const LabView: React.FC<LabViewProps> = ({ onNavigateToStudio, onOpenSettings }) => {
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
 
   const handleSelectTemplate = (templateId: string) => {
@@ -35,6 +36,7 @@ export const LabView: React.FC<LabViewProps> = ({ onNavigateToStudio }) => {
           templateId={activeTemplateId}
           onBackToLibrary={handleBackToLibrary}
           onOpenStudioProject={onNavigateToStudio}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </div>

@@ -13,6 +13,13 @@ import {
   splitBlock,
   mergeBlock,
   narrationNav,
+  isLlmConfigured,
+  isLabMockMode,
+  setLabMockMode,
+  LAB_MOCK_STORAGE_KEY,
+  mapLabStageToProgress,
+  mapLabAnalysisToResult,
+  prepareLabSourceInputs,
   type RecapItem,
 } from "../../src/views/lab/labModel.ts";
 
@@ -228,4 +235,244 @@ test("narrationNav — điều hướng bàn phím không vượt biên", () => 
   assert.equal(narrationNav(4, "ArrowDown", 5), 4);
   assert.equal(narrationNav(2, "Home", 5), 0);
   assert.equal(narrationNav(2, "End", 5), 4);
+});
+
+// ───────────────────────────── v0.16 Xưởng AI Bước A: Tests cho U1B ─────────────────────────────
+
+test("isLlmConfigured — kiểm tra tính hợp lệ của provider và api key", () => {
+  // Không có config hoặc null
+  assert.equal(isLlmConfigured(null), false);
+  assert.equal(isLlmConfigured(undefined), false);
+
+  // Không có provider
+  assert.equal(isLlmConfigured({} as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "" } as any), false);
+
+  // Local & Ollama: luôn sẵn sàng
+  assert.equal(isLlmConfigured({ translation_provider: "local" } as any), true);
+  assert.equal(isLlmConfigured({ translation_provider: "ollama" } as any), true);
+
+  // MiniMax: cần minimax_api_key
+  assert.equal(isLlmConfigured({ translation_provider: "minimax" } as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "minimax", minimax_api_key: "" } as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "minimax", minimax_api_key: "   " } as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "minimax", minimax_api_key: "sk-minimax-123" } as any), true);
+
+  // DeepSeek: cần deepseek_api_key
+  assert.equal(isLlmConfigured({ translation_provider: "deepseek" } as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "deepseek", deepseek_api_key: "ds-key" } as any), true);
+
+  // OpenRouter: cần openrouter_api_key
+  assert.equal(isLlmConfigured({ translation_provider: "openrouter" } as any), false);
+  assert.equal(isLlmConfigured({ translation_provider: "openrouter", openrouter_api_key: "or-key" } as any), true);
+
+  // Provider không nhận diện được
+  assert.equal(isLlmConfigured({ translation_provider: "other_unknown" } as any), false);
+});
+
+test("isLabMockMode & setLabMockMode — đọc ghi cờ localStorage", () => {
+  // Giả lập môi trường browser / window / localStorage
+  const mockStorage = new Map<string, string>();
+  const originalWindow = (globalThis as any).window;
+
+  (globalThis as any).window = {
+    localStorage: {
+      getItem: (key: string) => mockStorage.get(key) ?? null,
+      setItem: (key: string, val: string) => mockStorage.set(key, val),
+      removeItem: (key: string) => mockStorage.delete(key),
+    },
+  };
+
+  try {
+    // Mặc định không có trong storage và không có __TAURI_INTERNALS__ => true (ngoài Tauri)
+    assert.equal(isLabMockMode(), true);
+
+    // Ghi mock mode = false
+    setLabMockMode(false);
+    assert.equal(mockStorage.get(LAB_MOCK_STORAGE_KEY), "false");
+    assert.equal(isLabMockMode(), false);
+
+    // Ghi mock mode = true
+    setLabMockMode(true);
+    assert.equal(mockStorage.get(LAB_MOCK_STORAGE_KEY), "true");
+    assert.equal(isLabMockMode(), true);
+
+    // Xoá storage, giả lập có __TAURI_INTERNALS__ => false (trong Tauri app)
+    mockStorage.clear();
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    assert.equal(isLabMockMode(), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test("mapLabStageToProgress — ánh xạ chính xác stage backend sang giao diện tiến trình", () => {
+  const pStt = mapLabStageToProgress({
+    runId: "r1",
+    stage: "stt",
+    sourceIdx: 0,
+    percent: 25,
+    message: "Đang nhận dạng thoại...",
+  });
+  assert.equal(pStt.stageIndex, 1);
+  assert.equal(pStt.stageName, "Nhận dạng thoại (Whisper)");
+  assert.equal(pStt.percent, 25);
+  assert.equal(pStt.message, "Đang nhận dạng thoại...");
+
+  const pScenes = mapLabStageToProgress({
+    runId: "r1",
+    stage: "scenes",
+    sourceIdx: 0,
+    percent: 50,
+    message: "",
+  });
+  assert.equal(pScenes.stageIndex, 3);
+  assert.equal(pScenes.stageName, "Phát hiện cutscene & góc quay");
+  assert.equal(pScenes.percent, 50);
+
+  const pJunk = mapLabStageToProgress({
+    runId: "r1",
+    stage: "junk",
+    sourceIdx: 0,
+    percent: 75,
+    message: "",
+  });
+  assert.equal(pJunk.stageIndex, 4);
+
+  const pSummary = mapLabStageToProgress({
+    runId: "r1",
+    stage: "summary",
+    sourceIdx: 0,
+    percent: 90,
+    message: "",
+  });
+  assert.equal(pSummary.stageIndex, 5);
+
+  const pDone = mapLabStageToProgress({
+    runId: "r1",
+    stage: "done",
+    sourceIdx: 0,
+    percent: 100,
+    message: "Xong",
+  });
+  assert.equal(pDone.stageIndex, 5);
+  assert.equal(pDone.percent, 100);
+});
+
+test("mapLabAnalysisToResult — ánh xạ `analysis.junk` thành `junkSegments` và xử lý các trường mở rộng", () => {
+  const rawBackendAnalysis = {
+    sources: [
+      {
+        id: "src_1",
+        name: "gameplay.mp4",
+        durationSec: 120,
+        sizeMb: 50,
+        fps: 60,
+        resolution: "1920x1080",
+        hasSubtitles: true,
+        studioProjectName: null,
+      },
+    ],
+    chapters: [
+      {
+        id: 1,
+        sourceIdx: 0,
+        title: "Khởi đầu",
+        summary: "Bắt đầu chuyến phiêu lưu",
+        timeRange: "00:00 - 01:00",
+        durationSec: 60,
+        cutscenesCount: 2,
+        linesCount: 15,
+        included: true,
+        // Các trường mở rộng LLM từ backend:
+        chapterType: "cutscene",
+        narrativeFunction: "introduction",
+      },
+    ],
+    characters: [
+      {
+        id: "char_1",
+        name: "Arthur",
+        role: "Nhân vật chính",
+        linesCount: 10,
+        avatarColor: "#64748b",
+        mergedNotice: null,
+        // Các trường mở rộng LLM:
+        motivation: "Tìm lại thanh gươm",
+        subtitleName: "ARTHUR",
+      },
+    ],
+    // Backend đặt tên là `junk` (mã C3), UI cần `junkSegments`
+    junk: [
+      {
+        id: 101,
+        type: "loading",
+        sourceName: "gameplay.mp4",
+        timeRange: "00:30 - 00:35",
+        reason: "Màn hình nạp cảnh",
+        restored: false,
+      },
+    ],
+    scenes: [],
+    transcript: [],
+  };
+
+  const result = mapLabAnalysisToResult(rawBackendAnalysis as any);
+
+  // Kiểm tra mapping junk -> junkSegments
+  assert.ok(Array.isArray(result.junkSegments), "junkSegments phải là mảng");
+  assert.equal(result.junkSegments.length, 1);
+  assert.equal(result.junkSegments[0].id, 101);
+  assert.equal(result.junkSegments[0].type, "loading");
+  assert.equal(result.junkSegments[0].reason, "Màn hình nạp cảnh");
+
+  // Kiểm tra chapters
+  assert.equal(result.chapters.length, 1);
+  assert.equal(result.chapters[0].title, "Khởi đầu");
+  assert.equal(result.chapters[0].included, true);
+
+  // Kiểm tra characters
+  assert.equal(result.characters.length, 1);
+  assert.equal(result.characters[0].name, "Arthur");
+  assert.equal(result.characters[0].mergedNotice, undefined);
+});
+
+test("prepareLabSourceInputs — chuyển đổi MockVideoSource sang LabSourceInput cho Tauri", () => {
+  const sources = [
+    {
+      id: "v1",
+      name: "Part1.mp4",
+      path: "C:\\Videos\\Part1.mp4",
+      durationSec: 600,
+      sizeMb: 500,
+      fps: 60,
+      resolution: "1080p",
+      hasSubtitles: false,
+    },
+    {
+      id: "v2",
+      name: "Part2.mp4",
+      // Không có path => fallback về name
+      durationSec: 900,
+      sizeMb: 800,
+      fps: 60,
+      resolution: "1080p",
+      hasSubtitles: true,
+      studioProjectName: "C:\\Projects\\Part2_dub.json",
+    },
+  ];
+
+  const inputs = prepareLabSourceInputs(sources as any);
+
+  assert.equal(inputs.length, 2);
+  assert.deepEqual(inputs[0], {
+    path: "C:\\Videos\\Part1.mp4",
+    name: "Part1.mp4",
+    studioProject: null,
+  });
+  assert.deepEqual(inputs[1], {
+    path: "Part2.mp4",
+    name: "Part2.mp4",
+    studioProject: "C:\\Projects\\Part2_dub.json",
+  });
 });
