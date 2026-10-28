@@ -20,7 +20,9 @@
 
 pub mod bilibili;
 pub mod cache;
+pub mod commands;
 pub mod douyin;
+pub mod fetch;
 pub mod format;
 pub mod youtube;
 

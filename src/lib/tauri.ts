@@ -986,7 +986,122 @@ export const sublix = {
   async hardsubInstallDeps(): Promise<void> {
     return await invoke<void>("hardsub_install_deps");
   },
+
+  /**
+   * v0.15 tab "Khám phá" — Bilibili đang hot (20 video/trang).
+   * `force = true` ⇒ bỏ qua cache (nút "Tải lại").
+   */
+  async discoveryBilibiliPopular(page?: number, force?: boolean): Promise<DiscoveryItem[]> {
+    return await invoke<DiscoveryItem[]>("discovery_bilibili_popular", {
+      page: page ?? 1,
+      force: force ?? false,
+    });
+  },
+
+  /**
+   * v0.15 tab "Khám phá" — Bilibili bảng xếp hạng (`rid = 0` ⇒ tổng hợp).
+   */
+  async discoveryBilibiliRanking(rid?: number, force?: boolean): Promise<DiscoveryItem[]> {
+    return await invoke<DiscoveryItem[]>("discovery_bilibili_ranking", {
+      rid: rid ?? 0,
+      force: force ?? false,
+    });
+  },
+
+  /**
+   * v0.15 tab "Khám phá" — tìm video Bilibili.
+   * Nên dùng từ khoá **tiếng Trung** (tiếng Anh thường bị Bilibili chặn `-412`).
+   */
+  async discoveryBilibiliSearch(
+    keyword: string,
+    page?: number,
+    force?: boolean,
+  ): Promise<DiscoveryItem[]> {
+    return await invoke<DiscoveryItem[]>("discovery_bilibili_search", {
+      keyword,
+      page: page ?? 1,
+      force: force ?? false,
+    });
+  },
+
+  /** v0.15 tab "Khám phá" — 50 chủ đề đang nóng nhất Douyin (chip xu hướng). */
+  async discoveryDouyinHot(force?: boolean): Promise<HotWord[]> {
+    return await invoke<HotWord[]>("discovery_douyin_hot", {
+      force: force ?? false,
+    });
+  },
+
+  /** v0.15 tab "Khám phá" — tìm video YouTube qua `yt-dlp`. */
+  async discoveryYoutubeSearch(
+    keyword: string,
+    count?: number,
+    force?: boolean,
+  ): Promise<DiscoveryItem[]> {
+    return await invoke<DiscoveryItem[]>("discovery_youtube_search", {
+      keyword,
+      count: count ?? 10,
+      force: force ?? false,
+    });
+  },
 };
+
+/**
+ * Một video trong lưới "Khám phá" — khớp serde camelCase của lõi Rust
+ * (`src-tauri/src/discovery/mod.rs` → `DiscoveryItem`).
+ */
+export interface DiscoveryItem {
+  /** ID gốc của nền tảng: `bvid` (Bilibili) hoặc video id (YouTube). */
+  id: string;
+  /** `"bilibili"` | `"youtube"`. */
+  platform: string;
+  title: string;
+  /** URL chuẩn đưa thẳng cho `yt-dlp` khi bấm "Tải về". */
+  url: string;
+  /** Ảnh thu nhổ (luôn `https://…`; rỗng nếu nguồn không có). */
+  thumbnailUrl: string;
+  /** Thời lượng (giây) — `null` nếu không rõ. */
+  durationSec: number | null;
+  /** Lượt xem — `null` nếu nguồn không trả. */
+  viewCount: number | null;
+  /** Tên kênh / tác giả. */
+  author: string;
+  /** Thời điểm đăng (giây Unix) — `null` nếu nguồn không trả. */
+  publishTime: number | null;
+}
+
+/**
+ * Một chủ đề nóng (chip "🔥 Xu hướng Douyin") — khớp serde camelCase của lõi Rust
+ * (`src-tauri/src/discovery/mod.rs` → `HotWord`).
+ */
+export interface HotWord {
+  /** Từ khoá / chủ đề. */
+  word: string;
+  /** Điểm nhiệt của Douyin — `null` nếu nguồn không trả. */
+  hotValue: number | null;
+  /** Mã nhãn phân loại của Douyin ("0", "1", "3"…) — UI tự quyết hiển thị. */
+  label: string | null;
+}
+
+/**
+ * Mã lỗi mà UI phân biệt được, đọc từ tiền tố chuỗi lỗi của lệnh Khám phá.
+ *
+ * - `blocked` — nguồn chặn ta (HTTP 403/412/429, mã `-412`/`-352`): UI hiện nút
+ *   **Thử lại** đếm ngược.
+ * - `network` — mất mạng / quá thời gian.
+ * - `ytdlp_missing` — máy chưa có `yt-dlp`.
+ * - `parse` — dữ liệu nguồn trả về không đọc được.
+ * - `unknown` — lỗi không có tiền tố (không phải lỗi Khám phá).
+ */
+export type DiscoveryErrorCode = "blocked" | "network" | "ytdlp_missing" | "parse" | "unknown";
+
+/**
+ * Tách mã lỗi (`[blocked]`, `[network]`, `[ytdlp_missing]`, `[parse]`) khỏi lỗi của
+ * các lệnh `sublix.discovery*`; không có tiền tố ⇒ `"unknown"`.
+ */
+export function discoveryErrorCode(err: unknown): DiscoveryErrorCode {
+  const m = /^\[(blocked|network|ytdlp_missing|parse)\]/.exec(String(err));
+  return m ? (m[1] as DiscoveryErrorCode) : "unknown";
+}
 
 /** Tách mã lỗi (`HARDSUB_*`) khỏi lỗi của `hardsubDetect`; không phải lỗi dò ⇒ `null`. */
 export function hardsubErrorCode(err: unknown): HardsubErrorCode | null {
