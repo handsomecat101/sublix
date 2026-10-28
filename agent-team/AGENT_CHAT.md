@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-28 20:00 - Claude Code (Opus 5.5, điều phối) -> @Team / @jimmyvu
+- **Loại:** `@done` — **v0.14.0 XONG, chờ PO duyệt push.** Lỗi xuất "Đa đường tiếng" + phụ đề cứng đã sửa (`TSK-V014-EXPORT-FIX`, mcode #1, commit `c00288e`; điều phối thêm chặn `-filter_complex` rỗng).
+- **Kiểm:** bản sạch 410 test node + 366 test Rust đạt; app thật xuất video thử chữ Trung 30 s ⇒ mp4 h264 + aac, giây 6 dải mờ + tem che kín chữ cũ.
+- **Tài liệu đã tích:** `docs/V0.14_PLAN.md` §3 (7/7 ✅) · `PROJECT_STATE.md` (bảng khóa trống, v0.12/v0.14 sang ✅) · `TAM_NHIN_SUBLIX_STUDIO.md` GĐ4 ✅.
+- **Tiếp theo:** PO OK ⇒ `git push` (16 commit). Sau đó GĐ5 (dựng cơ bản + Batch) — cần PO chốt phạm vi trước khi giao.
+- **Đội (rảnh, giữ nguyên):** mcode #1 `term_05c6d215` · #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20`.
+
+---
+
 ### 2026-10-26 15:10 - Claude Code (Opus 5.5, điều phối) -> @Leader-tiếp-theo / @jimmyvu
 - **Loại:** `@handoff` — **Claude Code sắp hết hạn mức; leader khác tiếp quản.** Đọc `agent-team/LEADER_NOTES.md` mục 0 (+ mục 6 lời khuyên). Orca run `run_80e8fbd4887e`. **13 commit local CHƯA push** (`3a851a5`..`80e7456`); push chỉ khi PO đồng ý.
 - **v0.14 (PO chốt, `docs/V0.14_PLAN.md`):** đã xong + kiểm app thật — dò phụ đề cứng (PP-OCRv4 det sidecar), 3 mẫu chữ nhảy + font Việt (Hộp cam bỏ: libass không làm được), giao diện Thuộc tính + khung dải + xem thử, bump 0.14.0. Ảnh bằng chứng: `docs/ui-mockups/shots/v014-*.png`.
@@ -62,14 +71,5 @@
 - **Lịch sử:** split "Xuất .SRT" **mờ đúng kiểu** nút "Sao chép tất cả" khi 0 câu (nền phẳng, chữ mờ); icon trạng thái rỗng = **SVG mono 40px** thay ảnh JPG có ô xám.
 - **Verify:** `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** (117 module) · `node --test` **7 bộ / 259 test PASS / 0 fail** (thêm hạ nốc `package.json`+`index.ts` cho 3 bộ test mới của worker khác vì `node --test <dir>` không quét thư mục — **không** đụng logic test của họ) · ảnh `after-*` mới trong `docs/ui-mockups/shots/` (frontend-only, Edge headless 1920×1080).
 - **Đánh dấu `docs/UI_R2-8_REVIEW.md`:** ✅ mục **2, 5, 6, 7, 15, 16, 17, 19, 20** · ◐ mục **18** (mới làm phần CSS `.hardware-presets`) và **21** (mới làm phần "Xoá" trong `ModelDownloadRow`).
-
----
-### 2026-10-25 14:30 - mcode #2 (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-R2-8-FIX-CE` — **gói C + gói E** của review R2-8; **chưa commit**).
-- **Gói C — mục 4 (`components/glossary/GlossaryEditor.tsx`):** thêm prop `autoSave` (**mặc định `true`**) → nút **💾 Lưu chỉ hiện khi `!autoSave`** (Studio drawer dùng autoSave nên hết mâu thuẫn với dòng chân "không cần bấm Lưu"); thay bằng **trạng thái nhỏ cạnh tiêu đề** `Đang lưu…` / `✓ Đã lưu` (11px, `--t3`) — tự bật sau khi emit + tắt sau 2,5 s, thêm prop tuỳ chọn `saveState` cho cha biết trạng thái.
-- **Gói E — mục 13 (Live):** nút cạnh select thiết bị đổi từ **↻ trùng icon** sang **🔍 Quét** (`lv-btn tiny` + chữ "Quét"); giữ ↻ ở đầu card. **Mục 14:** bỏ **cờ emoji** khỏi mọi nhãn option (Windows không vẽ flag) + xoá field `flag` khỏi dữ liệu; `title="⚙ Nâng cao"` → **"Nâng cao"**; hint **"Dịch sang vi" → "Dịch sang Tiếng Việt"** (hàm mới `langLabel`). **Mục 21 (Live):** "Bắt **Đ**ầu Live" → "Bắt **đ**ầu Live"; "Ngôn ngữ gốc (Source)" → "Ngôn ngữ gốc". **Mục 22 (Tải video):** thêm `duration` vào item + **badge thời lượng góc phải-dưới** ảnh (10px mono, nền `rgba(0,0,0,.75)`) + **lấp thumbnail/thời lượng từ metadata yt-dlp** (cache theo URL + probe nền tối đa 12 mục). **Mục 23 (Live):** thẻ "Luồng thoại" `height:100%` (flex column) + **trạng thái rỗng căn giữa dọc**.
-- **Verify:** `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · `node --test` **259 test / 0 fail** (thêm 2 test cho mục 14 + sửa 1 kỳ vọng test cũ đang khẳng định lỗi chính tả "Bắt Đầu Live") · `cargo check --lib` OK · **chụp ảnh app thật** xác nhận: nút Quét, option không cờ, "Nâng cao", hint "Dịch sang Tiếng Việt", thẻ Luồng thoại cao 772 px + rỗng căn giữa.
-
----
 
 ---

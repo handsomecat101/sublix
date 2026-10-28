@@ -854,3 +854,13 @@
 
 ---
 
+### 2026-10-25 14:30 - mcode #2 (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-R2-8-FIX-CE` — **gói C + gói E** của review R2-8; **chưa commit**).
+- **Gói C — mục 4 (`components/glossary/GlossaryEditor.tsx`):** thêm prop `autoSave` (**mặc định `true`**) → nút **💾 Lưu chỉ hiện khi `!autoSave`** (Studio drawer dùng autoSave nên hết mâu thuẫn với dòng chân "không cần bấm Lưu"); thay bằng **trạng thái nhỏ cạnh tiêu đề** `Đang lưu…` / `✓ Đã lưu` (11px, `--t3`) — tự bật sau khi emit + tắt sau 2,5 s, thêm prop tuỳ chọn `saveState` cho cha biết trạng thái.
+- **Gói E — mục 13 (Live):** nút cạnh select thiết bị đổi từ **↻ trùng icon** sang **🔍 Quét** (`lv-btn tiny` + chữ "Quét"); giữ ↻ ở đầu card. **Mục 14:** bỏ **cờ emoji** khỏi mọi nhãn option (Windows không vẽ flag) + xoá field `flag` khỏi dữ liệu; `title="⚙ Nâng cao"` → **"Nâng cao"**; hint **"Dịch sang vi" → "Dịch sang Tiếng Việt"** (hàm mới `langLabel`). **Mục 21 (Live):** "Bắt **Đ**ầu Live" → "Bắt **đ**ầu Live"; "Ngôn ngữ gốc (Source)" → "Ngôn ngữ gốc". **Mục 22 (Tải video):** thêm `duration` vào item + **badge thời lượng góc phải-dưới** ảnh (10px mono, nền `rgba(0,0,0,.75)`) + **lấp thumbnail/thời lượng từ metadata yt-dlp** (cache theo URL + probe nền tối đa 12 mục). **Mục 23 (Live):** thẻ "Luồng thoại" `height:100%` (flex column) + **trạng thái rỗng căn giữa dọc**.
+- **Verify:** `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · `node --test` **259 test / 0 fail** (thêm 2 test cho mục 14 + sửa 1 kỳ vọng test cũ đang khẳng định lỗi chính tả "Bắt Đầu Live") · `cargo check --lib` OK · **chụp ảnh app thật** xác nhận: nút Quét, option không cờ, "Nâng cao", hint "Dịch sang Tiếng Việt", thẻ Luồng thoại cao 772 px + rỗng căn giữa.
+
+---
+
+---
+

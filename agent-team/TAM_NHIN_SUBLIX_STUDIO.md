@@ -32,7 +32,7 @@
 | **GĐ1** | Studio 1 màn hình + timeline XEM/SỬA cơ bản: hiện đúng những gì AI đã làm (phụ đề + làn nhân vật + giọng), sửa chữ/thời gian/đổi làn | Video 2 người nói → thấy 2 làn 2 màu đúng người → sửa 1 câu trên timeline → thấy ngay |
 | **GĐ2** | Ô chọn giọng GỘP mọi nguồn (local/Edge/API/clone): tìm kiếm, badge nguồn, nghe thử, gán giọng theo làn nhân vật | Bấm ô giọng → thấy đủ danh sách → nghe thử → gán, làn nhân vật đổi thẻ giọng |
 | **GĐ3** | Tinh chỉnh nâng cao: đọc lại từng câu, Undo, nghe thử tại chỗ | Sửa 1 câu + bấm đọc lại → chỉ câu đó đổi, câu khác giữ nguyên |
-| **GĐ4** (v0.14) | **Phụ đề hút mắt + xử lý sub cứng:** chọn kiểu phụ đề Bình thường / Nhảy chữ (từng từ, mẫu màu); ô tích (mặc định tắt) **tự dò dải sub cứng → làm mờ → đè phụ đề Việt** ("đè tem"), kéo chỉnh dải được. KHÔNG xoá bằng AI. OCR bóc chữ để sau | Video có sub cứng → tích ô → xuất ra dải cũ mờ + phụ đề Việt đè đúng chỗ; chọn Nhảy chữ → từng từ sáng theo nhịp, xem thử = video xuất |
+| **GĐ4** (v0.14) ✅ xong 2026-10-28, chờ push | **Phụ đề hút mắt + xử lý sub cứng:** chọn kiểu phụ đề Bình thường / Nhảy chữ (từng từ, mẫu màu); ô tích (mặc định tắt) **tự dò dải sub cứng → làm mờ → đè phụ đề Việt** ("đè tem"), kéo chỉnh dải được. KHÔNG xoá bằng AI. OCR bóc chữ để sau | Video có sub cứng → tích ô → xuất ra dải cũ mờ + phụ đề Việt đè đúng chỗ; chọn Nhảy chữ → từng từ sáng theo nhịp, xem thử = video xuất |
 | **GĐ5** | Dựng cơ bản (cắt/tách/ghép, thêm chữ/ảnh, filter, đổi tỷ lệ) + Batch Mode cả danh sách | Cắt 1 đoạn + thêm 1 dòng chữ → xuất video đúng |
 | GĐ6 (sau) | Tóm tắt / Review AI (kịch bản, ghép cảnh) — tính năng "ăn tiền" của EZMAX | — |
 

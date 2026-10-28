@@ -12,8 +12,8 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.11.36` (dev mode — chạy qua `Chay-Sublix.bat`; release binary cũ: v0.9.8) |
-| **Git Commit** | nhánh `master` @ `e61ba07` (`origin` = `https://github.com/handsomecat101/sublix.git`) — **đã merge hết nhánh fork**, `master` == `fix/voice-timeline-mojibake` |
+| **Bản Build Hiện Tại** | `v0.14.0` (dev mode — chạy qua `Chay-Sublix.bat`) — v0.12.0 + v0.13.0 đã push; **v0.14.0 xong + kiểm app thật, CHỜ PO duyệt push** (2026-10-28) |
+| **Git Commit** | nhánh `master` (`origin` = `https://github.com/handsomecat101/sublix.git`) — origin @ `f5d139e`; local có thêm commit v0.14 chưa push |
 | **Workspace Máy Dev** | `C:\AI Project\Sublix` (máy: Win11 11 Home build 26200, AMD Ryzen AI Max 390, 31 GB RAM, **không có GPU NVIDIA**) |
 | **Trạng Thái** | 🟢 Sẵn sàng làm việc — `cargo build` OK, `cargo test --lib` **60/60 PASS**, `npx tsc --noEmit` 0 lỗi, `npm run build` OK, guard `npm run verify:version` PASS exit 0 (6/6 nguồn = `0.11.36`); app chạy dev + verify GUI qua CDP (port 9223) |
 | **Provider Dịch Đang Dùng** | `ollama` (`qwen2.5:3b`, chạy **iGPU qua ROCm**) — vì `llama-server.exe` bị Smart App Control chặn, xem `BUG-H09` |
@@ -54,14 +54,7 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| `TSK-FEAT-GLOSSARY-PRONOUN` | Bảng **thuật ngữ + xưng hô** do người dùng duyệt (thay bảng LLM tự bịa): lưu theo dự án + fallback config, lệnh `glossary_get/set/suggest`, ràng buộc CỨNG trong prompt, hậu kiểm vi phạm `glossary_violation`, component `GlossaryEditor` độc lập | **mcode #2 (Orca worker)** | 🔴 HIGH |  ✅ Xong 2026-10-25  | `src-tauri/src/translate/glossary*.rs` (mới) · `translate/contextual*.rs` · `translate/mod.rs` · `config.rs` · `lib.rs` · `src/components/glossary/**` (mới) · `src/lib/tauri.ts` · `src/lib/types.ts` |
-| `TSK-REFACTOR-GLOSSARY-300` | Tách 2 file > 300 dòng (không đổi hành vi): `glossary.rs` 366→272 (+ `glossary_prompt.rs`), `contextual_run.rs` 336→165 (+ `contextual_chunk.rs`, `contextual_verify.rs`) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src-tauri/src/translate/{glossary,glossary_prompt,contextual_run,contextual_chunk,contextual_verify}.rs` + `translate/mod.rs` — **chưa commit** |
-| `TSK-FIX-BUG-H23` | `glossary_suggest` chịu JSON "dạng cũ" của LLM (chuỗi `gốc => dịch`) — 1 phần hỏng không làm hỏng phần khác | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src-tauri/src/translate/glossary_parse.rs` (mới) + `glossary_parse_tests.rs` (mới) + `glossary.rs` (+`split_term`) + `contextual.rs` (`parse_reference` → parser khoan dung) + `translate/mod.rs` — **chưa commit** |
-| `TSK-RELEASE-0.12.0` | Nâng phiên bản **0.11.36 → 0.12.0** + changelog (CHANGELOG.md + ChangelogModal) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `package.json` · `src-tauri/Cargo.toml` · `src-tauri/tauri.conf.json` (+2 tiêu đề cửa sổ) · `src-tauri/Cargo.lock` · `CHANGELOG.md` · `src/views/ChangelogModal.tsx` — **chưa commit** |
-| `TSK-RELEASE-0.12.0-CHANGELOG2` | Bổ sung **cùng mục changelog v0.12.0** (không tạo version mới): ô chọn giọng, mẫu nghe thử tức thì, phân vai theo giọng thật, hạ tiếng nền thông minh, thư mục tải mặc định, ảnh thu nhỏ + thời lượng, tóm tắt sửa giao diện R2-8, lịch sử tiến trình trùng mục | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `CHANGELOG.md` · `src/views/ChangelogModal.tsx` — **chưa commit** |
-| `TSK-FEAT-VOICE-PICKER` | Ô chọn giọng theo thiết kế Opus §4.10 (tìm không dấu, lọc ♂/♀, nhóm ★ → engine → ngôn ngữ, chip vai trùng giọng, bàn phím, ảo hoá > 100 giọng) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src/components/voice/**` (mới) · `src/views/settings/VoiceListSection.tsx` (mới) · `src/views/settings/TtsSection.tsx` · `src/views/studio/StudioVoiceStep.tsx` · `src/views/studio/studioPipelineTypes.ts` · `src/lib/tauri.ts` · `src/lib/types.ts` · `src-tauri/src/config.rs` (+`favorite_voices`) · `scripts/voice-picker-tests/` (mới) — **chưa commit** |
-| `TSK-UI-R2-8-FIX-CE` | Sửa giao diện R2-8 theo review — **gói C** (mục 4: nút Lưu chỉ hiện khi `!autoSave` + trạng thái “✓ Đã lưu” cạnh tiêu đề) + **gói E** (mục 13 nút Quét · 14 bỏ cờ emoji + “Nâng cao” + hint tên ngôn ngữ · 21 chính tả Live · 22 badge thời lượng + thumbnail yt-dlp · 23 thẻ “Luồng thoại” cao bằng cột) | **mcode #2 (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `src/components/glossary/GlossaryEditor.tsx` + `glossaryEditor.css` · `src/views/live/LiveView.tsx` + `liveLogic.ts` + `LiveView.css` · `src/views/DownloaderView.tsx` + `DownloaderView.css` · `scripts/live-history-tests/liveLogic.test.ts` — **chưa commit** |
-| `TSK-UI-R2-8-REVIEW` | Duyệt thẩm mỹ cuối giao diện vòng 2 (ảnh after-* so mockup) → danh sách sửa P1/P2/P3 | **Opus (Orca worker)** | 🟡 MEDIUM | ✅ Xong 2026-10-25 | `docs/UI_R2-8_REVIEW.md` (mới) — 23 mục (7 P1 · 10 P2 · 6 P3) + 5 gói chia việc; **chưa commit** |
+| _(trống — không có task nào đang khóa)_ | | | | | |
 
 
 ---
@@ -70,8 +63,6 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
-| `TSK-V014-SUB-STYLE` | v0.14: chọn kiểu phụ đề **Bình thường / Nhảy chữ** (ASS theo từ, chia thời gian theo âm tiết, xem thử = xuất) | (chưa giao) | 🔴 HIGH | PO chốt 2026-10-26 — `docs/V0.14_PLAN.md` |
-| `TSK-V014-HARDSUB-BLUR` | v0.14: ô tích **"phụ đề cứng → làm mờ & đè tem"** (mặc định tắt; dò dải sub cứng, blur, đè phụ đề Việt; kéo chỉnh dải) — KHÔNG inpainting | (chưa giao) | 🔴 HIGH | PO chốt 2026-10-26 — `docs/V0.14_PLAN.md` |
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-012` | ~~Phase V2: Phân vai thật (sherpa-onnx diarization offline)~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành ở v0.10.0 (S1 sidecar + S2 Rust backend + S3 UI roster + S4 E2E deliverables) |
 | `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning (Phase V3) | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng chuẩn bị ở Phase V3) |
@@ -82,6 +73,11 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `V012-BATCH` | Gói v0.12.0: `TSK-FEAT-GLOSSARY-PRONOUN` · `TSK-REFACTOR-GLOSSARY-300` · `TSK-FIX-BUG-H23` · `TSK-RELEASE-0.12.0` · `TSK-RELEASE-0.12.0-CHANGELOG2` · `TSK-FEAT-VOICE-PICKER` · `TSK-UI-R2-8-FIX-CE` · `TSK-UI-R2-8-REVIEW` | mcode #2 · Opus | 2026-10-25 | ✅ v0.12.0 — đã commit + push |
+| `TSK-V014-SUB-STYLE` | v0.14 kiểu phụ đề Bình thường / Nhảy chữ (3 mẫu, font Việt, xem thử = xuất) | mcode · OpenCode · CommandCode · Opus (thiết kế) | 2026-10-26 | ✅ v0.14.0 — kiểm app thật; chưa push |
+| `TSK-V014-HARDSUB-BLUR` | v0.14 ô tích phụ đề cứng → dò dải (PP-OCRv4 det) + làm mờ & đè tem, kéo chỉnh dải | Sonnet · mcode · Gemini (nghiên cứu) | 2026-10-26 | ✅ v0.14.0 — dò 60 s ~3 s; chưa push |
+| `TSK-V014-EXPORT-FIX` | Sửa xuất "Đa đường tiếng" + phụ đề cứng (`final_audio unconnected`) — ExportPlan: nhãn tạo ⇒ phải map | Mavis/mcode #1 (+ điều phối chặn đồ thị rỗng) | 2026-10-28 | ✅ `c00288e` — 366 Rust + 410 node; xuất thật ra mp4, dải mờ che kín chữ |
+| `TSK-V013-STUDIO-TABS` | v0.13 Studio nhiều tab (tối đa 6, hàng đợi 1 việc nặng, phím tắt) | Sonnet · mcode · Opus (thiết kế) | 2026-10-25 | ✅ v0.13.0 — đã push |
 
 | `TSK-CHORE-AGENT-TEAM-SLIM` | Dọn `agent-team/` cho nhẹ context (4 file lõi) — **chỉ di chuyển, không xoá** | **Mavis/mcode (Orca worker)** | 2026-10-25 | ✅ 4 file lõi **178,2 KB → 136,8 KB**: `PROJECT_STATE.md` 53,5→33,3 KB (giữ 25 mục ✅ mới nhất; **59 mục cũ** nguyên văn → `ARCHIVE/PROJECT_STATE_DONE_ARCHIVE.md`) · `ISSUE_LOG.md` 107,6→85,4 KB (**Quick Index giữ đủ 106/106 dòng lỗi**, thêm chú "chi tiết: ARCHIVE/…" cho 18 lỗi; **20 mục phân tích** lỗi ✅ Fixed & cũ trước 2026-10-20 → `ARCHIVE/ISSUE_LOG_DETAIL_ARCHIVE.md`; lỗi 🔴/🟡/mới giữ tại chỗ) · `AGENT_CHAT.md` ≤ 8 tin (2 tin worker cũ → `ARCHIVE/AGENT_CHAT_ARCHIVE.md`) · **18 file kế hoạch/báo cáo + test-output-audit-giong/** → `ARCHIVE/` (git mv, **0 file bị xoá**) · giữ `AUDIT_TAO_GIONG.md` (GUI_TEST_GUIDE + WORKFLOW_A_Z trỏ tới) và `SCREENSHOTS.md` (README trỏ tới) · đã đổi **đường dẫn** (chỉ path) trong CHANGELOG.md, DEV-LOG.md, SublixStudioView.tsx, test_v2_diarization_e2e.rs · verify: 94/94 mã TSK + 110/110 mã BUG còn nguyên, Quick Index 106/106 dòng; chưa commit |
 
