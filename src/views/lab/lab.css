@@ -1,0 +1,632 @@
+/* ==========================================================================
+   XƯỞNG AI — LAB VIEW STYLES (Cinema Dark Theme)
+   docs/UI_REDESIGN_PLAN.md §4.14
+   ========================================================================== */
+
+.lab-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-body, #0a0908);
+  color: var(--t1, #f3f1ee);
+  overflow: hidden;
+  font-family: inherit;
+}
+
+/* ────────────────────────── THƯ VIỆN MẪU (LIBRARY) ────────────────────────── */
+
+.lab-library-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 28px;
+  padding: 26px 32px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.lab-library-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.lab-library-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--bg-side, #120f0d);
+  border: 1px solid var(--line, #241e19);
+  border-radius: 14px;
+  padding: 20px;
+  height: fit-content;
+}
+
+.lab-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lab-main-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--t1, #f3f1ee);
+  margin: 0;
+}
+
+.lab-beta-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--ac-soft, rgba(232, 163, 61, 0.12));
+  color: var(--ac-txt, #f6c46d);
+  border: 1px solid var(--ac-br, rgba(232, 163, 61, 0.35));
+}
+
+.lab-beta-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(232, 163, 61, 0.05);
+  border: 1px solid rgba(232, 163, 61, 0.2);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--t2, #c8c3bc);
+}
+
+.lab-banner-close {
+  background: transparent;
+  border: none;
+  color: var(--t4, #665e55);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+}
+.lab-banner-close:hover {
+  color: var(--t1, #f3f1ee);
+}
+
+.lab-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.lab-template-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #16120e);
+  border: 1px solid var(--line, #241e19);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.18s ease-out;
+  text-align: left;
+}
+
+.lab-template-card:hover {
+  border-color: var(--ac-br, rgba(232, 163, 61, 0.4));
+  background: rgba(232, 163, 61, 0.04);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+}
+
+.lab-card-preview {
+  height: 160px;
+  background: #1c1712;
+  border-bottom: 1px solid var(--line, #241e19);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.lab-preview-graphic {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 1px dashed rgba(232, 163, 61, 0.3);
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.lab-preview-waves {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 36px;
+}
+.lab-wave-bar {
+  flex: 1;
+  background: var(--ac, #e8a33d);
+  border-radius: 2px;
+}
+.lab-wave-bar.ost {
+  background: var(--step-sub, #38bdf8);
+}
+
+.lab-card-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.lab-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lab-card-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--t1, #f3f1ee);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lab-card-oneline {
+  font-size: 13px;
+  color: var(--t3, #9e968d);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.lab-card-facts {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 6px 12px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.lab-fact-label {
+  color: var(--t4, #665e55);
+  font-weight: 600;
+}
+.lab-fact-val {
+  color: var(--t2, #c8c3bc);
+}
+
+.lab-card-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Thẻ Sắp có */
+.lab-template-card.disabled {
+  opacity: 0.62;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+.lab-template-card.disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--line, #241e19);
+  background: var(--bg-card, #16120e);
+}
+
+/* ────────────────────────── BẢN NHÁP GẦN ĐÂY ────────────────────────── */
+
+.lab-side-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--t1, #f3f1ee);
+  margin: 0;
+}
+
+.lab-drafts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-draft-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--bg-card, #16120e);
+  border: 1px solid var(--line, #241e19);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.lab-draft-item:hover {
+  border-color: var(--ac-br, rgba(232, 163, 61, 0.3));
+  background: var(--hover, #201a14);
+}
+
+.lab-draft-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t1, #f3f1ee);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-draft-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--t4, #665e55);
+}
+
+/* ────────────────────────── TRÌNH HƯỚNG DẪN (WIZARD) ────────────────────────── */
+
+.lab-wizard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lab-wizard-stepbar {
+  height: 58px;
+  background: #0f0d0b;
+  border-bottom: 1px solid var(--line, #241e19);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex: none;
+}
+
+.lab-stepbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lab-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--t3, #9e968d);
+  transition: all 0.15s;
+}
+.lab-step-item.active {
+  background: var(--ac-soft, rgba(232, 163, 61, 0.1));
+  color: var(--ac-txt, #f6c46d);
+  border: 1px solid var(--ac-br, rgba(232, 163, 61, 0.3));
+}
+.lab-step-item.completed {
+  color: var(--ok-txt, #86efac);
+}
+.lab-step-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lab-step-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1.5px solid currentColor;
+}
+.lab-step-item.active .lab-step-circle {
+  background: var(--ac, #e8a33d);
+  color: #1a1209;
+  border-color: var(--ac, #e8a33d);
+}
+
+.lab-step-labels {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+.lab-step-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.lab-step-sub {
+  font-size: 10.5px;
+  color: var(--t4, #665e55);
+}
+
+.lab-step-divider {
+  width: 32px;
+  height: 1.5px;
+  background: var(--line, #241e19);
+}
+.lab-step-divider.passed {
+  background: var(--ok-br, rgba(74, 222, 128, 0.3));
+}
+
+.lab-wizard-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-wizard-footer {
+  height: 62px;
+  background: #0f0d0b;
+  border-top: 1px solid var(--line, #241e19);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex: none;
+}
+
+/* ────────────────────────── BƯỚC NGUỒN (SOURCE STEP) ────────────────────────── */
+
+.lab-source-layout {
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  gap: 24px;
+  padding: 24px 32px;
+  flex: 1;
+}
+
+.lab-source-left {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.lab-source-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: var(--bg-side, #120f0d);
+  border: 1px solid var(--line, #241e19);
+  border-radius: 14px;
+  padding: 22px;
+}
+
+.lab-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-source-card {
+  display: grid;
+  grid-template-columns: 24px 32px 104px 1fr 32px;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card, #16120e);
+  border: 1px solid var(--line, #241e19);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.lab-source-thumb {
+  width: 104px;
+  height: 58px;
+  background: #1c1712;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--t4, #665e55);
+  font-size: 11px;
+}
+
+.lab-source-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--t1, #f3f1ee);
+}
+.lab-source-meta {
+  font-size: 11.5px;
+  color: var(--t4, #665e55);
+}
+
+/* ────────────────────────── BƯỚC LỜI BÌNH (NARRATION STEP) ────────────────────────── */
+
+.lab-narration-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lab-narration-scroll {
+  padding: 24px 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 980px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.lab-block-item {
+  display: grid;
+  grid-template-columns: 20px 28px 1fr 88px;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--bg-card, #16120e);
+  border: 1px solid var(--line, #241e19);
+  transition: all 0.15s;
+  position: relative;
+}
+
+.lab-block-item.ost {
+  border-left: 3.5px solid var(--step-sub, #38bdf8);
+  background: rgba(56, 189, 248, 0.04);
+}
+
+.lab-block-item:focus-within,
+.lab-block-item.active {
+  border-color: var(--ac-br, rgba(232, 163, 61, 0.4));
+  background: rgba(232, 163, 61, 0.03);
+}
+
+.lab-block-item.violation {
+  border-color: rgba(228, 179, 60, 0.55);
+  background: rgba(228, 179, 60, 0.04);
+}
+
+.lab-block-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--t1, #f3f1ee);
+  outline: none;
+  word-break: break-word;
+}
+.lab-block-text:focus {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.lab-block-dur {
+  font-size: 12px;
+  color: var(--t4, #665e55);
+  text-align: right;
+  font-family: monospace;
+}
+
+.lab-narration-side {
+  background: var(--bg-side, #120f0d);
+  border-left: 1px solid var(--line, #241e19);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ────────────────────────── BƯỚC DỰNG NHÁP (DRAFT STEP) ────────────────────────── */
+
+.lab-draft-layout {
+  display: grid;
+  grid-template-columns: 1fr 500px;
+  gap: 24px;
+  padding: 24px 32px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.lab-draft-table {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-draft-row {
+  display: grid;
+  grid-template-columns: 28px 120px 1fr 100px;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: var(--bg-card, #16120e);
+  border: 1px solid var(--line, #241e19);
+  cursor: pointer;
+}
+.lab-draft-row.ost {
+  border-left: 3px solid var(--step-sub, #38bdf8);
+}
+.lab-draft-row.selected {
+  border-color: var(--ac, #e8a33d);
+  background: var(--ac-soft, rgba(232, 163, 61, 0.08));
+}
+
+.lab-player-mock {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line, #241e19);
+}
+
+.lab-player-sub-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  text-align: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+/* ────────────────────────── UTILITIES ────────────────────────── */
+
+.lab-btn-primary {
+  background: var(--grad-ac, linear-gradient(135deg, #f59e0b, #d97706));
+  color: #1a1209;
+  font-weight: 800;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  transition: opacity 0.15s;
+}
+.lab-btn-primary:hover {
+  opacity: 0.92;
+}
+
+.lab-btn-secondary {
+  background: var(--bg-card, #16120e);
+  color: var(--t2, #c8c3bc);
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #241e19);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.lab-btn-secondary:hover {
+  background: var(--hover, #201a14);
+  color: var(--t1, #f3f1ee);
+}

@@ -26,6 +26,8 @@ export interface MasterTopbarTab {
   icon?: ReactNode;
   /** Badge (số tải đang chạy / LIVE / số tiến trình). */
   badge?: string | number | null;
+  /** Tag nhỏ phụ (vd "Thử nghiệm"). */
+  tag?: string | null;
 }
 
 /** Một lớp hoàn tác (Audio / Bản dịch / Phụ đề). */
@@ -118,7 +120,9 @@ function MasterTopbarInner({
           >
             {tab.icon}
             <span>{tab.label}</span>
-            {tab.badge !== null && tab.badge !== undefined && tab.badge !== "" ? (
+            {tab.tag ? (
+              <span className="master-tab-tag">{tab.tag}</span>
+            ) : tab.badge !== null && tab.badge !== undefined && tab.badge !== "" ? (
               <span className="master-tab-badge">{tab.badge}</span>
             ) : null}
           </button>

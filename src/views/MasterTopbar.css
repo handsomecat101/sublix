@@ -80,6 +80,19 @@
   color: #000;
   font-weight: 800;
 }
+.master-tab-tag {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--t4);
+  line-height: 1.2;
+}
+.master-tab.on .master-tab-tag {
+  border-color: var(--ac-br);
+  color: var(--ac-txt);
+}
 
 .master-topbar-context {
   flex: 1;

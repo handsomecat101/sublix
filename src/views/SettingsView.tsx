@@ -44,8 +44,9 @@ import { ProcessCenterView } from "./ProcessCenterView";
 import {
   IconClapper, IconMic, IconClock,
   IconEye, IconEyeOff,
-  IconGlobe, IconSettings,
+  IconGlobe, IconSettings, IconSparkles,
 } from "../icons";
+import LabView from "./lab/LabView";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import MasterTopbar from "./MasterTopbar";
 // TSK-UI-REDESIGN-R2-5: các mục Cài đặt tách riêng (mỗi file < 300 dòng).
@@ -149,7 +150,7 @@ export default function SettingsView() {
   const [transEnginePref, setTransEnginePref] = useState<"auto" | "cpu" | "cuda">("auto");
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
   const [fullConfig, setFullConfig] = useState<AppConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "process" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
+  const [activeTab, setActiveTab] = useState<"studio" | "downloader" | "lab" | "process" | "file_sub" | "dubbing" | "live" | "models" | "history" | "overlay">("studio");
   const [pendingFileSubPath, setPendingFileSubPath] = useState<string>("");
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
   const [pendingStudioPath, setPendingStudioPath] = useState<string>("");
@@ -1681,6 +1682,12 @@ export default function SettingsView() {
               badge: runningDownloads.length > 0 ? `⬇ ${runningDownloads.length}` : null,
             },
             {
+              id: "lab",
+              label: "Xưởng AI",
+              icon: <IconSparkles size={13} />,
+              tag: "Thử nghiệm",
+            },
+            {
               id: "live",
               label: "Live",
               icon: <IconMic size={13} />,
@@ -1748,6 +1755,16 @@ export default function SettingsView() {
           onNavigateToFileSub={handleRouteToFileSub}
           onNavigateToDubbing={handleRouteToDubbing}
         />
+      </div>
+
+      <div
+        data-tab="lab"
+        style={{
+          display: activeTab === "lab" ? "block" : "none",
+          height: "100%",
+        }}
+      >
+        <LabView onNavigateToStudio={(projectName) => handleRouteToStudio(projectName || '')} />
       </div>
 
       {/* PERSISTENT MOUNT: Keep FileSubView mounted across tab switching

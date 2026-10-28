@@ -37,7 +37,7 @@ export interface StudioTabsHostProps {
   /** Báo tổng việc đang chạy lên trên (ô trạng thái topbar). */
   onSummary?: (summary: { running: number; tabs: number }) => void;
   /** Chuyển tab ứng dụng (MasterTopbar). */
-  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process") => void;
+  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process" | "lab") => void;
   /** Phiên bản app (1 nguồn với các tab khác). */
   appVersion?: string;
   /** Chủ đề giao diện. */

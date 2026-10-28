@@ -93,6 +93,7 @@ import {
   IconArrowsHorizontal,
   IconX,
   IconCheck,
+  IconSparkles,
 } from "../icons";
 import "./SublixStudioView.css";
 
@@ -199,7 +200,7 @@ export interface SublixStudioViewProps {
    * thanh trên "nhảy" khi chuyển tab).
    */
   appVersion?: string;
-  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process") => void;
+  onNavigateTab?: (tab: "downloader" | "live" | "history" | "models" | "overlay" | "process" | "lab") => void;
   currentTheme?: string;
   onThemeChange?: (theme: string) => void;
   initialFilePath?: string;
@@ -7778,12 +7779,13 @@ export default function SublixStudioView({
         onNavigateTab={(tabId) => {
           if (tabId === "studio") return;
           onNavigateTab?.(
-            tabId as "downloader" | "live" | "history" | "models" | "overlay" | "process",
+            tabId as "downloader" | "live" | "history" | "models" | "overlay" | "process" | "lab",
           );
         }}
         tabs={[
           { id: "studio", label: "Studio", icon: <IconClapper size={13} /> },
           { id: "downloader", label: "Tải video", icon: <IconGlobe size={13} /> },
+          { id: "lab", label: "Xưởng AI", icon: <IconSparkles size={13} />, tag: "Thử nghiệm" },
           { id: "live", label: "Live", icon: <IconMic size={13} /> },
           { id: "history", label: "Lịch sử", icon: <IconClock size={13} /> },
           { id: "process", label: "Tiến trình", icon: <IconClock size={13} /> },

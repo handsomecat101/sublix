@@ -9,6 +9,24 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-29 00:10 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-V015-DISC-B1`: công tắc "文 Tự dịch" (Bilibili chặn từ khoá tiếng Anh `-412`) + đơn vị lượt xem kiểu Việt.
+- **Rust:** `discovery/keyword_translate.rs` (prompt tự dịch, `contains_han`, `needs_translation`, `clean_translated_keyword`) + lệnh `discovery_translate_keyword` — dùng **provider đã cấu hình** (`chat_completion_custom`, model theo provider qua `model_for`), **không** thêm provider/API key; provider không hỗ trợ prompt tùy chỉnh ⇒ fallback đường dịch chuẩn.
+- **TS:** công tắc mặc định BẬT (chỉ Bilibili, nhớ localStorage), cache bản dịch trong phiên, dòng "Đã tìm: 艾尔登法环 (dịch từ "elden ring")" + nút "Tìm nguyên văn"; dịch lỗi ⇒ tìm nguyên văn + "Chưa dịch được".
+- **Đơn vị:** `万`/`亿` và `K`/`M` → **một kiểu Việt** "nghìn / triệu / tỷ" cho cả Bilibili lẫn YouTube (1,8 triệu · 50 triệu · 1,2 tỷ) — sửa cả `discoveryModel.ts` lẫn `discovery/format.rs`.
+- **Kiểm:** `cargo test --lib discovery` **87/87** · `cargo build` OK · `node --test scripts/discovery-tests/` **41/41** · `npx vite build` OK · **dịch thật**: `elden ring boss` → `艾尔登法环 Boss` (MiniMax-M3.1-Flash của PO).
+- **Cần điều phối:** (1) `npx tsc --noEmit` đang **đỏ 5 lỗi** ở `src/views/lab/` — của worker Xưởng AI, **không phải** task này (file này không có lỗi nào). (2) Chưa commit (chờ PO). (3) Provider `local`/llama-server không có prompt tùy chỉnh ⇒ dịch dự phòng kém chính xác hơn; nên bật provider MiniMax/Ollama cho tính năng này.
+
+---
+
+### 2026-10-29 00:05 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Hoàn thành `TSK-LAB-U1A`: dựng toàn bộ giao diện tab Xưởng AI theo thiết kế Opus (§4.14).
+- **Thành phần:** 19 component tại `src/views/lab/**` (thư viện mẫu, trình hướng dẫn 4 bước: nguồn, phân tích AI 5 giai đoạn, biên tập lời bình, xem trước bản dựng); tích hợp mock API `labApi.ts` có thanh tiến trình và huỷ `AbortSignal`.
+- **Topbar & Trải nghiệm:** Thêm tab "Xưởng AI" kèm nhãn nổi bật "Thử nghiệm" sau "Tải video" trên `MasterTopbar` (cả SettingsView & SublixStudioView); hỗ trợ phím tắt số 1-4, `Ctrl+Enter` sửa nhanh câu.
+- **Kiểm chứng:** `node --test scripts/lab-tests/` **14/14 PASS** (bắt đúng 6 luật R1-R6 kịch bản recap, đếm âm tiết tiếng Việt) · `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** (2.98s, 0 lỗi).
+
+---
+
 ### 2026-10-28 23:55 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Xong `TSK-V015-DISC-UI`: dựng tab con "🔥 Khám phá" trong tab Tải video theo §4.13 (nấc A).
 - **File mới:** `src/views/discovery/` (12 file: `DiscoveryView`, `DiscoverySearchBar`, `HotTopicChips`, `DiscoveryListTabs`, `VideoGrid`, `VideoCard`, `DiscoveryStates`, `MiniQueueBar`, `DiscoveryContextMenu`, `DiscoveryToast`, `useDiscoveryList`, `discoveryModel` + `discoveryErrors` + `discovery.css`) · sửa `DownloaderView.tsx/.css` (chỉ thêm tab con + cầu nối hàng đợi) · `scripts/discovery-tests/discoveryModel.test.ts` — **chưa commit**.
@@ -54,23 +72,6 @@
 - **Loại:** @done — Hoàn thành sửa báo cáo TSK-RESEARCH-GAME-RECAP-R2 theo đúng yêu cầu PO.
 - **Cập nhật:** Đã cập nhật docs/GAME_RECAP_RESEARCH.md với model đời mới: Qwen2.5-VL-7B (26/01/2025) & MiniCPM-o 2.6 (20/01/2025) cho local RTX 3090 (AWQ/INT4 ~6.5–8GB VRAM); Gemini 3.8 Flash & Flash-Lite đời hiện hành (.05–.10/1M token, ~.035–.07/giờ video) kèm ghi chú model cũ đã deprecated.
 - **Bản quyền & Giấy phép:** Thay thế YOLOv8 (AGPL-3.0) bằng RT-DETR/RT-DETR-v2 (Apache 2.0); xác minh NarratoAI (MIT, commit 10/2026), VideoLingo (Apache 2.0, commit 10/2026), auto-editor (The Unlicense, v26.x 2026), TransNetV2 (MIT, ONNX SOTA). Đã thêm cột ngày phát hành và link nguồn thật.
-
----
-
-### 2026-10-28 20:55 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
-- **Loại:** `@done` — Hoàn thành nghiên cứu `TSK-RESEARCH-VIDEO-DISCOVERY` (tìm video & hot trend).
-- **Kết quả:** Đã xuất file báo cáo toàn diện `docs/VIDEO_DISCOVERY_RESEARCH.md`.
-- **Thực nghiệm:** Bilibili (Popular, Ranking, Search Type) & Douyin 50 Hot Words hoạt động 100% qua HTTP GET không cần key/đăng nhập; YouTube Search `ytsearchN:` chạy tốt qua `yt-dlp`; TikTok search broken & Creative Center cần tài khoản business; Kuaishou chưa có extractor trong yt-dlp; Xiaohongshu cần chữ ký x-s/x-t phức tạp.
-- **Đề xuất:** Triển khai Giai đoạn 1 (Bilibili + Douyin Hot Tags) và Giai đoạn 2 (YouTube Search) với kiến trúc Rust `reqwest` + in-memory TTL cache.
-
----
-
-### 2026-10-28 20:00 - Claude Code (Opus 5.5, điều phối) -> @Team / @jimmyvu
-- **Loại:** `@done` — **v0.14.0 XONG, chờ PO duyệt push.** Lỗi xuất "Đa đường tiếng" + phụ đề cứng đã sửa (`TSK-V014-EXPORT-FIX`, mcode #1, commit `c00288e`; điều phối thêm chặn `-filter_complex` rỗng).
-- **Kiểm:** bản sạch 410 test node + 366 test Rust đạt; app thật xuất video thử chữ Trung 30 s ⇒ mp4 h264 + aac, giây 6 dải mờ + tem che kín chữ cũ.
-- **Tài liệu đã tích:** `docs/V0.14_PLAN.md` §3 (7/7 ✅) · `PROJECT_STATE.md` (bảng khóa trống, v0.12/v0.14 sang ✅) · `TAM_NHIN_SUBLIX_STUDIO.md` GĐ4 ✅.
-- **Tiếp theo:** PO OK ⇒ `git push` (16 commit). Sau đó GĐ5 (dựng cơ bản + Batch) — cần PO chốt phạm vi trước khi giao.
-- **Đội (rảnh, giữ nguyên):** mcode #1 `term_05c6d215` · #3 `term_6c25f9f6` · CommandCode `term_5d122828` · OpenCode `term_47f5a03b` · Gemini `term_58eb6711` · Sonnet `term_d7391d06` · Opus `term_c1559e20`.
 
 ---
 
