@@ -1,3 +1,33 @@
+## v0.15.0 — 2026-10-29
+### Tab "Khám phá": xem video đang hot và tìm video nguồn ngay trong app
+
+**Bối cảnh:** trước đây muốn lồng tiếng một video, bạn phải tự tìm link ở ngoài rồi dán vào app. Bản này thêm **tab con "Khám phá"** ngay cạnh tab **Tải video**: xem video đang hot, gõ từ khoá tìm trên Bilibili hoặc YouTube, rồi tải về hoặc tải & mở luôn trong Studio.
+
+**1. Xem đang hot & tìm video**
+- **Bilibili đang hot**: 20 video nổi bật nhất của Bilibili, cập nhật khi bạn mở tab.
+- **Bảng xếp hạng Bilibili**: top 100 video đứng đầu bảng xếp hạng.
+- **Tìm trên Bilibili** bằng từ khoá; **tìm trên YouTube** cũng bằng từ khoá (không cần API key, dùng yt-dlp có sẵn trong app).
+- **🔥 Xu hướng Douyin**: 50 chủ đề đang nóng nhất Trung Quốc. Bấm một chip là app **điền từ khoá và tìm ngay** trên nguồn đang chọn.
+- Đổi qua lại giữa **Bilibili** và **YouTube** bằng hai nút nguồn ở thanh tìm; danh sách đã xem được giữ lại nên quay lại là thấy ngay, không phải tải lại.
+
+**2. Tự dịch từ khoá sang tiếng Trung**
+- Bilibili thường **ít kết quả hoặc chặn hẳn** khi tìm bằng tiếng Anh/tiếng Việt, nên có công tắc **文 Tự dịch** (mặc định bật khi tìm Bilibili).
+- App dịch từ khoá bằng **nhà cung cấp dịch bạn đã cài trong Cài đặt** — không phải cấu hình thêm gì.
+- Kết quả ghi rõ **Đã tìm: (từ khoá tiếng Trung) (dịch từ "…")**, kèm **Sửa** (điền bản dịch vào ô để chỉnh lại) và **Tìm nguyên văn** (tìm lại đúng từ khoá bạn gõ).
+- Nếu chưa cấu hình nhà cung cấp dịch, app vẫn tìm bình thường bằng từ khoá gốc và nhắc bạn bật dịch.
+
+**3. Thẻ video & tải về**
+- Mỗi video là một thẻ: ảnh xem trước, tiêu đề, tên kênh, thời lượng, lượt xem **kiểu Việt** (nghìn / triệu / tỷ) và thời gian đăng.
+- **⬇ Tải về**: đưa video vào hàng đợi tải sẵn có. Trạng thái hiện ngay trên thẻ (Đang đợi · % đang tải · Đã tải · Lỗi) và ở thanh hàng đợi nhỏ cuối tab.
+- **🎬 Tải & mở Studio**: tải xong app **mở sẵn tab Studio ở nền** rồi hiện thông báo **"Đi tới Studio (Enter)"** — app **không tự chuyển màn hình**, nên bạn đang gõ từ khoá hay đang làm việc ở tab khác thì vẫn tiếp tục được. Thông báo tự ẩn sau 8 giây, rê chuột vào thì dừng đếm.
+- Nếu nguồn tạm chặn máy bạn (Bilibili hay làm vậy), app báo rõ bằng tiếng Việt kèm nút **Thử lại** có đếm ngược và gợi ý tìm bằng từ khoá tiếng Trung.
+
+**4. Ghi chú**
+- **Danh sách "YouTube đang hot" theo quốc gia** cần Google API key (miễn phí) — bản này mới có **tìm YouTube bằng từ khoá**; danh sách đang hot sẽ bổ sung sau.
+- Chip **Xu hướng Douyin** chỉ để **gợi ý từ khoá**: bấm vào sẽ tìm trên Bilibili/YouTube. App chưa tìm trực tiếp bên trong Douyin/TikTok vì hai nguồn này chặn tìm kiếm tự động.
+
+
+---
 ## v0.14.0 — 2026-10-26
 ### Phụ đề "nhảy chữ" theo nhịp nói · Làm mờ phụ đề cứng của video gốc
 

@@ -23,10 +23,56 @@ interface VersionEntry {
 
 const CHANGELOG_DATA: VersionEntry[] = [
   {
+    version: "v0.15.0",
+    date: "29/10/2026",
+    title: "Tab \"Khám phá\": xem video đang hot và tìm video nguồn ngay trong app",
+    isCurrent: true,
+    highlights: [
+      {
+        category: "Xem đang hot & tìm video",
+        icon: "\u{1F9ED}",
+        items: [
+          "Tab con Khám phá nằm ngay cạnh tab Tải video: Bilibili đang hot (20 video), bảng xếp hạng Bilibili (top 100) và tìm kiếm theo từ khoá.",
+          "Tìm trên YouTube bằng từ khoá — không cần API key, dùng yt-dlp có sẵn trong app.",
+          "🔥 Xu hướng Douyin: 50 chủ đề đang nóng nhất Trung Quốc. Bấm một chip là app điền từ khoá và tìm ngay trên nguồn đang chọn.",
+          "Đổi qua lại giữa Bilibili và YouTube bằng hai nút nguồn ở thanh tìm; danh sách đã xem được giữ lại nên quay lại là thấy ngay."
+        ]
+      },
+      {
+        category: "Tự dịch từ khoá sang tiếng Trung",
+        icon: "\u{1F236}",
+        items: [
+          "Bilibili thường ít kết quả hoặc chặn hẳn khi tìm bằng tiếng Anh/tiếng Việt, nên có công tắc 文 Tự dịch (mặc định bật khi tìm Bilibili).",
+          "App dịch từ khoá bằng nhà cung cấp dịch bạn đã cài trong Cài đặt — không phải cấu hình thêm gì.",
+          "Kết quả ghi rõ Đã tìm: (từ khoá tiếng Trung) (dịch từ \"…\"), kèm Sửa (điền bản dịch vào ô để chỉnh) và Tìm nguyên văn (tìm lại đúng từ khoá bạn gõ).",
+          "Chưa cấu hình nhà cung cấp dịch thì app vẫn tìm bằng từ khoá gốc và nhắc bạn bật dịch."
+        ]
+      },
+      {
+        category: "Thẻ video & tải về",
+        icon: "\u{1F3AC}",
+        items: [
+          "Mỗi video là một thẻ: ảnh xem trước, tiêu đề, tên kênh, thời lượng, lượt xem kiểu Việt (nghìn / triệu / tỷ) và thời gian đăng.",
+          "⬇ Tải về: đưa video vào hàng đợi tải sẵn có; trạng thái hiện ngay trên thẻ (Đang đợi · % đang tải · Đã tải · Lỗi) và ở thanh hàng đợi nhỏ cuối tab.",
+          "🎬 Tải & mở Studio: tải xong app mở sẵn tab Studio ở nền rồi hiện thông báo Đi tới Studio (Enter) — app không tự chuyển màn hình, nên bạn đang gõ từ khoá hay làm việc ở tab khác vẫn tiếp tục được. Thông báo tự ẩn sau 8 giây, rê chuột vào thì dừng đếm.",
+          "Nếu nguồn tạm chặn máy bạn (Bilibili hay làm vậy), app báo rõ bằng tiếng Việt kèm nút Thử lại có đếm ngược và gợi ý tìm bằng từ khoá tiếng Trung."
+        ]
+      },
+      {
+        category: "Ghi chú",
+        icon: "\u{1F4DD}",
+        items: [
+          "Danh sách \"YouTube đang hot\" theo quốc gia cần Google API key (miễn phí) — bản này mới có tìm YouTube bằng từ khoá; danh sách đang hot sẽ bổ sung sau.",
+          "Chip Xu hướng Douyin chỉ để gợi ý từ khoá: bấm vào sẽ tìm trên Bilibili/YouTube. App chưa tìm trực tiếp bên trong Douyin/TikTok vì hai nguồn này chặn tìm kiếm tự động."
+        ]
+      }
+    ]
+  },
+  {
     version: "v0.14.0",
     date: "26/10/2026",
     title: "Phụ đề \"nhảy chữ\" theo nhịp nói · Làm mờ phụ đề cứng của video gốc",
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       {
         category: "Kiểu phụ đề: Bình thường hoặc Nhảy chữ",
