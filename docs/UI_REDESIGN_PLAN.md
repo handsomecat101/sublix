@@ -595,6 +595,102 @@ export interface HardsubSettings {
 
 **Đếm control:** thẻ Kiểu phụ đề Bình thường 4 → 5 (thêm segmented); Nhảy chữ 5 (segmented + 4 thẻ mẫu thay 5 ô màu) + 3 giữ. Thẻ phụ đề cứng: tắt = 1; tìm thấy = 1 ô + Dò lại + dải thời gian + 3 tuỳ chọn = 6. Modal Xuất: +2 liên kết "Đổi", không thêm control chỉnh.
 
+### 4.13 Khám phá (v0.15) (mockup `v015-discovery.html`, ảnh `shots/v015-discovery-*.png`)
+
+Phạm vi theo `docs/V0.15_PLAN.md` §2: vẽ đủ **nấc A**; nấc **B** (tự dịch từ khoá, danh mục, YouTube hot có key, nguồn "Tất cả", lọc thời lượng) và **C** (trình duyệt nhúng) chỉ chừa chỗ/phác. Dữ liệu mỗi nguồn: `docs/VIDEO_DISCOVERY_RESEARCH.md` §2 + kiểu `DiscoveryItem` §4.2.
+
+**Vị trí — tab con trong "Tải video" (không thêm tab thứ 7).** Topbar đã kín (§4.11); Khám phá chỉ để **đưa link vào hàng đợi tải** ⇒ cùng nhà với Tải về. Thanh tab con 38 px dưới topbar: `⬇ Tải về [badge số mục hàng đợi] · 🔥 Khám phá · (🌐 Trình duyệt — nấc C, ẩn tới khi spike đạt)`. Kiểu **gạch chân** `--ac` 2 px ở đáy (khác tab dự án Studio gạch trên đỉnh ⇒ không lẫn 2 loại tab). Nhớ tab con mở lần cuối (localStorage). `DownloaderView` **vẫn luôn mount** (BUG-045) — Khám phá là anh em, ẩn/hiện bằng CSS, không unmount Tải về.
+
+```
+topbar 48 │ 🎬 SUBLIX  Studio [⬇ Tải video 2] Live …                    ● Đang tải 2 · đợi 1  👁
+sub    38 │ ⬇ Tải về (3)  [🔥 Khám phá]                       Tải với: Cao nhất · Phụ đề tự tải  Đổi
+          │ [B Bilibili|▶ YouTube|Tất cả·B] [⌕ Tìm trên Bilibili…         Enter] [文 Tự dịch ◯]·B
+          │ 🔥 Xu hướng Douyin 50  (1 在稻城亚丁… 1172万)(2 …)(3 …)(4 黑神话 Bùng 866万) …→   12 phút ↻
+          │ [🔥 Đang hot] 🏆 Bảng xếp hạng │ Danh mục ▾·B                 20/100 video · 4 phút ↻
+          │ ┌thẻ┐┌thẻ┐┌thẻ┐┌thẻ┐┌thẻ┐┌thẻ┐   ← auto-fill minmax(260px,1fr): 1920=6 cột · 1024=3
+          │ …                                                           (cuộn vô hạn)
+mq     38 │ ⬇ Hàng đợi: 2 đang tải · 1 đợi  [tên ▬▬ 46%] [tên ▬▬ 81%] [⏳ tên]        Xem ở Tải về ›
+```
+
+**Kích thước & màu** (chỉ token sẵn có §4.1 / `_theme.css`)
+
+| Phần | Số đo |
+|---|---|
+| Thân | padding `14px 28px` (≤ 1280 px: `12px 20px`), khoảng cách hàng 12 px |
+| Thanh tìm | cao 40 px, bo 10; ô tìm nền `--bg-inset` viền `--line`, focus `--ac-br` + quầng 3 px `--ac-soft`; chọn nguồn = segmented 40 px (kiểu `.seg`, mục bật `--ac-soft`) với logo nguồn 16 px |
+| Logo nguồn | ô 16×16 bo 4, chữ 9 px/900: Bilibili `B` màu `#38bdf8` nền 18 % · YouTube `▶` `#f87171` — **cùng màu tag nền tảng ở tab Tải về** (§4.4), không dùng logo thương hiệu |
+| Chip hot | cao 28, bo 14, tối đa 240 px (cắt "…", tooltip đủ); ô hạng 18 px mono (top 3 nền cam `#e8a33d → #c9853a → #9c6a35`); nhãn Douyin `label` → "Mới" (`--ok`), "Nóng" (`--dang`), "Bùng" (`--ac`) 9.5 px; điểm nhiệt mono `--t4` dạng `1172万`; chip đang chọn `--ac-soft` + `--ac-br` |
+| Nút danh sách | cao 30, bo 8, 12.5/700; bật = `--ac-soft`; kết quả tìm = nút viền đứt `⌕ "từ khoá" ✕` |
+| Thẻ | bo 12, nền `--bg-card`, viền `--line-soft`; hover `--hover` + `--line`; focus bàn phím = vòng 2 px `--ac-txt` (cách 2 px); đã tải = viền `--ok-br` |
+| Ảnh | 16:9 (`aspect-ratio`), nhãn thời lượng mono 11/600 nền đen 78 % góc dưới phải; số hạng (Bảng xếp hạng) góc trên trái 26 px, top 3 nền cam như chip |
+| Thân thẻ | padding `9px 11px 10px`; tiêu đề 13/600, line-height 18, **cao cố định 36 px** (2 dòng, `line-clamp`); dòng 1 logo + kênh `--t2`; dòng 2 lượt xem `--t3` · thời gian `--t4` — thẻ cao đều nhau ⇒ lưới thẳng hàng, ảo hoá dễ |
+| Lớp hover | phủ cả ảnh `linear-gradient(rgba(10,8,6,.35), .72)`, 2 nút 32 px giữa ảnh: `⬇ Tải về` (phụ) · `🎬 Tải & mở Studio` (**chính**, `--grad-ac`) |
+| Hàng đợi mini | 38 px, nền `#0f0d0b`, viền trên `--line`; mỗi mục ≤ 320 px, thanh 60×4 `--ac` |
+
+**Thành phần & hành vi**
+
+1. **Thanh tìm.** Enter / bấm ⌕ / bấm chip mới tìm — **không tìm khi đang gõ** (YouTube ~7 s/lượt, Bilibili cần gọi thưa); debounce 500 ms của plan áp cho Enter/chip bấm dồn. Đổi nguồn khi có từ khoá ⇒ tìm lại ngay ở nguồn mới. Placeholder theo nguồn ("Tìm trên Bilibili — từ khoá tiếng Trung cho nhiều kết quả hơn, vd 艾尔登法环 剧情" / "Tìm trên YouTube"). Nấc A chỉ 2 nguồn; "Tất cả" và công tắc tự dịch **ẩn hẳn** ở nấc A (mockup vẽ mờ để thấy chỗ).
+2. **Tự dịch (B).** Công tắc `文 Tự dịch` cạnh ô; tắt + gõ có dấu tiếng Việt + nguồn Bilibili ⇒ 1 dòng gợi ý "Bật tự dịch sang tiếng Trung". Bật ⇒ dòng "Đang tìm: **艾尔登法环 剧情** (dịch từ "…" · nhà cung cấp) · Sửa · Tìm nguyên văn" — luôn cho thấy từ khoá thật đã gửi. Không dịch khi từ khoá đã là chữ Hán hoặc chỉ Latin không dấu (tên game). Dịch tối đa 8 s; lỗi/quá giờ ⇒ tìm nguyên văn + dòng `--warn-txt`. Dùng LLM ở Cài đặt › Dịch thuật (không thêm cấu hình mới). Chỉ áp Bilibili.
+3. **Chip "🔥 Xu hướng Douyin".** 50 chip, cuộn ngang bằng lăn chuột (chuyển `deltaY` → `scrollLeft`), mép phải mờ 48 px khi còn chip. Bấm ⇒ điền **đúng chữ chip** vào ô + tìm ở nguồn đang chọn; chip sáng cam tới khi đổi từ khoá. "12 phút trước ↻" = tuổi cache (TTL 15 phút). Douyin lỗi ⇒ ẩn cả hàng chip (1 dòng mờ "Không lấy được xu hướng Douyin · ↻"), không chặn phần khác.
+4. **Chọn danh sách.** Bilibili: `🔥 Đang hot` (popular 20/trang, cuộn tải thêm) · `🏆 Bảng xếp hạng` (ranking v2, 100 video 1 lần, thẻ có số hạng) · (B) `Danh mục ▾` (Tất cả / Trò chơi / Phim ảnh / Phim bộ–Anime / Âm nhạc / Đời sống / Khoa học & công nghệ — map `rid`, áp cho Bảng xếp hạng) + (B) lọc thời lượng. YouTube: `🔥 Đang hot 🔒` khi **chưa có key** ⇒ màn giải thích "cần Google API key (miễn phí)" + gợi ý tìm từ khoá/bấm chip + (B) nút "⚙ Thêm key trong Cài đặt"; **không** tự fallback `ytsearch "trending"` (không phải hot thật). Có key (B): chọn nước 🇻🇳/🇺🇸/🇯🇵/🇰🇷 (nhớ lựa chọn) + đếm quota còn lại. Đang tìm ⇒ thêm nút `⌕ "từ khoá" ✕`; ✕ / Esc ô rỗng ⇒ về danh sách trước, **giữ vị trí cuộn**. Mặc định khi mở: Bilibili · Đang hot.
+5. **Thẻ video.** Lượt xem: Bilibili `9.876 · 12,8万 · 1,2亿`; YouTube `987 · 12K · 3,4M` (phẩy thập phân kiểu Việt, 1 chữ số lẻ); tooltip số đủ + "万 = 10.000". Thời gian: "vừa xong / 25 phút trước / 3 giờ trước / 6 ngày trước", ≥ 30 ngày `12/09/2026`; không có ngày (YouTube flat) ⇒ bỏ mục, không ghi "—". Tiêu đề tìm Bilibili: làm sạch HTML, chỉ giữ `<em>` ⇒ tô `--ac-txt`. Ảnh tải lười (`loading="lazy"`); đang tải = nền shimmer, lỗi ảnh = nền gradient + logo nguồn (Bilibili cần `Referer` ⇒ qua backend/proxy như plan §3). (B, tuỳ chọn) dòng dịch tiêu đề 🇻🇳 `--t3` dưới tiêu đề.
+6. **Nút trên thẻ.** Hiện khi **hover hoặc focus** (bàn phím). `⬇ Tải về` ⇒ vào hàng đợi hiện có với tuỳ chọn đang đặt ở tab Tải về (tóm tắt "Tải với: … Đổi" ở thanh tab con, "Đổi" = sang Tải về, mở popover tuỳ chọn — **không lặp control**). `🎬 Tải & mở Studio` ⇒ như trên + cờ `openInStudio`; thẻ có nhãn "🎬 mở Studio khi xong"; xong ⇒ **tự tạo tab dự án Studio** (§4.11, chấm xanh "xong chưa xem") + toast "✓ Xong … — đã mở tab trong Studio · **Đi tới Studio** (Enter)" — **không tự nhảy màn hình** (người dùng có thể đang lướt/gõ). Trạng thái trên thẻ khớp hàng đợi + lịch sử tải theo **id video** (bvid / YouTube id): ⏳ Đang đợi · ⬇ 46 % + thanh 3 px đáy ảnh · ✓ Đã tải (viền xanh, nút thành `🎬 Mở trong Studio` + `📁`) · ! Lỗi tải (dòng lỗi thay dòng lượt xem, nút `↻ Thử lại`). Bấm lại khi đang tải ⇒ không thêm trùng, nháy thẻ. Chuột phải / `Shift+F10`: Tải về · Tải & mở Studio — Mở trang gốc trong trình duyệt · Sao chép link · Tìm thêm của kênh "…".
+7. **Hàng đợi mini** (đáy Khám phá): "⬇ Hàng đợi: N đang tải · M đợi" + tối đa 3 mục (tên + thanh + %), "Xem ở Tải về ›". Ẩn khi hàng đợi rỗng. Đọc từ cùng state hàng đợi của Downloader (không gọi lệnh mới).
+
+**Trạng thái** (mockup E)
+
+| Trạng thái | Hiện | Ghi chú |
+|---|---|---|
+| Đang tải danh sách | skeleton đúng kích thước thẻ, đủ 1 màn; "↻" thành vòng quay | có cache ⇒ hiện cache ngay, làm mới ngầm |
+| Trống | 🔍 "Không có video nào cho "…"" + gợi ý (Bilibili hợp từ khoá tiếng Trung/tên game) + nút "Thử "từ rút gọn"" · "Tìm trên YouTube" · (B) "Bật tự dịch" | không bao giờ khung trống trơn |
+| Lỗi mạng | 📡 "Không kết nối được Bilibili/YouTube" + **↻ Thử lại** (nút chính) + 1 dòng mono chi tiết | quá 10 s là báo, không treo |
+| Bị chặn | ⛔ "Bilibili đang tạm chặn tìm kiếm từ máy này" (HTTP 412 / code −352/−412; YouTube "Sign in to confirm") + "Thử lại sau 2:00" **đếm ngược** (gấp đôi nếu lặp) + lối sang danh sách còn dùng được | không giả cookie/chữ ký |
+| Hết kết quả | vạch "Hết · N video · Lên đầu ↑" | ranking dừng ở 100; tìm dừng khi trang rỗng hoặc trang 10 (200 video) |
+| Cuộn vô hạn | còn 600 px tới đáy ⇒ trang sau, 1 hàng skeleton; lỗi ⇒ dòng "Không tải thêm được · ↻ Thử lại", **giữ** thẻ đã có | `IntersectionObserver` trên mốc cuối lưới |
+| YouTube chưa có key | 🔑 màn giải thích (mục 4) | |
+| "Tất cả" (B) — 1 nguồn lỗi | chip nguồn đó đỏ "!" + tooltip; nguồn kia vẫn hiện | trộn xen kẽ 1–1, không sắp theo lượt xem (万 vs K khác thang) |
+
+**Bàn phím** (chỉ khi tab con Khám phá đang mở; đã đối chiếu §4.10/§4.11 — thợ grep lại `src/` trước khi gắn `/`, `Ctrl+F`)
+
+| Phím | Việc |
+|---|---|
+| `/` · `Ctrl+F` | focus ô tìm, chọn sẵn chữ |
+| `Enter` (ô tìm) | tìm |
+| `Esc` (ô tìm) | có chữ ⇒ xoá; rỗng ⇒ bỏ kết quả tìm, về danh sách trước, focus về lưới |
+| `↓` (ô tìm) | xuống thẻ đầu |
+| `← → ↑ ↓` (lưới) | đi theo ô lưới, số cột đọc từ bố cục thật (`ResizeObserver`); `↑` hàng đầu ⇒ lên hàng chọn danh sách. Roving `tabIndex` (1 thẻ = 0) ⇒ Tab chỉ dừng 1 lần ở lưới |
+| `Home` `End` · `PgUp` `PgDn` | đầu/cuối (End kích tải trang sau) · ±1 màn |
+| `Enter` · `Shift+Enter` (thẻ) | Tải về · Tải & mở Studio (thẻ đã tải: Enter = Mở trong Studio) |
+| `Ctrl+C` · `Shift+F10` | sao chép link · menu chuột phải |
+| `← →` · `Enter` (hàng chip) | đi giữa chip (tự cuộn vào tầm nhìn) · chọn |
+| `F5` | làm mới danh sách đang xem (bỏ cache) |
+
+ARIA: lưới `role="grid"` (hàng = `row`, thẻ = `gridcell`) hoặc `listbox` đơn giản hơn — thợ chọn; thẻ có `aria-label` "tiêu đề · kênh · thời lượng · lượt xem · trạng thái tải".
+
+**Hẹp cửa sổ (≥ 1024 px, mockup F).** Lưới tự co (1920 = 6 cột · 1440 = 4–5 · 1024 = 3). Dưới 1280 px: nút nguồn chưa chọn chỉ còn logo (tooltip) · công tắc tự dịch còn `文` + công tắc · nhãn chip hot còn "🔥 Douyin" · "Tải với" chỉ giữ chất lượng · hàng đợi mini còn 1 mục. Không có cuộn ngang toàn trang.
+
+**Nấc C — trình duyệt nhúng (phác, mockup G).** Tab con `🌐 Trình duyệt (thử nghiệm)` chỉ hiện khi spike đạt. Thanh công cụ thuộc **cửa sổ chính**: `‹ › ↻` · ô URL (chỉ đọc + gõ được) · pill nền tảng nhận ra ("✓ Douyin · tải được" / Kuaishou đỏ "yt-dlp chưa hỗ trợ" — BUG-082) · `⬇ Tải video đang xem` · `🎬 Tải & mở Studio` · `↗` mở trình duyệt ngoài; dải lối tắt Douyin/TikTok/Bilibili/YouTube/Xiaohongshu + "Xoá dữ liệu duyệt". Trang ngoài nằm trong webview con (hoặc cửa sổ thứ 2) **không có capability**; Rust đọc URL webview (bắt cả đổi route SPA) ⇒ trang ngoài không gửi gì vào app. Nút tắt khi URL không phải trang video (tooltip "Mở một video để tải"). Không cào/tự cuộn trang.
+
+**Component đề xuất** — `src/views/discovery/` (mỗi file < 300 dòng; **không** phình `DownloaderView.tsx`):
+
+| File | Việc |
+|---|---|
+| `DownloadHubTabs.tsx` (+ `.css`) | thanh tab con Tải về / Khám phá / (Trình duyệt); bọc `DownloaderView` (luôn mount) + `DiscoveryView` |
+| `DiscoveryView.tsx` (+ `.css`) | khung: giữ state nguồn / danh sách / từ khoá / trang; ghép các phần dưới |
+| `DiscoverySearchBar.tsx` | segmented nguồn + ô tìm + (B) công tắc tự dịch + dòng gợi ý/từ khoá đã dịch |
+| `HotTopicChips.tsx` | hàng chip Douyin, cuộn ngang, phím ← → |
+| `DiscoveryListTabs.tsx` | nút Đang hot / Bảng xếp hạng / kết quả tìm / (B) danh mục, nước; tuổi cache + ↻ |
+| `VideoGrid.tsx` | lưới, roving focus, ảo hoá theo hàng khi > 100 thẻ, cuộn vô hạn, skeleton/hết/lỗi trang sau |
+| `VideoCard.tsx` | `React.memo`; props primitive (`item`, `dlStatus`, `dlPct`, `focused`, `rank`) ⇒ tiến độ 1 mục chỉ render lại 1 thẻ |
+| `DiscoveryStates.tsx` | trống / lỗi mạng / bị chặn (đếm ngược) / YouTube chưa có key |
+| `MiniQueueBar.tsx` | hàng đợi mini |
+| `useDiscoveryList.ts` | gọi `discovery_*` qua `src/lib/tauri.ts`, phân trang, huỷ request cũ khi đổi nguồn/từ khoá (chống kết quả về muộn đè kết quả mới), map lỗi → loại (`network` / `blocked` / `no_key` / `other`) |
+| `discoveryModel.ts` (thuần) | `formatViews(n, platform)`, `formatAgo(ts, now)`, `stripTitleHtml`, `videoIdOf(url)` (khớp hàng đợi), `gridNav(index, key, cols, total)`, `isLikelyVietnamese(q)` → test `node --test` |
+
+Hàng đợi: `DiscoveryView` nhận từ cha 1 hàm `enqueue(url, { openInStudio })` + snapshot trạng thái hàng đợi theo `videoId` — chỉ dùng lại logic `downloader` sẵn có, không viết hàng đợi thứ 2. "Mở trong Studio" dùng đúng lối mở tab của §4.11 (khử trùng theo đường dẫn).
+
+**Đếm control (nấc A, màn mặc định):** 2 tab con + 2 nguồn + ô tìm + chip (1 vùng cuộn) + ↻ chip + 2 nút danh sách + ↻ danh sách + liên kết "Đổi" + "Xem ở Tải về" = **11 vùng tương tác**, mỗi thẻ 2 nút (chỉ hiện khi hover/focus).
+
 ---
 
 ## 5. MOCKUP & ẢNH
@@ -610,6 +706,8 @@ export interface HardsubSettings {
 | `docs/ui-mockups/studio-tabs.html` | Tab dự án Studio (§4.11): toàn cảnh 4 tab + thẻ hover, bảng trạng thái tab, 1 tab, rỗng, tràn + danh sách, kéo đổi thứ tự, menu chuột phải, hộp hỏi đóng tab đang chạy, đổi tên, thả file |
 | `docs/ui-mockups/shots/studio-tabs.png` | Ảnh 1920×2700 của `studio-tabs.html` |
 | `docs/ui-mockups/v014-subtitle-style.html` | Kiểu phụ đề + làm mờ phụ đề cứng (§4.12): toàn cảnh Studio, thẻ Kiểu phụ đề (Bình thường / Nhảy chữ, 4 mẫu chữ chạy thật — có 30 dòng JS sinh keyframes), 6 trạng thái dò, khung dải (nghỉ / chỉnh / đang kéo / đang dò / tự đặt), modal Xuất tóm tắt |
+| `docs/ui-mockups/v015-discovery.html` | Khám phá v0.15 (§4.13): toàn cảnh 1920×1080, thanh tìm + tự dịch (B) 5 trạng thái, chọn danh sách (Bilibili / YouTube chưa có key / có key), 12 thẻ đủ trạng thái + menu chuột phải, 6 trạng thái danh sách, cửa sổ 1024 px, phác nấc C, bảng phím. Có ~60 dòng JS chỉ để sinh thẻ lặp; `#a`…`#h` trên URL = chỉ hiện 1 khu (dùng khi chụp) |
+| `docs/ui-mockups/shots/v015-discovery-*.png` | Ảnh Edge headless: `-a-toan-canh` (1920×1080), `-b-thanh-tim`, `-c-danh-sach`, `-d-the-video`, `-e-trang-thai`, `-f-hep-1024`, `-g-trinh-duyet`, `-all` (1920×6300) |
 | `docs/ui-mockups/shots/after-*.png` | Ảnh mockup (Edge headless 1920×1080) |
 | `docs/ui-mockups/shots/compare-*.png` | **Trước | Sau** đặt cạnh nhau cho Studio, Tải video, Cài đặt |
 

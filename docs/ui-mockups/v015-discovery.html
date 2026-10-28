@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Sublix — Khám phá (mockup §4.13 · v0.15)</title>
+<link rel="stylesheet" href="_theme.css">
+<style>
+  body { height: auto; overflow: auto; }
+  /* ---------- khung trình bày (giống studio-tabs.html) ---------- */
+  .page { padding: 26px 28px 60px; display: flex; flex-direction: column; gap: 30px; }
+  h1 { font-size: 20px; margin: 0; } h2 { font-size: 14px; margin: 0 0 10px; color: var(--ac-txt); }
+  h2 .tagB, h2 .tagC { vertical-align: 1px; }
+  .lead { color: var(--t3); margin: 4px 0 0; max-width: 1180px; line-height: 1.55; }
+  .lead b { color: var(--t1); }
+  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .cap { margin-top: 8px; color: var(--t3); font-size: 12px; line-height: 1.5; }
+  .cap b { color: var(--t1); }
+  .tagB, .tagC { display: inline-block; font-size: 10px; font-weight: 800; padding: 0 6px; border-radius: 4px; letter-spacing: .03em; line-height: 16px; }
+  .tagB { background: rgba(167,139,250,.16); color: #c4b5fd; border: 1px solid rgba(167,139,250,.35); }
+  .tagC { background: rgba(56,189,248,.12); color: #7dd3fc; border: 1px solid rgba(56,189,248,.35); }
+  .tbl { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .tbl td, .tbl th { border-bottom: 1px solid var(--line-soft); padding: 7px 10px; text-align: left; vertical-align: top; }
+  .tbl th { color: var(--t4); font-size: 11px; font-weight: 700; }
+  .tbl td:first-child { white-space: nowrap; }
+
+  /* ================= THANH TAB CON (đề xuất code: DownloadHubTabs) ================= */
+  .subbar { height: 38px; display: flex; align-items: stretch; gap: 4px; padding: 0 20px; background: #0f0d0b; border-bottom: 1px solid var(--line); }
+  .st { display: flex; align-items: center; gap: 7px; padding: 0 12px; font-size: 12.5px; font-weight: 600; color: var(--t3); position: relative; }
+  .st.on { color: var(--t1); }
+  .st.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; background: var(--ac); }
+  .st .badge { font-size: 10px; padding: 0 5px; border-radius: 8px; background: var(--ac); color: #000; font-weight: 800; }
+  .st.off { color: var(--t4); }
+  .sub-r { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--t3); }
+  .sub-r b { color: var(--t2); font-weight: 600; }
+
+  /* ================= THÂN KHÁM PHÁ ================= */
+  .dv { display: flex; flex-direction: column; gap: 12px; padding: 14px 28px 0; }
+  /* thanh tìm */
+  .sr { display: flex; gap: 10px; align-items: center; }
+  .src-seg { height: 40px; display: flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--bg-inset); border: 1px solid var(--line); flex: none; }
+  .src-seg span { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 7px; color: var(--t3); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+  .src-seg span.on { background: var(--ac-soft); color: var(--ac-txt); box-shadow: inset 0 0 0 1px var(--ac-br); }
+  .src-seg span.dis { color: var(--t4); }
+  .q { flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px; border-radius: 10px; background: var(--bg-inset); border: 1px solid var(--line); font-size: 13.5px; position: relative; }
+  .q.focus { border-color: var(--ac-br); box-shadow: 0 0 0 3px var(--ac-soft); }
+  .q .ic { color: var(--t4); font-size: 15px; }
+  .q .ph { color: var(--t4); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q .val { color: var(--t1); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q .caret { display: inline-block; width: 1.5px; height: 17px; background: var(--ac-txt); vertical-align: -3px; margin-left: 1px; }
+  .q .x { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--t4); font-size: 12px; }
+  .q .kbd { flex: none; }
+  .tr { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-card); font-size: 12px; font-weight: 600; color: var(--t2); flex: none; white-space: nowrap; }
+  .tr .zh { font-weight: 800; color: var(--t3); }
+  .tr.on { border-color: rgba(167,139,250,.4); background: rgba(167,139,250,.08); color: #ddd6fe; }
+  .tr.on .zh { color: #c4b5fd; }
+  .tr.on .sw.on { background: #a78bfa; }
+  .hint { font-size: 11.5px; color: var(--t3); display: flex; align-items: center; gap: 8px; padding-left: 2px; }
+  .hint .zhq { font-weight: 700; color: #ddd6fe; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(255,255,255,.15); border-top-color: var(--ac); display: inline-block; flex: none; }
+  /* hàng chip xu hướng */
+  .hot { display: flex; align-items: center; gap: 10px; height: 30px; position: relative; }
+  .hot-l { flex: none; font-size: 12px; font-weight: 800; color: #fcd9a0; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .hot-l small { font-weight: 600; color: var(--t4); font-size: 11px; }
+  .chips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow: hidden; position: relative; -webkit-mask: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
+  .chip { flex: none; height: 28px; max-width: 240px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 5px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-card); font-size: 12px; color: var(--t2); white-space: nowrap; }
+  .chip .n { min-width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-family: var(--font-mono); color: var(--t3); background: rgba(255,255,255,.06); padding: 0 4px; }
+  .chip.t1 .n { background: #e8a33d; color: #1a1209; } .chip.t2 .n { background: #c9853a; color: #1a1209; } .chip.t3 .n { background: #9c6a35; color: #f6f0e4; }
+  .chip .w { overflow: hidden; text-overflow: ellipsis; }
+  .chip .h { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); }
+  .chip .lb { font-size: 9.5px; font-weight: 800; padding: 0 4px; border-radius: 3px; line-height: 14px; }
+  .lb.new { background: rgba(94,189,107,.16); color: var(--ok-txt); }
+  .lb.hot { background: rgba(224,91,75,.16); color: var(--dang-txt); }
+  .lb.boom { background: rgba(232,163,61,.2); color: var(--ac-txt); }
+  .chip.on { border-color: var(--ac-br); background: var(--ac-soft); color: var(--ac-txt); }
+  .chip.hov { background: var(--hover); color: var(--t1); border-color: rgba(244,236,222,.18); }
+  .chip.kf { box-shadow: 0 0 0 2px #12100e, 0 0 0 4px var(--ac-txt); }
+  .hot-r { flex: none; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--t4); white-space: nowrap; }
+  .ib { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; border: 1px solid var(--line); color: var(--t3); background: var(--bg-card); font-size: 12px; }
+  /* hàng chọn danh sách */
+  .lr { display: flex; align-items: center; gap: 6px; height: 30px; }
+  .lt { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 8px; font-weight: 700; font-size: 12.5px; color: var(--t3); border: 1px solid transparent; white-space: nowrap; }
+  .lt.on { background: var(--ac-soft); color: var(--ac-txt); border-color: var(--ac-br); }
+  .lt.sel::after { content: "▾"; color: var(--t4); font-size: 10px; }
+  .lt.lock { color: var(--t4); }
+  .lt .x { color: var(--t4); font-size: 11px; margin-left: 2px; }
+  .lt.res { border-style: dashed; border-color: var(--line); color: var(--t2); }
+  .lt.res.on { border-style: solid; }
+  .lsep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+  .lr-r { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--t3); white-space: nowrap; }
+  /* lưới */
+  .vg { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .vc { border-radius: 12px; background: var(--bg-card); border: 1px solid var(--line-soft); overflow: hidden; position: relative; }
+  .vc.hov { background: var(--hover); border-color: var(--line); }
+  .vc.kf { box-shadow: 0 0 0 2px #12100e, 0 0 0 4px var(--ac-txt); }
+  .vc.done { border-color: var(--ok-br); }
+  .vth { aspect-ratio: 16 / 9; position: relative; overflow: hidden; }
+  .vth .gl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 46px; opacity: .17; filter: grayscale(.3); }
+  .dur { position: absolute; right: 6px; bottom: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; background: rgba(0,0,0,.78); color: #fff; padding: 1px 5px; border-radius: 4px; }
+  .rk { position: absolute; left: 0; top: 0; min-width: 30px; height: 26px; padding: 0 8px; display: grid; place-items: center; border-radius: 0 0 10px 0; font-weight: 900; font-size: 13px; font-family: var(--font-mono); background: rgba(0,0,0,.72); color: var(--t2); }
+  .rk.g1 { background: #e8a33d; color: #1a1209; } .rk.g2 { background: #c9853a; color: #1a1209; } .rk.g3 { background: #9c6a35; color: #fff; }
+  .scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,8,6,.35), rgba(10,8,6,.72)); display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 10px; }
+  .scrim .btn { height: 32px; padding: 0 12px; background: rgba(30,25,21,.92); border-color: rgba(244,236,222,.2); }
+  .scrim .btn.primary { background: var(--grad-ac); }
+  .scrim .btn.kf { box-shadow: 0 0 0 2px #12100e, 0 0 0 4px var(--ac-txt); }
+  .stp { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,.78); color: var(--t1); display: flex; align-items: center; gap: 5px; }
+  .stp.ok { background: rgba(26,48,30,.92); color: var(--ok-txt); }
+  .stp.dl { color: #fcd9a0; } .stp.err { background: rgba(60,20,16,.92); color: var(--dang-txt); }
+  .stp.studio { left: auto; right: 6px; top: 6px; background: rgba(0,0,0,.72); color: var(--t2); font-weight: 600; }
+  .pbar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.12); }
+  .pbar i { display: block; height: 100%; background: linear-gradient(90deg, #e8a33d, #f0d9a8); }
+  .vb { padding: 9px 11px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .vt { font-size: 13px; font-weight: 600; line-height: 18px; height: 36px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--t1); }
+  .vt em { font-style: normal; color: var(--ac-txt); }
+  .vtr { font-size: 11.5px; color: var(--t3); line-height: 16px; height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-top: -2px; }
+  .vm { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t3); min-width: 0; }
+  .vm .ch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--t2); }
+  .vm2 { font-size: 11.5px; color: var(--t4); display: flex; gap: 6px; white-space: nowrap; }
+  .vm2 b { color: var(--t3); font-weight: 600; }
+  .pl { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; font-size: 9px; font-weight: 900; flex: none; font-family: var(--font-ui); }
+  .pl.bili { background: rgba(56,189,248,.18); color: #38bdf8; }
+  .pl.yt { background: rgba(239,68,68,.18); color: #f87171; }
+  /* skeleton */
+  .sk { background: linear-gradient(90deg, rgba(244,236,222,.04) 0%, rgba(244,236,222,.09) 40%, rgba(244,236,222,.04) 80%); border-radius: 6px; }
+  .vc.skc .vth { background: linear-gradient(90deg, rgba(244,236,222,.04) 0%, rgba(244,236,222,.08) 40%, rgba(244,236,222,.04) 80%); }
+  /* chân hàng đợi mini */
+  .mq { height: 38px; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-top: 1px solid var(--line); background: #0f0d0b; font-size: 12px; color: var(--t3); position: absolute; left: 0; right: 0; bottom: 0; }
+  .mq b { color: var(--t1); font-weight: 700; }
+  .mqi { display: flex; align-items: center; gap: 7px; max-width: 320px; padding: 3px 10px; border-radius: 14px; border: 1px solid var(--line-soft); background: var(--bg-card); white-space: nowrap; }
+  .mqi .t { overflow: hidden; text-overflow: ellipsis; color: var(--t2); }
+  .mqi .mb { width: 60px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; flex: none; }
+  .mqi .mb i { display: block; height: 100%; background: var(--ac); }
+  .mono11 { font-family: var(--font-mono); font-size: 11px; }
+  /* menu + toast + tooltip */
+  .menu { position: absolute; z-index: 30; width: 260px; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 10px; box-shadow: 0 14px 40px rgba(0,0,0,.6); padding: 5px; font-size: 12px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 9px; border-radius: 6px; color: var(--t2); white-space: nowrap; }
+  .mi .kbd { margin-left: auto; }
+  .mi.hot2 { background: var(--ac-soft); color: var(--ac-txt); }
+  .mi.off { color: var(--t4); }
+  .ms { height: 1px; background: var(--line-soft); margin: 4px 2px; }
+  .mh { font-size: 10.5px; color: var(--t4); font-weight: 700; padding: 4px 9px 2px; letter-spacing: .04em; }
+  .toast { position: absolute; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: #1e1915; border: 1px solid var(--ok-br); box-shadow: 0 14px 40px rgba(0,0,0,.6); font-size: 12.5px; }
+  .toast .ok { color: var(--ok-txt); font-weight: 800; }
+  .tip { position: absolute; z-index: 30; background: #1e1915; border: 1px solid rgba(244,236,222,.13); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.55); padding: 7px 10px; font-size: 11.5px; color: var(--t2); line-height: 1.45; max-width: 300px; }
+  /* trạng thái giữa lưới */
+  .es { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 30px 20px; color: var(--t3); font-size: 12.5px; line-height: 1.5; }
+  .es .big { font-size: 30px; opacity: .8; }
+  .es h4 { margin: 0; font-size: 14.5px; color: var(--t1); }
+  .es .acts { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+  .es .det { font-family: var(--font-mono); font-size: 10.5px; color: var(--t4); }
+  .btn.dang { color: var(--dang-txt); border-color: var(--dang-br); background: var(--dang-soft); }
+  .endrow { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 12px; height: 46px; color: var(--t4); font-size: 12px; }
+  .endrow::before, .endrow::after { content: ""; flex: 1; max-width: 260px; height: 1px; background: var(--line-soft); }
+  .demo { height: 360px; }
+  .demo .dv { padding: 14px 18px 0; }
+  .vg.mini { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  /* nấc C — trình duyệt nhúng */
+  .bz { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #171310; border-bottom: 1px solid var(--line); }
+  .bz .nav { display: flex; gap: 2px; }
+  .bz .nav span { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--t3); font-size: 13px; }
+  .url2 { flex: 1; min-width: 0; height: 30px; border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 10px; font-family: var(--font-mono); font-size: 12px; color: var(--t2); white-space: nowrap; overflow: hidden; }
+  .url2 .lock { color: var(--ok-txt); font-family: var(--font-ui); }
+  .url2 .d { color: var(--t4); }
+  .bm { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 14px; background: #141110; border-bottom: 1px solid var(--line-soft); font-size: 11.5px; color: var(--t3); }
+  .bm span { padding: 3px 9px; border-radius: 6px; }
+  .bm span.on { background: var(--hover); color: var(--t1); }
+  .web { position: relative; height: 470px; background: #f2f2f2; display: grid; grid-template-columns: 220px 1fr 300px; color: #333; font-size: 12px; overflow: hidden; }
+  .web .wl { background: #fff; border-right: 1px solid #e5e5e5; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .web .wl i { display: block; height: 12px; border-radius: 6px; background: #e6e6e6; }
+  .web .wv { background: #000; display: grid; place-items: center; position: relative; }
+  .web .wv .ph9 { width: 250px; height: 444px; border-radius: 8px; background: linear-gradient(160deg, #3d2a52, #12131e 60%, #0a0a0d); position: relative; }
+  .web .wr { background: #fff; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .web .wr i { display: block; height: 10px; border-radius: 5px; background: #ececec; }
+  .wfence { position: absolute; inset: 0; border: 2px dashed rgba(56,189,248,.55); pointer-events: none; }
+  .wtag { position: absolute; right: 8px; bottom: 8px; background: rgba(12,20,28,.85); color: #7dd3fc; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
+  .note { max-width: 300px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <h1>Khám phá — mockup §4.13 (v0.15)</h1>
+    <p class="lead">Tìm video nguồn ngay trong app: <b>Bilibili Đang hot · Bảng xếp hạng · tìm Bilibili / YouTube</b>, hàng chip <b>🔥 Xu hướng Douyin</b>, thẻ video có <b>⬇ Tải về</b> và <b>🎬 Tải &amp; mở Studio</b>. Nấc A vẽ đầy đủ; chỗ cho nấc <span class="tagB">B</span> (tự dịch từ khoá, danh mục, YouTube hot có key, "Tất cả") và <span class="tagC">C</span> (trình duyệt nhúng) vẽ ở trạng thái tắt/phác. Kích thước thật 1:1 ở 1920 px. Dữ liệu giả, tiêu đề Bilibili giữ tiếng Trung như API trả về.</p>
+  </div>
+
+  <!-- ===================== A. TOÀN CẢNH ===================== -->
+  <section id="a">
+    <h2>A · Toàn cảnh 1920×1080 — tab con "Khám phá" trong "Tải video", danh sách Bilibili Đang hot, rê chuột 1 thẻ, 1 thẻ đang tải, 1 thẻ đã tải</h2>
+    <div class="frame" style="height:1080px">
+      <header class="topbar">
+        <div class="brand"><div class="brand-logo">🎬</div>SUBLIX STUDIO <span class="brand-ver">v0.15</span></div>
+        <nav class="tabs">
+          <span class="tab">🎬 Studio</span><span class="tab on">⬇ Tải video <span class="badge">2</span></span><span class="tab">🎙 Live</span><span class="tab">🕘 Lịch sử</span><span class="tab">⚡ Tiến trình</span><span class="tab">⚙ Cài đặt</span>
+        </nav>
+        <div class="top-mid"></div>
+        <div class="top-right">
+          <span class="status-pill"><span class="dot" style="background:var(--ac)"></span>Đang tải 2 · đợi 1</span>
+          <span class="icon-btn" title="Overlay (Ctrl+Shift+O)">👁</span>
+        </div>
+      </header>
+      <div class="subbar">
+        <span class="st">⬇ Tải về <span class="badge">3</span></span>
+        <span class="st on">🔥 Khám phá</span>
+        <span class="st off" title="Nấc C — thử nghiệm, ẩn tới khi spike đạt">🌐 Trình duyệt <span class="tagC">C</span></span>
+        <span class="sub-r">Tải với: <b>Cao nhất</b> · <b>Phụ đề tự tải nếu có</b> <span class="link">Đổi</span></span>
+      </div>
+      <div class="dv">
+        <div class="sr">
+          <div class="src-seg"><span class="on"><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span><span class="dis" title="Nấc B">Tất cả <span class="tagB">B</span></span></div>
+          <div class="q"><span class="ic">⌕</span><span class="ph">Tìm trên Bilibili — từ khoá tiếng Trung cho nhiều kết quả hơn, vd 艾尔登法环 剧情</span><span class="kbd">Enter</span></div>
+          <div class="tr" title="Nấc B — dùng LLM dịch đang cấu hình ở Cài đặt › Dịch thuật"><span class="zh">文</span>Tự dịch sang tiếng Trung <span class="sw"></span></div>
+        </div>
+        <div class="hot">
+          <span class="hot-l">🔥 Xu hướng Douyin <small>50</small></span>
+          <div class="chips" id="chipsA"></div>
+          <span class="hot-r">12 phút trước <span class="ib" title="Làm mới">↻</span></span>
+        </div>
+        <div class="lr">
+          <span class="lt on">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span><span class="lsep"></span><span class="lt sel lock" title="Nấc B">Danh mục: Tất cả <span class="tagB">B</span></span>
+          <span class="lr-r"><span>20 / 100 video · cập nhật 4 phút trước</span><span class="ib" title="Làm mới (F5)">↻</span></span>
+        </div>
+        <div class="vg" id="gridA"></div>
+      </div>
+      <div class="mq">
+        <span>⬇ Hàng đợi: <b>2 đang tải</b> · 1 đợi</span>
+        <span class="mqi"><span class="t">【老番茄】我在艾尔登法环里当了一百天乞丐</span><span class="mb"><i style="width:46%"></i></span><span class="mono11">46%</span></span>
+        <span class="mqi"><span class="t">JOD — Tập đặc biệt (bản đầy đủ)</span><span class="mb"><i style="width:81%"></i></span><span class="mono11">81%</span></span>
+        <span class="mqi"><span class="t">⏳ 一口气看完《庆余年》第三季</span></span>
+        <span class="grow"></span>
+        <span class="link">Xem ở Tải về ›</span>
+      </div>
+      <div class="toast" style="right:28px;bottom:52px"><span class="ok">✓ Xong</span><span>《沙丘：觉醒》剧情全解析 — đã mở tab trong Studio</span><span class="btn primary">Đi tới Studio <span class="kbd" style="background:rgba(0,0,0,.2);color:#3a2408">Enter</span></span><span class="dim">✕</span></div>
+
+      <div class="note" data-n="1" style="left:370px;top:52px;max-width:420px">Tab con trong "Tải video" (không thêm tab thứ 7 lên topbar). Badge "3" = số mục trong hàng đợi; tab con nhớ lần mở cuối.</div>
+      <div class="note" data-n="2" style="left:1180px;top:52px;max-width:360px">Tải theo tuỳ chọn đang đặt ở "Tải về" — chỉ hiện tóm tắt + "Đổi", không lặp control.</div>
+      <div class="note" data-n="3" style="left:1590px;top:144px">Nấc B: công tắc tự dịch (đang tắt). Nấc A ẩn hẳn công tắc này.</div>
+      <div class="note" data-n="4" style="left:560px;top:184px;max-width:520px">Chip Douyin cuộn ngang (lăn chuột), mép phải mờ báo còn chip. Bấm ⇒ điền ô tìm + tìm ngay ở nguồn đang chọn.</div>
+      <div class="note" data-n="5" style="left:666px;top:528px;max-width:276px">Rê chuột / focus: lớp tối + 2 nút. Nút chính (cam) = Tải &amp; mở Studio vì đó là việc của người làm kênh.</div>
+      <div class="note" data-n="6" style="left:960px;top:972px;max-width:340px">Hàng đợi mini: không phải sang "Tải về" vẫn thấy tiến độ. Xong "Tải &amp; mở Studio" ⇒ tab Studio tự mở + toast (không giật màn hình).</div>
+    </div>
+  </section>
+
+  <!-- ===================== B. THANH TÌM ===================== -->
+  <section id="b">
+    <h2>B · Thanh tìm — chọn nguồn + tự dịch từ khoá <span class="tagB">B</span></h2>
+    <div class="grid2">
+      <div>
+        <div class="frame"><div class="dv" style="padding:14px 18px">
+          <div class="sr">
+            <div class="src-seg"><span class="on"><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span></div>
+            <div class="q focus"><span class="ic">⌕</span><span class="val">elden ring cốt truyện<span class="caret"></span></span><span class="x">✕</span><span class="kbd">Enter</span></div>
+          </div>
+        </div></div>
+        <p class="cap"><b>B1 · Nấc A (chưa có tự dịch).</b> Chỉ 2 nguồn. Enter = tìm; Esc = xoá chữ (rỗng thì về lưới). Không tự tìm khi đang gõ (YouTube mất ~7 s/lượt, Bilibili cần gọi thưa) — chỉ Enter, bấm ⌕ hoặc bấm chip; bấm liên tiếp trong 500 ms bị gộp.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="dv" style="padding:14px 18px;gap:8px">
+          <div class="sr">
+            <div class="src-seg"><span class="on"><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span><span class="dis">Tất cả</span></div>
+            <div class="q"><span class="ic">⌕</span><span class="val">cốt truyện elden ring</span><span class="x">✕</span></div>
+            <div class="tr"><span class="zh">文</span>Tự dịch <span class="sw"></span></div>
+          </div>
+          <div class="hint">💡 Từ khoá tiếng Việt thường ra ít kết quả trên Bilibili. <span class="link">Bật tự dịch sang tiếng Trung</span> <span class="dim">· chỉ hiện khi gõ có dấu tiếng Việt + nguồn Bilibili</span></div>
+        </div></div>
+        <p class="cap"><b>B2 · Nấc B, tự dịch TẮT.</b> Công tắc nằm cạnh ô tìm, nhãn ngắn "Tự dịch". Gợi ý 1 dòng chỉ hiện khi phát hiện chữ tiếng Việt có dấu và nguồn là Bilibili; bấm liên kết = bật công tắc + tìm lại.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="dv" style="padding:14px 18px;gap:8px">
+          <div class="sr">
+            <div class="src-seg"><span class="on"><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span><span class="dis">Tất cả</span></div>
+            <div class="q"><span class="ic">⌕</span><span class="val">cốt truyện elden ring</span><span class="x">✕</span></div>
+            <div class="tr on"><span class="zh">文</span>Tự dịch <span class="sw on"></span></div>
+          </div>
+          <div class="hint">Đang tìm: <span class="zhq">艾尔登法环 剧情</span> <span class="dim">(dịch từ "cốt truyện elden ring" · Ollama qwen2.5:3b)</span> · <span class="link">Sửa</span> · <span class="link" style="color:var(--t3)">Tìm nguyên văn</span></div>
+        </div></div>
+        <p class="cap"><b>B3 · Nấc B, tự dịch BẬT.</b> Luôn cho thấy từ khoá tiếng Trung thật sự được gửi đi (người dùng không biết tiếng Trung vẫn kiểm được qua kết quả). "Sửa" = điền từ tiếng Trung vào ô để chỉnh tay; "Tìm nguyên văn" = 1 lần không dịch. Từ khoá đã là tiếng Trung / chỉ chữ Latin không dấu (tên game) ⇒ không dịch. Chỉ áp cho Bilibili; YouTube giữ nguyên.</p>
+      </div>
+      <div>
+        <div class="frame"><div class="dv" style="padding:14px 18px;gap:8px">
+          <div class="sr">
+            <div class="src-seg"><span class="on"><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span><span class="dis">Tất cả</span></div>
+            <div class="q"><span class="ic">⌕</span><span class="val">cốt truyện elden ring</span><span class="x">✕</span></div>
+            <div class="tr on"><span class="zh">文</span>Tự dịch <span class="sw on"></span></div>
+          </div>
+          <div class="hint"><span class="spin"></span> Đang dịch từ khoá… <span class="dim">(tối đa 8 s — quá giờ thì tìm nguyên văn và báo 1 dòng vàng)</span></div>
+        </div></div>
+        <p class="cap"><b>B4 · Đang dịch.</b> Dịch xong mới gọi Bilibili. Kết quả dịch được cache theo từ khoá (cùng TTL 5 phút với kết quả tìm). LLM lỗi ⇒ dòng <span style="color:var(--warn-txt)">"Không dịch được — đang tìm nguyên văn"</span>, không chặn tìm.</p>
+      </div>
+    </div>
+    <div style="margin-top:18px">
+      <div class="frame"><div class="dv" style="padding:14px 18px">
+        <div class="sr">
+          <div class="src-seg"><span><span class="pl bili">B</span>Bilibili</span><span><span class="pl yt">▶</span>YouTube</span><span class="on">Tất cả</span></div>
+          <div class="q"><span class="ic">⌕</span><span class="val">black myth zhong kui</span><span class="x">✕</span></div>
+          <div class="tr on"><span class="zh">文</span>Tự dịch <span class="sw on"></span></div>
+        </div>
+        <div class="lr" style="margin-top:12px"><span class="lt res on">⌕ "black myth zhong kui" <span class="x">✕</span></span><span class="lsep"></span><span class="lt on" style="font-weight:600">Trộn</span><span class="lt" style="font-weight:600"><span class="pl bili">B</span>Bilibili 20</span><span class="lt" style="font-weight:600"><span class="pl yt">▶</span>YouTube 12 <span class="spin" style="margin-left:4px"></span></span></div>
+        <div class="vg mini" id="gridAll" style="margin-top:12px;grid-template-columns:repeat(6,1fr)"></div>
+      </div></div>
+      <p class="cap"><b>B5 · "Tất cả" <span class="tagB">B</span>.</b> Gọi 2 nguồn song song; nguồn nào về trước hiện trước (Bilibili ~1 s, YouTube ~7 s — có vòng quay trên chip đếm). "Trộn" xen kẽ 1–1 theo thứ tự từng nguồn (không sắp lại theo lượt xem vì 万 và K không cùng thang ở 2 nền tảng); bấm chip nguồn để chỉ xem 1 nguồn. Một nguồn lỗi ⇒ chip nguồn đó đỏ "!" + tooltip, nguồn kia vẫn hiện.</p>
+    </div>
+  </section>
+
+  <!-- ===================== C. CHỌN DANH SÁCH ===================== -->
+  <section id="c">
+    <h2>C · Chọn danh sách theo nguồn</h2>
+    <div class="grid2">
+      <div>
+        <div class="frame" style="height:250px"><div class="dv" style="padding:14px 18px">
+          <div class="lr"><span class="lt">🔥 Đang hot</span><span class="lt on">🏆 Bảng xếp hạng</span><span class="lsep"></span><span class="lt sel">Danh mục: Trò chơi <span class="tagB">B</span></span><span class="lr-r">100 video · cập nhật 9 phút trước <span class="ib">↻</span></span></div>
+        </div>
+        <div class="menu" style="left:230px;top:52px;width:220px">
+          <div class="mi">Tất cả</div>
+          <div class="mi hot2">🎮 Trò chơi <span class="kbd">✓</span></div>
+          <div class="mi">🎬 Phim ảnh</div>
+          <div class="mi">📺 Phim bộ / Anime</div>
+          <div class="mi">🎵 Âm nhạc</div>
+          <div class="mi">🍜 Đời sống</div>
+          <div class="mi">🔬 Khoa học &amp; công nghệ</div>
+        </div></div>
+        <p class="cap"><b>C1 · Bilibili.</b> 2 danh sách nấc A dạng nút như tab: <b>Đang hot</b> (popular, 20/trang, cuộn để tải thêm) và <b>Bảng xếp hạng</b> (ranking v2, 100 video 1 lần, thẻ có số hạng). <span class="tagB">B</span> "Danh mục" là menu (chỉ áp cho Bảng xếp hạng vì API `rid`), tên danh mục tiếng Việt; lọc thời lượng <span class="tagB">B</span> đặt cạnh (`&lt; 5 phút · 5–30 · &gt; 30`). Nấc A ẩn hẳn 2 control B (không vẽ ô tắt).</p>
+      </div>
+      <div>
+        <div class="frame" style="height:250px"><div class="dv" style="padding:14px 18px">
+          <div class="lr"><span class="lt on lock">🔥 Đang hot 🔒</span><span class="lr-r">YouTube</span></div>
+          <div class="es" style="padding:18px 10px 0">
+            <div class="big">🔑</div>
+            <h4>YouTube Đang hot cần Google API key (miễn phí)</h4>
+            <div>Gõ từ khoá ở trên hoặc bấm một chip xu hướng để tìm YouTube — không cần key.<br>Có key thì xem được video hot theo nước (VN · US · JP · KR).</div>
+            <div class="acts"><span class="btn">⚙ Thêm key trong Cài đặt</span><span class="link" style="align-self:center">Cách lấy key ›</span></div>
+          </div>
+        </div></div>
+        <p class="cap"><b>C2 · YouTube, chưa có key.</b> Chọn nguồn YouTube khi ô tìm rỗng ⇒ màn này (không phải lưới trống). Nấc A: chỉ có câu đầu + tìm từ khoá; nút "Thêm key" xuất hiện từ nấc <span class="tagB">B</span>. Không tự fallback `ytsearch "trending"` (kết quả không phải "đang hot" thật ⇒ dễ hiểu nhầm).</p>
+      </div>
+      <div>
+        <div class="frame" style="height:130px"><div class="dv" style="padding:14px 18px">
+          <div class="lr"><span class="lt on">🔥 Đang hot</span><span class="lt sel" style="font-weight:600">🇻🇳 Việt Nam</span><span class="lt sel" style="font-weight:600">Trò chơi <span class="tagB">B</span></span><span class="lr-r">20 video · còn 9.982 lượt/ngày <span class="ib">↻</span></span></div>
+          <div class="lr" style="margin-top:12px"><span class="lt res on">⌕ "elden ring nightreign" <span class="x">✕</span></span><span class="lr-r">20 kết quả · 6,8 s</span></div>
+        </div></div>
+        <p class="cap"><b>C3 · YouTube có key <span class="tagB">B</span></b> (trên) và <b>kết quả tìm</b> (dưới, mọi nguồn). Khi đang tìm, danh sách thành 1 nút có dấu ✕ "⌕ từ khoá"; ✕ hoặc Esc trong ô rỗng = về danh sách trước đó (giữ vị trí cuộn). Nhớ nước đã chọn.</p>
+      </div>
+      <div>
+        <div class="frame" style="height:130px"><div class="dv" style="padding:14px 18px">
+          <div class="lr"><span class="lt">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span><span class="lsep"></span><span class="lt res on">⌕ "黑神话" <span class="x">✕</span></span><span class="lr-r">20 / 1.000+ kết quả</span></div>
+          <div class="hot" style="margin-top:12px"><span class="hot-l">🔥 Xu hướng Douyin</span><div class="chips"><span class="chip"><span class="n">1</span><span class="w">在稻城亚丁看一场秋日童话</span></span><span class="chip on"><span class="n">4</span><span class="w">黑神话</span><span class="h">866万</span></span><span class="chip"><span class="n">5</span><span class="w">萌宠滑镜定格挑战</span></span></div></div>
+        </div></div>
+        <p class="cap"><b>C4 · Bấm chip.</b> Chip được bấm sáng cam cho tới khi đổi từ khoá; ô tìm điền đúng chữ chip (tiếng Trung). Nguồn đang là YouTube vẫn tìm YouTube bằng chữ đó (người dùng tự đổi nguồn nếu muốn).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== D. THẺ VIDEO ===================== -->
+  <section id="d">
+    <h2>D · Thẻ video — các trạng thái (rộng 260–340 px, ảnh 16:9)</h2>
+    <div class="frame" style="padding:18px;position:relative">
+      <div class="vg" id="gridD" style="grid-template-columns:repeat(6,1fr)"></div>
+      <div class="menu" style="left:1530px;top:120px">
+        <div class="mi hot2">⬇ Tải về <span class="kbd">Enter</span></div>
+        <div class="mi">🎬 Tải &amp; mở Studio <span class="kbd">Shift+Enter</span></div>
+        <div class="ms"></div>
+        <div class="mi">🌐 Mở trang gốc trong trình duyệt</div>
+        <div class="mi">🔗 Sao chép link <span class="kbd">Ctrl+C</span></div>
+        <div class="mi">⌕ Tìm thêm của kênh "游戏剧情君"</div>
+      </div>
+      <div class="tip" style="left:340px;top:330px">1.284.502 lượt xem · đăng 14:05 28/10/2026<br><span class="dim">Bilibili tính 万 = 10.000 lượt</span></div>
+    </div>
+    <div class="grid3" style="margin-top:12px">
+      <p class="cap" style="margin:0"><b>Giải phẫu.</b> Ảnh 16:9 bo 12 · nhãn thời lượng mono góc dưới phải · tiêu đề 13/600 cao cố định 2 dòng (36 px, cắt "…", tooltip tiêu đề đủ) · dòng 1: logo nguồn 16 px + kênh · dòng 2: <b>lượt xem · thời gian đăng</b>. Bảng xếp hạng: số hạng góc trên trái (top 3 cam đậm → nhạt). Tiêu đề tìm kiếm: phần khớp tô <em style="color:var(--ac-txt);font-style:normal">cam</em> (từ thẻ &lt;em&gt; Bilibili — làm sạch HTML, chỉ giữ em).</p>
+      <p class="cap" style="margin:0"><b>Số &amp; ngày.</b> Bilibili: <span class="mono">9.876 · 12,8万 · 1,2亿</span>; YouTube: <span class="mono">987 · 12K · 3,4M</span> (dấu phẩy thập phân kiểu Việt, 1 chữ số lẻ). Tooltip luôn có số đủ + "万 = 10.000". Thời gian: &lt; 1 giờ "vừa xong / 25 phút trước" · &lt; 24 giờ "3 giờ trước" · &lt; 30 ngày "6 ngày trước" · còn lại <span class="mono">12/09/2026</span>. YouTube tìm (yt-dlp flat) thường không có ngày ⇒ bỏ hẳn mục ngày, không ghi "—".</p>
+      <p class="cap" style="margin:0"><b>Trạng thái tải trên thẻ</b> khớp hàng đợi theo <b>id video</b> (bvid / YouTube id, không theo chuỗi URL): ⏳ Đang đợi · ⬇ 46 % + thanh 3 px đáy ảnh · ✓ Đã tải (viền xanh, nút đổi thành "🎬 Mở trong Studio" / "📁 Thư mục") · ! Lỗi + "↻ Thử lại". Đã tải ở phiên trước (có trong lịch sử tải) cũng hiện ✓. Bấm Tải về lần 2 khi đang tải ⇒ không thêm trùng, chỉ nháy thẻ.</p>
+    </div>
+  </section>
+
+  <!-- ===================== E. TRẠNG THÁI DANH SÁCH ===================== -->
+  <section id="e">
+    <h2>E · Trạng thái danh sách</h2>
+    <div class="grid3">
+      <div>
+        <div class="frame demo"><div class="dv"><div class="lr"><span class="lt on">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span><span class="lr-r"><span class="spin"></span>Đang tải…</span></div><div class="vg mini" id="gridSk"></div></div></div>
+        <p class="cap"><b>E1 · Đang tải danh sách</b> — skeleton đúng kích thước thẻ (không nhảy bố cục), lấp đủ 1 màn. Có dữ liệu cache ⇒ hiện cache ngay, làm mới ngầm (chỉ vòng quay nhỏ ở "↻").</p>
+      </div>
+      <div>
+        <div class="frame demo"><div class="dv"><div class="lr"><span class="lt">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span><span class="lsep"></span><span class="lt res on">⌕ "cốt truyện elden ring" <span class="x">✕</span></span></div>
+          <div class="es"><div class="big">🔍</div><h4>Không có video nào cho "cốt truyện elden ring"</h4><div>Bilibili tìm tốt nhất với từ khoá tiếng Trung hoặc tên game tiếng Anh.</div><div class="acts"><span class="btn">Thử "elden ring"</span><span class="btn"><span class="pl yt">▶</span>Tìm trên YouTube</span></div></div></div></div>
+        <p class="cap"><b>E2 · Trống.</b> Luôn có lối ra: gợi ý bỏ bớt chữ (bỏ từ tiếng Việt có dấu), đổi nguồn. Nấc <span class="tagB">B</span>: thêm "Bật tự dịch".</p>
+      </div>
+      <div>
+        <div class="frame demo"><div class="dv"><div class="lr"><span class="lt on">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span></div>
+          <div class="es"><div class="big">📡</div><h4>Không kết nối được Bilibili</h4><div>Kiểm tra mạng rồi thử lại. Danh sách khác và hàng đợi tải vẫn dùng bình thường.</div><div class="acts"><span class="btn primary">↻ Thử lại</span></div><div class="det">api.bilibili.com · hết thời gian chờ (10 s)</div></div></div></div>
+        <p class="cap"><b>E3 · Lỗi mạng.</b> Thử lại = nút chính duy nhất. Chi tiết kỹ thuật 1 dòng mono mờ. Hết 10 s là báo, không treo vòng quay.</p>
+      </div>
+      <div>
+        <div class="frame demo"><div class="dv"><div class="lr"><span class="lt">🔥 Đang hot</span><span class="lt">🏆 Bảng xếp hạng</span><span class="lsep"></span><span class="lt res on">⌕ "原神" <span class="x">✕</span></span></div>
+          <div class="es"><div class="big">⛔</div><h4>Bilibili đang tạm chặn tìm kiếm từ máy này</h4><div>Thường do tìm quá nhiều trong thời gian ngắn. Đợi vài phút rồi thử lại — <b>Đang hot</b> và <b>Bảng xếp hạng</b> vẫn xem được.</div><div class="acts"><span class="btn">↻ Thử lại sau <span class="mono">2:00</span></span><span class="btn">🔥 Xem Đang hot</span></div><div class="det">HTTP 412 · code -412 (chống bot)</div></div></div></div>
+        <p class="cap"><b>E4 · Bị chặn</b> (HTTP 412 / code -352 / -412 / YouTube "Sign in to confirm"). Nút Thử lại <b>đếm ngược</b> (2 phút, tăng gấp đôi nếu lặp) ⇒ không bấm dồn làm nặng thêm. App <b>không</b> tự giả cookie/chữ ký.</p>
+      </div>
+      <div>
+        <div class="frame demo"><div class="dv"><div class="vg mini" id="gridEnd"></div></div></div>
+        <p class="cap"><b>E5 · Hết kết quả</b> — vạch "Hết · 100 video · Lên đầu ↑" cuối lưới. Bảng xếp hạng luôn kết thúc ở 100; tìm kiếm dừng khi trang trả về rỗng hoặc tới trang 10 (200 video — đủ cho 1 lần tìm, giới hạn để gọi API thưa).</p>
+      </div>
+      <div>
+        <div class="frame demo"><div class="dv"><div class="vg mini" id="gridMore"></div></div></div>
+        <p class="cap"><b>E6 · Cuộn vô hạn.</b> Còn 600 px tới đáy ⇒ tải trang sau, hiện 1 hàng skeleton. Lỗi trang sau ⇒ thay hàng skeleton bằng dòng "Không tải thêm được · ↻ Thử lại" — <b>giữ nguyên</b> các thẻ đã có. &gt; 100 thẻ ⇒ ảo hoá theo hàng (cao hàng cố định).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== F. HẸP 1024 ===================== -->
+  <section id="f">
+    <h2>F · Cửa sổ hẹp 1024 px (tối thiểu) — kết quả tìm YouTube, thẻ đầu đang focus bàn phím</h2>
+    <div class="frame" style="width:1024px;height:640px">
+      <header class="topbar" style="gap:10px">
+        <div class="brand"><div class="brand-logo">🎬</div></div>
+        <nav class="tabs" style="margin-left:0">
+          <span class="tab">🎬</span><span class="tab on">⬇ Tải video <span class="badge">2</span></span><span class="tab">🎙</span><span class="tab">🕘</span><span class="tab">⚡</span><span class="tab">⚙</span>
+        </nav>
+        <div class="top-mid"></div>
+        <div class="top-right"><span class="icon-btn">👁</span></div>
+      </header>
+      <div class="subbar" style="padding:0 12px">
+        <span class="st">⬇ Tải về <span class="badge">3</span></span><span class="st on">🔥 Khám phá</span>
+        <span class="sub-r">Tải với: <b>Cao nhất</b> <span class="link">Đổi</span></span>
+      </div>
+      <div class="dv" style="padding:12px 20px 0">
+        <div class="sr">
+          <div class="src-seg"><span title="Bilibili"><span class="pl bili">B</span></span><span class="on"><span class="pl yt">▶</span>YouTube</span></div>
+          <div class="q"><span class="ic">⌕</span><span class="val">elden ring nightreign lore</span><span class="x">✕</span></div>
+          <div class="tr" style="padding:0 10px" title="Tự dịch sang tiếng Trung (nấc B)"><span class="zh">文</span><span class="sw"></span></div>
+        </div>
+        <div class="hot"><span class="hot-l">🔥 <small>Douyin</small></span><div class="chips" id="chipsF"></div><span class="ib">↻</span></div>
+        <div class="lr"><span class="lt lock">🔥 Hot 🔒</span><span class="lsep"></span><span class="lt res on">⌕ "elden ring nightreign lore" <span class="x">✕</span></span><span class="lr-r">20 kết quả</span></div>
+        <div class="vg" id="gridF" style="grid-template-columns:repeat(3,1fr)"></div>
+      </div>
+    </div>
+    <p class="cap"><b>Quy tắc co:</b> lưới <span class="mono">repeat(auto-fill, minmax(260px, 1fr))</span> ⇒ 1920 px = 6 cột · 1440 = 4–5 · 1024 = 3. Dưới 1280 px: nút nguồn chưa chọn chỉ còn logo (tooltip tên) · công tắc tự dịch chỉ còn "文" + công tắc · nhãn chip hot rút còn "🔥 Douyin" · tóm tắt "Tải với" chỉ giữ chất lượng · chip hàng đợi mini ẩn bớt, giữ "⬇ 2 đang tải › ". Không bao giờ có thanh cuộn ngang toàn trang.</p>
+  </section>
+
+  <!-- ===================== G. NẤC C ===================== -->
+  <section id="g">
+    <h2>G · Phác thảo nấc C — Trình duyệt nhúng (thử nghiệm, sau spike) <span class="tagC">C</span></h2>
+    <div class="frame">
+      <div class="subbar">
+        <span class="st">⬇ Tải về <span class="badge">3</span></span><span class="st">🔥 Khám phá</span><span class="st on">🌐 Trình duyệt <span class="tagC">thử nghiệm</span></span>
+      </div>
+      <div class="bz">
+        <div class="nav"><span>‹</span><span>›</span><span>↻</span></div>
+        <div class="url2"><span class="lock">🔒</span>www.douyin.com<span class="d">/video/7563201948853812543</span></div>
+        <span class="pill ok">✓ Douyin · tải được</span>
+        <span class="btn">⬇ Tải video đang xem</span>
+        <span class="btn primary">🎬 Tải &amp; mở Studio</span>
+        <span class="icon-btn" title="Mở bằng trình duyệt ngoài">↗</span>
+      </div>
+      <div class="bm"><span class="dim">Lối tắt:</span><span class="on">Douyin</span><span>TikTok</span><span>Bilibili</span><span>YouTube</span><span>Xiaohongshu</span><span class="grow"></span><span class="dim">Đăng nhập như trình duyệt thường · dữ liệu đăng nhập lưu riêng cho Sublix · <span class="link">Xoá dữ liệu duyệt</span></span></div>
+      <div class="web">
+        <div class="wl"><i style="width:70%"></i><i></i><i style="width:80%"></i><i style="width:60%"></i><i style="width:75%"></i></div>
+        <div class="wv"><div class="ph9"></div></div>
+        <div class="wr"><i style="width:60%"></i><i></i><i></i><i style="width:85%"></i><i style="width:40%"></i></div>
+        <div class="wfence"></div>
+        <div class="wtag">Trang ngoài — webview riêng, KHÔNG có quyền gọi lệnh Sublix</div>
+      </div>
+      <div class="note" data-n="1" style="left:520px;top:96px">Thanh công cụ thuộc cửa sổ chính (có quyền); trang ngoài nằm trong webview con / cửa sổ thứ 2 không có capability. App đọc URL của webview từ Rust ⇒ không cần trang ngoài gửi gì.</div>
+    </div>
+    <div class="grid3" style="margin-top:12px">
+      <p class="cap" style="margin:0"><b>Nút "Tải video đang xem"</b> theo URL: trang video nhận ra (Douyin `/video/…`, TikTok `/@…/video/…`, Bilibili `BV…`, YouTube `watch`/`shorts`) ⇒ bật + pill xanh tên nền tảng · trang chủ/lướt ⇒ tắt, tooltip "Mở một video để tải" · Kuaishou ⇒ pill đỏ "yt-dlp chưa hỗ trợ" (BUG-082).</p>
+      <p class="cap" style="margin:0"><b>Đặt chỗ:</b> tab con thứ 3 chỉ hiện khi spike đạt (mặc định ẩn ở nấc A — không vẽ tab tắt trong app thật; mockup A vẽ mờ chỉ để thấy vị trí). Nếu webview con không ổn định trên WebView2 ⇒ phương án B: cửa sổ riêng, thanh công cụ là 1 dải dính ở cửa sổ chính (giữ nguyên nút).</p>
+      <p class="cap" style="margin:0"><b>Không làm:</b> không tự cuộn/cào trang, không đọc cookie để gửi kèm yt-dlp ở bản đầu (nếu Douyin cần cookie ⇒ dùng tuỳ chọn cookie trình duyệt sẵn có ở "Tải về › Nâng cao"). Spike trả lời: đăng nhập được không, video phát được không, đọc URL khi trang đổi route (SPA) được không.</p>
+    </div>
+  </section>
+
+  <!-- ===================== H. BÀN PHÍM ===================== -->
+  <section id="h">
+    <h2>H · Bàn phím (chỉ khi tab con Khám phá đang mở)</h2>
+    <div class="frame" style="padding:6px 8px">
+      <table class="tbl">
+        <tr><th>Phím</th><th>Ở đâu</th><th>Việc</th></tr>
+        <tr><td><span class="kbd">/</span> · <span class="kbd">Ctrl+F</span></td><td>bất kỳ (trừ khi đang gõ ô khác)</td><td>focus ô tìm, chọn sẵn cả chữ</td></tr>
+        <tr><td><span class="kbd">Enter</span></td><td>ô tìm</td><td>tìm ở nguồn đang chọn (ô rỗng ⇒ không làm gì)</td></tr>
+        <tr><td><span class="kbd">Esc</span></td><td>ô tìm</td><td>có chữ ⇒ xoá chữ; rỗng ⇒ bỏ kết quả tìm, về danh sách trước (giữ vị trí cuộn), focus về lưới</td></tr>
+        <tr><td><span class="kbd">↓</span></td><td>ô tìm</td><td>xuống thẻ đầu của lưới</td></tr>
+        <tr><td><span class="kbd">← → ↑ ↓</span></td><td>lưới thẻ</td><td>đi theo ô lưới (số cột đọc từ bố cục thật — đổi khi co cửa sổ); <span class="kbd">↑</span> ở hàng đầu ⇒ lên hàng chọn danh sách. 1 thẻ trong lưới có <span class="mono">tabIndex=0</span> (roving), thẻ khác -1 ⇒ Tab chỉ dừng 1 lần ở lưới</td></tr>
+        <tr><td><span class="kbd">Home</span> <span class="kbd">End</span> · <span class="kbd">PgUp</span> <span class="kbd">PgDn</span></td><td>lưới thẻ</td><td>thẻ đầu / cuối (End kích tải trang sau nếu còn) · lên/xuống 1 màn</td></tr>
+        <tr><td><span class="kbd">Enter</span> · <span class="kbd">Shift+Enter</span></td><td>thẻ đang focus</td><td>⬇ Tải về · 🎬 Tải &amp; mở Studio (thẻ đã tải: Enter = Mở trong Studio)</td></tr>
+        <tr><td><span class="kbd">Ctrl+C</span> · <span class="kbd">Shift+F10</span> / phím Menu</td><td>thẻ đang focus</td><td>sao chép link · mở menu chuột phải</td></tr>
+        <tr><td><span class="kbd">← →</span> · <span class="kbd">Enter</span></td><td>hàng chip Douyin</td><td>đi giữa chip (tự cuộn chip vào tầm nhìn) · chọn chip</td></tr>
+        <tr><td><span class="kbd">F5</span></td><td>bất kỳ</td><td>làm mới danh sách đang xem (bỏ qua cache)</td></tr>
+      </table>
+    </div>
+    <p class="cap">Đã kiểm: <span class="kbd">Ctrl+Tab</span>/<span class="kbd">Ctrl+1..9</span> chỉ thuộc Studio (§4.11); <span class="kbd">Alt+1..3</span> chỉ trong VoicePicker (§4.10) ⇒ không trùng. Thợ code grep lại <span class="mono">src/</span> trước khi gắn <span class="kbd">/</span> và <span class="kbd">Ctrl+F</span>.</p>
+  </section>
+</div>
+
+<script>
+/* Chỉ để sinh thẻ lặp lại cho mockup — không phải code app. */
+const BILI = "bili", YT = "yt";
+const A = [
+  { t: "《黑神话：钟馗》实机演示 4K 全流程 无解说", ch: "游戏科学", v: "386,2万", ago: "5 giờ trước", d: "1:12:40", p: BILI, h: 18, g: "🎮" },
+  { t: "【原神】6.2版本前瞻 全新角色「希诺宁」演示", ch: "原神", v: "241,7万", ago: "9 giờ trước", d: "18:22", p: BILI, h: 200, g: "✨" },
+  { t: "【老番茄】我在艾尔登法环里当了一百天乞丐", ch: "老番茄", v: "512,0万", ago: "1 ngày trước", d: "32:15", p: BILI, h: 28, g: "⚔" },
+  { t: "【中字】《沙丘：觉醒》剧情全解析 —— 一口气看懂厄拉科斯", ch: "游戏剧情君", v: "45,3万", ago: "2 ngày trước", d: "47:08", p: BILI, h: 36, g: "🏜" },
+  { t: "一口气看完《庆余年》第三季 全集解说", ch: "影视飓风解说", v: "128,4万", ago: "3 giờ trước", d: "1:58:30", p: BILI, h: 340, g: "🎬" },
+  { t: "异环1.5版本前瞻 新地图与剧情PV 首曝", ch: "异环官方", v: "98,1万", ago: "7 giờ trước", d: "06:41", p: BILI, h: 260, g: "🌀" },
+  { t: "在稻城亚丁看一场秋日童话 4K航拍", ch: "旅行的意义", v: "77,9万", ago: "1 ngày trước", d: "12:03", p: BILI, h: 45, g: "🏔" },
+  { t: "萌宠滑镜定格挑战 第三弹！猫猫看傻了", ch: "喵星人日记", v: "63,2万", ago: "11 giờ trước", d: "03:27", p: BILI, h: 20, g: "🐱" },
+  { t: "【燃】2026 LPL 全球总决赛 半决赛 高光集锦", ch: "哔哩哔哩英雄联盟赛事", v: "301,5万", ago: "4 giờ trước", d: "24:55", p: BILI, h: 0, g: "🏆" },
+  { t: "全网最细《鸣潮》2.8 主线剧情解析（上）", ch: "解说阿杰", v: "38,7万", ago: "2 ngày trước", d: "41:12", p: BILI, h: 220, g: "🌊" },
+  { t: "国产独立游戏《明末：渊虚之羽》通关后的真结局", ch: "游戏剧情君", v: "52,6万", ago: "3 ngày trước", d: "35:47", p: BILI, h: 15, g: "🗡" },
+  { t: "用三十秒看完一部电影：《流浪地球3》预告逐帧分析", ch: "电影最TOP", v: "210,0万", ago: "6 giờ trước", d: "15:30", p: BILI, h: 210, g: "🌏" },
+  { t: "【赛博朋克2077】往日之影 全支线剧情合集", ch: "夜之城档案馆", v: "29,4万", ago: "4 ngày trước", d: "2:05:16", p: BILI, h: 320, g: "🌃" },
+  { t: "绝区零 2.3 新角色实战测评 强度到底如何", ch: "绳匠小李", v: "41,0万", ago: "8 giờ trước", d: "11:48", p: BILI, h: 290, g: "📺" },
+  { t: "如果把《西游记》拍成黑暗奇幻？AI 概念短片", ch: "AI影像实验室", v: "88,8万", ago: "1 ngày trước", d: "08:08", p: BILI, h: 30, g: "🐒" },
+  { t: "【4K】《怪物猎人：荒野》全怪物登场动画合集", ch: "猎人公会", v: "57,3万", ago: "5 ngày trước", d: "52:20", p: BILI, h: 100, g: "🐉" },
+  { t: "十分钟讲清楚《三体》第二部 黑暗森林", ch: "科幻放映厅", v: "146,2万", ago: "12/10/2026", d: "10:02", p: BILI, h: 240, g: "🌌" },
+  { t: "沉浸式体验《逆水寒》新资料片 江南水乡", ch: "江湖小记", v: "21,6万", ago: "2 ngày trước", d: "19:44", p: BILI, h: 160, g: "🏯" },
+];
+const YTR = [
+  { t: "ELDEN RING NIGHTREIGN — Full Lore Explained (Every Nightlord)", ch: "VaatiVidya", v: "2,1M", ago: "", d: "38:12", p: YT, h: 30, g: "⚔" },
+  { t: "Nightreign's Hidden Story — What Happened After the Shattering", ch: "Tarnished Archaeologist", v: "684K", ago: "", d: "24:50", p: YT, h: 10, g: "🌙" },
+  { t: "Elden Ring Nightreign Lore in 10 Minutes", ch: "Quinton Reviews", v: "1,3M", ago: "", d: "10:44", p: YT, h: 210, g: "📜" },
+  { t: "The Duchess Explained | Nightreign Character Lore", ch: "Smough Tier Lore", v: "212K", ago: "", d: "16:09", p: YT, h: 280, g: "🗡" },
+  { t: "Every Nightlord Boss Ranked from Easiest to Hardest", ch: "Fextralife", v: "945K", ago: "", d: "21:33", p: YT, h: 0, g: "🏆" },
+  { t: "Elden Ring Nightreign — Cốt truyện đầy đủ (Vietsub)", ch: "Góc Game Việt", v: "58K", ago: "", d: "45:01", p: YT, h: 40, g: "🇻🇳" },
+];
+const HOT = [
+  ["在稻城亚丁看一场秋日童话", "1172万", ""], ["中方敦促美方停止对古巴封锁施压", "1020万", "hot"], ["异环1.5版本前瞻", "934万", "new"], ["黑神话", "866万", "boom"],
+  ["萌宠滑镜定格挑战", "812万", ""], ["这一届年轻人的秋天", "745万", ""], ["全运会男子百米决赛", "703万", "hot"], ["原神6.2前瞻", "688万", "new"],
+  ["霜降吃什么", "652万", ""], ["流浪地球3预告", "631万", "boom"], ["考研倒计时60天", "598万", ""], ["LPL总决赛", "577万", "hot"],
+  ["贵州村超新赛季", "540万", ""], ["一分钟看懂沙丘觉醒", "512万", "new"], ["秋日限定奶茶", "489万", ""], ["城市骑行挑战", "470万", ""],
+  ["国产3A游戏发售日", "455万", "new"], ["双十一攻略", "431万", ""], ["故宫初雪", "418万", ""], ["最强大脑新季", "402万", ""],
+];
+function bg(h) { return `linear-gradient(135deg, hsl(${h} 32% 26%), hsl(${(h + 30) % 360} 30% 9%))`; }
+function views(d) { return d.p === BILI ? `${d.v} lượt xem` : `${d.v} lượt xem`; }
+function card(d, o = {}) {
+  const cls = ["vc", o.hov ? "hov" : "", o.kf ? "kf" : "", o.st === "done" ? "done" : ""].join(" ");
+  let th = `<div class="gl">${d.g}</div><span class="dur">${d.d}</span>`;
+  if (o.rank) th += `<span class="rk ${o.rank <= 3 ? "g" + o.rank : ""}">${o.rank}</span>`;
+  if (o.st === "queued") th += `<span class="stp">⏳ Đang đợi</span>`;
+  if (o.st === "dl") th += `<span class="stp dl">⬇ Đang tải ${o.pct}%</span><span class="pbar"><i style="width:${o.pct}%"></i></span>`;
+  if (o.st === "done") th += `<span class="stp ok">✓ Đã tải</span>`;
+  if (o.st === "err") th += `<span class="stp err">! Lỗi tải</span>`;
+  if (o.studio) th += `<span class="stp studio">🎬 mở Studio khi xong</span>`;
+  if (o.hov || o.kf) {
+    if (o.st === "done") th += `<div class="scrim"><span class="btn primary">🎬 Mở trong Studio</span><span class="btn">📁</span></div>`;
+    else if (o.st === "err") th += `<div class="scrim"><span class="btn primary">↻ Thử lại</span></div>`;
+    else th += `<div class="scrim"><span class="btn ${o.kfBtn === 1 ? "kf" : ""}">⬇ Tải về</span><span class="btn primary ${o.kfBtn === 2 ? "kf" : ""}">🎬 Tải &amp; mở Studio</span></div>`;
+  }
+  const title = o.hl ? d.t.replace(o.hl, `<em>${o.hl}</em>`) : d.t;
+  const tr = o.tr ? `<div class="vtr">🇻🇳 ${o.tr}</div>` : "";
+  const ago = d.ago ? `<span>·</span><span>${d.ago}</span>` : "";
+  const err = o.st === "err" ? `<div class="vm2" style="color:var(--dang-txt)">Video đã bị gỡ hoặc giới hạn vùng</div>` : `<div class="vm2"><b>${views(d)}</b>${ago}</div>`;
+  return `<div class="${cls}"><div class="vth" style="background:${bg(d.h)}">${th}</div><div class="vb"><div class="vt" title="${d.t}">${title}</div>${tr}<div class="vm"><span class="pl ${d.p}">${d.p === BILI ? "B" : "▶"}</span><span class="ch">${d.ch}</span></div>${err}</div></div>`;
+}
+function skel() { return `<div class="vc skc"><div class="vth"></div><div class="vb"><div class="sk" style="height:13px;width:92%"></div><div class="sk" style="height:13px;width:64%"></div><div class="sk" style="height:11px;width:48%;margin-top:4px"></div><div class="sk" style="height:11px;width:38%"></div></div></div>`; }
+function chip(c, i, o = {}) {
+  const lb = c[2] === "new" ? `<span class="lb new">Mới</span>` : c[2] === "hot" ? `<span class="lb hot">Nóng</span>` : c[2] === "boom" ? `<span class="lb boom">Bùng</span>` : "";
+  const t = i < 3 ? " t" + (i + 1) : "";
+  return `<span class="chip${t}${o.hov ? " hov" : ""}${o.kf ? " kf" : ""}" title="Bấm để tìm — ${c[1]} điểm nhiệt"><span class="n">${i + 1}</span><span class="w">${c[0]}</span>${lb}<span class="h">${c[1]}</span></span>`;
+}
+const $ = (id) => document.getElementById(id);
+$("chipsA").innerHTML = HOT.map((c, i) => chip(c, i, { hov: i === 3 })).join("");
+$("chipsF").innerHTML = HOT.slice(0, 8).map((c, i) => chip(c, i)).join("");
+$("gridA").innerHTML = A.map((d, i) => card(d, i === 2 ? { st: "dl", pct: 46, studio: true } : i === 3 ? { st: "done" } : i === 4 ? { st: "queued" } : i === 8 ? { hov: true } : {})).join("");
+$("gridAll").innerHTML = [card(A[0], { hl: "黑神话" }), card(YTR[0]), card(A[14]), card(YTR[2]), card(A[10]), card(YTR[4])].join("");
+$("gridD").innerHTML = [
+  card(A[5], {}),
+  card(A[3], { hov: true }),
+  card(A[0], { kf: true, kfBtn: 2, rank: 1 }),
+  card(A[2], { st: "dl", pct: 46, studio: true }),
+  card(A[4], { st: "done", hov: true }),
+  card({ ...A[16], t: "【已失效】十分钟讲清楚《三体》第二部" }, { st: "err" }),
+  card(A[8], { rank: 2 }),
+  card(A[11], { rank: 3, st: "queued" }),
+  card(A[9], { rank: 4 }),
+  card(A[1], { tr: "[Genshin] Trực tiếp 6.2 — nhân vật mới Xinonin" }),
+  card(YTR[5], {}),
+  card(A[13], { hl: "绝区零" }),
+].join("");
+$("gridSk").innerHTML = Array.from({ length: 3 }, skel).join("");
+$("gridEnd").innerHTML = [card(A[15], { rank: 98 }), card(A[16], { rank: 99 }), card(A[17], { rank: 100 })].join("") + `<div class="endrow">Hết · 100 video · <span class="link">Lên đầu ↑</span></div>`;
+$("gridMore").innerHTML = [card(A[6]), card(A[7]), card(A[12])].join("") + `<div class="endrow" style="color:var(--dang-txt)">Không tải thêm được (mất mạng) · <span class="link">↻ Thử lại</span></div>`;
+$("gridF").innerHTML = YTR.map((d, i) => card(d, i === 0 ? { kf: true } : {})).join("");
+/* #a / #f … ⇒ chỉ hiện 1 khu (dùng khi chụp ảnh) */
+const only = location.hash.slice(1);
+if (only) { document.querySelectorAll(".page > div, .page > section").forEach((el) => { if (el.id !== only) el.style.display = "none"; }); document.querySelector(".page").style.padding = "0"; document.querySelectorAll("#" + only + " > h2").forEach((h) => (h.style.display = "none")); }
+</script>
+</body>
+</html>

@@ -52,6 +52,11 @@
 | **Claude Sonnet 5.5** | Việc khó/quan trọng (kiến trúc, luồng trạng thái, P2 hàng đợi) — PO cho phép "cái nào quan trọng thì giao Sonnet" | Tốn usage — chỉ khi xứng đáng |
 | **Claude Opus 5.5** | CHỈ phần **thẩm mỹ / logic thiết kế giao diện** + duyệt UI cuối so với mockup | Thợ khác code theo thiết kế của Opus |
 
+> ⚠️ **PO chốt 2026-10-28: MỌI thợ phải mở ở chế độ TỰ DUYỆT (yolo)** — nếu không, leader vắng là thợ đứng chờ và PO phải ngồi bấm duyệt. Lệnh mở:
+> - Claude (Opus/Sonnet): `claude --model claude-opus-5-5 --dangerously-skip-permissions` (thanh dưới phải hiện **"bypass permissions on"**). Lỡ mở thiếu: `/exit` → `claude --resume <id nó in ra> --model … --dangerously-skip-permissions` (giữ ngữ cảnh).
+> - Gemini: `agy --dangerously-skip-permissions` · CommandCode: bật yolo/bypass · mcode / OpenCode: kiểm tra không có hộp xin phép sau lệnh đầu tiên.
+> - **Sau khi giao việc 30–60 s: `orca terminal read` kiểm tra không có "Do you want to proceed?" / "Allow…?"**.
+
 - **Khi mcode quá tải** (gói free chậm ~20–40 tok/s): chia việc sang CommandCode / OpenCode / Gemini.
 - **Đội hình hiện tại** (handle) ghi trong tin `@handoff` mới nhất của điều phối — không ghi ở đây vì đổi theo phiên.
 
