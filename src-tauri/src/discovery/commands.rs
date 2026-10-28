@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 
 use super::cache::{TtlCache, TTL_HOT, TTL_HOT_WORDS, TTL_SEARCH};
 use super::fetch;
+use super::keyword_translate;
 use super::{bilibili, douyin, youtube, DiscoveryItem, HotWord};
 
 /// Cache cho danh sách "nóng" (đang hot + xếp hạng) — [`TTL_HOT`].
@@ -194,6 +195,33 @@ fn parse_error(what: &str, error: anyhow::Error) -> String {
         "{} Không đọc được dữ liệu {what}: {error}",
         fetch::PREFIX_PARSE
     )
+}
+
+/// Dịch từ khoá tìm kiếm sang **tiếng Trung giản thể** (nấc B).
+///
+/// Dùng provider dịch mà người dùng đã cấu hình (MiniMax / Ollama / …) — không
+/// thêm provider hay API key mới. Từ khoá đã là tiếng Trung ⇒ trả về nguyên
+/// văn (không gọi provider). Lỗi ⇒ `Err` ⇒ frontend tìm nguyên văn.
+#[tauri::command]
+pub async fn discovery_translate_keyword(
+    app: tauri::AppHandle,
+    keyword: String,
+) -> Result<String, String> {
+    let trimmed = keyword.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Từ khoá rỗng.".to_string());
+    }
+    // Đã là tiếng Trung ⇒ không cần dịch, không gọi provider.
+    if !keyword_translate::needs_translation(&trimmed) {
+        return Ok(trimmed);
+    }
+
+    tokio::task::spawn_blocking(move || {
+        let cfg = crate::config::AppConfig::load(&app);
+        keyword_translate::translate_keyword(&cfg, &trimmed)
+    })
+    .await
+    .map_err(|e| format!("Không chạy được tác vụ dịch từ khoá: {e}"))?
 }
 
 #[cfg(test)]

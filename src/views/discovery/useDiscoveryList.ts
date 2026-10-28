@@ -1,4 +1,4 @@
-//! TSK-V015-DISC-UI — hook gọi lệnh `discovery_*` + phân trang + chống race.
+﻿//! TSK-V015-DISC-UI — hook gọi lệnh `discovery_*` + phân trang + chống race.
 //!
 //! - **Huỷ request cũ**: mỗi lần gọi tăng `requestId`; kết quả về muộn mà
 //!   `requestId` đã cũ ⇒ **bỏ qua** (không đè lên kết quả mới).
@@ -14,12 +14,17 @@ import {
   sublix,
   discoveryErrorCode,
 } from "../../lib/tauri";
-import type { DiscoveryItem, HotWord } from "../../lib/tauri";
+import type { DiscoveryItem } from "../../lib/tauri";
 import {
   mapDiscoveryError,
   type DiscoveryErrorInfo,
 } from "./discoveryErrors";
 import type { DiscoveryList, DiscoverySource } from "./discoveryModel";
+import { needsTranslation } from "./discoveryModel";
+import {
+  useKeywordTranslate,
+  type DiscoveryTranslation,
+} from "./useKeywordTranslate";
 
 /** Số trang tối đa khi cuộn tải thêm (20/trang ⇒ 200 video). */
 export const MAX_PAGES = 10;
@@ -27,6 +32,8 @@ export const MAX_PAGES = 10;
 export const PAGE_SIZE = 20;
 /** Số kết quả YouTube mỗi lần tìm. */
 export const YOUTUBE_COUNT = 20;
+
+export { AUTO_TRANSLATE_KEY, type DiscoveryTranslation } from "./useKeywordTranslate";
 
 /** Trạng thái danh sách đang xem. */
 export interface DiscoveryListState {
@@ -50,15 +57,35 @@ export interface DiscoveryListApi extends DiscoveryListState {
   keyword: string;
   /** Từ khoá **đã gửi** (sau khi Enter / bấm chip). */
   query: string;
+  /** Công tắc "Tự dịch sang tiếng Trung" (chỉ Bilibili, mặc định BẬT). */
+  autoTranslate: boolean;
+  /** Đang chờ dịch từ khoá. */
+  translating: boolean;
+  /** Bản dịch vừa dùng (để hiện dòng "Đã tìm: …"). */
+  translation: DiscoveryTranslation | null;
+  /** Thông báo nhẹ khi dịch lỗi (đang tìm nguyên văn). */
+  translateNotice: string | null;
   /** YouTube chưa có API key ⇒ danh sách "Đang hot" bị khoá (nấc A). */
   youtubeLocked: boolean;
   setSource: (source: DiscoverySource) => void;
   setList: (list: DiscoveryList) => void;
   setKeyword: (keyword: string) => void;
-  /** Gửi tìm kiếm với từ khoá hiện tại. */
-  submitSearch: (keyword?: string) => void;
+  /** Bật/tắt công tắc tự dịch (nhớ trong localStorage). */
+  setAutoTranslate: (value: boolean) => void;
+  /**
+   * Gửi tìm kiếm với từ khoá hiện tại.
+   *
+   * `options.source` ghi đè nguồn (dùng khi đổi nguồn: state chưa kịp render
+   * nên `paramsRef` còn giá trị cũ). `options.skipTranslate` ⇒ tìm nguyên văn.
+   */
+  submitSearch: (
+    keyword?: string,
+    options?: { skipTranslate?: boolean; source?: DiscoverySource },
+  ) => void;
   /** Bỏ kết quả tìm kiếm ⇒ về danh sách trước đó. */
   clearSearch: () => void;
+  /** Tìm lại bằng **nguyên văn** (bỏ qua bản dịch). */
+  searchOriginal: () => void;
   /** Tải lại bỏ cache. */
   reload: () => void;
   /** Tải trang kế tiếp (cuộn vô hạn). */
@@ -93,6 +120,9 @@ export function useDiscoveryList(): DiscoveryListApi {
   const [query, setQuery] = useState("");
   /** Bộ đếm lần tìm — Enter lại với cùng từ khoá vẫn tìm lại. */
   const [searchNonce, setSearchNonce] = useState(0);
+  /** Công tắc tự dịch + cache phiên (Tách riêng cho file < 300 dòng). */
+  const translator = useKeywordTranslate();
+  const { autoTranslate, translating, translation, translateNotice } = translator;
 
   const [items, setItems] = useState<DiscoveryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,22 +206,62 @@ export function useDiscoveryList(): DiscoveryListApi {
   }, [source, list, query, searchNonce, youtubeLocked, load]);
 
   const submitSearch = useCallback(
-    (text?: string) => {
-      const value = (text ?? keyword).trim();
-      setKeyword(value);
-      setQuery(value);
+    async (
+      text?: string,
+      options?: { skipTranslate?: boolean; source?: DiscoverySource },
+    ) => {
+      const raw = (text ?? keyword).trim();
+      if (!raw) return;
+      setKeyword(raw);
+
+      let effective = raw;
+
+      // Tự dịch sang tiếng Trung — chỉ Bilibili (nguồn khác không cần) và
+      // chỉ khi từ khoá là chữ Latin (tiếng Anh/Việt). Từ khoá đã tiếng Trung
+      // thì giữ nguyên.
+      const activeSource = options?.source ?? paramsRef.current.source;
+      const shouldTranslate =
+        !options?.skipTranslate &&
+        activeSource === "bilibili" &&
+        autoTranslate &&
+        needsTranslation(raw);
+
+      if (shouldTranslate) {
+        const translated = await translator.translate(raw);
+        // `null` ⇒ dịch lỗi ⇒ tìm nguyên văn (thông báo đã do hook đặt).
+        effective = translated ?? raw;
+      } else if (!options?.skipTranslate) {
+        translator.reset();
+      }
+
+      setQuery(effective);
       setList("search");
       setSearchNonce((n) => n + 1);
     },
-    [keyword],
+    [keyword, autoTranslate, translator],
   );
+
+  /** Bật/tắt công tắc tự dịch (ghi localStorage, có try/catch). */
+  const setAutoTranslate = translator.setAutoTranslate;
+
+  /** Tìm lại bằng nguyên văn (bỏ qua bản dịch). */
+  const searchOriginal = useCallback(() => {
+    const raw = (translation?.from ?? keyword).trim();
+    if (!raw) return;
+    setKeyword(raw);
+    translator.reset();
+    setQuery(raw);
+    setList("search");
+    setSearchNonce((n) => n + 1);
+  }, [translation, keyword, translator]);
 
   const clearSearch = useCallback(() => {
     setKeyword("");
     setQuery("");
     setList("hot");
+    translator.reset();
     setSearchNonce((n) => n + 1);
-  }, []);
+  }, [translator]);
 
   const reload = useCallback(() => {
     void load(1, false, true);
@@ -215,60 +285,20 @@ export function useDiscoveryList(): DiscoveryListApi {
     list,
     keyword,
     query,
+    autoTranslate,
+    translating,
+    translation,
+    translateNotice,
     youtubeLocked,
     setSource,
     setList,
     setKeyword,
+    setAutoTranslate,
     submitSearch,
     clearSearch,
+    searchOriginal,
     reload,
     loadMore,
   };
 }
 
-/** Hàng chip "🔥 Xu hướng Douyin" — lỗi thì ẩn cả hàng, không chặn phần khác. */
-export interface HotTopicsApi {
-  words: HotWord[];
-  loading: boolean;
-  error: boolean;
-  loadedAt: number | null;
-  reload: () => void;
-}
-
-/** Hook tải hot word Douyin (TTL 15 phút phía Rust). */
-export function useHotTopics(): HotTopicsApi {
-  const [words, setWords] = useState<HotWord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [loadedAt, setLoadedAt] = useState<number | null>(null);
-  const requestIdRef = useRef(0);
-
-  const load = useCallback(async (force: boolean) => {
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setLoading(true);
-    try {
-      const result = await sublix.discoveryDouyinHot(force);
-      if (requestId !== requestIdRef.current) return;
-      setWords(result);
-      setError(false);
-      setLoadedAt(Date.now());
-    } catch {
-      if (requestId !== requestIdRef.current) return;
-      setWords([]);
-      setError(true);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(false);
-  }, [load]);
-
-  const reload = useCallback(() => {
-    void load(true);
-  }, [load]);
-
-  return { words, loading, error, loadedAt, reload };
-}

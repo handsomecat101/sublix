@@ -990,3 +990,65 @@
   background: var(--hover);
   color: var(--t1);
 }
+
+/* ───────────────────────────── Công tắc "文 Tự dịch" + dòng "Đã tìm" ───────────────────────────── */
+
+.dsc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-inset);
+  color: var(--t2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dsc-toggle:hover {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.dsc-toggle input {
+  margin: 0;
+  accent-color: var(--ac);
+  cursor: pointer;
+}
+
+.dsc-toggle-on {
+  background: var(--ac-soft);
+  border-color: var(--ac-br);
+  color: var(--ac-txt);
+}
+
+.dsc-translated {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--t3);
+}
+
+.dsc-translated-label {
+  color: var(--t3);
+}
+
+.dsc-translated-to {
+  color: var(--ac-txt);
+  font-weight: 700;
+}
+
+.dsc-translated-from {
+  color: var(--t4);
+}
+
+.dsc-hint-warn {
+  color: var(--warn-txt);
+}

@@ -1,10 +1,8 @@
 //! TSK-V015-DISC-UI — khung chính của tab con "Khám phá" (v0.15 nấc A).
 //!
 //! Ghép: thanh tìm → hàng chip Douyin → hàng chọn danh sách → lưới thẻ →
-//! hàng đợi mini. Giữ state nguồn / danh sách / từ khoá / trang; lỗi backend ⇒
-//! map qua `discoveryErrorCode` ⇒ thông điệp + nút Thử lại (đếm ngược 30 s khi
-//! bị chặn, gọi lại với `force`).
-//!
+//! hàng đợi mini. Lỗi backend ⇒ map qua `discoveryErrorCode` ⇒ thông điệp +
+//! nút Thử lại (đếm ngược 30 s khi bị chặn, gọi lại với `force`).
 //! Xem `docs/UI_REDESIGN_PLAN.md` §4.13.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,18 +22,12 @@ import { DiscoverySearchBar } from "./DiscoverySearchBar";
 import { DiscoveryEmpty, DiscoveryError, DiscoveryNoKey, DiscoverySkeleton } from "./DiscoveryStates";
 import { HotTopicChips } from "./HotTopicChips";
 import { MiniQueueBar, type MiniQueueItem } from "./MiniQueueBar";
-import { useDiscoveryList, useHotTopics } from "./useDiscoveryList";
+import type { DiscoveryDlEntry, DiscoveryMenuState } from "./discoveryTypes";
+import { useDiscoveryList } from "./useDiscoveryList";
+import { useHotTopics } from "./useHotTopics";
 import { VideoGrid } from "./VideoGrid";
 
-/** Trạng thái tải của một mục hàng đợi, khớp theo **id video**. */
-export interface DiscoveryDlEntry {
-  status: "queued" | "downloading" | "paused" | "completed" | "error" | "cancelled";
-  percent: number;
-  title: string;
-  filePath?: string | null;
-  /** Mục xếp bằng nút "🎬 Tải & mở Studio" ⇒ tải xong tự mở tab Studio. */
-  openInStudio?: boolean;
-}
+export type { DiscoveryDlEntry } from "./discoveryTypes";
 
 export interface DiscoveryPanelProps {
   /** Hàng đợi tải hiện có của DownloaderView — khớp theo id video. */
@@ -48,13 +40,6 @@ export interface DiscoveryPanelProps {
   onOpenStudio: (filePath: string) => void;
   /** Chuyển sang tab con "Tải về". */
   onShowDownloader: () => void;
-}
-
-/** Menu chuột phải (Shift+F10) của một thẻ. */
-interface MenuState {
-  item: DiscoveryItem;
-  x: number;
-  y: number;
 }
 
 export function DiscoveryPanel({
@@ -71,7 +56,7 @@ export function DiscoveryPanel({
   const [retryIn, setRetryIn] = useState(0);
   /** Số lần bị chặn liên tiếp + thời gian chờ hiện tại (gấp đôi mỗi lần). */
   const blockedRef = useRef({ count: 0, delay: RETRY_DELAY_SECS });
-  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [menu, setMenu] = useState<DiscoveryMenuState | null>(null);
   /** Yêu cầu focus thẻ đầu của lưới (ô tìm: ↓ hoặc Esc khi ô rỗng). */
   const [gridFocusReq, setGridFocusReq] = useState(0);
   const focusGrid = useCallback(() => setGridFocusReq((n) => n + 1), []);
@@ -184,7 +169,7 @@ export function DiscoveryPanel({
     (word: string) => {
       // Chip ⇒ điền **đúng chữ chip** vào ô + tìm ở nguồn đang chọn.
       list.setKeyword(word);
-      list.submitSearch(word);
+      void list.submitSearch(word);
     },
     [list],
   );
@@ -193,8 +178,10 @@ export function DiscoveryPanel({
     (source: DiscoverySource) => {
       list.setSource(source);
       // Đổi nguồn khi có từ khoá ⇒ tìm lại ngay ở nguồn mới.
-      if (list.query.trim()) {
-        list.submitSearch(list.query);
+      // Dùng từ khoá **gõ trong ô** (chưa dịch) — YouTube tìm tiếng Anh tốt hơn.
+      const raw = list.keyword.trim() || list.query.trim();
+      if (raw) {
+        void list.submitSearch(raw, { source });
       } else {
         list.setList("hot");
       }
@@ -223,9 +210,15 @@ export function DiscoveryPanel({
         source={list.source}
         keyword={list.keyword}
         busy={list.loading}
+        autoTranslate={list.autoTranslate}
+        translating={list.translating}
+        translation={list.translation}
+        translateNotice={list.translateNotice}
         onSourceChange={onSourceChange}
         onKeywordChange={list.setKeyword}
-        onSubmit={list.submitSearch}
+        onSubmit={(text) => void list.submitSearch(text)}
+        onAutoTranslateChange={list.setAutoTranslate}
+        onSearchOriginal={list.searchOriginal}
         onClear={list.clearSearch}
         onFocusGrid={focusGrid}
       />
@@ -269,10 +262,10 @@ export function DiscoveryPanel({
       ) : list.list === "search" && !gridHasItems ? (
         <DiscoveryEmpty
           query={list.query}
-          onShorter={() => list.submitSearch(list.query.split(/\s+/)[0] ?? list.query)}
+          onShorter={() => void list.submitSearch(list.query.split(/\s+/)[0] ?? list.query)}
           onYouTube={() => {
             list.setSource("youtube");
-            list.submitSearch(list.query);
+            void list.submitSearch(list.query);
           }}
         />
       ) : (
@@ -326,7 +319,7 @@ export function DiscoveryPanel({
           onDownloadAndOpen={(item) => doDownload(item, true)}
           onSearchChannel={(author) => {
             list.setKeyword(author);
-            list.submitSearch(author);
+            void list.submitSearch(author);
           }}
           onClose={closeMenu}
         />

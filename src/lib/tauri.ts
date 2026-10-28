@@ -1043,6 +1043,16 @@ export const sublix = {
       force: force ?? false,
     });
   },
+
+  /**
+   * v0.15 nấc B — dịch từ khoá tìm kiếm sang **tiếng Trung giản thể** (Bilibili).
+   *
+   * Dùng provider dịch người dùng đã cấu hình (MiniMax / Ollama / …), không thêm
+   * provider hay API key mới. Từ khoá đã là tiếng Trung ⇒ backend trả về nguyên văn.
+   */
+  async discoveryTranslateKeyword(keyword: string): Promise<string> {
+    return await invoke<string>("discovery_translate_keyword", { keyword });
+  },
 };
 
 /**

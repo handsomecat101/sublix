@@ -373,6 +373,7 @@ pub fn run() {
             discovery::commands::discovery_bilibili_search,
             discovery::commands::discovery_douyin_hot,
             discovery::commands::discovery_youtube_search,
+            discovery::commands::discovery_translate_keyword,
             capture_test,
             transcribe_test,
             translate_test,

@@ -4,20 +4,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  containsHan,
   formatAgo,
-  formatCountBili,
-  formatCountShort,
+  formatCountVi,
   formatCountdown,
   formatDuration,
   formatViews,
   gridNav,
   isLikelyVietnamese,
   itemVideoId,
+  needsTranslation,
   nextRetryDelay,
   platformLabel,
   platformName,
+  readStoredFlag,
+  readStoredValue,
   viewsTooltip,
   videoIdOf,
+  writeStoredFlag,
+  writeStoredValue,
 } from "../../src/views/discovery/discoveryModel.ts";
 import {
   dlBadge,
@@ -30,43 +35,41 @@ const SEC = 1000;
 
 // ───────────────────────────── Số lượt xem ─────────────────────────────
 
-test("formatCountShort — YouTube: 987 · 12K · 3,4M", () => {
-  assert.equal(formatCountShort(987), "987");
-  assert.equal(formatCountShort(12_000), "12K");
-  assert.equal(formatCountShort(3_400_000), "3,4M");
-  assert.equal(formatCountShort(1_200), "1,2K");
+test("formatCountVi — kiểu Việt thống nhất: 987 · 18,6 nghìn · 1,8 triệu · 1,2 tỷ", () => {
+  assert.equal(formatCountVi(987), "987");
+  assert.equal(formatCountVi(18_600), "18,6 nghìn");
+  assert.equal(formatCountVi(1_800_000), "1,8 triệu");
+  assert.equal(formatCountVi(50_000_000), "50 triệu");
+  assert.equal(formatCountVi(1_200_000_000), "1,2 tỷ");
 });
 
-test("formatCountShort — không vượt đơn vị (999_950 ⇒ 1M)", () => {
-  assert.equal(formatCountShort(999_950), "1M");
+test("formatCountVi — không vượt đơn vị (999_950 ⇒ 1 triệu)", () => {
+  assert.equal(formatCountVi(999_950), "1 triệu");
+  assert.equal(formatCountVi(999_999), "1 triệu");
+  assert.equal(formatCountVi(999_999_999), "1 tỷ");
 });
 
-test("formatCountShort — số lẻ / âm / NaN không vỡ", () => {
-  assert.equal(formatCountShort(0), "0");
-  assert.equal(formatCountShort(-5), "0");
-  assert.equal(formatCountShort(Number.NaN), "0");
+test("formatCountVi — số lẻ / âm / NaN không vỡ", () => {
+  assert.equal(formatCountVi(0), "0");
+  assert.equal(formatCountVi(-5), "0");
+  assert.equal(formatCountVi(Number.NaN), "0");
 });
 
-test("formatCountBili — Bilibili: 9.876 · 12,8万 · 1,2亿", () => {
-  assert.equal(formatCountBili(9_876), "9.876");
-  assert.equal(formatCountBili(128_000), "12,8万");
-  assert.equal(formatCountBili(120_000_000), "1,2亿");
-  assert.equal(formatCountBili(999), "999");
+test("formatViews — cùng kiểu cho CẢ Bilibili lẫn YouTube", () => {
+  // TSK-V015-DISC-B1: không còn 万/亿 (Bilibili) vs K/M (YouTube) — 1 kiểu chung.
+  assert.equal(formatViews(128_000), "128 nghìn");
+  assert.equal(formatViews(12_800), "12,8 nghìn");
+  assert.equal(formatViews(12_000), "12 nghìn");
+  assert.equal(formatViews(50_000_000), "50 triệu");
+  assert.equal(formatViews(null), "");
+  assert.equal(formatViews(undefined), "");
 });
 
-test("formatViews — chọn kiểu theo nền tảng", () => {
-  assert.equal(formatViews(128_000, "bilibili"), "12,8万");
-  assert.equal(formatViews(12_800, "bilibili"), "1,3万");
-  assert.equal(formatViews(12_000, "youtube"), "12K");
-  assert.equal(formatViews(null, "youtube"), "");
-  assert.equal(formatViews(undefined, "bilibili"), "");
-});
-
-test("viewsTooltip — Bilibili có chú thích đơn vị 万/亿", () => {
-  assert.ok(viewsTooltip(128_000, "bilibili").includes("万 = 10.000"));
-  assert.ok(viewsTooltip(128_000, "bilibili").includes("128.000"));
-  assert.ok(!viewsTooltip(12_000, "youtube").includes("万"));
-  assert.equal(viewsTooltip(null, "youtube"), "");
+test("viewsTooltip — số đủ, không còn chú thích 万/亿", () => {
+  assert.ok(viewsTooltip(128_000).includes("128.000"));
+  assert.ok(!viewsTooltip(128_000).includes("万"));
+  assert.ok(!viewsTooltip(128_000).includes("亿"));
+  assert.equal(viewsTooltip(null), "");
 });
 
 // ───────────────────────────── Thời lượng ─────────────────────────────
@@ -187,7 +190,39 @@ test("mapDiscoveryError — unknown ⇒ dùng thông điệp gốc", () => {
   assert.ok(info.detail.includes("hỏng rồi"));
 });
 
-// ───────────────────────────── Gợi ý từ khoá ─────────────────────────────
+// ───────────────────────────── Tự dịch từ khoá ─────────────────────────────
+
+test("containsHan — nhận chữ Hán", () => {
+  assert.equal(containsHan("原神"), true);
+  assert.equal(containsHan("艾尔登法环 剧情"), true);
+  assert.equal(containsHan("原神 genshin"), true);
+  assert.equal(containsHan("elden ring"), false);
+  assert.equal(containsHan(""), false);
+});
+
+test("needsTranslation — Latin thì dịch, đã có Hán thì không", () => {
+  assert.equal(needsTranslation("elden ring"), true);
+  assert.equal(needsTranslation("đấu trường"), true);
+  assert.equal(needsTranslation("原神"), false);
+  assert.equal(needsTranslation("原神 genshin"), false);
+  assert.equal(needsTranslation("2024"), false);
+  assert.equal(needsTranslation(""), false);
+});
+
+test("readStoredFlag / writeStoredFlag — localStorage lỗi ⇒ trả mặc định", () => {
+  // Node không có `window.localStorage` ⇒ try/catch phải trả mặc định, không ném.
+  assert.equal(readStoredFlag("sublix.test.khongTonTai", true), true);
+  assert.equal(readStoredFlag("sublix.test.khongTonTai", false), false);
+  assert.doesNotThrow(() => writeStoredFlag("sublix.test.khongTonTai", true));
+});
+
+// ───────────────────────────── Lưu/đọc tuỳ chọn ─────────────────────────────
+
+test("readStoredValue — không có window ⇒ trả fallback", () => {
+  assert.equal(readStoredValue("sublix.test.khongTonTai", "gia"), "gia");
+  assert.doesNotThrow(() => writeStoredValue("sublix.test.khongTonTai", "x"));
+});
+
 
 test("isLikelyVietnamese — nhận dấu tiếng Việt", () => {
   assert.equal(isLikelyVietnamese("đấu trường"), true);

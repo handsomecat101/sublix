@@ -24,6 +24,7 @@ pub mod commands;
 pub mod douyin;
 pub mod fetch;
 pub mod format;
+pub mod keyword_translate;
 pub mod youtube;
 
 use serde::{Deserialize, Serialize};

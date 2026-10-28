@@ -70,7 +70,7 @@ function VideoCardInner({
 
   const badge = dlBadge(dlStatus, dlPct);
   const duration = formatDuration(item.durationSec);
-  const views = formatViews(item.viewCount, item.platform);
+  const views = formatViews(item.viewCount);
   const ago = formatAgo(item.publishTime, Date.now());
   const isDownloading = dlStatus === "queued" || dlStatus === "downloading";
   const isDone = dlStatus === "done";
@@ -175,7 +175,7 @@ function VideoCardInner({
         ) : (
           <div className="dsc-line2">
             {views && (
-              <span title={viewsTooltip(item.viewCount, item.platform)}>{views} lượt xem</span>
+              <span title={viewsTooltip(item.viewCount)}>{views} lượt xem</span>
             )}
             {ago && <span>· {ago}</span>}
             {isDone && (

@@ -16,9 +16,21 @@ export interface DiscoverySearchBarProps {
   keyword: string;
   /** Có đang tìm (để hiện spinner ở nút ⌕). */
   busy: boolean;
+  /** Công tắc "Tự dịch sang tiếng Trung" (chỉ Bilibili). */
+  autoTranslate: boolean;
+  /** Đang chờ dịch từ khoá. */
+  translating: boolean;
+  /** Bản dịch vừa dùng — hiện dòng "Đã tìm: …". */
+  translation: { from: string; to: string } | null;
+  /** Thông báo nhẹ khi dịch lỗi. */
+  translateNotice: string | null;
   onSourceChange: (source: DiscoverySource) => void;
   onKeywordChange: (keyword: string) => void;
   onSubmit: (keyword: string) => void;
+  /** Bật/tắt công tắc tự dịch. */
+  onAutoTranslateChange: (value: boolean) => void;
+  /** Tìm lại bằng nguyên văn (bỏ qua bản dịch). */
+  onSearchOriginal: () => void;
   /** Esc khi ô rỗng ⇒ bỏ kết quả tìm. */
   onClear: () => void;
   /** Esc khi ô rỗng ⇒ đưa focus về lưới. */
@@ -39,9 +51,15 @@ export function DiscoverySearchBar({
   source,
   keyword,
   busy,
+  autoTranslate,
+  translating,
+  translation,
+  translateNotice,
   onSourceChange,
   onKeywordChange,
   onSubmit,
+  onAutoTranslateChange,
+  onSearchOriginal,
   onClear,
   onFocusGrid,
 }: DiscoverySearchBarProps) {
@@ -137,12 +155,49 @@ export function DiscoverySearchBar({
         </button>
       </div>
 
-      {source === "bilibili" && isLikelyVietnamese(keyword) && (
-        <div className="dsc-hint">
-          Bilibili ưu tiên từ khoá <strong>tiếng Trung</strong> — từ khoá tiếng Anh thường bị
-          chặn.
+      {source === "bilibili" && (
+        <label
+          className={`dsc-toggle${autoTranslate ? " dsc-toggle-on" : ""}`}
+          title="Tự dịch từ khoá sang tiếng Trung — Bilibili chặn tìm kiếm bằng từ khoá tiếng Anh"
+        >
+          <input
+            type="checkbox"
+            checked={autoTranslate}
+            onChange={(e) => onAutoTranslateChange(e.target.checked)}
+          />
+          <span className="dsc-toggle-text">文 Tự dịch</span>
+        </label>
+      )}
+
+      {translation && (
+        <div className="dsc-translated">
+          <span className="dsc-translated-label">Đã tìm:</span>
+          <strong className="dsc-translated-to">{translation.to}</strong>
+          <span className="dsc-translated-from">(dịch từ "{translation.from}")</span>
+          <button
+            type="button"
+            className="dsc-link-btn"
+            onClick={onSearchOriginal}
+            title="Tìm bằng từ khoá gốc, không dịch"
+          >
+            Tìm nguyên văn
+          </button>
         </div>
       )}
+
+      {translateNotice && <div className="dsc-hint dsc-hint-warn">{translateNotice}</div>}
+
+      {source === "bilibili" && !autoTranslate && isLikelyVietnamese(keyword) && (
+        <div className="dsc-hint">Bật tự dịch sang tiếng Trung để Bilibili ra nhiều kết quả hơn.</div>
+      )}
+
+      {source === "bilibili" && autoTranslate && isLikelyVietnamese(keyword) && (
+        <div className="dsc-hint">
+          Từ khoá có dấu tiếng Việt sẽ được dịch sang tiếng Trung trước khi tìm.
+        </div>
+      )}
+
+      {translating && <div className="dsc-hint">Đang dịch từ khoá sang tiếng Trung…</div>}
     </div>
   );
 }

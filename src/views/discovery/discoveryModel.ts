@@ -31,37 +31,42 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** Ghép số + đơn vị: `1.0` + `K` ⇒ `"1K"`, `1.2` + `K` ⇒ `"1,2K"`. */
+/** Ghép số + đơn vị: `1.0` + `nghìn` ⇒ `"1 nghìn"`, `1.2` + `triệu` ⇒ `"1,2 triệu"`. */
 function join(value: number, unit: string): string {
   let text = value.toFixed(1);
   while (text.endsWith("0")) text = text.slice(0, -1);
   if (text.endsWith(".")) text = text.slice(0, -1);
-  return `${text.replace(".", ",")}${unit}`;
+  return `${text.replace(".", ",")} ${unit}`;
 }
 
-/** Các mốc đơn vị, **giảm dần** — dùng để nhảy đơn vị khi làm tròn chạm trần. */
-const UNITS: [number, string][] = [
-  [1_000_000_000, "T"],
-  [1_000_000, "M"],
-  [1_000, "K"],
+/**
+ * Các mốc đơn vị kiểu Việt, **giảm dần** — dùng để nhảy đơn vị khi làm tròn chạm trần.
+ *
+ * TSK-V015-DISC-B1: dùng **chung 1 kiểu cho cả Bilibili lẫn YouTube**
+ * (`万` = 10.000 / `亿` = 100.000.000 của Bilibili khó đọc với người Việt).
+ */
+const VI_UNITS: [number, string][] = [
+  [1_000_000_000, "tỷ"],
+  [1_000_000, "triệu"],
+  [1_000, "nghìn"],
 ];
 
 /**
- * Rút gọn theo kiểu YouTube: `987` · `12K` · `3,4M` · `1,2T`.
+ * Rút gọn số kiểu Việt: `987` · `18,6 nghìn` · `1,8 triệu` · `50 triệu` · `1,2 tỷ`.
  *
  * Khớp `format_count` của lõi Rust (`src-tauri/src/discovery/format.rs`): khi làm
- * tròn **vượt đơn vị** (`999.950K`) thì tự nhảy lên đơn vị lớn hơn ⇒ `1M`.
+ * tròn **vượt đơn vị** (`999.950 nghìn`) thì tự nhảy lên đơn vị lớn hơn ⇒ `1 triệu`.
  */
-export function formatCountShort(n: number): string {
+export function formatCountVi(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0";
   const value = Math.floor(n);
   if (value < 1000) return String(value);
-  for (let index = 0; index < UNITS.length; index += 1) {
-    const [divisor, unit] = UNITS[index];
+  for (let index = 0; index < VI_UNITS.length; index += 1) {
+    const [divisor, unit] = VI_UNITS[index];
     if (value < divisor) continue;
     const rounded = round1(value / divisor);
     if (rounded >= 1000 && index > 0) {
-      const [bigDivisor, bigUnit] = UNITS[index - 1];
+      const [bigDivisor, bigUnit] = VI_UNITS[index - 1];
       return join(round1(value / bigDivisor), bigUnit);
     }
     return join(rounded, unit);
@@ -69,44 +74,16 @@ export function formatCountShort(n: number): string {
   return String(value);
 }
 
-/** Mốc đơn vị kiểu Bilibili: `万` = 10.000 · `亿` = 100.000.000. */
-const BILI_UNITS: [number, string][] = [
-  [100_000_000, "亿"],
-  [10_000, "万"],
-];
-
-/** Rút gọn theo kiểu Bilibili: `9.876` · `12,8万` · `1,2亿`. */
-export function formatCountBili(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return "0";
-  const value = Math.floor(n);
-  if (value < 10_000) {
-    // Nhóm nghìn bằng dấu chấm (kiểu Việt): 9876 ⇒ "9.876".
-    return value.toLocaleString("vi-VN");
-  }
-  for (let index = 0; index < BILI_UNITS.length; index += 1) {
-    const [divisor, unit] = BILI_UNITS[index];
-    if (value < divisor) continue;
-    const rounded = round1(value / divisor);
-    if (rounded >= 1000 && index > 0) {
-      const [bigDivisor, bigUnit] = BILI_UNITS[index - 1];
-      return join(round1(value / bigDivisor), bigUnit);
-    }
-    return join(rounded, unit);
-  }
-  return String(value);
+/** Lượt xem rút gọn — **cùng kiểu cho mọi nguồn** (TSK-V015-DISC-B1). */
+export function formatViews(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "";
+  return formatCountVi(n);
 }
 
-/** Lượt xem rút gọn theo nền tảng. */
-export function formatViews(n: number | null | undefined, platform: string): string {
+/** Tooltip đầy đủ cho lượt xem (số đủ, không dùng đơn vị `万`/`亿` nữa). */
+export function viewsTooltip(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "";
-  return platform === "bilibili" ? formatCountBili(n) : formatCountShort(n);
-}
-
-/** Tooltip đầy đủ cho lượt xem (số đủ + gợi ý đơn vị Bilibili). */
-export function viewsTooltip(n: number | null | undefined, platform: string): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return "";
-  const full = Math.floor(n).toLocaleString("vi-VN");
-  return platform === "bilibili" ? `${full} lượt xem · 万 = 10.000 · 亿 = 100.000.000` : `${full} lượt xem`;
+  return `${Math.floor(n).toLocaleString("vi-VN")} lượt xem`;
 }
 
 // ───────────────────────────── Thời lượng & thời gian ─────────────────────────────
@@ -249,8 +226,8 @@ export function nextRetryDelay(currentSecs: number): number {
   return Math.min(Math.floor(currentSecs) * 2, 300);
 }
 
-/** Lưu/đọc tuỳ chọn tab con (localStorage, có try/catch). */
-export function readStoredTab(key: string, fallback: string): string {
+/** Lưu/đọc tuỳ chọn (localStorage, có try/catch). */
+export function readStoredValue(key: string, fallback: string): string {
   try {
     const raw = window.localStorage.getItem(key);
     return raw && raw.trim() ? raw : fallback;
@@ -259,11 +236,46 @@ export function readStoredTab(key: string, fallback: string): string {
   }
 }
 
-/** Ghi tuỳ chọn tab con (localStorage, có try/catch). */
-export function writeStoredTab(key: string, value: string): void {
+/** Ghi tuỳ chọn (localStorage, có try/catch). */
+export function writeStoredValue(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value);
   } catch {
     /* localStorage bị chặn (private mode) — bỏ qua, không làm hỏng UI. */
   }
+}
+
+/** Đọc công tắc boolean đã lưu (mặc định `fallback` nếu chưa lưu / bị chặn). */
+export function readStoredFlag(key: string, fallback: boolean): boolean {
+  const raw = readStoredValue(key, fallback ? "1" : "0");
+  return raw === "1";
+}
+
+/** Ghi công tắc boolean (localStorage, có try/catch). */
+export function writeStoredFlag(key: string, value: boolean): void {
+  writeStoredValue(key, value ? "1" : "0");
+}
+
+// ───────────────────────────── Tự dịch từ khoá ─────────────────────────────
+
+/**
+ * Từ khoá đã có chữ Hán (CJK) chưa?
+ *
+ * Khớp `contains_han` của lõi Rust (`discovery/keyword_translate.rs`).
+ */
+export function containsHan(text: string): boolean {
+  return /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(text ?? "");
+}
+
+/**
+ * Cần dịch từ khoá sang tiếng Trung không?
+ *
+ * - Đã có chữ Hán ⇒ **không** dịch (từ khoá đã là tiếng Trung).
+ * - Không có chữ Latin ⇒ không dịch (chỉ số / ký hiệu).
+ */
+export function needsTranslation(keyword: string): boolean {
+  const text = (keyword ?? "").trim();
+  if (!text) return false;
+  const hasLatin = /[A-Za-z]/.test(text);
+  return hasLatin && !containsHan(text);
 }
