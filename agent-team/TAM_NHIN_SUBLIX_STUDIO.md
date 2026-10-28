@@ -24,6 +24,7 @@
 ## 3b. HƯỚNG DÀI HẠN (PO chốt 2026-10-26)
 **Từ "Studio dịch" → "Studio làm video AI".** Dịch + lồng tiếng là nền; bước tiếp là làm video **hút người xem suốt từ đầu đến cuối** (phụ đề động, dựng nhanh) — tự động hoá những chuỗi thao tác nhiều bước mà creator đang phải làm tay trong CapCut, nhưng **chỉ chạy khi người dùng chọn** (ô tích / nút), không áp cho mọi video.
 - Gần: **v0.14** — chọn kiểu phụ đề (Bình thường / **Nhảy chữ**) + ô tích **"phụ đề cứng → làm mờ & đè tem"** (KHÔNG xoá bằng AI). Kế hoạch: `docs/V0.14_PLAN.md`.
+- Tiếp: **v0.15 "Khám phá"** — tìm video + đang hot (Bilibili, Douyin hot words, YouTube) ngay trong app → Tải & mở Studio. Kế hoạch: `docs/V0.15_PLAN.md`. Sau đó **Batch** và **Dựng AI recap game** (PO làm kênh recap game — `docs/GAME_RECAP_RESEARCH.md`).
 - Xa hơn (ý tưởng đã nghiên cứu, chưa chốt): cắt khoảng lặng 1 nút, dịch vừa nhịp nói, dựng dọc 9:16 bám người nói, tách nhạc tốt hơn — `docs/FEATURE_IDEAS_2026.md`.
 
 ## 4. LỘ TRÌNH (đảo: timeline lên đầu)

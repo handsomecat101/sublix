@@ -102,6 +102,7 @@
 ## 6. Lời khuyên vận hành (rút từ thực tế — đọc 1 lần, áp dụng mãi)
 
 **Giao việc**
+- **Mỗi run chỉ có 1 điều phối** (`orca orchestration run-show --id <run>` ⇒ `coordinator_handle`). Thợ lỡ chạy `run-use` sẽ **chiếm vai điều phối** (2026-10-28 Gemini làm vậy khi cửa sổ đổi handle ⇒ `task-create` của leader báo `consumer_fenced`). Sửa: leader chạy `orca orchestration run-use --id <run>`; spec ghi rõ "thợ KHÔNG chạy run-use/run-create". Muốn có **trợ lý điều phối** việc phụ ⇒ cho họ `run-create` run RIÊNG + nhóm thợ riêng, khóa file qua PROJECT_STATE.
 - **Spec càng rõ, thợ rẻ càng làm tốt.** Mỗi spec: mục tiêu 1 câu · file được/cấm sửa · mục docs phải đọc · ca test bắt buộc · lệnh tự kiểm · "không build/chạy app, không commit, không heartbeat". Thiếu danh sách file ⇒ thợ sửa lan sang file người khác.
 - **Tách "lõi thuần" ra trước.** Việc lớn trên 1 file to (vd view 9.000 dòng) phải làm tuần tự — nhưng phần logic thuần (module mới + test node) giao song song cho thợ khác ngay. Khi file to rảnh, phần còn lại chỉ là "nối".
 - **Việc vài dòng thì leader tự sửa** — giao + kiểm còn tốn hơn.
