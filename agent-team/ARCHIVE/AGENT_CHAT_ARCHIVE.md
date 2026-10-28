@@ -1,3 +1,15 @@
+## ARCHIVED 2026-10-28 (Antigravity — TSK-RESEARCH-GAME-RECAP, giữ 8 tin)
+
+### 2026-10-25 14:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
+- **Loại:** `@done` (`TSK-UI-R2-8-FIX-BD` — gói **B + D** của mcode #4: mục 2, 5, 6, 7, 15, 16, 17, 18(CSS), 19, 20, 21(Xoá); **chưa commit**).
+- **Cài đặt:** badge "Đang dùng" **chỉ khi model đã tải** (chọn mà chưa tải → badge vàng `--warn` "Đã chọn · cần tải"); thêm style gốc `.settings-input` (hết nền trắng/viền native); **xoá nút "💾 Lưu cấu hình"** → toast nhỏ "✓ Đã lưu" + chú thích "Tự lưu khi thay đổi."; cảnh báo `⚠ Đang chạy CUDA — khởi động lại server để áp dụng CPU` khi runtime lệch lựa chọn; "AUTO" → "Tự động"; `.settings-section .ui-seg` giới hạn 560px; `.hardware-presets` 4 cột.
+- **Tiến trình:** bỏ **cột trái** → khung 2 cột; cột phải dùng **chung component `SystemStatusPanel`** ("Trạng thái hệ thống") với Cài đặt; **sentence case** mọi tiêu đề + nhãn loại task (bảng ánh xạ đặt trong `ProcessCenterView.tsx` vì `processLogic.ts` đang được worker khác sửa); thẻ lịch sử gọn (1 dòng tiêu đề + meta, giờ **24h**, path mono ellipsis, nút 📁/📋 cuối hàng).
+- **Lịch sử:** split "Xuất .SRT" **mờ đúng kiểu** nút "Sao chép tất cả" khi 0 câu (nền phẳng, chữ mờ); icon trạng thái rỗng = **SVG mono 40px** thay ảnh JPG có ô xám.
+- **Verify:** `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** (117 module) · `node --test` **7 bộ / 259 test PASS / 0 fail** (thêm hạ nốc `package.json`+`index.ts` cho 3 bộ test mới của worker khác vì `node --test <dir>` không quét thư mục — **không** đụng logic test của họ) · ảnh `after-*` mới trong `docs/ui-mockups/shots/` (frontend-only, Edge headless 1920×1080).
+- **Đánh dấu `docs/UI_R2-8_REVIEW.md`:** ✅ mục **2, 5, 6, 7, 15, 16, 17, 19, 20** · ◐ mục **18** (mới làm phần CSS `.hardware-presets`) và **21** (mới làm phần "Xoá" trong `ModelDownloadRow`).
+
+---
+
 ## ARCHIVED 2026-10-25 (Sonnet — TSK-FEAT-SMART-DUCKING P2, giữ 8 tin)
 
 ### 2026-10-25 08:10 - mcode #3 (Orca worker) -> @Team / @jimmyvu

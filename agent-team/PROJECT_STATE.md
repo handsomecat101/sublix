@@ -54,7 +54,8 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| _(trống — không có task nào đang khóa)_ | | | | | |
+| `TSK-V015-DISC-CORE` | Lõi thuần Rust `discovery/` (parser + cache + test JSON mẫu) | **OpenCode (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `src-tauri/src/discovery/**` (mới) · `src-tauri/src/lib.rs` (+1 dòng `pub mod discovery;`) |
+| `TSK-DESIGN-V015-DISCOVERY` | Thiết kế tab "Khám phá" v0.15 (mockup + `UI_REDESIGN_PLAN.md §4.13`) | **Opus (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `docs/ui-mockups/v015-discovery.html` · `docs/ui-mockups/shots/v015-discovery*.png` · `docs/UI_REDESIGN_PLAN.md` |
 
 
 ---
@@ -63,6 +64,14 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
+| `TSK-V015-DISC-CORE` | v0.15 nấc A — lõi Rust `discovery/`: parser Bilibili hot/xếp hạng/tìm, Douyin hot words, yt-dlp ytsearch → `DiscoveryItem` + cache + test JSON mẫu | OpenCode / mcode | 🔴 HIGH | `docs/V0.15_PLAN.md` §3–4 #2 — **làm được ngay** (không chờ thiết kế) |
+| `TSK-V015-DISC-CMD` | v0.15 nấc A — lệnh Tauri + gọi mạng + wrapper `src/lib/tauri.ts` | mcode | 🔴 HIGH | sau `DISC-CORE` |
+| `TSK-V015-DISC-UI` | v0.15 nấc A — tab Khám phá theo mockup + nút Tải về / Tải & mở Studio | mcode / agy | 🔴 HIGH | sau thiết kế + `DISC-CMD` |
+| `TSK-V015-DISC-B` | v0.15 nấc B — danh mục, tự dịch từ khoá Việt→Trung, YouTube hot (API key tuỳ chọn) | mcode / agy | 🟡 MEDIUM | sau nấc A |
+| `TSK-V015-BROWSER-SPIKE` | v0.15 nấc C — thử trình duyệt nhúng (TikTok/Douyin) + nút "Tải video đang xem"; trang ngoài KHÔNG có quyền gọi lệnh Tauri | agy / Sonnet | 🟢 LOW | độc lập, thử kỹ thuật 1 ngày |
+| `TSK-BATCH` | Batch: chạy lồng tiếng cả danh sách video 1 lần (gộp `TSK-022.2`) | — | 🟡 MEDIUM | sau v0.15 |
+| `TSK-AI-RECAP-1` | Dựng AI nấc 1: reel highlight từ gameplay dài (chia cảnh + lọc cutscene + 9:16 + chữ nhảy) | — | 🟡 MEDIUM | `docs/GAME_RECAP_RESEARCH.md` — cần kế hoạch chi tiết |
+| `TSK-AI-RECAP-2` | Dựng AI nấc 2: recap cốt truyện game có lời bình (tóm tắt phân cấp → kịch bản → TTS → ghép cảnh theo lời) | — | 🟡 MEDIUM | sau nấc 1 |
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
 | `TSK-012` | ~~Phase V2: Phân vai thật (sherpa-onnx diarization offline)~~ | **Antigravity** | 🔴 DONE | ✅ Đã hoàn thành ở v0.10.0 (S1 sidecar + S2 Rust backend + S3 UI roster + S4 E2E deliverables) |
 | `TSK-013` | Tích hợp F5-TTS Vietnamese / Kokoro ONNX cho Voice Cloning (Phase V3) | - | 🟡 MEDIUM | Tầng 4: Đọc câu thoại theo đúng mẫu giọng nhân vật (Kokoro phần đọc sẵn đã xong ở v0.9.8/v0.9.9 — phần clone giọng chuẩn bị ở Phase V3) |
@@ -73,6 +82,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-RESEARCH-GAME-RECAP-R2` | Sửa báo cáo Game Recap: cập nhật model 2025-2026, RT-DETR Apache-2.0, Gemini 3.8 | Antigravity | 2026-10-28 | ✅ `docs/GAME_RECAP_RESEARCH.md` — Qwen2.5-VL/MiniCPM-o 2.6 local, Gemini 3.8 Flash ($0.035-$0.07/h), RT-DETR |
 | `TSK-RESEARCH-VIDEO-DISCOVERY` | Nghiên cứu tìm video + hot trend (Bilibili, YouTube, Douyin, TikTok, Kuaishou, XHS) | Antigravity | 2026-10-28 | ✅ `docs/VIDEO_DISCOVERY_RESEARCH.md` — Bilibili/Douyin hot DỄ không cần key, YouTube ytsearch DỄ |
 | `V012-BATCH` | Gói v0.12.0: `TSK-FEAT-GLOSSARY-PRONOUN` · `TSK-REFACTOR-GLOSSARY-300` · `TSK-FIX-BUG-H23` · `TSK-RELEASE-0.12.0` · `TSK-RELEASE-0.12.0-CHANGELOG2` · `TSK-FEAT-VOICE-PICKER` · `TSK-UI-R2-8-FIX-CE` · `TSK-UI-R2-8-REVIEW` | mcode #2 · Opus | 2026-10-25 | ✅ v0.12.0 — đã commit + push |
 | `TSK-V014-SUB-STYLE` | v0.14 kiểu phụ đề Bình thường / Nhảy chữ (3 mẫu, font Việt, xem thử = xuất) | mcode · OpenCode · CommandCode · Opus (thiết kế) | 2026-10-26 | ✅ v0.14.0 — kiểm app thật; chưa push |

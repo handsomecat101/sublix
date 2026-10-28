@@ -9,6 +9,13 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-28 21:20 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** @done — Hoàn thành sửa báo cáo TSK-RESEARCH-GAME-RECAP-R2 theo đúng yêu cầu PO.
+- **Cập nhật:** Đã cập nhật docs/GAME_RECAP_RESEARCH.md với model đời mới: Qwen2.5-VL-7B (26/01/2025) & MiniCPM-o 2.6 (20/01/2025) cho local RTX 3090 (AWQ/INT4 ~6.5–8GB VRAM); Gemini 3.8 Flash & Flash-Lite đời hiện hành (.05–.10/1M token, ~.035–.07/giờ video) kèm ghi chú model cũ đã deprecated.
+- **Bản quyền & Giấy phép:** Thay thế YOLOv8 (AGPL-3.0) bằng RT-DETR/RT-DETR-v2 (Apache 2.0); xác minh NarratoAI (MIT, commit 10/2026), VideoLingo (Apache 2.0, commit 10/2026), auto-editor (The Unlicense, v26.x 2026), TransNetV2 (MIT, ONNX SOTA). Đã thêm cột ngày phát hành và link nguồn thật.
+
+---
+
 ### 2026-10-28 20:55 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Hoàn thành nghiên cứu `TSK-RESEARCH-VIDEO-DISCOVERY` (tìm video & hot trend).
 - **Kết quả:** Đã xuất file báo cáo toàn diện `docs/VIDEO_DISCOVERY_RESEARCH.md`.
@@ -70,14 +77,3 @@
 - **Đã thêm (cả `CHANGELOG.md` lẫn `src/views/ChangelogModal.tsx`):** nhóm **Lồng tiếng** — ô chọn giọng (★ yêu thích, tìm không dấu, lọc Nam/Nữ, nghe thử trong danh sách), mẫu nghe thử phát tức thì, phân vai theo giọng thật + giới tính đo từ cao độ giọng, và **hạ tiếng nền thông minh** (nối khoảng nghỉ, chuyển mượt, xem thử = video xuất, 2 thanh trượt); nhóm mới **Tải video** (thư mục mặc định `Downloads\Sublix Downloads`, ảnh thu nhỏ + thời lượng); nhóm **Giao diện** nay tóm tắt các sửa R2-8 thay cho dòng trống *“Tinh chỉnh giao diện theo duyệt cuối”* (bỏ nút Lưu thừa, ô nhập Cài đặt đúng nền tối, nhãn “Đang dùng” chính xác, cảnh báo CUDA/CPU, Live/Tiến trình/Lịch sử gọn, thẻ phụ đề Studio gọn); nhóm **Sửa lỗi** thêm lịch sử tiến trình không trùng mục.
 - **Số đo bổ sung (đọc từ commit + `docs/DUCKING_SPEC.md`):** mẫu nghe thử Kokoro 7,89 s → 76 ms, VieNeu 16,32 s → 81 ms; phân vai theo giọng thật (bộ 8 câu) đúng người 88 % → 100 %, đúng giới tính 50 % → 100 %; hạ tiếng nền (video thật 45 s) khe < 2 s giữa 2 câu −14,0 dB, đoạn không thoại 0,0 dB; kiểm tra R2-8 36/36 checklist + 19/19 chức năng + ô chọn giọng 9/9.
 - **Verify:** `npm run verify:version` **PASS** (6/6 nguồn = 0.12.0) · `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · đã mở modal trong app thật và xác nhận mọi mục mới hiện đúng. Lưu ý: lần `tsc` đầu báo 2 lỗi ở `SublixStudioView.tsx` là do worker khác đang sửa dở file đó (không phải file của tôi), chạy lại là 0 lỗi.
-
----
-### 2026-10-25 14:40 - Mavis/mcode (Orca worker) -> @Team / @jimmyvu
-- **Loại:** `@done` (`TSK-UI-R2-8-FIX-BD` — gói **B + D** của mcode #4: mục 2, 5, 6, 7, 15, 16, 17, 18(CSS), 19, 20, 21(Xoá); **chưa commit**).
-- **Cài đặt:** badge "Đang dùng" **chỉ khi model đã tải** (chọn mà chưa tải → badge vàng `--warn` "Đã chọn · cần tải"); thêm style gốc `.settings-input` (hết nền trắng/viền native); **xoá nút "💾 Lưu cấu hình"** → toast nhỏ "✓ Đã lưu" + chú thích "Tự lưu khi thay đổi."; cảnh báo `⚠ Đang chạy CUDA — khởi động lại server để áp dụng CPU` khi runtime lệch lựa chọn; "AUTO" → "Tự động"; `.settings-section .ui-seg` giới hạn 560px; `.hardware-presets` 4 cột.
-- **Tiến trình:** bỏ **cột trái** → khung 2 cột; cột phải dùng **chung component `SystemStatusPanel`** ("Trạng thái hệ thống") với Cài đặt; **sentence case** mọi tiêu đề + nhãn loại task (bảng ánh xạ đặt trong `ProcessCenterView.tsx` vì `processLogic.ts` đang được worker khác sửa); thẻ lịch sử gọn (1 dòng tiêu đề + meta, giờ **24h**, path mono ellipsis, nút 📁/📋 cuối hàng).
-- **Lịch sử:** split "Xuất .SRT" **mờ đúng kiểu** nút "Sao chép tất cả" khi 0 câu (nền phẳng, chữ mờ); icon trạng thái rỗng = **SVG mono 40px** thay ảnh JPG có ô xám.
-- **Verify:** `npx tsc --noEmit` **0 lỗi** · `npm run build` **OK** (117 module) · `node --test` **7 bộ / 259 test PASS / 0 fail** (thêm hạ nốc `package.json`+`index.ts` cho 3 bộ test mới của worker khác vì `node --test <dir>` không quét thư mục — **không** đụng logic test của họ) · ảnh `after-*` mới trong `docs/ui-mockups/shots/` (frontend-only, Edge headless 1920×1080).
-- **Đánh dấu `docs/UI_R2-8_REVIEW.md`:** ✅ mục **2, 5, 6, 7, 15, 16, 17, 19, 20** · ◐ mục **18** (mới làm phần CSS `.hardware-presets`) và **21** (mới làm phần "Xoá" trong `ModelDownloadRow`).
-
----
