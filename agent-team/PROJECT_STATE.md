@@ -73,6 +73,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-RESEARCH-VIDEO-DISCOVERY` | Nghiên cứu tìm video + hot trend (Bilibili, YouTube, Douyin, TikTok, Kuaishou, XHS) | Antigravity | 2026-10-28 | ✅ `docs/VIDEO_DISCOVERY_RESEARCH.md` — Bilibili/Douyin hot DỄ không cần key, YouTube ytsearch DỄ |
 | `V012-BATCH` | Gói v0.12.0: `TSK-FEAT-GLOSSARY-PRONOUN` · `TSK-REFACTOR-GLOSSARY-300` · `TSK-FIX-BUG-H23` · `TSK-RELEASE-0.12.0` · `TSK-RELEASE-0.12.0-CHANGELOG2` · `TSK-FEAT-VOICE-PICKER` · `TSK-UI-R2-8-FIX-CE` · `TSK-UI-R2-8-REVIEW` | mcode #2 · Opus | 2026-10-25 | ✅ v0.12.0 — đã commit + push |
 | `TSK-V014-SUB-STYLE` | v0.14 kiểu phụ đề Bình thường / Nhảy chữ (3 mẫu, font Việt, xem thử = xuất) | mcode · OpenCode · CommandCode · Opus (thiết kế) | 2026-10-26 | ✅ v0.14.0 — kiểm app thật; chưa push |
 | `TSK-V014-HARDSUB-BLUR` | v0.14 ô tích phụ đề cứng → dò dải (PP-OCRv4 det) + làm mờ & đè tem, kéo chỉnh dải | Sonnet · mcode · Gemini (nghiên cứu) | 2026-10-26 | ✅ v0.14.0 — dò 60 s ~3 s; chưa push |
