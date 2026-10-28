@@ -1,0 +1,76 @@
+{
+  "code": 0,
+  "message": "OK",
+  "ttl": 1,
+  "data": {
+    "note": "根据稿件内容质量、近期的数据综合展示，动态更新",
+    "list": [
+      {
+        "bvid": "BV1kMxM6FECM",
+        "title": "旗舰手机芯片大横评：苹果高通发哥玄戒谁最强？",
+        "pic": "http://i1.hdslb.com/bfs/archive/a5504c58614fd9d4890ab2fa11d50b49dd303fcc.jpg",
+        "duration": 3435,
+        "pubdate": 1793087129,
+        "owner": {
+          "mid": 25876945,
+          "name": "极客湾Geekerwan",
+          "face": "http://i1.hdslb.com/bfs/face/d0f7a7ee34a4a45c8390eb3a07e4d7f2d70bae91.jpg"
+        },
+        "stat": {
+          "aid": 117511731285323,
+          "view": 2156916,
+          "danmaku": 38242,
+          "reply": 36044,
+          "favorite": 83054,
+          "coin": 288381,
+          "share": 49717,
+          "like": 237022
+        }
+      },
+      {
+        "bvid": "BV1RJHV6pECP",
+        "title": "张麻子《鹅城FUNK》",
+        "pic": "http://i0.hdslb.com/bfs/archive/031323fd48a4d9e33970888408920e1160f2d1e4.jpg",
+        "duration": 190,
+        "pubdate": 1792902033,
+        "owner": {
+          "mid": 540084505,
+          "name": "HH糯米团",
+          "face": "https://i1.hdslb.com/bfs/face/3b7da2e28facf9d86ee5668a0ee91d6b4bf2081f.jpg"
+        },
+        "stat": {
+          "aid": 117499601423783,
+          "view": 3023696,
+          "danmaku": 1814,
+          "reply": 3635,
+          "favorite": 43627,
+          "coin": 81823,
+          "share": 19376,
+          "like": 172828
+        }
+      },
+      {
+        "bvid": "BV1kZHK6VEgZ",
+        "title": "马尔芙小姐，我能请你共舞一曲吗？｜PV",
+        "pic": "http://i1.hdslb.com/bfs/archive/1220c3798e5c8d87af8395268c483b7be6a4ef6e.jpg",
+        "duration": 129,
+        "pubdate": 1792838600,
+        "owner": {
+          "mid": 1383971575,
+          "name": "Foyege弗曳哥",
+          "face": "https://i1.hdslb.com/bfs/face/82c60fb9eda7304104d2a68ed523421ddb623741.jpg"
+        },
+        "stat": {
+          "aid": 117495457386899,
+          "view": 4252170,
+          "danmaku": 5422,
+          "reply": 27917,
+          "favorite": 89394,
+          "coin": 133462,
+          "share": 42761,
+          "like": 250069
+        }
+      }
+    ]
+  }
+}

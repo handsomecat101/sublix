@@ -1,0 +1,105 @@
+{
+  "id": "elden ring",
+  "_type": "playlist",
+  "extractor": "youtube:search",
+  "extractor_key": "YoutubeSearch",
+  "playlist_count": 3,
+  "entries": [
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "OVr1VJyWJ9Y",
+      "url": "https://www.youtube.com/watch?v=OVr1VJyWJ9Y",
+      "title": "Every Weapon Type Ranked! Elden Ring Tier List",
+      "duration": 2540,
+      "channel_id": "UCRoGgq_xy650Iu4uQy72OLA",
+      "channel": "Youwy",
+      "channel_url": "https://www.youtube.com/channel/UCRoGgq_xy650Iu4uQy72OLA",
+      "uploader": "Youwy",
+      "uploader_id": "@youwy",
+      "uploader_url": "https://www.youtube.com/@youwy",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/OVr1VJyWJ9Y/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAVLyIym0-ebvN7eqS5Ify3-__VhA",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/OVr1VJyWJ9Y/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBDh3TRn1-2T5dcX5MmqIRZypPzPg",
+          "height": 404,
+          "width": 720
+        }
+      ],
+      "timestamp": null,
+      "release_timestamp": null,
+      "availability": null,
+      "view_count": 71626,
+      "live_status": null,
+      "channel_is_verified": true
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "MphIMz3HoeM",
+      "url": "https://www.youtube.com/watch?v=MphIMz3HoeM",
+      "title": "Oh God, He's Ranking The Elden Ring Straight Swords...",
+      "duration": 1539,
+      "channel_id": "UCL-Tm21Rft-u6EI18n0EN2w",
+      "channel": "Rusty.",
+      "channel_url": "https://www.youtube.com/channel/UCL-Tm21Rft-u6EI18n0EN2w",
+      "uploader": "Rusty.",
+      "uploader_id": "@Rusty._",
+      "uploader_url": "https://www.youtube.com/@Rusty._",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/MphIMz3HoeM/hq720_custom_1.jpg?sqp=CLyLiNcG-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLAiSEW2fbLRGiQKVbr2yLEY5k2V0g",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/MphIMz3HoeM/hq720_custom_1.jpg?sqp=CLyLiNcG-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLDfhwfBdwixXqspB1zxpUZObCmw1g",
+          "height": 404,
+          "width": 720
+        }
+      ],
+      "timestamp": null,
+      "release_timestamp": null,
+      "availability": null,
+      "view_count": 253526,
+      "live_status": null,
+      "channel_is_verified": true
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "lJai4M0xT6c",
+      "url": "https://www.youtube.com/watch?v=lJai4M0xT6c",
+      "title": "Elden Ring NOTHING Run FINAL BOSS attempt for a little, MAYBE stink souls after !merch",
+      "duration": 22993,
+      "channel_id": "UCgxXKGdzo7jk4DxjTywCTew",
+      "channel": "Skumnut",
+      "channel_url": "https://www.youtube.com/channel/UCgxXKGdzo7jk4DxjTywCTew",
+      "uploader": "Skumnut",
+      "uploader_id": "@Skumnut",
+      "uploader_url": "https://www.youtube.com/@Skumnut",
+      "thumbnails": [
+        {
+          "url": "https://i.ytimg.com/vi/lJai4M0xT6c/hq720.jpg?sqp=-oaymwEcCOgCEMoBSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLCaWakgeuZCnSUIJmZXWLqusVVQTQ",
+          "height": 202,
+          "width": 360
+        },
+        {
+          "url": "https://i.ytimg.com/vi/lJai4M0xT6c/hq720.jpg?sqp=-oaymwEcCNAFEJQDSFXyq4qpAw4IARUAAIhCGAFwAcABBg==&rs=AOn4CLBmfG0UIXkF1AiU_UwR9EuKacsDUg",
+          "height": 404,
+          "width": 720
+        }
+      ],
+      "timestamp": null,
+      "release_timestamp": null,
+      "availability": null,
+      "view_count": 41221,
+      "live_status": "was_live",
+      "channel_is_verified": true
+    }
+  ]
+}

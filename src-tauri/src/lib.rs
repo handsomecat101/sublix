@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 pub mod audio;
 pub mod config;
+pub mod discovery;
 pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
