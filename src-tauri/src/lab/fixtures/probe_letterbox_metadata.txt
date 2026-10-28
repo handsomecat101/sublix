@@ -1,0 +1,128 @@
+frame:0    pts:0       pts_time:0
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:1    pts:1       pts_time:0.5
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:2    pts:2       pts_time:1
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:3    pts:3       pts_time:1.5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:4    pts:4       pts_time:2
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=11.719
+lavfi.scd.score=11.719
+lavfi.scd.time=2
+frame:5    pts:5       pts_time:2.5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:6    pts:6       pts_time:3
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:7    pts:7       pts_time:3.5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:8    pts:8       pts_time:4
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=11.722
+lavfi.scd.score=11.722
+lavfi.scd.time=4
+frame:9    pts:9       pts_time:4.5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:10   pts:10      pts_time:5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000
+frame:11   pts:11      pts_time:5.5
+lavfi.cropdetect.x1=0
+lavfi.cropdetect.x2=319
+lavfi.cropdetect.y1=30
+lavfi.cropdetect.y2=209
+lavfi.cropdetect.w=320
+lavfi.cropdetect.h=180
+lavfi.cropdetect.x=0
+lavfi.cropdetect.y=30
+lavfi.cropdetect.limit=24.000000
+lavfi.scd.mafd=0.000
+lavfi.scd.score=0.000

@@ -1,0 +1,38 @@
+ffmpeg.exe : Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\Users\haiba\AppData\Local\Temp\claude\C--AI-Project-Sublix\552
+b7175-5967-4bd5-92bb-b386a0753c6e\fixtures\hardsub_zh_30s.mp4':
+At line:1 char:252
++ ... ation $dir; & ffmpeg -hide_banner -nostats -loglevel info -i $fix -vf ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Input #0, mov,m...ub_zh_30s.mp4'::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:30.00, start: 0.000000, bitrate: 5573 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 
+5497 kb/s, 25 fps, 25 tbr, 12800 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 69 kb/s (default)
+    Metadata:
+      handler_name    : SoundHandler
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))
+  Stream #0:1 -> #0:1 (aac (native) -> pcm_s16le (native))
+... (lược bớt) ...
+frame=60
+fps=0.00
+stream_0_0_q=-0.0
+bitrate=N/A
+total_size=N/A
+out_time_us=30000000
+out_time_ms=30000000
+out_time=00:00:30.000000
+dup_frames=0
+drop_frames=0
+speed=32.1x
+progress=end

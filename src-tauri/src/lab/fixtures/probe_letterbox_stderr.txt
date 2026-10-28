@@ -1,0 +1,60 @@
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'letterbox.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Duration: 00:00:06.00, start: 0.000000, bitrate: 21 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x960 [SAR 1:1 DAR 4:3], 11 kb/s, 25 fps, 25 tbr, 12800 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc63.1.102 libx264
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 1 kb/s (default)
+    Metadata:
+      handler_name    : SoundHandler
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))
+  Stream #0:1 -> #0:1 (aac (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+[Parsed_silencedetect_0 @ 00000159042a42c0] silence_start: 0
+Output #0, null, to 'pipe:':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf63.1.102
+  Stream #0:0(und): Video: wrapped_avframe, yuv420p(progressive), 320x240 [SAR 1:1 DAR 4:3], q=2-31, 200 kb/s, 2 fps, 2 tbn (default)
+    Metadata:
+      encoder         : Lavc63.1.102 wrapped_avframe
+      handler_name    : VideoHandler
+  Stream #0:1(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)
+    Metadata:
+      encoder         : Lavc63.1.102 pcm_s16le
+      handler_name    : SoundHandler
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:2 t:1.000000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:3 t:1.500000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:4 t:2.000000 limit:24.000000 crop=320:180:0:30
+[Parsed_scdet_3 @ 000001590722b6c0] lavfi.scd.score: 11.719, lavfi.scd.time: 2
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:5 t:2.500000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:6 t:3.000000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:7 t:3.500000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:8 t:4.000000 limit:24.000000 crop=320:180:0:30
+[Parsed_scdet_3 @ 000001590722b6c0] lavfi.scd.score: 11.722, lavfi.scd.time: 4
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:9 t:4.500000 limit:24.000000 crop=320:180:0:30
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:10 t:5.000000 limit:24.000000 crop=320:180:0:30
+[Parsed_silencedetect_0 @ 00000159042a42c0] silence_end: 6 | silence_duration: 6
+[Parsed_cropdetect_2 @ 000001590722cac0] x1:0 x2:319 y1:30 y2:209 w:320 h:180 x:0 y:30 pts:11 t:5.500000 limit:24.000000 crop=320:180:0:30
+[out#0/null @ 0000015904200ac0] video:5KiB audio:517KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+frame=   12 fps=0.0 q=-0.0 Lsize=N/A time=00:00:06.00 bitrate=N/A speed=82.6x elapsed=0:00:00.07    
+frame=12
+fps=0.00
+stream_0_0_q=-0.0
+bitrate=N/A
+total_size=N/A
+out_time_us=6000000
+out_time_ms=6000000
+out_time=00:00:06.000000
+dup_frames=0
+drop_frames=0
+speed=82.6x
+progress=end
