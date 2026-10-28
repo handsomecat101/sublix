@@ -47,6 +47,7 @@ import {
   IconGlobe, IconSettings, IconSparkles,
 } from "../icons";
 import LabView from "./lab/LabView";
+import DiscoveryToast from "./discovery/DiscoveryToast";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import MasterTopbar from "./MasterTopbar";
 // TSK-UI-REDESIGN-R2-5: các mục Cài đặt tách riêng (mỗi file < 300 dòng).
@@ -172,7 +173,26 @@ export default function SettingsView() {
     setActiveTab("studio");
   };
 
-  const handleRouteToStudio = (path: string) => {
+  // [TSK-V015-UI-FIX] Toast cấp app thông báo video từ Khám phá đã mở tab trong Studio
+  const [discoveryStudioToasts, setDiscoveryStudioToasts] = useState<Array<{ title: string; path: string }>>([]);
+
+  const handleNotifyDiscoveryStudioOpened = useCallback((info: { title: string; path: string }) => {
+    setDiscoveryStudioToasts((prev) => {
+      if (prev.some((p) => p.path === info.path)) return prev;
+      return [...prev, info];
+    });
+  }, []);
+
+  const handleOpenToastStudio = useCallback((path: string) => {
+    handleRouteToStudio(path, { activate: true });
+    setDiscoveryStudioToasts([]);
+  }, []);
+
+  const handleCloseToastStudio = useCallback(() => {
+    setDiscoveryStudioToasts([]);
+  }, []);
+
+  const handleRouteToStudio = (path: string, options?: { activate?: boolean; title?: string }) => {
     const safe = path ? path.replace(/\//g, "\\").trim() : "";
     setPendingDubbingPath(safe);
     setPendingStudioPath(safe);
@@ -181,7 +201,9 @@ export default function SettingsView() {
     // host ⇒ tab mới / nhảy tab đã có cùng path (không ghi đè dự án đang mở).
     studioOpenNonceRef.current += 1;
     setStudioOpenRequest({ path: safe, nonce: studioOpenNonceRef.current });
-    setActiveTab("studio");
+    if (options?.activate !== false) {
+      setActiveTab("studio");
+    }
   };
 
   const handleRouteToFileSub = (path: string) => {
@@ -1754,6 +1776,7 @@ export default function SettingsView() {
           onNavigateToStudio={handleRouteToStudio}
           onNavigateToFileSub={handleRouteToFileSub}
           onNavigateToDubbing={handleRouteToDubbing}
+          onNotifyDiscoveryStudioOpened={handleNotifyDiscoveryStudioOpened}
         />
       </div>
 
@@ -2470,6 +2493,14 @@ export default function SettingsView() {
           </div>
         );
       })()}
+
+      {discoveryStudioToasts.length > 0 && (
+        <DiscoveryToast
+          items={discoveryStudioToasts}
+          onOpenStudio={handleOpenToastStudio}
+          onClose={handleCloseToastStudio}
+        />
+      )}
 
       <ChangelogModal
         isOpen={showChangelog}

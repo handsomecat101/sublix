@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { isLikelyVietnamese, type DiscoverySource } from "./discoveryModel";
+import { needsTranslation, type DiscoverySource } from "./discoveryModel";
 
 export interface DiscoverySearchBarProps {
   source: DiscoverySource;
@@ -155,19 +155,23 @@ export function DiscoverySearchBar({
         </button>
       </div>
 
-      {source === "bilibili" && (
-        <label
-          className={`dsc-toggle${autoTranslate ? " dsc-toggle-on" : ""}`}
-          title="Tự dịch từ khoá sang tiếng Trung — Bilibili chặn tìm kiếm bằng từ khoá tiếng Anh"
-        >
-          <input
-            type="checkbox"
-            checked={autoTranslate}
-            onChange={(e) => onAutoTranslateChange(e.target.checked)}
-          />
-          <span className="dsc-toggle-text">文 Tự dịch</span>
-        </label>
-      )}
+      <label
+        className={`dsc-toggle${autoTranslate ? " dsc-toggle-on" : ""}${source !== "bilibili" ? " dsc-toggle-disabled" : ""}`}
+        title={
+          source === "bilibili"
+            ? "Tự dịch từ khoá sang tiếng Trung — Bilibili ít kết quả với tiếng Anh/Việt"
+            : "Tự dịch chỉ áp dụng khi tìm trên Bilibili"
+        }
+      >
+        <input
+          type="checkbox"
+          checked={autoTranslate}
+          disabled={source !== "bilibili"}
+          onChange={(e) => onAutoTranslateChange(e.target.checked)}
+        />
+        <span className="dsc-toggle-slider" />
+        <span className="dsc-toggle-text">文 Tự dịch</span>
+      </label>
 
       {translation && (
         <div className="dsc-translated">
@@ -177,23 +181,34 @@ export function DiscoverySearchBar({
           <button
             type="button"
             className="dsc-link-btn"
+            onClick={() => {
+              onKeywordChange(translation.to);
+              inputRef.current?.focus();
+            }}
+            title="Điền bản dịch vào ô để chỉnh sửa"
+          >
+            · Sửa
+          </button>
+          <button
+            type="button"
+            className="dsc-link-btn"
             onClick={onSearchOriginal}
             title="Tìm bằng từ khoá gốc, không dịch"
           >
-            Tìm nguyên văn
+            · Tìm nguyên văn
           </button>
         </div>
       )}
 
       {translateNotice && <div className="dsc-hint dsc-hint-warn">{translateNotice}</div>}
 
-      {source === "bilibili" && !autoTranslate && isLikelyVietnamese(keyword) && (
+      {source === "bilibili" && !autoTranslate && needsTranslation(keyword) && (
         <div className="dsc-hint">Bật tự dịch sang tiếng Trung để Bilibili ra nhiều kết quả hơn.</div>
       )}
 
-      {source === "bilibili" && autoTranslate && isLikelyVietnamese(keyword) && (
+      {source === "bilibili" && autoTranslate && needsTranslation(keyword) && (
         <div className="dsc-hint">
-          Từ khoá có dấu tiếng Việt sẽ được dịch sang tiếng Trung trước khi tìm.
+          Sẽ dịch sang tiếng Trung trước khi tìm (Bilibili ít kết quả với tiếng Anh/Việt).
         </div>
       )}
 

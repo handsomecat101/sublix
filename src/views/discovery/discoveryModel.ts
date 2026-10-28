@@ -279,3 +279,76 @@ export function needsTranslation(keyword: string): boolean {
   const hasLatin = /[A-Za-z]/.test(text);
   return hasLatin && !containsHan(text);
 }
+
+// ───────────────────────────── P1-1 & §1: Mở Studio & Tuổi cache ─────────────────────────────
+
+/**
+ * Tuổi cache ở chip xu hướng và hàng danh sách (P3-1):
+ * - < 1 phút ⇒ "vừa xong"
+ * - >= 1 phút ⇒ "N phút trước"
+ */
+export function formatAge(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || !Number.isFinite(minutes) || minutes < 0) return "";
+  if (minutes < 1) return "vừa xong";
+  return `${Math.floor(minutes)} phút trước`;
+}
+
+/**
+ * Hằng số kiểm soát hành vi khi video xếp bằng "Tải & mở Studio" hoàn thành (§1 & Quyết định chuyển màn).
+ * - `false`: Mở tab mới trong Studio (chấm xanh) nhưng KHÔNG chuyển màn, hiện toast cấp app với nút "Đi tới Studio".
+ * - `true`: Tự động nhảy sang tab Studio (hành vi cũ nếu PO muốn đổi lại).
+ */
+export const AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE = false;
+
+/**
+ * Kiểm tra xem một mục tải về có đủ điều kiện tự mở tab Studio không (P1-1).
+ * Chỉ mở đúng 1 lần trong đời mục:
+ * - Có cờ openInStudio
+ * - Chưa từng được mở (studioOpened !== true)
+ * - Đã tải xong (status === "completed")
+ * - Đã có filePath hợp lệ
+ */
+export function shouldTriggerOpenStudio(params: {
+  status: string;
+  filePath?: string | null;
+  openInStudio?: boolean;
+  studioOpened?: boolean;
+}): boolean {
+  return (
+    params.openInStudio === true &&
+    params.studioOpened !== true &&
+    params.status === "completed" &&
+    Boolean(params.filePath && params.filePath.trim().length > 0)
+  );
+}
+
+/**
+ * Khử trùng các mục tải về nạp từ localStorage khi khởi động app (P1-1).
+ * Bất kỳ mục nào đã "completed" từ phiên trước đều được đánh dấu studioOpened = true
+ * để ngăn app tự động nhảy sang Studio lúc vừa mở app.
+ */
+export function sanitizeLoadedDownloadItems<T extends { status: string; openInStudio?: boolean; studioOpened?: boolean }>(
+  items: T[],
+): T[] {
+  return items.map((item) => {
+    if (item.status === "completed" && item.openInStudio) {
+      return {
+        ...item,
+        studioOpened: true,
+      };
+    }
+    return item;
+  });
+}
+
+/**
+ * Định dạng thông điệp toast thông báo video đã mở tab trong Studio (§1).
+ * Gộp nhiều mục nếu có 2+ video cùng xong.
+ */
+export function formatStudioToastText(titles: string[]): string {
+  if (!titles || titles.length === 0) return "";
+  if (titles.length === 1) {
+    return `✓ Đã tải xong "${titles[0]}" — đã mở tab trong Studio`;
+  }
+  return `${titles.length} video đã mở tab trong Studio`;
+}

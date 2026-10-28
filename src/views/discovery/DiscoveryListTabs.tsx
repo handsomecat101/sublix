@@ -8,7 +8,7 @@
 //! Xem `docs/UI_REDESIGN_PLAN.md` §4.13 (mục 4).
 
 import { formatCountdown } from "./discoveryModel";
-import type { DiscoveryList, DiscoverySource } from "./discoveryModel";
+import { formatAge, type DiscoveryList, type DiscoverySource } from "./discoveryModel";
 
 export interface DiscoveryListTabsProps {
   source: DiscoverySource;
@@ -39,7 +39,7 @@ export function DiscoveryListTabs({
   total,
   ageMinutes,
   loading,
-  hasMore,
+  hasMore: _hasMore,
   retryIn,
   onSelect,
   onClearSearch,
@@ -58,7 +58,7 @@ export function DiscoveryListTabs({
           disabled={youtubeHotLocked}
           title={
             youtubeHotLocked
-              ? "YouTube chưa có API key — nấc A chỉ tìm kiếm được YouTube"
+              ? "Cần Google API key — hiện chỉ tìm kiếm được"
               : "Danh sách đang hot"
           }
         >
@@ -97,7 +97,7 @@ export function DiscoveryListTabs({
         <span className="dsc-count">
           {count}
           {total ? ` / ${total}` : ""} video
-          {ageMinutes !== null && ` · ${ageMinutes} phút trước`}
+          {ageMinutes !== null && ` · ${formatAge(ageMinutes)}`}
         </span>
         <button
           type="button"
@@ -108,11 +108,7 @@ export function DiscoveryListTabs({
         >
           ↻
         </button>
-        {!hasMore && count > 0 && !loading && (
-          <span className="dsc-dash" aria-hidden="true">
-            —
-          </span>
-        )}
+
       </div>
     </div>
   );

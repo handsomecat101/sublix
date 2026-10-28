@@ -11,12 +11,12 @@ import type { DiscoveryItem } from "../../lib/tauri";
 import {
   nextRetryDelay,
   RETRY_DELAY_SECS,
+  shouldTriggerOpenStudio,
   videoIdOf,
   type DiscoveryList,
   type DiscoverySource,
 } from "./discoveryModel";
 import { DiscoveryContextMenu } from "./DiscoveryContextMenu";
-import { DiscoveryToast } from "./DiscoveryToast";
 import { DiscoveryListTabs } from "./DiscoveryListTabs";
 import { DiscoverySearchBar } from "./DiscoverySearchBar";
 import { DiscoveryEmpty, DiscoveryError, DiscoveryNoKey, DiscoverySkeleton } from "./DiscoveryStates";
@@ -37,7 +37,9 @@ export interface DiscoveryPanelProps {
   /** Đưa URL vào **hàng đợi tải hiện có** (dùng đúng luồng của DownloaderView). */
   onEnqueue: (url: string, options: { openInStudio: boolean; title?: string }) => void;
   /** Mở tab Studio cho file đã tải (dùng đúng lối mở tab của §4.11). */
-  onOpenStudio: (filePath: string) => void;
+  onOpenStudio: (filePath: string, title?: string) => void;
+  /** Đánh dấu mục tải về đã mở tab Studio (P1-1). */
+  onMarkStudioOpened?: (id: string) => void;
   /** Chuyển sang tab con "Tải về". */
   onShowDownloader: () => void;
 }
@@ -47,8 +49,10 @@ export function DiscoveryPanel({
   queueItems,
   onEnqueue,
   onOpenStudio,
+  onMarkStudioOpened,
   onShowDownloader,
 }: DiscoveryPanelProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const list = useDiscoveryList();
   const hot = useHotTopics();
 
@@ -108,31 +112,21 @@ export function DiscoveryPanel({
     (item: DiscoveryItem) => {
       const state = dlStates[item.id] ?? dlStates[videoIdOf(item.url)];
       const path = state?.filePath;
-      if (path) onOpenStudio(path);
+      if (path) onOpenStudio(path, item.title);
     },
     [dlStates, onOpenStudio],
   );
 
-  // ---- Toast "Xong — đã mở tab trong Studio" (§4.13 mục 6) ----
-  // Mục xếp bằng cờ `openInStudio` tải xong ⇒ tự mở tab Studio + toast.
-  const [toast, setToast] = useState<{ title: string; path: string } | null>(null);
-  const autoOpenedRef = useRef<Set<string>>(new Set());
-
+  // ---- Tự mở tab Studio cho mục tải xong (P1-1 & §1) ----
+  // Chỉ mở đúng 1 lần trong đời mục (kiểm tra qua shouldTriggerOpenStudio)
   useEffect(() => {
-    const live = new Set(Object.keys(dlStates));
-    // Dọn cờ của mục đã rời hàng đợi ⇒ tải lại cùng video vẫn mở Studio.
-    for (const vid of Array.from(autoOpenedRef.current)) {
-      if (!live.has(vid)) autoOpenedRef.current.delete(vid);
+    for (const entry of Object.values(dlStates)) {
+      if (shouldTriggerOpenStudio(entry)) {
+        if (entry.id) onMarkStudioOpened?.(entry.id);
+        onOpenStudio(entry.filePath!, entry.title);
+      }
     }
-    for (const [vid, entry] of Object.entries(dlStates)) {
-      if (!entry.openInStudio) continue;
-      if (entry.status !== "completed" || !entry.filePath) continue;
-      if (autoOpenedRef.current.has(vid)) continue;
-      autoOpenedRef.current.add(vid);
-      setToast({ title: entry.title, path: entry.filePath });
-      onOpenStudio(entry.filePath);
-    }
-  }, [dlStates, onOpenStudio]);
+  }, [dlStates, onMarkStudioOpened, onOpenStudio]);
 
   const retry = useCallback(() => {
     list.reload();
@@ -205,7 +199,7 @@ export function DiscoveryPanel({
   const gridHasItems = list.items.length > 0;
 
   return (
-    <div className="dsc-root">
+    <div className="dsc-root" ref={rootRef}>
       <DiscoverySearchBar
         source={list.source}
         keyword={list.keyword}
@@ -258,6 +252,7 @@ export function DiscoveryPanel({
           retryIn={retryIn}
           onRetry={retry}
           onFallback={list.source === "bilibili" ? () => list.setList("hot") : undefined}
+          fallbackLabel={list.source === "bilibili" ? "🔥 Xem Đang hot" : undefined}
         />
       ) : list.list === "search" && !gridHasItems ? (
         <DiscoveryEmpty
@@ -267,6 +262,14 @@ export function DiscoveryPanel({
             list.setSource("youtube");
             void list.submitSearch(list.query);
           }}
+          onEnableAutoTranslate={
+            list.source === "bilibili" && !list.autoTranslate
+              ? () => {
+                  list.setAutoTranslate(true);
+                  void list.submitSearch(list.query);
+                }
+              : undefined
+          }
         />
       ) : (
         <VideoGrid
@@ -286,13 +289,21 @@ export function DiscoveryPanel({
         />
       )}
 
-      {gridHasItems && !list.loading && (
-        <div className="dsc-endline">
+      {gridHasItems && !list.loading && !list.hasMore && !list.loadingMore && (
+        <div className="dsc-endline" aria-live="polite">
           Hết · {list.items.length} video
           <button
             type="button"
             className="dsc-link-btn"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onClick={() => {
+              const scrollParent = rootRef.current?.closest(".dl-hubpane") || rootRef.current?.parentElement;
+              if (scrollParent) {
+                scrollParent.scrollTo({ top: 0, behavior: "smooth" });
+              } else {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+              setGridFocusReq((n) => n + 1);
+            }}
           >
             Lên đầu ↑
           </button>
@@ -300,15 +311,6 @@ export function DiscoveryPanel({
       )}
 
       <MiniQueueBar items={queueItems} onOpenDownloader={onShowDownloader} />
-
-      {toast && (
-        <DiscoveryToast
-          title={toast.title}
-          path={toast.path}
-          onOpenStudio={onOpenStudio}
-          onClose={() => setToast(null)}
-        />
-      )}
 
       {menu && (
         <DiscoveryContextMenu

@@ -7,7 +7,7 @@
 //! (1 nút chính theo trạng thái + menu ⋯/chuột phải dùng `ContextMenu` dùng chung).
 //! **Toàn bộ logic (handler, hàng đợi 3 song song, BUG-053, sub-pass, reup) giữ nguyên.**
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   sublix,
@@ -34,11 +34,13 @@ import { DiscoveryPanel, type DiscoveryDlEntry } from "./discovery/DiscoveryView
 import { videoIdOf } from "./discovery/discoveryModel";
 import "./DownloaderView.css";
 import "./discovery/discovery.css";
+import { sanitizeLoadedDownloadItems, AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE } from "./discovery/discoveryModel";
 
 interface DownloaderViewProps {
   onNavigateToFileSub?: (filePath: string) => void;
   onNavigateToDubbing?: (filePath: string) => void;
-  onNavigateToStudio?: (filePath: string) => void;
+  onNavigateToStudio?: (filePath: string, options?: { activate?: boolean; title?: string }) => void;
+  onNotifyDiscoveryStudioOpened?: (info: { title: string; path: string }) => void;
 }
 
 // v0.9.6: friendly quality label for a "WIDTHxHEIGHT" resolution string.
@@ -79,6 +81,8 @@ interface DownloadItem {
   reup?: ReupOptions | null;
   // TSK-V015-DISC-UI: xếp từ tab "Khám phá" với cờ mở Studio ⇒ tải xong tự mở tab.
   openInStudio?: boolean;
+  // P1-1: đã mở tab Studio rồi thì không mở lại.
+  studioOpened?: boolean;
   createdAt: number;
 }
 
@@ -278,6 +282,7 @@ export default function DownloaderView({
   onNavigateToFileSub,
   onNavigateToDubbing,
   onNavigateToStudio,
+  onNotifyDiscoveryStudioOpened,
 }: DownloaderViewProps) {
   const [url, setUrl] = useState<string>("");
   const [format, setFormat] = useState<string>("max");
@@ -321,7 +326,8 @@ export default function DownloaderView({
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed: DownloadItem[] = JSON.parse(saved);
-        return parsed.map((item) => {
+        const sanitized = sanitizeLoadedDownloadItems(parsed);
+        return sanitized.map((item) => {
           if (item.status === "downloading" || item.status === "queued") {
             return {
               ...item,
@@ -766,6 +772,15 @@ export default function DownloaderView({
   // ---- TSK-V015-DISC-UI: cầu nối với tab con "Khám phá" ----
   // Dùng **đúng hàng đợi tải hiện có** (không viết luồng tải thứ 2).
 
+  /** Đánh dấu mục tải về đã mở Studio để không mở lại lần 2 (P1-1). */
+  const markStudioOpened = useCallback((id: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, studioOpened: true, openInStudio: false } : item
+      )
+    );
+  }, []);
+
   /** Đưa 1 URL từ tab Khám phá vào hàng đợi (tuỳ chọn hiện tại của tab Tải về). */
   const enqueueFromDiscovery = (
     targetUrl: string,
@@ -787,11 +802,13 @@ export default function DownloaderView({
       const vid = videoIdOf(item.url);
       if (!vid) continue;
       out[vid] = {
+        id: item.id,
         status: item.status,
         percent: item.percent,
         title: item.title,
         filePath: item.filePath ?? null,
         openInStudio: item.openInStudio,
+        studioOpened: item.studioOpened,
       };
     }
     return out;
@@ -1380,25 +1397,42 @@ export default function DownloaderView({
     <div className="dl-view">
       {/* ===== TSK-V015-DISC-UI: thanh tab con Tải về / Khám phá (38 px) ===== */}
       <div className="dl-hubtabs" role="tablist" aria-label="Tải về / Khám phá">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={hubTab === "download"}
-          className={`dl-hubtab${hubTab === "download" ? " dl-hubtab-on" : ""}`}
-          onClick={() => switchHubTab("download")}
-        >
-          ⬇ Tải về
-          {queueBadgeCount > 0 && <span className="dl-hubtab-badge">{queueBadgeCount}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={hubTab === "discovery"}
-          className={`dl-hubtab${hubTab === "discovery" ? " dl-hubtab-on" : ""}`}
-          onClick={() => switchHubTab("discovery")}
-        >
-          🔥 Khám phá
-        </button>
+        <div className="dl-hubtabs-left">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={hubTab === "download"}
+            className={`dl-hubtab${hubTab === "download" ? " dl-hubtab-on" : ""}`}
+            onClick={() => switchHubTab("download")}
+          >
+            ⬇ Tải về
+            {queueBadgeCount > 0 && <span className="dl-hubtab-badge">{queueBadgeCount}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={hubTab === "discovery"}
+            className={`dl-hubtab${hubTab === "discovery" ? " dl-hubtab-on" : ""}`}
+            onClick={() => switchHubTab("discovery")}
+          >
+            🔥 Khám phá
+          </button>
+        </div>
+        {hubTab === "discovery" && (
+          <div className="dl-hubtabs-summary">
+            <span>
+              Tải với: <b>{formatLabel(format)}</b> · <b>{extractSubtitles ? "Phụ đề tự tải nếu có" : "Không tải phụ đề"}</b>
+            </span>
+            <button
+              type="button"
+              className="dl-hubtabs-change"
+              onClick={() => switchHubTab("download")}
+              title="Chuyển sang tab Tải về để đổi tuỳ chọn chất lượng & phụ đề"
+            >
+              Đổi
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Cả 2 pane luôn mount (BUG-045) — chỉ ẩn/hiện bằng CSS. */}
@@ -1931,7 +1965,11 @@ export default function DownloaderView({
           dlStates={discoveryDlStates}
           queueItems={discoveryQueueItems}
           onEnqueue={enqueueFromDiscovery}
-          onOpenStudio={(filePath) => onNavigateToStudio?.(filePath)}
+          onOpenStudio={(filePath, title) => {
+            onNavigateToStudio?.(filePath, { activate: AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE, title });
+            onNotifyDiscoveryStudioOpened?.({ title: title || filePath, path: filePath });
+          }}
+          onMarkStudioOpened={markStudioOpened}
           onShowDownloader={() => switchHubTab("download")}
         />
       </div>

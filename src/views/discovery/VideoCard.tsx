@@ -10,7 +10,7 @@
 
 import { memo, useState } from "react";
 
-import type { DiscoveryItem } from "../../lib/tauri";
+import { sublix, type DiscoveryItem } from "../../lib/tauri";
 import {
   formatAgo,
   formatDuration,
@@ -30,6 +30,10 @@ export interface VideoCardProps {
   dlStatus: CardDlStatus;
   /** Phần trăm đang tải (0–100). */
   dlPct: number;
+  /** Cờ mở Studio khi tải xong (P2-2). */
+  openInStudio?: boolean;
+  /** Đường dẫn file đã tải (P2-1). */
+  filePath?: string | null;
   /** Thẻ đang có focus bàn phím. */
   focused: boolean;
   /** Số thứ hạng (chỉ có ở "Bảng xếp hạng"). */
@@ -58,6 +62,8 @@ function VideoCardInner({
   item,
   dlStatus,
   dlPct,
+  openInStudio,
+  filePath,
   focused,
   rank,
   onDownload,
@@ -135,27 +141,94 @@ function VideoCardInner({
         )}
         {duration && <span className="dsc-dur">{duration}</span>}
 
+        {/* P2-2: Nhãn trạng thái góc trên ảnh */}
+        {isDone && <span className="dsc-thumb-pill dsc-thumb-pill-ok">✓ Đã tải</span>}
+        {isDownloading && (
+          <span className="dsc-thumb-pill dsc-thumb-pill-ac">
+            {dlStatus === "queued" ? "⏳ Đợi" : `⬇ ${Math.round(dlPct)}%`}
+          </span>
+        )}
+        {isError && <span className="dsc-thumb-pill dsc-thumb-pill-err">! Lỗi</span>}
+        {openInStudio && !isDone && (
+          <span className="dsc-thumb-pill dsc-thumb-pill-studio" title="Sẽ mở tab Studio khi tải xong">
+            🎬 Studio
+          </span>
+        )}
+
         {isDownloading && (
           <span className="dsc-thumb-progress" style={{ width: `${Math.max(2, dlPct)}%` }} />
         )}
 
+        {/* P2-1: Lớp nút khi rê theo trạng thái */}
         <div className="dsc-hover">
-          <button
-            type="button"
-            className="dsc-hover-btn dsc-hover-btn-ghost"
-            onClick={() => guard(onDownload)}
-            title="Tải về (đưa vào hàng đợi)"
-          >
-            ⬇ Tải về
-          </button>
-          <button
-            type="button"
-            className="dsc-hover-btn dsc-hover-btn-main"
-            onClick={() => guard(onDownloadAndOpen)}
-            title="Tải & mở Studio khi xong"
-          >
-            🎬 Tải & mở Studio
-          </button>
+          {isDone ? (
+            <>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-ghost"
+                onClick={() => {
+                  if (filePath) {
+                    void sublix.downloaderRevealFile(filePath).catch(() => sublix.downloaderOpenFolder());
+                  } else {
+                    void sublix.downloaderOpenFolder();
+                  }
+                }}
+                title="Mở thư mục chứa video đã tải"
+              >
+                📁 Thư mục
+              </button>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-main"
+                onClick={() => onOpenStudio(item)}
+                title="Mở trong Sublix Studio"
+              >
+                🎬 Mở trong Studio
+              </button>
+            </>
+          ) : isError ? (
+            <>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-ghost"
+                onClick={() => guard(onDownload)}
+                title="Tải về"
+              >
+                ⬇ Tải về
+              </button>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-main"
+                onClick={() => guard(onDownload)}
+                title="Thử lại"
+              >
+                ↻ Thử lại
+              </button>
+            </>
+          ) : isDownloading ? (
+            <div className="dsc-hover-progress" title={`Đang tải ${Math.round(dlPct)}%`}>
+              <span>{dlStatus === "queued" ? "⏳ Đang đợi…" : `⬇ ${Math.round(dlPct)}%`}</span>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-ghost"
+                onClick={() => guard(onDownload)}
+                title="Tải về (đưa vào hàng đợi)"
+              >
+                ⬇ Tải về
+              </button>
+              <button
+                type="button"
+                className="dsc-hover-btn dsc-hover-btn-main"
+                onClick={() => guard(onDownloadAndOpen)}
+                title="Tải & mở Studio khi xong"
+              >
+                🎬 Tải & mở Studio
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -164,7 +237,7 @@ function VideoCardInner({
           {item.title}
         </div>
         <div className="dsc-line1">
-          <span className="dsc-logo" title={platformName(item.platform)}>
+          <span className={`dsc-logo dsc-logo-${item.platform}`} title={platformName(item.platform)}>
             {platformLabel(item.platform)}
           </span>
           <span className="dsc-author">{item.author || platformName(item.platform)}</span>
@@ -178,16 +251,6 @@ function VideoCardInner({
               <span title={viewsTooltip(item.viewCount)}>{views} lượt xem</span>
             )}
             {ago && <span>· {ago}</span>}
-            {isDone && (
-              <button
-                type="button"
-                className="dsc-open-studio"
-                onClick={() => onOpenStudio(item)}
-                title="Mở trong Studio"
-              >
-                🎬 Mở trong Studio
-              </button>
-            )}
           </div>
         )}
       </div>

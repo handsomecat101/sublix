@@ -1542,12 +1542,51 @@ textarea.downloader-url-input[rows="1"] {
 .dl-hubtabs {
   flex: 0 0 auto;
   display: flex;
-  align-items: stretch;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   height: 38px;
   padding: 0 18px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
+}
+
+.dl-hubtabs-left {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 100%;
+}
+
+.dl-hubtabs-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--t3);
+}
+
+.dl-hubtabs-summary b {
+  color: var(--t1);
+  font-weight: 600;
+}
+
+.dl-hubtabs-change {
+  border: none;
+  background: transparent;
+  color: var(--ac-txt);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dl-hubtabs-change:hover {
+  color: var(--ac);
+  background: var(--ac-soft);
 }
 
 .dl-hubtab {

@@ -93,14 +93,29 @@ export function useKeywordTranslate(): KeywordTranslateApi {
     try {
       const cacheKey = text.toLowerCase();
       const cached = translateCache.get(cacheKey);
-      const translated = cached ?? (await sublix.discoveryTranslateKeyword(text));
-      if (!cached) translateCache.set(cacheKey, translated);
+      let translated: string;
+      if (cached) {
+        translated = cached;
+      } else {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("TIMEOUT_8S")), 8000),
+        );
+        translated = await Promise.race([
+          sublix.discoveryTranslateKeyword(text),
+          timeoutPromise,
+        ]);
+        translateCache.set(cacheKey, translated);
+      }
       setTranslation({ from: text, to: translated });
       return translated;
-    } catch {
-      // Dịch lỗi / chưa cấu hình provider ⇒ tìm nguyên văn + báo nhẹ.
+    } catch (err) {
+      // Dịch lỗi / quá 8s / chưa cấu hình provider ⇒ tìm nguyên văn + báo nhẹ (P3-4).
       setTranslation(null);
-      setTranslateNotice("Chưa dịch được — đang tìm nguyên văn.");
+      if (err instanceof Error && err.message === "TIMEOUT_8S") {
+        setTranslateNotice("Dịch quá lâu (>8s) — đang tìm nguyên văn.");
+      } else {
+        setTranslateNotice("Chưa dịch được — đang tìm nguyên văn.");
+      }
       return null;
     } finally {
       setTranslating(false);

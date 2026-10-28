@@ -36,19 +36,26 @@ export function DiscoveryEmpty({
   query,
   onShorter,
   onYouTube,
+  onEnableAutoTranslate,
 }: {
   query: string;
   onShorter: () => void;
   onYouTube: () => void;
+  onEnableAutoTranslate?: () => void;
 }) {
   return (
     <div className="dsc-state" role="status">
       <div className="dsc-state-icon">🔍</div>
       <div className="dsc-state-title">Không có video nào cho "{query}"</div>
       <div className="dsc-state-sub">
-        Bilibili tìm tốt hơn với từ khoá tiếng Trung hoặc tên game tiếng Anh.
+        Bilibili tìm tốt nhất bằng tiếng Trung — bật 文 Tự dịch hoặc thử tên game tiếng Trung.
       </div>
       <div className="dsc-state-actions">
+        {onEnableAutoTranslate && (
+          <button type="button" className="dsc-btn" onClick={onEnableAutoTranslate}>
+            文 Bật tự dịch
+          </button>
+        )}
         <button type="button" className="dsc-btn" onClick={onShorter}>
           Thử "{query.split(/\s+/)[0] ?? query}"
         </button>
@@ -66,6 +73,7 @@ export function DiscoveryError({
   retryIn,
   onRetry,
   onFallback,
+  fallbackLabel,
 }: {
   error: DiscoveryErrorInfo;
   /** Số giây còn lại của đếm ngược (0 = cho thử lại ngay). */
@@ -73,6 +81,7 @@ export function DiscoveryError({
   onRetry: () => void;
   /** Lối sang danh sách còn dùng được. */
   onFallback?: () => void;
+  fallbackLabel?: string;
 }) {
   const blocked = error.code === "blocked";
   const icon = blocked ? "⛔" : error.code === "network" ? "📡" : "⚠️";
@@ -97,7 +106,7 @@ export function DiscoveryError({
           ))}
         {onFallback && (
           <button type="button" className="dsc-btn" onClick={onFallback}>
-            Về danh sách khác
+            {fallbackLabel || "Về danh sách khác"}
           </button>
         )}
       </div>
@@ -112,8 +121,7 @@ export function DiscoveryNoKey({ onSearch }: { onSearch: () => void }) {
       <div className="dsc-state-icon">🔑</div>
       <div className="dsc-state-title">YouTube chưa có API key</div>
       <div className="dsc-state-sub">
-        Danh sách "Đang hot" của YouTube cần Google API key (miễn phí). Nấc A bạn vẫn tìm kiếm
-        được YouTube bằng từ khoá.
+        Danh sách "Đang hot" của YouTube cần Google API key (miễn phí). Bạn vẫn tìm được YouTube bằng từ khoá — hoặc bấm 1 chip xu hướng.
       </div>
       <div className="dsc-state-actions">
         <button type="button" className="dsc-btn dsc-btn-main" onClick={onSearch}>

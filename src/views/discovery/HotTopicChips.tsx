@@ -10,6 +10,7 @@
 import { useRef } from "react";
 
 import type { HotWord } from "../../lib/tauri";
+import { formatCountVi, formatAge } from "./discoveryModel";
 
 export interface HotTopicChipsProps {
   words: HotWord[];
@@ -37,13 +38,7 @@ function labelText(label: string | null): { text: string; kind: string } | null 
   }
 }
 
-/** Điểm nhiệt Douyin (đơn vị `万`) — số đủ, mono. */
-function hotValueText(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "";
-  if (value >= 100_000_000) return `${Math.round(value / 100_000_000)}亿`;
-  if (value >= 10_000) return `${Math.round(value / 10_000)}万`;
-  return String(value);
-}
+
 
 export function HotTopicChips({
   words,
@@ -99,14 +94,14 @@ export function HotTopicChips({
         <span className="dsc-hot-count">{words.length}</span>
         {words.map((word, index) => {
           const label = labelText(word.label);
-          const hot = hotValueText(word.hotValue);
+          const hot = word.hotValue !== null ? formatCountVi(word.hotValue) : "";
           const isActive = active.length > 0 && active === word.word;
           return (
             <button
               key={`${word.word}-${index}`}
               type="button"
               className={`dsc-chip${isActive ? " dsc-chip-on" : ""}`}
-              title={`${word.word}${hot ? ` · ${hot}` : ""}`}
+              title={`${word.word}${word.hotValue ? ` · ${word.hotValue.toLocaleString("vi-VN")} điểm nhiệt` : ""}`}
               onClick={() => onPick(word.word)}
             >
               <span className={`dsc-chip-rank${index < 3 ? " dsc-chip-rank-top" : ""}`}>{index + 1}</span>
@@ -118,7 +113,7 @@ export function HotTopicChips({
         })}
       </div>
       <div className="dsc-hot-side">
-        {ageMinutes !== null && <span className="dsc-cache-age">{ageMinutes} phút trước</span>}
+        {ageMinutes !== null && <span className="dsc-cache-age">{formatAge(ageMinutes)}</span>}
         <button type="button" className="dsc-link-btn" onClick={onReload} title="Tải lại xu hướng">
           ↻
         </button>

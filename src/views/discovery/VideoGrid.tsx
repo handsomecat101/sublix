@@ -17,7 +17,7 @@ import { VideoCard, type CardDlStatus } from "./VideoCard";
 export interface VideoGridProps {
   items: DiscoveryItem[];
   /** Trạng thái tải theo video id. */
-  dlStates: Record<string, { status: CardDlStatus; percent: number }>;
+  dlStates: Record<string, { status: CardDlStatus; percent: number; filePath?: string | null; openInStudio?: boolean }>;
   /** Có hiện số thứ hạng (Bảng xếp hạng). */
   showRank: boolean;
   /** Tăng lên ⇒ focus thẻ đầu (từ ô tìm). */
@@ -53,6 +53,7 @@ export function VideoGrid({
   const gridRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [gridHasFocus, setGridHasFocus] = useState(false);
   const [cols, setCols] = useState(4);
 
   /** Số cột đọc từ bố cục thật (ResizeObserver). */
@@ -91,21 +92,19 @@ export function VideoGrid({
     return () => observer.disconnect();
   }, [hasMore, loadingMore, onLoadMore, items.length]);
 
-  /** Đưa focus DOM về thẻ đang chọn. */
-  useEffect(() => {
-    const el = cardRefs.current[focusIndex];
-    if (el && document.activeElement !== el) el.focus({ preventScroll: true });
-  }, [focusIndex]);
-
-  /** Yêu cầu focus thẻ đầu (từ ô tìm: ↓ hoặc Esc khi ô rỗng). */
+  /** Yêu cầu focus thẻ đầu (từ ô tìm: ↓ hoặc Esc khi ô rỗng — P1-3). */
   useEffect(() => {
     if (!focusRequest) return;
     setFocusIndex(0);
+    setGridHasFocus(true);
     cardRefs.current[0]?.focus({ preventScroll: false });
   }, [focusRequest]);
 
+  /** Chuyển focus bàn phím giữa các thẻ khi người dùng điều hướng. */
   const focusCard = useCallback((index: number) => {
     setFocusIndex(index);
+    setGridHasFocus(true);
+    cardRefs.current[index]?.focus({ preventScroll: false });
   }, []);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -145,6 +144,16 @@ export function VideoGrid({
       if (!item) return;
       e.preventDefault();
       void navigator.clipboard?.writeText(item.url);
+      return;
+    }
+    if ((e.shiftKey && e.key === "F10") || e.key === "ContextMenu") {
+      const item = items[focusIndex];
+      const el = cardRefs.current[focusIndex];
+      if (item && el) {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        onContextMenu(item, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      }
     }
   };
 
@@ -154,6 +163,12 @@ export function VideoGrid({
       role="grid"
       aria-label="Danh sách video"
       ref={gridRef}
+      onFocus={() => setGridHasFocus(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setGridHasFocus(false);
+        }
+      }}
       onKeyDown={onKeyDown}
     >
       {items.map((item, index) => {
@@ -165,13 +180,18 @@ export function VideoGrid({
               cardRefs.current[index] = el;
             }}
             tabIndex={index === focusIndex ? 0 : -1}
-            onFocus={() => setFocusIndex(index)}
+            onFocus={() => {
+              setFocusIndex(index);
+              setGridHasFocus(true);
+            }}
           >
             <VideoCard
               item={item}
               dlStatus={state?.status ?? ""}
               dlPct={state?.percent ?? 0}
-              focused={index === focusIndex}
+              openInStudio={state?.openInStudio}
+              filePath={state?.filePath}
+              focused={gridHasFocus && index === focusIndex}
               rank={showRank ? index + 1 : null}
               onDownload={onDownload}
               onDownloadAndOpen={onDownloadAndOpen}

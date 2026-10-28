@@ -115,7 +115,15 @@ async function fetchPage(
 /** Hook chính của tab "Khám phá". */
 export function useDiscoveryList(): DiscoveryListApi {
   const [source, setSource] = useState<DiscoverySource>("bilibili");
-  const [list, setList] = useState<DiscoveryList>("hot");
+  const [list, setListState] = useState<DiscoveryList>("hot");
+  const prevListRef = useRef<DiscoveryList>("hot");
+
+  const setList = useCallback((target: DiscoveryList) => {
+    if (target !== "search") {
+      prevListRef.current = target;
+    }
+    setListState(target);
+  }, []);
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
   /** Bộ đếm lần tìm — Enter lại với cùng từ khoá vẫn tìm lại. */
@@ -258,7 +266,8 @@ export function useDiscoveryList(): DiscoveryListApi {
   const clearSearch = useCallback(() => {
     setKeyword("");
     setQuery("");
-    setList("hot");
+    const fallback = prevListRef.current === "search" ? "hot" : prevListRef.current;
+    setListState(fallback);
     translator.reset();
     setSearchNonce((n) => n + 1);
   }, [translator]);

@@ -23,6 +23,11 @@ import {
   videoIdOf,
   writeStoredFlag,
   writeStoredValue,
+  formatAge,
+  formatStudioToastText,
+  sanitizeLoadedDownloadItems,
+  shouldTriggerOpenStudio,
+  AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE,
 } from "../../src/views/discovery/discoveryModel.ts";
 import {
   dlBadge,
@@ -275,4 +280,110 @@ test("nextRetryDelay — nhân đôi mỗi lần bị chặn, tối đa 5 phút"
   assert.equal(nextRetryDelay(60), 120);
   assert.equal(nextRetryDelay(240), 300);
   assert.equal(nextRetryDelay(300), 300);
+});
+
+test("formatAge — dưới 1 phút là vừa xong, từ 1 phút trở lên là N phút trước (P3-1)", () => {
+  assert.equal(formatAge(null), "");
+  assert.equal(formatAge(undefined), "");
+  assert.equal(formatAge(-5), "");
+  assert.equal(formatAge(0), "vừa xong");
+  assert.equal(formatAge(0.8), "vừa xong");
+  assert.equal(formatAge(1), "1 phút trước");
+  assert.equal(formatAge(15.4), "15 phút trước");
+});
+
+test("shouldTriggerOpenStudio — chỉ kích hoạt khi đủ 4 điều kiện (P1-1)", () => {
+  // Đạt: completed + openInStudio + chưa mở + có path
+  assert.equal(
+    shouldTriggerOpenStudio({
+      status: "completed",
+      filePath: "C:\\video.mp4",
+      openInStudio: true,
+      studioOpened: false,
+    }),
+    true
+  );
+
+  // Đã từng mở rồi (studioOpened = true) ⇒ KHÔNG mở lại
+  assert.equal(
+    shouldTriggerOpenStudio({
+      status: "completed",
+      filePath: "C:\\video.mp4",
+      openInStudio: true,
+      studioOpened: true,
+    }),
+    false
+  );
+
+  // Chưa tải xong (downloading / queued) ⇒ KHÔNG mở
+  assert.equal(
+    shouldTriggerOpenStudio({
+      status: "downloading",
+      filePath: null,
+      openInStudio: true,
+      studioOpened: false,
+    }),
+    false
+  );
+
+  // Không có cờ openInStudio ⇒ KHÔNG mở
+  assert.equal(
+    shouldTriggerOpenStudio({
+      status: "completed",
+      filePath: "C:\\video.mp4",
+      openInStudio: false,
+      studioOpened: false,
+    }),
+    false
+  );
+
+  // Thiếu filePath ⇒ KHÔNG mở
+  assert.equal(
+    shouldTriggerOpenStudio({
+      status: "completed",
+      filePath: "",
+      openInStudio: true,
+      studioOpened: false,
+    }),
+    false
+  );
+});
+
+test("sanitizeLoadedDownloadItems — khử trùng mục completed từ phiên trước (P1-1)", () => {
+  const loadedFromStorage = [
+    { id: "1", status: "completed", openInStudio: true, title: "Old video 1" },
+    { id: "2", status: "completed", openInStudio: false, title: "Old video 2" },
+    { id: "3", status: "downloading", openInStudio: true, title: "Interrupted" },
+  ];
+
+  const sanitized = sanitizeLoadedDownloadItems(loadedFromStorage);
+  // Mục 1 phải được đánh dấu studioOpened: true
+  assert.equal(sanitized[0].studioOpened, true);
+  // Mục 2 giữ nguyên
+  assert.equal(sanitized[1].studioOpened, undefined);
+  // Mục 3 chưa xong giữ nguyên
+  assert.equal(sanitized[2].studioOpened, undefined);
+
+  // Đảm bảo không mục nào sau khi nạp bị kích hoạt mở Studio
+  assert.equal(shouldTriggerOpenStudio(sanitized[0]), false);
+});
+
+test("formatStudioToastText — 1 mục ghi rõ tên, nhiều mục gộp số lượng (§1)", () => {
+  assert.equal(formatStudioToastText([]), "");
+  assert.equal(
+    formatStudioToastText(["Elden Ring Boss Fight"]),
+    '✓ Đã tải xong "Elden Ring Boss Fight" — đã mở tab trong Studio'
+  );
+  assert.equal(
+    formatStudioToastText(["Video A", "Video B"]),
+    "2 video đã mở tab trong Studio"
+  );
+  assert.equal(
+    formatStudioToastText(["Video A", "Video B", "Video C"]),
+    "3 video đã mở tab trong Studio"
+  );
+});
+
+test("AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE mặc định là false (§1)", () => {
+  assert.equal(AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE, false);
 });
