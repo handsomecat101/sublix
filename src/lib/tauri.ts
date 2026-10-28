@@ -1053,6 +1053,34 @@ export const sublix = {
   async discoveryTranslateKeyword(keyword: string): Promise<string> {
     return await invoke<string>("discovery_translate_keyword", { keyword });
   },
+
+  /**
+   * v0.16 Xưởng AI — **phân tích** video nguồn (Bước A) chạy nền.
+   *
+   * Trả về `run_id` ngay; tiến trình qua sự kiện `lab:progress`, kết quả qua
+   * `lab:done`, lỗi qua `lab:error` (xem {@link onLabProgress}…).
+   */
+  async labAnalyze(
+    sources: LabSourceInput[],
+    options?: LabAnalyzeOptions,
+  ): Promise<string> {
+    return await invoke<string>("lab_analyze", { sources, options });
+  },
+
+  /** v0.16 Xưởng AI — huỷ lượt phân tích đang chạy. */
+  async labCancel(runId: string): Promise<void> {
+    await invoke<void>("lab_cancel", { runId });
+  },
+
+  /** v0.16 Xưởng AI — lấy kết quả của lượt đã xong (`null` nếu chưa xong). */
+  async labGetAnalysis(runId: string): Promise<LabAnalysis | null> {
+    return await invoke<LabAnalysis | null>("lab_get_analysis", { runId });
+  },
+
+  /** v0.16 Xưởng AI — xoá lượt khỏi bộ nhớ (sau khi đã lấy kết quả). */
+  async labForgetAnalysis(runId: string): Promise<void> {
+    await invoke<void>("lab_forget_analysis", { runId });
+  },
 };
 
 /**
@@ -1117,6 +1145,182 @@ export function discoveryErrorCode(err: unknown): DiscoveryErrorCode {
 export function hardsubErrorCode(err: unknown): HardsubErrorCode | null {
   const m = /^(HARDSUB_[A-Z_]+):/.exec(String(err));
   return m ? (m[1] as HardsubErrorCode) : null;
+}
+
+// ───────────────────────────── v0.16 Xưởng AI (Bước A) ─────────────────────────────
+
+/** Một video nguồn đưa vào phân tích. */
+export interface LabSourceInput {
+  /** Đường dẫn video trên đĩa. */
+  path: string;
+  /** Tên hiển thị (mặc định = tên file). */
+  name?: string | null;
+  /** Đường dẫn dự án Studio đã nhận diện ⇒ dùng `segments` có sẵn (không STT lại). */
+  studioProject?: string | null;
+}
+
+/** Tuỳ chọn phân tích (Bước A). */
+export interface LabAnalyzeOptions {
+  /** Tên game (đưa vào prompt cho LLM). */
+  gameName?: string;
+  /** Thể loại game. */
+  gameGenre?: string;
+  /** Thông tin tra cứu bổ trợ. */
+  supplementaryContext?: string;
+  /** Thời lượng tối đa của 1 cụm thoại (giây, mặc định 600). */
+  chunkSecs?: number;
+  /** Có dò phụ đề cứng (v0.14) để chấm điểm cutscene chính xác hơn không. */
+  useHardsub?: boolean;
+}
+
+/** Một video nguồn trong kết quả — khớp `MockVideoSource`. */
+export interface LabSource {
+  id: string;
+  name: string;
+  durationSec: number;
+  sizeMb: number;
+  fps: number;
+  resolution: string;
+  hasSubtitles: boolean;
+  studioProjectName?: string | null;
+}
+
+/** Một chương đã tóm tắt — khớp `MockChapter` (+ 2 trường LLM, UI chưa dùng). */
+export interface LabChapter {
+  id: number;
+  sourceIdx: number;
+  title: string;
+  summary: string;
+  timeRange: string;
+  durationSec: number;
+  cutscenesCount: number;
+  linesCount: number;
+  included: boolean;
+  /** Loại chương do LLM gán ("cutscene", "gameplay"…). */
+  chapterType?: string | null;
+  /** Chức năng dẫn chuyện do LLM gán. */
+  narrativeFunction?: string | null;
+}
+
+/** Một nhân vật — khớp `MockCharacter` (+ 2 trường LLM, UI chưa dùng). */
+export interface LabCharacter {
+  id: string;
+  name: string;
+  role: string;
+  linesCount: number;
+  avatarColor: string;
+  /** Ghi chú khi gộp nhiều lần xuất hiện. */
+  mergedNotice?: string | null;
+  /** Động cơ do LLM nêu. */
+  motivation?: string | null;
+  /** Tên nhân vật xuất hiện trong phụ đề. */
+  subtitleName?: string | null;
+}
+
+/** Một đoạn rác bị lọc — khớp `MockJunkSegment`. */
+export interface LabJunkSegment {
+  id: number;
+  type: string;
+  sourceName: string;
+  timeRange: string;
+  reason: string;
+  restored: boolean;
+}
+
+/** Đặc trưng đo được của 1 đoạn cảnh (tầng điểm cutscene). */
+export interface LabSceneFeatures {
+  letterboxCover: number;
+  letterboxStrength: number;
+  hardsubCover: number;
+  dialogueDensity: number;
+  silenceCover: number;
+}
+
+/** Một đoạn cảnh đã chấm điểm cutscene (0–1). */
+export interface LabScene {
+  sourceIdx: number;
+  start: number;
+  end: number;
+  score: number;
+  features: LabSceneFeatures;
+}
+
+/** Một câu thoại đã nhận dạng. */
+export interface LabTranscriptLine {
+  sourceIdx: number;
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Kết quả phân tích Bước A.
+ *
+ * **Lệch 1 chỗ với UI**: UI đang gọi là `junkSegments`, ta đặt `junk` (theo đặc tả
+ * `LabAnalysis`). Bước nối UI sẽ map `junk` → `junkSegments`.
+ */
+export interface LabAnalysis {
+  sources: LabSource[];
+  characters: LabCharacter[];
+  chapters: LabChapter[];
+  junk: LabJunkSegment[];
+  scenes: LabScene[];
+  transcript: LabTranscriptLine[];
+}
+
+/** Giai đoạn của lần phân tích. */
+export type LabStage = "stt" | "scenes" | "junk" | "summary" | "done" | "error";
+
+/** Payload sự kiện `lab:progress`. */
+export interface LabProgressEvent {
+  runId: string;
+  stage: LabStage;
+  sourceIdx: number;
+  percent: number;
+  message: string;
+}
+
+/** Payload sự kiện `lab:done`. */
+export interface LabDoneEvent {
+  runId: string;
+  analysis: LabAnalysis;
+}
+
+/** Payload sự kiện `lab:error`. */
+export interface LabErrorEvent {
+  runId: string;
+  message: string;
+}
+
+/**
+ * Nghe sự kiện `lab:progress` của Xưởng AI (tiến trình Bước A).
+ *
+ * Trả hàm **gỡ nghe** — gọi khi component unmount.
+ */
+export async function onLabProgress(
+  handler: (event: LabProgressEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<LabProgressEvent>("lab:progress", (e) => handler(e.payload));
+  return unlisten;
+}
+
+/** Nghe sự kiện `lab:done` (phân tích xong) — trả hàm gỡ nghe. */
+export async function onLabDone(
+  handler: (event: LabDoneEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<LabDoneEvent>("lab:done", (e) => handler(e.payload));
+  return unlisten;
+}
+
+/** Nghe sự kiện `lab:error` (phân tích lỗi) — trả hàm gỡ nghe. */
+export async function onLabError(
+  handler: (event: LabErrorEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<LabErrorEvent>("lab:error", (e) => handler(e.payload));
+  return unlisten;
 }
 
 export interface VoicePreset {

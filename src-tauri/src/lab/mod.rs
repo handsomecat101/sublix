@@ -23,10 +23,20 @@
 //! `allocate::allocate → (UI duyệt) → to_studio`.
 
 pub mod allocate;
+pub mod analysis_merge;
+pub mod analysis_types;
+pub mod analyze;
+pub mod analyze_sources;
+pub mod analyze_summary;
+pub mod cache;
+pub mod commands;
 pub mod cutscene;
 pub mod junk_filter;
+pub mod llm_json;
+pub mod llm_prompt;
 pub mod probe;
 pub mod recap_script;
+pub mod transcript;
 
 pub(crate) mod original;
 pub(crate) mod probe_parse;
