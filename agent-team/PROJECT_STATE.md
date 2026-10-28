@@ -54,6 +54,7 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
+*(Không có task nào đang khóa)*
 
 
 ---
@@ -77,6 +78,8 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-LAB-U1A` | Giao diện tab Xưởng AI theo thiết kế Opus (dữ liệu giả, chưa nối backend) | Antigravity | 2026-10-28 | ✅ 19 component src/views/lab/** · topbar Xưởng AI (Thử nghiệm) · 14/14 test labModel.test.ts PASS · tsc/build OK |
+| `TSK-V015-DISC-B1` | Tự dịch từ khoá Việt/Anh → Trung khi tìm Bilibili + đơn vị lượt xem kiểu Việt | mcode #1 (Orca worker) | 2026-10-28 | ✅ `discovery/keyword_translate.rs` + lệnh `discovery_translate_keyword` (provider đã cấu hình) + đơn vị `nghìn/triệu/tỷ` thống nhất 2 nguồn — 87 Rust + 41 node; dịch thật `elden ring boss` → `艾尔登法环 Boss`; **chưa commit** |
 | `TSK-V015-DISC-UI` | Tab con Khám phá: chip Douyin, Bilibili hot/xếp hạng/tìm, tìm YouTube, Tải về / Tải & mở Studio | mcode #1 | 2026-10-28 | ✅ `26ebe2d` — kiểm app thật: tải clip 21 s → tự mở tab Studio; ảnh `shots/v015-app-*.png` |
 | `TSK-V015-DISC-CMD` | Nối Khám phá: gọi mạng + 5 lệnh Tauri + mã lỗi + wrapper TS | mcode #1 | 2026-10-28 | ✅ `b8cf7d9` — 437 Rust + 418 node; mạng thật OK (Bilibili hot, Douyin, tìm 原神) |
 | `TSK-LAB-DESIGN` (D1) | Thiết kế tab Xưởng AI (thư viện mẫu, 3 bước, sửa lời bình) | **Opus (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `docs/ui-mockups/v016-lab*` · `docs/UI_REDESIGN_PLAN.md` §4.14 |

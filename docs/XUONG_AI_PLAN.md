@@ -36,8 +36,8 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 - [x] **R2** Gemini — Việt hoá + chỉnh cho game 3 prompt NarratoAI → `src-tauri/src/lab/prompts/recap_{analyze,narration,match}.md` + `LICENSE-NarratoAI.txt` (ghi công MIT)
 
 ### Giai đoạn 1 — Phân tích (sau C1)
-- [ ] **C2** (OpenCode — đang làm) đo đặc trưng cutscene bằng ffmpeg (dải đen `cropdetect`, cảnh `scdet`, im lặng `silencedetect`) + `cutscene.rs` chấm điểm + test video thử
-- [ ] **C3** lệnh Tauri `lab_analyze` (STT + OCR + cutscene + lọc rác → tóm tắt chương bằng LLM theo prompt R2), có tiến trình + huỷ
+- [x] **C2** (OpenCode ✅ `5a46dda` — ~2,3–3,7 s quét mỗi phút video) đo đặc trưng cutscene bằng ffmpeg (dải đen `cropdetect`, cảnh `scdet`, im lặng `silencedetect`) + `cutscene.rs` chấm điểm + test video thử
+- [ ] **C3** (mcode — đang làm) lệnh Tauri `lab_analyze` (STT + OCR + cutscene + lọc rác → tóm tắt chương bằng LLM theo prompt R2), có tiến trình + huỷ
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
 - [ ] **C4** lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
