@@ -17,6 +17,7 @@ pub mod downloader;
 pub mod dubbing;
 pub mod file_sub;
 pub mod hardsub;
+pub mod lab;
 pub mod model_download;
 pub mod overlay;
 pub mod proc_kill;
