@@ -1,0 +1,992 @@
+/* TSK-V015-DISC-UI — kiểu tab con "Khám phá" (v0.15 nấc A).
+ *
+ * Chỉ dùng token sẵn có của Cinema Dark (`src/App.css` :root) — không thêm màu mới.
+ * Số đo theo `docs/UI_REDESIGN_PLAN.md` §4.13 (bảng "Kích thước & màu").
+ */
+
+.dsc-root {
+  --dsc-pad-y: 14px;
+  --dsc-pad-x: 28px;
+  --dsc-gap: 12px;
+  --dsc-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsc-gap);
+  padding: var(--dsc-pad-y) var(--dsc-pad-x);
+  min-height: 100%;
+  color: var(--t1);
+}
+
+@media (max-width: 1280px) {
+  .dsc-root {
+    --dsc-pad-y: 12px;
+    --dsc-pad-x: 20px;
+  }
+}
+
+/* ───────────────────────────── Thanh tìm ───────────────────────────── */
+
+.dsc-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Chọn nguồn = segmented 40 px */
+.dsc-seg {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.dsc-seg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t2);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.dsc-seg-item:hover {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.dsc-seg-on {
+  background: var(--ac-soft);
+  color: var(--ac-txt);
+}
+
+/* Logo nguồn 16×16 — màu **giống tag nền tảng** ở tab Tải về (§4.4) */
+.dsc-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dsc-logo-bilibili {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+}
+
+.dsc-logo-youtube {
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+}
+
+.dsc-search-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 240px;
+  height: 40px;
+  padding: 0 8px 0 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.dsc-search-focus {
+  border-color: var(--ac-br);
+  box-shadow: 0 0 0 3px var(--ac-soft);
+}
+
+.dsc-search-icon {
+  color: var(--t4);
+  font-size: 15px;
+}
+
+.dsc-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--t1);
+  font-size: 13px;
+}
+
+.dsc-search-input::placeholder {
+  color: var(--t4);
+}
+
+.dsc-search-go {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--ac-soft);
+  color: var(--ac-txt);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dsc-search-go:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dsc-hint {
+  flex: 1 0 100%;
+  font-size: 11.5px;
+  color: var(--warn-txt);
+}
+
+/* ───────────────────────────── Chip xu hướng Douyin ───────────────────────────── */
+
+.dsc-hot-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dsc-hot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  /* Mép phải mờ 48 px khi còn chip */
+  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent 100%);
+}
+
+.dsc-hot-row::-webkit-scrollbar {
+  display: none;
+}
+
+.dsc-hot-title {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--t2);
+  padding-right: 2px;
+}
+
+.dsc-hot-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--t4);
+}
+
+.dsc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 240px;
+  height: 28px;
+  padding: 0 10px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--t2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.dsc-chip:hover {
+  background: var(--hover);
+  border-color: var(--line);
+  color: var(--t1);
+}
+
+.dsc-chip-on {
+  background: var(--ac-soft);
+  border-color: var(--ac-br);
+  color: var(--ac-txt);
+}
+
+.dsc-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsc-chip-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 9px;
+  background: var(--bg-inset);
+  color: var(--t3);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+/* Top 3 nền cam: #e8a33d → #c9853a → #9c6a35 */
+.dsc-chip-rank-top:nth-child(1) {
+  background: #e8a33d;
+  color: #12100e;
+}
+
+.dsc-chip-rank-top:nth-child(2) {
+  background: #c9853a;
+  color: #12100e;
+}
+
+.dsc-chip-rank-top:nth-child(3) {
+  background: #9c6a35;
+  color: #12100e;
+}
+
+.dsc-chip-lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.dsc-chip-lbl-ok {
+  color: var(--ok-txt);
+}
+
+.dsc-chip-lbl-dang {
+  color: var(--dang-txt);
+}
+
+.dsc-chip-lbl-ac {
+  color: var(--ac-txt);
+}
+
+.dsc-chip-hot {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--t4);
+}
+
+.dsc-chip-skeleton {
+  width: 92px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-soft);
+}
+
+.dsc-hot-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.dsc-cache-age {
+  font-size: 11px;
+  color: var(--t4);
+}
+
+.dsc-hot-row-err {
+  mask-image: none;
+  -webkit-mask-image: none;
+  font-size: 12px;
+  color: var(--t3);
+}
+
+/* ───────────────────────────── Hàng chọn danh sách ───────────────────────────── */
+
+.dsc-listtabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dsc-listtabs-left,
+.dsc-listtabs-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dsc-listbtn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t2);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dsc-listbtn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.dsc-listbtn-on {
+  background: var(--ac-soft);
+  border-color: var(--ac-br);
+  color: var(--ac-txt);
+}
+
+.dsc-listbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dsc-listbtn-search {
+  border-style: dashed;
+  color: var(--ac-txt);
+  border-color: var(--ac-br);
+}
+
+.dsc-count,
+.dsc-retry-count {
+  font-size: 11.5px;
+  color: var(--t4);
+}
+
+.dsc-retry-count {
+  color: var(--warn-txt);
+}
+
+.dsc-icon-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--t3);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dsc-icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--t1);
+}
+
+.dsc-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dsc-dash {
+  color: var(--t4);
+}
+
+.dsc-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--ac-txt);
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.dsc-link-btn:hover {
+  background: var(--hover);
+}
+
+/* ───────────────────────────── Lưới thẻ ───────────────────────────── */
+
+.dsc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--dsc-gap);
+  align-items: start;
+}
+
+.dsc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--dsc-radius);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
+}
+
+.dsc-card:hover {
+  background: var(--hover);
+  border-color: var(--line);
+}
+
+.dsc-card-focus {
+  outline: 2px solid var(--ac-txt);
+  outline-offset: 2px;
+}
+
+.dsc-card-done {
+  border-color: var(--ok-br);
+}
+
+.dsc-card-err {
+  border-color: var(--dang-br);
+}
+
+.dsc-card-flash {
+  animation: dsc-flash 0.4s ease;
+}
+
+@keyframes dsc-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  40% {
+    box-shadow: 0 0 0 3px var(--ac-soft);
+  }
+}
+
+.dsc-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.dsc-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dsc-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-card-2), var(--bg-inset));
+}
+
+.dsc-logo-lg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--t4);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* Nhãn thời lượng — mono 11/600, nền đen 78 %, góc dưới phải */
+.dsc-dur {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Số thứ hạng (Bảng xếp hạng) — góc trên trái 26 px */
+.dsc-rank {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dsc-rank-top {
+  background: #e8a33d;
+  color: #12100e;
+}
+
+/* Thanh tiến trình 3 px ở đáy ảnh */
+.dsc-thumb-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--ac);
+  transition: width 0.25s ease;
+}
+
+/* Lớp hover: phủ ảnh + 2 nút 32 px */
+.dsc-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  background: linear-gradient(rgba(10, 8, 6, 0.35), rgba(10, 8, 6, 0.72));
+  transition: opacity 0.14s ease;
+  pointer-events: none;
+}
+
+.dsc-card:hover .dsc-hover,
+.dsc-card-focus .dsc-hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dsc-hover-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+
+.dsc-hover-btn-ghost {
+  background: rgba(20, 17, 13, 0.82);
+  color: var(--t1);
+}
+
+.dsc-hover-btn-ghost:hover {
+  background: rgba(30, 26, 20, 0.92);
+}
+
+.dsc-hover-btn-main {
+  background: var(--grad-ac);
+  border-color: transparent;
+  color: #1b1409;
+}
+
+.dsc-body {
+  padding: 9px 11px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Tiêu đề 13/600, line-height 18, cao cố định 36 px (2 dòng) */
+.dsc-title {
+  height: 36px;
+  line-height: 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dsc-line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--t2);
+  min-height: 18px;
+}
+
+.dsc-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsc-dl {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dsc-dl-done {
+  color: var(--ok-txt);
+}
+
+.dsc-dl-error {
+  color: var(--dang-txt);
+}
+
+.dsc-dl-downloading,
+.dsc-dl-queued {
+  color: var(--ac-txt);
+}
+
+.dsc-line2 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--t3);
+  min-height: 18px;
+}
+
+.dsc-line2-err {
+  color: var(--dang-txt);
+}
+
+.dsc-open-studio {
+  margin-left: auto;
+  border: 1px solid var(--ok-br);
+  background: var(--ok-soft);
+  color: var(--ok-txt);
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+/* ───────────────────────────── Trạng thái ───────────────────────────── */
+
+.dsc-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.dsc-state-icon {
+  font-size: 30px;
+}
+
+.dsc-state-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--t1);
+}
+
+.dsc-state-sub {
+  font-size: 12.5px;
+  color: var(--t3);
+  max-width: 460px;
+}
+
+.dsc-state-hint {
+  font-size: 11.5px;
+  color: var(--warn-txt);
+}
+
+.dsc-state-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dsc-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t1);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dsc-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.dsc-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.dsc-btn-main {
+  background: var(--grad-ac);
+  border-color: transparent;
+  color: #1b1409;
+}
+
+.dsc-card-skeleton {
+  pointer-events: none;
+}
+
+.dsc-skel-thumb {
+  background: var(--bg-card);
+}
+
+.dsc-skel-line {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg-card);
+  margin-bottom: 6px;
+}
+
+.dsc-skel-line-2 {
+  height: 16px;
+  width: 92%;
+}
+
+.dsc-skel-line-1 {
+  width: 70%;
+}
+
+.dsc-skel-short {
+  width: 45%;
+}
+
+.dsc-grid-more {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--t3);
+}
+
+.dsc-grid-more-err {
+  color: var(--dang-txt);
+}
+
+.dsc-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--ac);
+  animation: dsc-spin 0.8s linear infinite;
+}
+
+@keyframes dsc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dsc-sentinel {
+  grid-column: 1 / -1;
+  height: 1px;
+}
+
+.dsc-endline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+  font-size: 12px;
+  color: var(--t4);
+}
+
+/* ───────────────────────────── Hàng đợi mini ───────────────────────────── */
+
+.dsc-miniq {
+  margin-top: auto;
+  padding: 9px 12px;
+  background: #0f0d0b;
+  border-top: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dsc-miniq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dsc-miniq-count {
+  font-size: 11.5px;
+  color: var(--t3);
+}
+
+.dsc-miniq-items {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.dsc-miniq-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 320px;
+  font-size: 11px;
+  color: var(--t3);
+}
+
+.dsc-miniq-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.dsc-miniq-bar {
+  position: relative;
+  width: 60px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-inset);
+  overflow: hidden;
+  flex: 0 0 60px;
+}
+
+.dsc-miniq-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ac);
+}
+
+.dsc-miniq-pct {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--t4);
+  flex: 0 0 auto;
+}
+
+/* ───────────────────────────── Menu ngữ cảnh ───────────────────────────── */
+
+.dsc-menu {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--bg-side);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.dsc-menu button {
+  border: none;
+  background: transparent;
+  color: var(--t1);
+  font-size: 12.5px;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.dsc-menu button:hover {
+  background: var(--hover);
+}
+
+/* ───────────────────────────── Hẹp cửa sổ ───────────────────────────── */
+
+@media (max-width: 1280px) {
+  .dsc-seg-text {
+    display: none;
+  }
+
+  .dsc-seg-item {
+    padding: 0 8px;
+  }
+
+  .dsc-hot-title {
+    font-size: 11px;
+  }
+
+  .dsc-miniq-item:nth-child(n + 2) {
+    display: none;
+  }
+}
+
+/* ───────────────────────────── Toast "Xong — đã mở tab Studio" ───────────────────────────── */
+
+.dsc-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 460px;
+  padding: 10px 12px;
+  background: var(--bg-side);
+  border: 1px solid var(--ok-br);
+  border-radius: 10px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+
+.dsc-toast-text {
+  font-size: 12.5px;
+  color: var(--t1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsc-toast-btn {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--grad-ac);
+  color: #1b1409;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dsc-toast-close {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--t4);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.dsc-toast-close:hover {
+  background: var(--hover);
+  color: var(--t1);
+}

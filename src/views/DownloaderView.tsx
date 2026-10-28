@@ -7,7 +7,7 @@
 //! (1 nút chính theo trạng thái + menu ⋯/chuột phải dùng `ContextMenu` dùng chung).
 //! **Toàn bộ logic (handler, hàng đợi 3 song song, BUG-053, sub-pass, reup) giữ nguyên.**
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   sublix,
@@ -30,7 +30,10 @@ import {
   IconPlay,
   IconRotateCw,
 } from "../icons";
+import { DiscoveryPanel, type DiscoveryDlEntry } from "./discovery/DiscoveryView";
+import { videoIdOf } from "./discovery/discoveryModel";
 import "./DownloaderView.css";
+import "./discovery/discovery.css";
 
 interface DownloaderViewProps {
   onNavigateToFileSub?: (filePath: string) => void;
@@ -74,6 +77,8 @@ interface DownloadItem {
   subsLangs?: string[] | null;
   // TSK-FEAT-DL-PLATFORMS-REUP: tùy chọn reup đã dùng cho mục này (giữ khi Thử lại).
   reup?: ReupOptions | null;
+  // TSK-V015-DISC-UI: xếp từ tab "Khám phá" với cờ mở Studio ⇒ tải xong tự mở tab.
+  openInStudio?: boolean;
   createdAt: number;
 }
 
@@ -368,6 +373,28 @@ export default function DownloaderView({
   const [nameFilter, setNameFilter] = useState<string>(""); // lọc theo tên
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // ---- TSK-V015-DISC-UI: tab con "Tải về" / "Khám phá" ----
+  // Nhớ tab con mở lần cuối (localStorage, có try/catch). DownloaderView **luôn
+  // mount** (BUG-045) ⇒ 2 pane dùng `hidden` (CSS), không unmount Tải về.
+  const HUB_TAB_KEY = "sublix.downloader.hubTab";
+  const [hubTab, setHubTab] = useState<"download" | "discovery">(() => {
+    try {
+      const saved = window.localStorage.getItem(HUB_TAB_KEY);
+      return saved === "discovery" ? "discovery" : "download";
+    } catch {
+      return "download";
+    }
+  });
+
+  const switchHubTab = (next: "download" | "discovery") => {
+    setHubTab(next);
+    try {
+      window.localStorage.setItem(HUB_TAB_KEY, next);
+    } catch {
+      /* localStorage bị chặn — bỏ qua, không làm hỏng UI. */
+    }
+  };
 
   // Save history on change
   useEffect(() => {
@@ -677,7 +704,11 @@ export default function DownloaderView({
 
   // Xếp các mục vào hàng đợi có sẵn (trạng thái "queued"); effect bên dưới
   // tự khởi động tối đa MAX_PARALLEL_DOWNLOADS mục một lúc.
-  const queueEntries = (entries: PlaylistEntry[], extraNote?: string | null) => {
+  const queueEntries = (
+    entries: PlaylistEntry[],
+    extraNote?: string | null,
+    openInStudio = false,
+  ) => {
     // BUG-053: không xếp 1 URL 2 lần khi nó đang chạy / đang chờ.
     const busy = new Set(
       items
@@ -714,6 +745,7 @@ export default function DownloaderView({
         filePath: null,
         error: null,
         reup: buildReupOptions(),
+        openInStudio,
         createdAt: now + idx,
       });
     });
@@ -730,6 +762,58 @@ export default function DownloaderView({
         .join(" ")
     );
   };
+
+  // ---- TSK-V015-DISC-UI: cầu nối với tab con "Khám phá" ----
+  // Dùng **đúng hàng đợi tải hiện có** (không viết luồng tải thứ 2).
+
+  /** Đưa 1 URL từ tab Khám phá vào hàng đợi (tuỳ chọn hiện tại của tab Tải về). */
+  const enqueueFromDiscovery = (
+    targetUrl: string,
+    options: { openInStudio: boolean; title?: string },
+  ) => {
+    const trimmed = targetUrl.trim();
+    if (!trimmed) return;
+    queueEntries(
+      [{ url: trimmed, title: options.title?.trim() || trimmed, duration: null }],
+      options.openInStudio ? "🎬 Sẽ mở tab Studio khi tải xong." : null,
+      options.openInStudio,
+    );
+  };
+
+  /** Trạng thái hàng đợi theo **id video** (bvid / YouTube id) để thẻ Khám phá khớp. */
+  const discoveryDlStates = useMemo<Record<string, DiscoveryDlEntry>>(() => {
+    const out: Record<string, DiscoveryDlEntry> = {};
+    for (const item of items) {
+      const vid = videoIdOf(item.url);
+      if (!vid) continue;
+      out[vid] = {
+        status: item.status,
+        percent: item.percent,
+        title: item.title,
+        filePath: item.filePath ?? null,
+        openInStudio: item.openInStudio,
+      };
+    }
+    return out;
+  }, [items]);
+
+  /** Hàng đợi mini (đọc từ cùng state, không gọi lệnh mới). */
+  const discoveryQueueItems = useMemo(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        percent: item.percent,
+      })),
+    [items],
+  );
+
+  /** Số mục hàng đợi (badge trên tab con "Tải về"). */
+  const queueBadgeCount = useMemo(
+    () => items.filter((i) => i.status !== "completed" && i.status !== "cancelled").length,
+    [items],
+  );
 
   // Inspect video URL
   const handleInspect = async (overrideUrl?: string) => {
@@ -1294,7 +1378,32 @@ export default function DownloaderView({
 
   return (
     <div className="dl-view">
-      <div className="dl-body">
+      {/* ===== TSK-V015-DISC-UI: thanh tab con Tải về / Khám phá (38 px) ===== */}
+      <div className="dl-hubtabs" role="tablist" aria-label="Tải về / Khám phá">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={hubTab === "download"}
+          className={`dl-hubtab${hubTab === "download" ? " dl-hubtab-on" : ""}`}
+          onClick={() => switchHubTab("download")}
+        >
+          ⬇ Tải về
+          {queueBadgeCount > 0 && <span className="dl-hubtab-badge">{queueBadgeCount}</span>}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={hubTab === "discovery"}
+          className={`dl-hubtab${hubTab === "discovery" ? " dl-hubtab-on" : ""}`}
+          onClick={() => switchHubTab("discovery")}
+        >
+          🔥 Khám phá
+        </button>
+      </div>
+
+      {/* Cả 2 pane luôn mount (BUG-045) — chỉ ẩn/hiện bằng CSS. */}
+      <div className="dl-hubpane" hidden={hubTab !== "download"}>
+        <div className="dl-body">
         {/* ===== 1. Ô NHẬP + NÚT TẢI ===== */}
         <section className="dl-card dl-cmd">
           <div className="dl-cmd-row">
@@ -1814,6 +1923,18 @@ export default function DownloaderView({
           Dailymotion, VK, Pinterest, Snapchat… · Chỉ tải nội dung bạn có quyền sử dụng.
         </span>
       </footer>
+      </div>
+
+      {/* ===== TSK-V015-DISC-UI: tab con "Khám phá" (v0.15 nấc A) ===== */}
+      <div className="dl-hubpane dl-hubpane-discovery" hidden={hubTab !== "discovery"}>
+        <DiscoveryPanel
+          dlStates={discoveryDlStates}
+          queueItems={discoveryQueueItems}
+          onEnqueue={enqueueFromDiscovery}
+          onOpenStudio={(filePath) => onNavigateToStudio?.(filePath)}
+          onShowDownloader={() => switchHubTab("download")}
+        />
+      </div>
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />

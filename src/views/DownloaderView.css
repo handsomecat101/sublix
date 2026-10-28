@@ -1532,3 +1532,84 @@ textarea.downloader-url-input[rows="1"] {
 .dl-batch-idx { min-width: auto; }
 .dl-batch-title { max-width: 240px; }
 
+
+/* ============================================================================
+   TSK-V015-DISC-UI — Thanh tab con "Tải về" / "Khám phá" (PLAN §4.13)
+   Cao 38 px, gạch chân `--ac` 2 px ở ĐÁY (khác tab dự án Studio gạch trên đỉnh).
+   Cả 2 pane luôn mount (BUG-045) — ẩn/hiện bằng `hidden` (CSS), không unmount.
+   ========================================================================== */
+
+.dl-hubtabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 38px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.dl-hubtab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dl-hubtab:hover {
+  color: var(--t1);
+}
+
+/* Gạch chân --ac 2 px ở đáy */
+.dl-hubtab-on {
+  color: var(--ac-txt);
+}
+
+.dl-hubtab-on::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ac);
+}
+
+.dl-hubtab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--ac-soft);
+  color: var(--ac-txt);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.dl-hubpane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* `hidden` phải thắng `display:flex` của .dl-hubpane */
+.dl-hubpane[hidden] {
+  display: none !important;
+}
+
+.dl-hubpane-discovery {
+  overflow-y: auto;
+}
