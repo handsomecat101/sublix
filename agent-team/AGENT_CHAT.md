@@ -1,4 +1,4 @@
-# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
+﻿# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
 
 > **⚠️ QUY TẮC CHỐNG PHÌNH TO & TRÙNG LẶP (BẮT BUỘC CHO MỌI AGENT):**
 > 1. **Ngắn gọn tuyệt đối:** Mỗi tin nhắn chỉ từ **3 – 7 dòng** (dạng bullet).
@@ -8,6 +8,16 @@
 
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
+
+### 2026-10-28 22:45 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-V015-DISC-CMD` (nối lõi Khám phá vào app): gọi mạng + 5 lệnh Tauri + wrapper TS.
+- **File mới:** `src-tauri/src/discovery/{fetch.rs,commands.rs,fetch/ytdlp.rs}` + `{fetch,commands,network}_tests.rs` · sửa `discovery/mod.rs` (+2 `pub mod`), `src-tauri/src/lib.rs` (+5 handler), `src/lib/tauri.ts` (+wrapper), `scripts/discovery-tests/` — **chưa commit**.
+- **Mã lỗi có tiền tố** cho UI: `[blocked]` (HTTP 403/412/429, mã `-412`/`-352`/`-509`) · `[network]` · `[ytdlp_missing]` · `[parse]` — TS có `discoveryErrorCode()` tách tiền tố.
+- **Bắt được lỗi OpenCode phát hiện:** search Bilibili **bắt buộc** `Referer: https://search.bilibili.com/` — đã xác nhận tìm "原神" ra **20 kết quả** (không Referer ⇒ `-412`).
+- **Kiểm:** `cargo test --lib` **437/437 PASS** · `cargo test --lib discovery -- --ignored` **1/1 PASS** (mạng thật Bilibili popular + Douyin hot) · `cargo build` OK · `npx tsc --noEmit` 0 lỗi · `node --test scripts/discovery-tests/` **8/8**.
+- **Còn lại:** `TSK-V015-DISC-UI` (tab Khám phá theo mockup) + commit/push (chờ PO).
+
+---
 
 ### 2026-10-28 22:35 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** @done — Hoàn thành nghiên cứu sâu TSK-RESEARCH-RECAP-TOOLS (docs/RECAP_TOOLS_DEEPDIVE.md).
@@ -66,9 +76,3 @@
 
 ---
 
-### 2026-10-26 01:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
-- **Loại:** `@handoff` điều phối — **v0.13.0 xong, đã commit local, CHƯA push** (chờ PO OK). Orca run `run_80e8fbd4887e`.
-- **Đã có:** Studio nhiều tab P0–P4 (`59c4d32` run_id · `260c898` chặn kết quả video cũ · `27fab97` P1 · `50b4e92` P2 hàng đợi · `b19305f` P3+P4 phiên + phím tắt) · nghe mẫu từ file `9e082a5` · `edfb987` bump 0.13.0. Kiểm bản sạch: tsc/build OK, node 358/358, cargo 293/0.
-- **Kiểm app thật (vượt Smart App Control):** chạy exe cũ đã được phép + Vite từ working tree + CDP (xem LEADER_NOTES §4). Đã kiểm: 3 tab, "Đang chờ #1", Hủy chờ không giết tab chạy, tắt/mở app còn đủ tab, phím tắt. Bản sao localStorage của PO trước migrate v1→v2: scratchpad phiên 72fb9e23 `localStorage_backup.json`.
-- **Còn lại (không chặn release):** nút "Để chạy nền" khi đóng tab; khung xử lý ghi "Toàn Trình" cả khi chỉ chạy STT; đo RAM 6 tab; ý tưởng tính năng chờ PO chọn (`docs/FEATURE_IDEAS_2026.md`).
-- **Đội:** tab "thợ 2" = mcode #1–#4 · tab "thợ 3" = CommandCode + OpenCode · tab Gemini · Sonnet + Opus mỗi bạn 1 tab. Giữ ổn định, không tự đóng, tối đa 3–4 ô/tab.

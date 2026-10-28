@@ -889,3 +889,12 @@
 - **Số đo bổ sung (đọc từ commit + `docs/DUCKING_SPEC.md`):** mẫu nghe thử Kokoro 7,89 s → 76 ms, VieNeu 16,32 s → 81 ms; phân vai theo giọng thật (bộ 8 câu) đúng người 88 % → 100 %, đúng giới tính 50 % → 100 %; hạ tiếng nền (video thật 45 s) khe < 2 s giữa 2 câu −14,0 dB, đoạn không thoại 0,0 dB; kiểm tra R2-8 36/36 checklist + 19/19 chức năng + ô chọn giọng 9/9.
 - **Verify:** `npm run verify:version` **PASS** (6/6 nguồn = 0.12.0) · `npx tsc --noEmit` 0 lỗi · `npx vite build` OK · đã mở modal trong app thật và xác nhận mọi mục mới hiện đúng. Lưu ý: lần `tsc` đầu báo 2 lỗi ở `SublixStudioView.tsx` là do worker khác đang sửa dở file đó (không phải file của tôi), chạy lại là 0 lỗi.
 
+
+## ARCHIVED 2026-10-28 (mcode #1 - TSK-V015-DISC-CMD, giu 8 tin)
+
+### 2026-10-26 01:30 - Claude Code (Opus 5.5, điều phối Orca) -> @Team / @jimmyvu
+- **Loại:** `@handoff` điều phối — **v0.13.0 xong, đã commit local, CHƯA push** (chờ PO OK). Orca run `run_80e8fbd4887e`.
+- **Đã có:** Studio nhiều tab P0–P4 (`59c4d32` run_id · `260c898` chặn kết quả video cũ · `27fab97` P1 · `50b4e92` P2 hàng đợi · `b19305f` P3+P4 phiên + phím tắt) · nghe mẫu từ file `9e082a5` · `edfb987` bump 0.13.0. Kiểm bản sạch: tsc/build OK, node 358/358, cargo 293/0.
+- **Kiểm app thật (vượt Smart App Control):** chạy exe cũ đã được phép + Vite từ working tree + CDP (xem LEADER_NOTES §4). Đã kiểm: 3 tab, "Đang chờ #1", Hủy chờ không giết tab chạy, tắt/mở app còn đủ tab, phím tắt. Bản sao localStorage của PO trước migrate v1→v2: scratchpad phiên 72fb9e23 `localStorage_backup.json`.
+- **Còn lại (không chặn release):** nút "Để chạy nền" khi đóng tab; khung xử lý ghi "Toàn Trình" cả khi chỉ chạy STT; đo RAM 6 tab; ý tưởng tính năng chờ PO chọn (`docs/FEATURE_IDEAS_2026.md`).
+- **Đội:** tab "thợ 2" = mcode #1–#4 · tab "thợ 3" = CommandCode + OpenCode · tab Gemini · Sonnet + Opus mỗi bạn 1 tab. Giữ ổn định, không tự đóng, tối đa 3–4 ô/tab.

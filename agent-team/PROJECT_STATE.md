@@ -54,7 +54,6 @@
 
 | ID | Task | Agent | Priority | Status | Files đang sửa |
 |----|------|-------|----------|--------|----------------|
-| `TSK-V015-DISC-CMD` | Nối lõi Khám phá: gọi mạng (reqwest, Referer search.bilibili.com) + 5 lệnh Tauri + mã lỗi + wrapper TS | **mcode #1 (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `src-tauri/src/discovery/{fetch,commands}.rs` (+tests) · `discovery/mod.rs` (+2 dòng) · `src-tauri/src/lib.rs` (generate_handler) · `src/lib/tauri.ts` (thêm) · `scripts/discovery-tests/` |
 
 
 ---
@@ -63,10 +62,11 @@
 
 | ID | Task | Agent dự kiến | Priority | Ghi chú ngắn |
 |----|------|---------------|----------|--------------|
-| `TSK-V015-DISC-UI` | v0.15 nấc A — tab Khám phá theo mockup + nút Tải về / Tải & mở Studio | mcode / agy | 🔴 HIGH | sau thiết kế + `DISC-CMD` |
 | `TSK-V015-DISC-B` | v0.15 nấc B — danh mục, tự dịch từ khoá Việt→Trung, YouTube hot (API key tuỳ chọn) | mcode / agy | 🟡 MEDIUM | sau nấc A |
 | `TSK-V015-BROWSER-SPIKE` | v0.15 nấc C — thử trình duyệt nhúng (TikTok/Douyin) + nút "Tải video đang xem"; trang ngoài KHÔNG có quyền gọi lệnh Tauri | agy / Sonnet | 🟢 LOW | độc lập, thử kỹ thuật 1 ngày |
 | `TSK-BATCH` | Batch: chạy lồng tiếng cả danh sách video 1 lần (gộp `TSK-022.2`) | — | 🟡 MEDIUM | sau v0.15 |
+| `TSK-LAB-RENDER-RESEARCH` | So sánh bộ dựng video bằng code (Remotion / Revideo / Motion Canvas / HyperFrames / MoviePy): giấy phép, tốc độ, dung lượng, Tauri, font Việt + dựng thử thẻ 5 s | agy | 🟡 MEDIUM | trước khi làm mẫu cần đồ hoạ động |
+| `TSK-LAB-DESIGN` | Opus thiết kế tab lớn **"Xưởng AI"** (Thử nghiệm): thư viện mẫu → video nguồn → duyệt kịch bản → mở sang Studio | Opus | 🟡 MEDIUM | GĐ6 trong `TAM_NHIN_SUBLIX_STUDIO.md` |
 | `TSK-AI-RECAP-1` | Dựng AI nấc 1: reel highlight từ gameplay dài (chia cảnh + lọc cutscene + 9:16 + chữ nhảy) | — | 🟡 MEDIUM | `docs/GAME_RECAP_RESEARCH.md` — cần kế hoạch chi tiết |
 | `TSK-AI-RECAP-2` | Dựng AI nấc 2: recap cốt truyện game có lời bình (tóm tắt phân cấp → kịch bản → TTS → ghép cảnh theo lời) | — | 🟡 MEDIUM | sau nấc 1 |
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
@@ -79,6 +79,8 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-V015-DISC-CMD` | Nối Khám phá: gọi mạng + 5 lệnh Tauri + mã lỗi + wrapper TS | mcode #1 | 2026-10-28 | ✅ `b8cf7d9` — 437 Rust + 418 node; mạng thật OK (Bilibili hot, Douyin, tìm 原神) |
+| `TSK-V015-DISC-UI` | Giao diện tab con Khám phá theo §4.13 (chip Douyin, lưới thẻ, Tải về / Tải & mở Studio, trạng thái lỗi) | **mcode #1 (Orca worker)** | 🔴 HIGH | 🟡 Đang làm 2026-10-28 | `src/views/discovery/**` (mới) · `DownloaderView.tsx/.css` (tối thiểu: tab con) · `scripts/discovery-tests/` |
 | TSK-RESEARCH-RECAP-TOOLS | Nghiên cứu sâu các tool recap/review: Sublix tận dụng được gì | Antigravity | 2026-10-28 | ✅ docs/RECAP_TOOLS_DEEPDIVE.md — Mổ xẻ NarratoAI (MIT, prompt OST, công thức từ/5), VideoLingo, auto-editor (The Unlicense), TransNetV2 ONNX, 13 đề xuất |
 | `TSK-V015-DISC-CORE` | Lõi thuần Rust `discovery/` (parser Bilibili/Douyin/yt-dlp + cache TTL) | OpenCode | 2026-10-28 | ✅ `321fb8e` — 37 test JSON mẫu thật; phát hiện Bilibili tìm tiếng Anh bị -412 |
 | `TSK-DESIGN-V015-DISCOVERY` | Thiết kế tab Khám phá (mockup 8 khu + 8 ảnh + §4.13) | Opus | 2026-10-28 | ✅ `7bf7e5b` — tab con trong Tải video, chip Douyin, Tải & mở Studio |
