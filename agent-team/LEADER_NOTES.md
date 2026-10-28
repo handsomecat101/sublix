@@ -52,6 +52,11 @@
 | **Claude Sonnet 5.5** | Việc khó/quan trọng (kiến trúc, luồng trạng thái, P2 hàng đợi) — PO cho phép "cái nào quan trọng thì giao Sonnet" | Tốn usage — chỉ khi xứng đáng |
 | **Claude Opus 5.5** | CHỈ phần **thẩm mỹ / logic thiết kế giao diện** + duyệt UI cuối so với mockup | Thợ khác code theo thiết kế của Opus |
 
+**Đánh giá thực chiến (cập nhật sau mỗi đợt — chi tiết benchmark: `docs/AGENT_MODEL_BENCHMARKS_2026.md`):**
+- OpenCode: chắc tay nhất cho module gói gọn có test (test bằng dữ liệu thật, tự phát hiện bẫy API). Hay để quên file tạm.
+- mcode: kỹ, báo cáo trung thực, nhưng chậm (15–20 phút/việc vừa); UI tab Khám phá có 4 lỗi P1 ⇒ luôn cho Opus duyệt ảnh app thật.
+- Gemini: code UI theo mockup nhanh + khớp; nghiên cứu hay đưa nguồn/model CŨ và ngày không căn cứ ⇒ soát kỹ; từng lỡ `run-use` chiếm vai điều phối.
+
 > ⚠️ **PO chốt 2026-10-28: MỌI thợ phải mở ở chế độ TỰ DUYỆT (yolo)** — nếu không, leader vắng là thợ đứng chờ và PO phải ngồi bấm duyệt. Lệnh mở:
 > - Claude (Opus/Sonnet): `claude --model claude-opus-5-5 --dangerously-skip-permissions` (thanh dưới phải hiện **"bypass permissions on"**). Lỡ mở thiếu: `/exit` → `claude --resume <id nó in ra> --model … --dangerously-skip-permissions` (giữ ngữ cảnh).
 > - Gemini: `agy --dangerously-skip-permissions` · CommandCode: bật yolo/bypass · mcode / OpenCode: kiểm tra không có hộp xin phép sau lệnh đầu tiên.
