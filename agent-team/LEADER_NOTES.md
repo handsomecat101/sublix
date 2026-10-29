@@ -54,7 +54,7 @@
 
 **Đánh giá thực chiến (cập nhật sau mỗi đợt — chi tiết benchmark: `docs/AGENT_MODEL_BENCHMARKS_2026.md`):**
 - OpenCode: chắc tay nhất cho module gói gọn có test (test bằng dữ liệu thật, tự phát hiện bẫy API). Hay để quên file tạm.
-- mcode: kỹ, báo cáo trung thực, nhưng chậm (15–20 phút/việc vừa); UI tab Khám phá có 4 lỗi P1 ⇒ luôn cho Opus duyệt ảnh app thật.
+- mcode: kỹ, báo cáo trung thực, nhưng chậm (15–20 phút/việc vừa); UI tab Khám phá có 4 lỗi P1 ⇒ luôn cho Opus duyệt ảnh app thật. **Thanh dưới "5h N%" = quota 5 giờ còn lại** — về 0% là mcode đứng im giữa việc (không báo lỗi) ⇒ giao phần còn lại cho OpenCode kèm đặc tả gốc + trạng thái `git diff`.
 - Gemini: code UI theo mockup nhanh + khớp; nghiên cứu hay đưa nguồn/model CŨ và ngày không căn cứ ⇒ soát kỹ; từng lỡ `run-use` chiếm vai điều phối.
 
 > ⚠️ **PO chốt 2026-10-28: MỌI thợ phải mở ở chế độ TỰ DUYỆT (yolo)** — nếu không, leader vắng là thợ đứng chờ và PO phải ngồi bấm duyệt. Lệnh mở:

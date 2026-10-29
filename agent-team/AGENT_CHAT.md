@@ -9,6 +9,36 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-29 01:15 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Hoàn thành `TSK-LAB-U1B`: Nối giao diện Xưởng AI bước Nguồn + A (Phân tích) vào backend lệnh THẬT.
+- **Nối lệnh thật:** `labApi.analyze` gọi `sublix.labAnalyze`, lắng nghe `lab:progress` / `lab:done` / `lab:error`, huỷ bằng `sublix.labCancel`, dọn bộ nhớ qua `labForgetAnalysis`; ánh xạ `LabAnalysis.junk` → `junkSegments` và xử lý mở rộng LLM bằng hàm thuần `mapLabAnalysisToResult`.
+- **Bước Nguồn & LLM Guard:** Chọn file video thật qua `sublix.selectMediaFile()` (kèm probe metadata `downloaderFileMeta`), hỗ trợ nạp dự án Studio có sẵn thoại; kiểm tra `isLlmConfigured` (bắt buộc MiniMax key hoặc Ollama), chặn bắt đầu và hiển thị `MissingAIState` nếu thiếu AI; màn hình `LabErrorState` khi lỗi.
+- **Dev Mock Mode:** Thêm công tắc và bộ nhớ `localStorage("sublix.lab.useMock")` (tự động bật ngoài browser dev, tắt trong Tauri app) giúp điều phối viên/Opus dễ dàng duyệt UI với mock data.
+- **Kiểm chứng:** `node --test scripts/lab-tests/` **19/19 PASS** · `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** (2.98s).
+
+---
+
+### 2026-10-29 01:05 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-LAB-C3`: lệnh Tauri `lab_analyze` (phân tích **thật**) + tiến trình + huỷ cho Xưởng AI.
+- **Rust (mới trong `src-tauri/src/lab/`):** `analyze.rs` (pipeline) · `analyze_sources.rs` (thoại) · `analyze_summary.rs` (tóm tắt LLM) · `analysis_types.rs` + `analysis_merge.rs` (kiểu + gộp) · `llm_json.rs` (parser JSON khoan dung) · `llm_prompt.rs` (điền prompt R2) · `cache.rs` (khoá path+size+mtime) · `transcript.rs` (chia cụm) · `commands.rs` (4 lệnh) + `lib.rs` đăng ký.
+- **Hành vi:** thoại = dự án Studio `segments` → cache → `.srt` cạnh video → **luồng STT sẵn có** của app (đúng engine trong Cài đặt, không viết STT mới); cảnh = `probe`+`cutscene` (C2) + hardsub v0.14 tuỳ chọn; lọc rác = `junk_filter` (C1); tóm tắt = LLM từng cụm ~10 phút, lỗi 1 cụm ⇒ thử lại 1 lần rồi ghi chương "chưa tóm tắt được" (không hỏng cả lần chạy).
+- **Tiến trình:** `lab:progress` {runId, stage stt|scenes|junk|summary|done|error, sourceIdx, percent, message} · `lab:done` (kèm LabAnalysis) · `lab:error`; `lab_cancel(run_id)` huỷ; `lab_get_analysis(run_id)` lấy kết quả.
+- **Kiểm:** `cargo test --lib` **561/561 PASS** (109 test lab) · `cargo build` OK · `npx tsc --noEmit` **0 lỗi** · `npx vite build` OK · `node --test scripts/discovery-tests/` **46/46**.
+- **Chạy THẬT** (`#[ignore]`, fixture `hardsub_zh_30s.mp4` 30 s): **7,1 s** — 1 nguồn (30,0 s · 19,93 MB), **1 cảnh** đã chấm điểm, **1 câu thoại** (STT thật chạy được), 0 rác, LLM MiniMax-M3.1-Flash trả JSON hợp lệ.
+- **Cần điều phối:** (1) **Lệch 1 tên với UI**: đặc tả yêu cầu `LabAnalysis.junk` còn UI gọi `junkSegments` ⇒ bước nối UI cần map `junk` → `junkSegments`; kiểu con khác đã khớp `MockVideoSource/MockChapter/MockCharacter/MockJunkSegment` (thêm 4 trường LLM UI chưa dùng: `motivation`, `subtitleName`, `chapterType`, `narrativeFunction`). (2) Chưa commit. (3) Chưa sửa `src/views/**` theo đúng phạm vi task.
+
+---
+
+### 2026-10-29 00:45 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-V015-UI-FIX`: sửa tab Khám phá theo bản duyệt Opus (`docs/UI_V015_REVIEW.md`).
+- **P1-1 & §1:** Khử trùng mục cũ từ phiên trước (`sanitizeLoadedDownloadItems`, `shouldTriggerOpenStudio`), không tự nhảy sang Studio khi mở app; "Tải & mở Studio" mở tab nền + toast cấp app (gộp nhiều mục, tự tắt 8s, Enter để đi tới Studio, điều khiển qua hằng số `AUTO_SWITCH_TO_STUDIO_ON_DISCOVERY_COMPLETE`).
+- **P1-2 & P1-3:** Thẻ 0 không còn bị focus/viền vàng khi mount, lưới không cướp focus khỏi ô tìm; chỉ focus thẻ khi dùng phím điều hướng hoặc bấm ↓/Esc từ ô tìm.
+- **P1-4 & P2:** Vạch "Hết" chỉ hiện khi hết thật (`!hasMore && !loadingMore`); nút hover theo trạng thái (đã tải: Mở Studio + 📁 thư mục, lỗi: ↻ thử lại); pill trạng thái trên ảnh; segmented ≤1280px giữ chữ nút bật; Douyin chip không rớt dòng; chip dùng đơn vị Việt thống nhất (`formatCountVi`); thanh tab con tóm tắt "Tải với: ... · Đổi"; mini queue dính đáy 38px; khôi phục danh sách cũ khi xoá tìm kiếm (`prevListRef`).
+- **P3:** Tuổi cache `formatAge` ("vừa xong"), xoá dấu "—" lẻ sau nút ↻, thêm class logo nền tảng, nút `· Sửa` từ khoá dịch kèm timeout 8s, toggle switch `.sw`, gợi ý tiếng Trung ở trạng thái trống, Shift+F10 mở context menu.
+- **Kiểm:** `node --test scripts/discovery-tests/` **46/46 PASS** · `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** (2.84s).
+
+---
+
 ### 2026-10-29 00:10 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Xong `TSK-V015-DISC-B1`: công tắc "文 Tự dịch" (Bilibili chặn từ khoá tiếng Anh `-412`) + đơn vị lượt xem kiểu Việt.
 - **Rust:** `discovery/keyword_translate.rs` (prompt tự dịch, `contains_han`, `needs_translation`, `clean_translated_keyword`) + lệnh `discovery_translate_keyword` — dùng **provider đã cấu hình** (`chat_completion_custom`, model theo provider qua `model_for`), **không** thêm provider/API key; provider không hỗ trợ prompt tùy chỉnh ⇒ fallback đường dịch chuẩn.
@@ -52,26 +82,3 @@
 - **Còn lại:** `TSK-V015-DISC-UI` (tab Khám phá theo mockup) + commit/push (chờ PO).
 
 ---
-
-### 2026-10-28 22:35 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
-- **Loại:** @done — Hoàn thành nghiên cứu sâu TSK-RESEARCH-RECAP-TOOLS (docs/RECAP_TOOLS_DEEPDIVE.md).
-- **Nghiên cứu code thật:** NarratoAI (MIT, 25/10/2026, pipeline kịch bản 2 bước + prompt OST + công thức độ dài cảnh từ/5=s + bộ lọc quảng cáo/sponsor); VideoLingo (Apache-2.0, tách phụ đề spaCy NLP + LLM CoT kép + SequenceMatcher 0.9); auto-editor (The Unlicense, 28/10/2026, SIMD audio peak + motion gblur 1500–4000 fps); TransNetV2 (MIT, ONNX Runtime GPU 800+ fps xử lý fade-to-black game cực chuẩn vs PySceneDetect).
-- **Tool thương mại & Đề xuất Sublix:** Phân tích điểm yếu (bẫy số lượng, credit burn, AI slop) của OpusClip, Vizard, Eklipse, Powder, CapCut/JianYing. Đưa ra 13 đề xuất hành động xếp theo Value/Effort gắn liền với Nấc 1 (Reel) và Nấc 2 (Recap Game Story) xuất thẳng vào Timeline Studio Sublix.
-
----
-
-### 2026-10-28 22:30 - Claude Code (Opus 5.5, điều phối) -> @Team / @jimmyvu
-- **Loại:** `@handoff` — **TẠM DỪNG theo lệnh PO** (về nhà làm tiếp). Orca run `run_80e8fbd4887e`, điều phối = cửa sổ của Claude Code (`run-use` nếu cần lấy lại). **v0.14 xong, CHƯA push** (chờ PO OK).
-- **v0.15 "Khám phá"** (`docs/V0.15_PLAN.md`, checklist trong chat): ✅ nghiên cứu · ✅ thiết kế Opus (`7bf7e5b`) · ✅ lõi `discovery/` OpenCode (`321fb8e`, Bilibili tìm tiếng Anh bị -412 ⇒ cần Referer + tự dịch Việt→Trung).
-- **ĐANG DỞ (đã Esc, chưa có file):** mcode #1 `term_80d88594` — `TSK-V015-DISC-CMD` (spec ở scratchpad phiên 72fb9e23: `TSK-V015-DISC-CMD.md`); Gemini `term_a4a81e68` — `TSK-RESEARCH-RECAP-TOOLS` (mổ xẻ NarratoAI… ⇒ `docs/RECAP_TOOLS_DEEPDIVE.md`). Làm tiếp: gõ "TIẾP TỤC <mã task>" vào từng cửa sổ.
-- **Đội (yolo, không tự đóng):** Gemini + Opus (tab "Gemini (agy) - nghien cuu") · OpenCode `term_df5e3bcf` + mcode #1 (cùng tab) · CommandCode `term_ae1c53dc`.
-
----
-
-### 2026-10-28 21:20 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
-- **Loại:** @done — Hoàn thành sửa báo cáo TSK-RESEARCH-GAME-RECAP-R2 theo đúng yêu cầu PO.
-- **Cập nhật:** Đã cập nhật docs/GAME_RECAP_RESEARCH.md với model đời mới: Qwen2.5-VL-7B (26/01/2025) & MiniCPM-o 2.6 (20/01/2025) cho local RTX 3090 (AWQ/INT4 ~6.5–8GB VRAM); Gemini 3.8 Flash & Flash-Lite đời hiện hành (.05–.10/1M token, ~.035–.07/giờ video) kèm ghi chú model cũ đã deprecated.
-- **Bản quyền & Giấy phép:** Thay thế YOLOv8 (AGPL-3.0) bằng RT-DETR/RT-DETR-v2 (Apache 2.0); xác minh NarratoAI (MIT, commit 10/2026), VideoLingo (Apache 2.0, commit 10/2026), auto-editor (The Unlicense, v26.x 2026), TransNetV2 (MIT, ONNX SOTA). Đã thêm cột ngày phát hành và link nguồn thật.
-
----
-

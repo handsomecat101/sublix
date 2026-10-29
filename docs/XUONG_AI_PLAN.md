@@ -40,8 +40,8 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 - [x] **C3** (mcode ✅ `32d9f8a` — chạy thật video thử 7 s, MiniMax trả JSON đúng) lệnh Tauri `lab_analyze` (STT + OCR + cutscene + lọc rác → tóm tắt chương bằng LLM theo prompt R2), có tiến trình + huỷ
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
-- [ ] **C4** (mcode — đang làm) lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
-- [~] **U1** (Gemini — ✅ giao diện + dữ liệu giả `c6c3442`, kiểm app thật 4 bước; đang nối bước Nguồn + Phân tích vào lệnh thật; B/C sau C4) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
+- [x] **C4** (mcode + OpenCode làm nốt — commit sau `2497b5b`; dựng nháp thật 36 s → video 11,6 s + dự án Studio) lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
+- [~] **U1** (Gemini — ✅ giao diện + dữ liệu giả `c6c3442`, kiểm app thật 4 bước; Nguồn + Phân tích nối thật `2497b5b`; đang nối B/C) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
 
 ### Giai đoạn 3 — Kiểm & phát hành
 - [ ] Điều phối: bản sạch + app thật với **gameplay thật 20–40 phút** → ra dự án Studio xem được, lời bình hợp lý, luật dựng đúng
