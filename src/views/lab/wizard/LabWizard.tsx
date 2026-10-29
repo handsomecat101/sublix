@@ -24,8 +24,8 @@ import {
   setLabMockMode,
   type RecapItem,
 } from "../labModel";
-import { labApi, type AnalyzeStageProgress } from "../labApi";
-import { sublix } from "../../../lib/tauri";
+import { labApi, type AnalyzeStageProgress, type BuildDraftResult } from "../labApi";
+import { sublix, type VoicePreset } from "../../../lib/tauri";
 
 interface LabWizardProps {
   templateId: string;
@@ -50,6 +50,13 @@ export const LabWizard: React.FC<LabWizardProps> = ({
   const [llmProviderName, setLlmProviderName] = useState<string>("MiniMax-M3");
   const [missingAiActive, setMissingAiActive] = useState<boolean>(false);
 
+  // Lượt phân tích đang hoạt động trong backend
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
+  // Danh sách giọng TTS thật tải từ backend Studio
+  const [voices, setVoices] = useState<VoicePreset[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>("kokoro:vi_female");
+
   // Dữ liệu cấu hình bước Nguồn
   const [sources, setSources] = useState<MockVideoSource[]>([...MOCK_VIDEO_SOURCES]);
   const [gameName, setGameName] = useState<string>("Vương Miện Tro Tàn");
@@ -58,20 +65,28 @@ export const LabWizard: React.FC<LabWizardProps> = ({
   const [originalRatio, setOriginalRatio] = useState<number>(0.3);
   const [voiceName] = useState<string>("Hoàng Nam (Truyền cảm)");
 
-  // Dữ liệu bước Phân tích
+  // Dữ liệu bước Phân tích (A)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analyzeProgress, setAnalyzeProgress] = useState<AnalyzeStageProgress | undefined>();
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [chapters, setChapters] = useState<MockChapter[]>([...MOCK_CHAPTERS]);
   const [characters, setCharacters] = useState<MockCharacter[]>([...MOCK_CHARACTERS]);
   const [junkSegments, setJunkSegments] = useState<MockJunkSegment[]>([...MOCK_JUNK_SEGMENTS]);
-
-  // Bộ điều khiển huỷ phân tích
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Dữ liệu bước Lời bình & Dựng nháp
+  // Dữ liệu bước Lời bình (B)
   const [recapItems, setRecapItems] = useState<RecapItem[]>([...MOCK_RECAP_ITEMS]);
+  const [isWritingNarration, setIsWritingNarration] = useState<boolean>(false);
+  const hasGeneratedNarrationRef = useRef<boolean>(false);
+
+  // Dữ liệu bước Dựng nháp (C)
   const [isBuildingDraft, setIsBuildingDraft] = useState<boolean>(false);
+  const [draftProgress, setDraftProgress] = useState<{ stageName: string; percent: number } | null>(null);
+  const [draftResult, setDraftResult] = useState<BuildDraftResult | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const draftAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Thông báo Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -101,8 +116,27 @@ export const LabWizard: React.FC<LabWizardProps> = ({
     }
   };
 
+  // Tải danh sách giọng thật từ Studio
+  const loadVoices = async () => {
+    try {
+      const vList = await sublix.dubbingGetVoices();
+      if (Array.isArray(vList) && vList.length > 0) {
+        setVoices(vList);
+        const viVoice = vList.find((v) => v.lang.startsWith("vi") || v.id.includes("vi"));
+        if (viVoice) {
+          setSelectedVoiceId(viVoice.id);
+        } else {
+          setSelectedVoiceId(vList[0].id);
+        }
+      }
+    } catch (err) {
+      console.warn("Không tải được danh sách giọng Studio:", err);
+    }
+  };
+
   useEffect(() => {
     void checkLlmConfig();
+    void loadVoices();
   }, []);
 
   const handleToggleMockMode = () => {
@@ -200,6 +234,7 @@ export const LabWizard: React.FC<LabWizardProps> = ({
     showToast("Đã thêm dự án Studio mẫu.");
   };
 
+  // Huỷ phân tích bước A
   const handleCancelAnalysis = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -209,6 +244,7 @@ export const LabWizard: React.FC<LabWizardProps> = ({
     showToast("Đã dừng quá trình phân tích.");
   };
 
+  // Bắt đầu phân tích bước A
   const handleStartAnalysis = async () => {
     if (!isMockMode && !isLlmReady) {
       setMissingAiActive(true);
@@ -233,6 +269,9 @@ export const LabWizard: React.FC<LabWizardProps> = ({
         controller.signal,
       );
 
+      if (res.runId) {
+        setActiveRunId(res.runId);
+      }
       setChapters(res.chapters);
       setCharacters(res.characters);
       setJunkSegments(res.junkSegments);
@@ -253,6 +292,7 @@ export const LabWizard: React.FC<LabWizardProps> = ({
     }
   };
 
+  // Chuyển từ Nguồn sang Phân tích
   const handleNextFromSource = async () => {
     if (sources.length === 0) {
       showToast("Vui lòng thêm ít nhất 1 video nguồn để phân tích.");
@@ -274,24 +314,122 @@ export const LabWizard: React.FC<LabWizardProps> = ({
     }
   };
 
-  const handleNextFromAnalyze = () => {
+  // Tạo lời bình bằng AI (Bước B)
+  const handleGenerateNarration = async () => {
+    setIsWritingNarration(true);
+    try {
+      const items = await labApi.writeNarration({
+        runId: activeRunId || undefined,
+        gameName,
+        targetDurationSec: targetMinutes * 60,
+        originalRatio,
+      });
+      setRecapItems(items);
+      hasGeneratedNarrationRef.current = true;
+      showToast("Đã hoàn tất kịch bản lời bình!");
+    } catch (err) {
+      showToast(`Lỗi viết lời bình: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsWritingNarration(false);
+    }
+  };
+
+  // Chuyển từ Phân tích sang Lời bình
+  const handleNextFromAnalyze = async () => {
     setCurrentStep("narration");
     if (!unlockedSteps.includes("narration")) {
       setUnlockedSteps([...unlockedSteps, "narration"]);
     }
+    // Tự động gọi viết lời bình nếu chưa tạo và có runId thật
+    if (!hasGeneratedNarrationRef.current && activeRunId && !isMockMode) {
+      void handleGenerateNarration();
+    }
   };
 
+  // Huỷ dựng video nháp (Bước C)
+  const handleCancelDraft = () => {
+    if (draftAbortControllerRef.current) {
+      draftAbortControllerRef.current.abort();
+      draftAbortControllerRef.current = null;
+    }
+    setIsBuildingDraft(false);
+    showToast("Đã gửi yêu cầu dừng dựng nháp.");
+  };
+
+  // Bắt đầu dựng video nháp (Bước C)
+  const handleStartBuildDraft = async () => {
+    setIsBuildingDraft(true);
+    setDraftError(null);
+    setDraftProgress({ stageName: "Đang đọc giọng thuyết minh TTS...", percent: 10 });
+
+    const controller = new AbortController();
+    draftAbortControllerRef.current = controller;
+
+    try {
+      const res = await labApi.buildDraft(
+        {
+          runId: activeRunId || undefined,
+          items: recapItems,
+          voiceId: selectedVoiceId,
+          targetDurationSec: targetMinutes * 60,
+          originalRatio,
+        },
+        (stage, percent) => {
+          let stageName = "Đang dựng video nháp...";
+          if (stage === "tts") stageName = "Đang đọc giọng thuyết minh TTS...";
+          else if (stage === "match") stageName = "Đang khớp khung hình gameplay & cutscene...";
+          else if (stage === "render") stageName = "Kiểm tra luật dựng và xuất video nháp...";
+          else if (stage === "done") stageName = "Hoàn tất dựng video nháp";
+          setDraftProgress({ stageName, percent });
+        },
+        controller.signal,
+      );
+
+      setDraftResult(res);
+      setRecapItems(res.items);
+      showToast("Đã dựng video nháp thành công!");
+    } catch (err) {
+      if (controller.signal.aborted) {
+        showToast("Đã dừng quá trình dựng nháp.");
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setDraftError(msg);
+      }
+    } finally {
+      setIsBuildingDraft(false);
+      draftAbortControllerRef.current = null;
+    }
+  };
+
+  // Chuyển từ Lời bình sang Dựng nháp
   const handleNextFromNarration = async () => {
     setCurrentStep("draft");
     if (!unlockedSteps.includes("draft")) {
       setUnlockedSteps([...unlockedSteps, "draft"]);
     }
+    if (!draftResult && !isBuildingDraft) {
+      void handleStartBuildDraft();
+    }
   };
 
+  // Mở bản nháp đã dựng sang Studio
   const handleOpenStudio = async () => {
-    const res = await labApi.openInStudio("draft-crown-1");
-    showToast(`Đã tạo dự án "${res.studioTabTitle}". Sẽ kết nối chuyển tab thật ở bước C4!`);
-    onOpenStudioProject?.(res.studioTabTitle);
+    const targetPath = draftResult?.draftPath || "draft-crown-1";
+    try {
+      const res = await labApi.openInStudio(targetPath);
+      showToast(`Đã nạp dự án "${res.studioTabTitle}". Đang mở trong Studio...`);
+      onOpenStudioProject?.(targetPath);
+    } catch (err) {
+      showToast(`Lỗi mở Studio: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  // Đóng wizard và dọn dẹp
+  const handleBackToLibraryInternal = () => {
+    if (activeRunId) {
+      void labApi.forgetRun(activeRunId);
+    }
+    onBackToLibrary();
   };
 
   return (
@@ -300,7 +438,7 @@ export const LabWizard: React.FC<LabWizardProps> = ({
         currentStep={currentStep}
         unlockedSteps={unlockedSteps}
         onNavigateStep={(s) => setCurrentStep(s)}
-        onBackToLibrary={onBackToLibrary}
+        onBackToLibrary={handleBackToLibraryInternal}
         gameTitle={gameName}
         targetMinutes={targetMinutes}
       />
@@ -327,6 +465,9 @@ export const LabWizard: React.FC<LabWizardProps> = ({
             originalRatio={originalRatio}
             onChangeOriginalRatio={setOriginalRatio}
             voiceName={voiceName}
+            voices={voices}
+            selectedVoiceId={selectedVoiceId}
+            onChangeVoiceId={setSelectedVoiceId}
             isLlmReady={isLlmReady}
             llmProviderName={llmProviderName}
             onOpenSettings={handleOpenSettingsAction}
@@ -387,34 +528,95 @@ export const LabWizard: React.FC<LabWizardProps> = ({
             onChangeItems={setRecapItems}
             targetDurationSec={targetMinutes * 60}
             chapters={chapters}
+            onRegenerate={handleGenerateNarration}
+            isGenerating={isWritingNarration}
           />
         )}
 
         {currentStep === "draft" && (
-          <DraftResult
-            items={recapItems}
-            onOpenStudio={handleOpenStudio}
-            onRebuild={async () => {
-              setIsBuildingDraft(true);
-              try {
-                await labApi.buildDraft({
-                  items: recapItems,
-                  voiceId: "vi-VN",
-                  targetDurationSec: targetMinutes * 60,
-                });
-                showToast("Đã dựng lại timeline khớp cảnh!");
-              } finally {
-                setIsBuildingDraft(false);
-              }
-            }}
-          />
+          draftError ? (
+            <LabErrorState
+              errorMessage={draftError}
+              onRetry={handleStartBuildDraft}
+            />
+          ) : isBuildingDraft ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 32px",
+                maxWidth: "600px",
+                margin: "auto",
+                width: "100%",
+                gap: "24px",
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: 800, margin: "0 0 8px 0" }}>
+                  Đang dựng video nháp
+                </h2>
+                <p style={{ fontSize: "13px", color: "var(--t3)", margin: 0 }}>
+                  Đọc TTS giọng thuyết minh, khớp khung hình gameplay & cutscene, render bằng FFmpeg...
+                </p>
+              </div>
+
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--t2)" }}>
+                  <span>{draftProgress?.stageName || "Đang xử lý..."}</span>
+                  <span style={{ fontWeight: 800, color: "var(--ac-txt)", fontFamily: "monospace" }}>
+                    {draftProgress?.percent ?? 0}%
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: "8px",
+                    background: "rgba(255,255,255,0.06)",
+                    borderRadius: "4px",
+                    overflow: "hidden",
+                    width: "100%",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${draftProgress?.percent ?? 10}%`,
+                      background: "var(--grad-ac)",
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="lab-btn-secondary"
+                onClick={handleCancelDraft}
+                style={{ marginTop: "12px" }}
+              >
+                Huỷ dựng nháp
+              </button>
+            </div>
+          ) : (
+            <DraftResult
+              items={draftResult?.items || recapItems}
+              onOpenStudio={handleOpenStudio}
+              onRebuild={handleStartBuildDraft}
+              draftPath={draftResult?.draftPath}
+              notes={draftResult?.notes}
+              warningsCount={draftResult?.warningsCount}
+              unplaced={draftResult?.unplaced}
+              rulesPassed={draftResult?.rulesPassed}
+            />
+          )
         )}
       </div>
 
       <StepFooter
         onBack={
           currentStep === "source"
-            ? onBackToLibrary
+            ? handleBackToLibraryInternal
             : currentStep === "analyze"
             ? () => setCurrentStep("source")
             : currentStep === "narration"
@@ -441,10 +643,12 @@ export const LabWizard: React.FC<LabWizardProps> = ({
               ? "Đang phân tích..."
               : `Viết lời bình (${targetMinutes} phút)`
             : currentStep === "narration"
-            ? "Dựng nháp timeline"
+            ? isWritingNarration
+              ? "Đang viết lời bình..."
+              : "Dựng nháp timeline"
             : "🎬 Mở trong Studio"
         }
-        nextLoading={isAnalyzing || isBuildingDraft}
+        nextLoading={isAnalyzing || isWritingNarration || isBuildingDraft}
       />
 
       {/* Thông báo Toast */}

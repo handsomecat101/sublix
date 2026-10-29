@@ -2,6 +2,7 @@ import React from "react";
 import type { MockVideoSource } from "../labMock";
 import { formatDur, processingEstimate } from "../labModel";
 import { OriginalRatioSlider } from "./OriginalRatioSlider";
+import type { VoicePreset } from "../../../lib/tauri";
 
 interface SourceStepProps {
   sources: MockVideoSource[];
@@ -18,6 +19,9 @@ interface SourceStepProps {
   originalRatio: number;
   onChangeOriginalRatio: (ratio: number) => void;
   voiceName: string;
+  voices?: VoicePreset[];
+  selectedVoiceId?: string;
+  onChangeVoiceId?: (id: string) => void;
   isLlmReady?: boolean;
   llmProviderName?: string;
   onOpenSettings?: () => void;
@@ -40,6 +44,9 @@ export const SourceStep: React.FC<SourceStepProps> = ({
   originalRatio,
   onChangeOriginalRatio,
   voiceName,
+  voices,
+  selectedVoiceId,
+  onChangeVoiceId,
   isLlmReady = true,
   llmProviderName = "MiniMax-M3",
   onOpenSettings,
@@ -282,26 +289,51 @@ export const SourceStep: React.FC<SourceStepProps> = ({
 
         {/* 3. Giọng đọc */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--t2)" }}>
-            Giọng đọc thuyết minh
-          </label>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--line)",
-              fontSize: "13px",
-            }}
-          >
-            <span>🎙 {voiceName} (Tiếng Việt truyền cảm)</span>
-            <span style={{ fontSize: "11px", color: "var(--ac-txt)", cursor: "pointer" }}>
-              Đổi giọng ▸
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--t2)" }}>
+              Giọng đọc thuyết minh
+            </label>
+            <span style={{ fontSize: "11px", color: "var(--t4)" }}>
+              {voices && voices.length > 0 ? `${voices.length} giọng sẵn sàng` : voiceName}
             </span>
           </div>
+          {voices && voices.length > 0 ? (
+            <select
+              value={selectedVoiceId || voices[0]?.id}
+              onChange={(e) => onChangeVoiceId?.(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                background: "var(--bg-card)",
+                border: "1px solid var(--line)",
+                color: "var(--t1)",
+                fontSize: "13px",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              {voices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  🎙 {v.name} ({v.lang}) — {v.gender === "female" ? "Nữ" : "Nam"}{v.description ? ` · ${v.description}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                background: "var(--bg-card)",
+                border: "1px solid var(--line)",
+                fontSize: "13px",
+              }}
+            >
+              <span>🎙 {voiceName} (Tiếng Việt truyền cảm)</span>
+            </div>
+          )}
         </div>
 
         {/* 4. Tỷ lệ thoại gốc */}

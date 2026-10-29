@@ -1,6 +1,9 @@
-//! TSK-LAB-U1B — Lớp API giao tiếp cho Xưởng AI.
-//! Kết nối lệnh thật qua Tauri (`sublix.labAnalyze`, `labCancel`, các sự kiện `lab:*`)
-//! và duy trì chế độ Mock cho môi trường dev/duyệt giao diện.
+//! TSK-LAB-U1C — Lớp API giao tiếp cho Xưởng AI (Bước A, B, C).
+//! Kết nối lệnh thật qua Tauri:
+//! - Bước A: `sublix.labAnalyze`, `labCancel`, các sự kiện `lab:*`
+//! - Bước B: `sublix.labWriteNarration`, `labRewriteSegment`
+//! - Bước C: `sublix.labBuildDraft`, `labCancelDraft`, `labLoadDraftProject`
+//! Và duy trì chế độ Mock cho môi trường dev/duyệt giao diện.
 
 import {
   MOCK_CHAPTERS,
@@ -14,8 +17,12 @@ import {
 } from "./labMock";
 import {
   isLabMockMode,
+  mapChipToRewriteMode,
   mapLabAnalysisToResult,
+  mapLabBuildDraftResultToUi,
+  mapLabRecapItemToUi,
   mapLabStageToProgress,
+  mapUiToLabRecapItem,
   prepareLabSourceInputs,
   type RecapItem,
 } from "./labModel";
@@ -24,11 +31,15 @@ import {
   onLabProgress,
   onLabDone,
   onLabError,
+  onLabDraftDone,
   type LabAnalyzeOptions,
+  type LabDraftOptions,
+  type LabRecapItem,
   type LabScene,
   type LabSource,
   type LabSourceInput,
   type LabTranscriptLine,
+  type DubbingProject,
 } from "../../lib/tauri";
 
 export interface AnalyzeOptions {
@@ -56,12 +67,26 @@ export interface AnalyzeResult {
   sources?: LabSource[];
   scenes?: LabScene[];
   transcript?: LabTranscriptLine[];
+  runId?: string;
+}
+
+export interface WriteNarrationOptions {
+  runId?: string;
+  gameName: string;
+  gameGenre?: string;
+  targetDurationSec: number;
+  originalRatio?: number;
+  onProgress?: (pct: number) => void;
 }
 
 export interface BuildDraftOptions {
+  runId?: string;
   items: RecapItem[];
   voiceId: string;
-  targetDurationSec: number;
+  rate?: string;
+  pitch?: string;
+  targetDurationSec?: number;
+  originalRatio?: number;
 }
 
 export interface BuildDraftResult {
@@ -69,6 +94,10 @@ export interface BuildDraftResult {
   totalSec: number;
   rulesPassed: boolean;
   warningsCount: number;
+  unplaced?: string[];
+  notes?: string[];
+  draftPath?: string;
+  studioProjectPath?: string;
 }
 
 /** Giả lập độ trễ ngắn để tạo cảm giác xử lý mượt mà trong chế độ demo. */
@@ -119,6 +148,7 @@ export const labApi = {
       chapters: [...MOCK_CHAPTERS],
       characters: [...MOCK_CHARACTERS],
       junkSegments: [...MOCK_JUNK_SEGMENTS],
+      runId: `mock_run_${Date.now()}`,
     };
   },
 
@@ -187,10 +217,11 @@ export const labApi = {
         if (settled) return;
         settled = true;
         cleanup();
-        if (activeRunId) {
-          sublix.labForgetAnalysis(activeRunId).catch(() => {});
-        }
-        resolve(res);
+        // Giữ activeRunId trong backend để phục vụ bước B và bước C
+        resolve({
+          ...res,
+          runId: activeRunId ?? undefined,
+        });
       };
 
       const finishReject = (err: Error) => {
@@ -250,45 +281,110 @@ export const labApi = {
     });
   },
 
-  /** Viết kịch bản lời bình (Bước B): trả về danh sách câu văn bản (giữ mock slot chờ C4). */
+  /**
+   * Viết kịch bản lời bình (Bước B):
+   * Hỗ trợ gọi linh hoạt qua đối tượng options hoặc các tham số rời.
+   */
   async writeNarration(
-    _gameTitle: string,
-    _targetDurationSec: number,
+    optionsOrTitle: string | WriteNarrationOptions,
+    targetDurationSec?: number,
     onProgress?: (pct: number) => void,
   ): Promise<RecapItem[]> {
+    let opts: WriteNarrationOptions;
+    if (typeof optionsOrTitle === "string") {
+      opts = {
+        gameName: optionsOrTitle,
+        targetDurationSec: targetDurationSec ?? 600,
+        onProgress,
+      };
+    } else {
+      opts = optionsOrTitle;
+    }
+
+    if (isLabMockMode() || !opts.runId) {
+      return this._writeNarrationMock(opts);
+    }
+    return this._writeNarrationReal(opts);
+  },
+
+  /** Viết lời bình giả lập (chế độ demo). */
+  async _writeNarrationMock(opts: WriteNarrationOptions): Promise<RecapItem[]> {
     for (let p = 10; p <= 100; p += 30) {
-      onProgress?.(p);
+      opts.onProgress?.(p);
       await delay(200);
     }
     return MOCK_RECAP_ITEMS.map((item) => ({ ...item }));
   },
 
-  /** Viết lại một đoạn lời bình (hộp nổi RewritePopover - giữ mock slot chờ C4). */
+  /** Viết lời bình thật qua `sublix.labWriteNarration`. */
+  async _writeNarrationReal(opts: WriteNarrationOptions): Promise<RecapItem[]> {
+    if (!opts.runId) {
+      throw new Error("Thiếu runId của lần phân tích để viết lời bình.");
+    }
+
+    opts.onProgress?.(20);
+    const rawItems: LabRecapItem[] = await sublix.labWriteNarration(opts.runId, {
+      gameName: opts.gameName,
+      gameGenre: opts.gameGenre,
+      targetDurationSec: opts.targetDurationSec,
+      originalRatio: opts.originalRatio,
+    });
+    opts.onProgress?.(100);
+
+    return rawItems.map(mapLabRecapItemToUi);
+  },
+
+  /**
+   * Viết lại một đoạn lời bình (hộp nổi RewritePopover):
+   * Chế độ thật gọi `sublix.labRewriteSegment`, chế độ mock giả lập biến đổi.
+   */
   async rewriteBlock(
     originalText: string,
     styleChip: string,
     customInstruction?: string,
   ): Promise<string> {
-    await delay(600);
-    if (styleChip === "Ngắn hơn") {
-      return originalText.length > 30 ? originalText.slice(0, 28) + "..." : originalText;
+    if (isLabMockMode()) {
+      await delay(500);
+      if (styleChip === "Ngắn hơn") {
+        return originalText.length > 30 ? originalText.slice(0, 28) + "..." : originalText;
+      }
+      if (styleChip === "Kịch tính hơn") {
+        return `Bất ngờ thay, ${originalText.toLowerCase().replace(/^[a-zà-ỹ]/, (c) => c.toUpperCase())} Nguy hiểm cận kề trong từng tấc đất!`;
+      }
+      if (styleChip === "Thêm câu nối" || styleChip === "Câu nối") {
+        return `Chính vì lẽ đó, ${originalText.toLowerCase()}`;
+      }
+      if (customInstruction) {
+        return `${originalText} (theo yêu cầu: ${customInstruction})`;
+      }
+      return `Nhưng câu chuyện chưa dừng lại ở đó. ${originalText}`;
     }
-    if (styleChip === "Kịch tính hơn") {
-      return `Bất ngờ thay, ${originalText.toLowerCase().replace(/^[a-zà-ỹ]/, (c) => c.toUpperCase())} Nguy hiểm cận kề trong từng tấc đất!`;
-    }
-    if (styleChip === "Thêm câu nối") {
-      return `Chính vì lẽ đó, ${originalText.toLowerCase()}`;
-    }
-    if (customInstruction) {
-      return `${originalText} (theo yêu cầu: ${customInstruction})`;
-    }
-    return `Nhưng câu chuyện chưa dừng lại ở đó. ${originalText}`;
+
+    const mode = mapChipToRewriteMode(styleChip);
+    const res = await sublix.labRewriteSegment(originalText, mode, customInstruction);
+    return res || originalText;
   },
 
-  /** Dựng nháp timeline (Bước C): đọc giọng TTS và khớp cảnh (giữ mock slot chờ C4). */
+  /**
+   * Dựng nháp timeline (Bước C): đọc giọng TTS và khớp cảnh.
+   * Tự động chuyển đổi giữa chế độ Mock và Backend thật `sublix.labBuildDraft`.
+   */
   async buildDraft(
     options: BuildDraftOptions,
     onProgress?: (stage: string, percent: number) => void,
+    signal?: AbortSignal,
+  ): Promise<BuildDraftResult> {
+    if (isLabMockMode() || !options.runId) {
+      return this._buildDraftMock(options, onProgress, signal);
+    }
+    return this._buildDraftReal(options, onProgress, signal);
+  },
+
+  /** Dựng nháp giả lập (chế độ demo). */
+  async _buildDraftMock(
+    options: BuildDraftOptions,
+    onProgress?: (stage: string, percent: number) => void,
+    signal?: AbortSignal,
   ): Promise<BuildDraftResult> {
     const stages = [
       { name: "Đang đọc giọng thuyết minh TTS...", pct: 35 },
@@ -297,6 +393,7 @@ export const labApi = {
     ];
 
     for (const s of stages) {
+      if (signal?.aborted) throw new Error("Thao tác dựng nháp đã bị huỷ");
       onProgress?.(s.name, s.pct);
       await delay(400);
     }
@@ -311,15 +408,159 @@ export const labApi = {
       totalSec: Math.round(totalSec * 10) / 10,
       rulesPassed: true,
       warningsCount: 0,
+      notes: ["Bản dựng mẫu (Dev Mock Mode)."],
+      draftPath: undefined,
     };
   },
 
-  /** Mở bản nháp đã dựng sang Studio (hiện tại hiển thị thông báo). */
-  async openInStudio(_draftId: string): Promise<{ success: boolean; studioTabTitle: string }> {
-    await delay(300);
-    return {
-      success: true,
-      studioTabTitle: "Recap — Vương Miện Tro Tàn",
+  /** Dựng nháp thật qua Tauri backend (`sublix.labBuildDraft`). */
+  async _buildDraftReal(
+    options: BuildDraftOptions,
+    onProgress?: (stage: string, percent: number) => void,
+    signal?: AbortSignal,
+  ): Promise<BuildDraftResult> {
+    if (signal?.aborted) {
+      throw new Error("Thao tác dựng nháp đã bị huỷ");
+    }
+    const analysisRunId = options.runId;
+    if (!analysisRunId) {
+      throw new Error("Chưa có runId phân tích để dựng nháp.");
+    }
+
+    const segments: LabRecapItem[] = options.items.map(mapUiToLabRecapItem);
+    const draftOpts: LabDraftOptions = {
+      voice: options.voiceId,
+      rate: options.rate ?? "+0%",
+      pitch: options.pitch ?? "+0Hz",
+      originalRatio: options.originalRatio ?? 0.3,
     };
+
+    let activeDraftRunId: string | null = null;
+    let unlistenProgress: (() => void) | null = null;
+    let unlistenDone: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+
+    const cleanup = () => {
+      if (unlistenProgress) {
+        unlistenProgress();
+        unlistenProgress = null;
+      }
+      if (unlistenDone) {
+        unlistenDone();
+        unlistenDone = null;
+      }
+      if (unlistenError) {
+        unlistenError();
+        unlistenError = null;
+      }
+    };
+
+    return new Promise<BuildDraftResult>(async (resolve, reject) => {
+      let settled = false;
+
+      const finishResolve = (res: BuildDraftResult) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(res);
+      };
+
+      const finishReject = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
+      };
+
+      const onAbort = () => {
+        if (activeDraftRunId) {
+          sublix.labCancelDraft(activeDraftRunId).catch((e) => {
+            console.warn("labCancelDraft error:", e);
+          });
+        }
+        finishReject(new Error("Thao tác dựng nháp đã bị huỷ"));
+      };
+
+      if (signal) {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+
+      try {
+        // Đăng ký nghe sự kiện tiến trình dựng nháp (tts | match | render | done)
+        unlistenProgress = await onLabProgress((event) => {
+          if (!activeDraftRunId || event.runId === activeDraftRunId) {
+            const st = event.stage as string;
+            if (st === "tts" || st === "match" || st === "render" || st === "done") {
+              onProgress?.(st, event.percent);
+            }
+          }
+        });
+
+        // Đăng ký nghe sự kiện hoàn tất dựng nháp
+        unlistenDone = await onLabDraftDone((event) => {
+          if (!activeDraftRunId || event.runId === activeDraftRunId) {
+            finishResolve(mapLabBuildDraftResultToUi(event.result));
+          }
+        });
+
+        // Đăng ký nghe sự kiện lỗi
+        unlistenError = await onLabError((event) => {
+          if (!activeDraftRunId || event.runId === activeDraftRunId) {
+            finishReject(new Error(event.message || "Quá trình dựng nháp thất bại"));
+          }
+        });
+
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+
+        const draftRunId = await sublix.labBuildDraft(analysisRunId, segments, draftOpts);
+        activeDraftRunId = draftRunId;
+      } catch (err) {
+        finishReject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+  },
+
+  /**
+   * Mở bản nháp đã dựng sang Studio:
+   * Gọi `sublix.labLoadDraftProject` để nạp dự án Studio có sẵn của video nháp.
+   */
+  async openInStudio(
+    draftPath: string,
+  ): Promise<{ success: boolean; studioTabTitle: string; project?: DubbingProject }> {
+    if (isLabMockMode() || !draftPath || !draftPath.endsWith(".mp4")) {
+      await delay(300);
+      return {
+        success: true,
+        studioTabTitle: "Recap — Vương Miện Tro Tàn",
+      };
+    }
+
+    try {
+      const project = await sublix.labLoadDraftProject(draftPath);
+      const fileName = draftPath.replace(/^.*[/\\]/, "");
+      return {
+        success: true,
+        studioTabTitle: fileName,
+        project,
+      };
+    } catch (err) {
+      console.warn("Không đọc được dự án nháp từ disk, fallback:", err);
+      return {
+        success: true,
+        studioTabTitle: draftPath.replace(/^.*[/\\]/, ""),
+      };
+    }
+  },
+
+  /** Xoá lượt phân tích khỏi bộ nhớ backend khi đóng wizard. */
+  async forgetRun(runId: string): Promise<void> {
+    try {
+      await sublix.labForgetAnalysis(runId);
+    } catch {
+      // bỏ qua nếu đã xoá
+    }
   },
 };

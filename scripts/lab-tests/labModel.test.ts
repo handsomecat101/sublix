@@ -20,6 +20,11 @@ import {
   mapLabStageToProgress,
   mapLabAnalysisToResult,
   prepareLabSourceInputs,
+  mapLabRecapItemToUi,
+  mapUiToLabRecapItem,
+  mapChipToRewriteMode,
+  mapLabDraftStageToProgress,
+  mapLabBuildDraftResultToUi,
   type RecapItem,
 } from "../../src/views/lab/labModel.ts";
 
@@ -475,4 +480,111 @@ test("prepareLabSourceInputs — chuyển đổi MockVideoSource sang LabSourceI
     name: "Part2.mp4",
     studioProject: "C:\\Projects\\Part2_dub.json",
   });
+});
+
+// ───────────────────────────── v0.16 Xưởng AI Bước B & C: Tests cho U1C ─────────────────────────────
+
+test("mapLabRecapItemToUi & mapUiToLabRecapItem — chuyển đổi 2 chiều giữa UI và backend", () => {
+  const backendItem = {
+    id: 1,
+    sourceIdx: 0,
+    start: 12.5,
+    end: 25.0,
+    picture: "Cảnh chiến đấu trên đỉnh tháp",
+    narration: "Hiệp sĩ vung kiếm xé toạc màn đêm.",
+    keepOriginal: false,
+    ttsSecs: 4.8,
+  };
+
+  const uiItem = mapLabRecapItemToUi(backendItem);
+  assert.equal(uiItem.id, 1);
+  assert.equal(uiItem.sourceIdx, 0);
+  assert.equal(uiItem.start, 12.5);
+  assert.equal(uiItem.end, 25.0);
+  assert.equal(uiItem.picture, "Cảnh chiến đấu trên đỉnh tháp");
+  assert.equal(uiItem.narration, "Hiệp sĩ vung kiếm xé toạc màn đêm.");
+  assert.equal(uiItem.keepOriginal, false);
+  assert.equal(uiItem.ttsSecs, 4.8);
+
+  // Xử lý ttsSecs null từ backend
+  const backendItemNullTts = {
+    ...backendItem,
+    id: 2,
+    ttsSecs: null,
+    keepOriginal: true,
+  };
+  const uiItem2 = mapLabRecapItemToUi(backendItemNullTts);
+  assert.equal(uiItem2.ttsSecs, undefined);
+  assert.equal(uiItem2.keepOriginal, true);
+
+  // Chuyển ngược lại sang backend
+  const backToBackend = mapUiToLabRecapItem(uiItem2);
+  assert.equal(backToBackend.id, 2);
+  assert.equal(backToBackend.keepOriginal, true);
+  assert.equal(backToBackend.ttsSecs, null);
+});
+
+test("mapChipToRewriteMode — ánh xạ nhãn chip sang RewriteMode hợp lệ", () => {
+  assert.equal(mapChipToRewriteMode("Ngắn hơn"), "shorter");
+  assert.equal(mapChipToRewriteMode("ngắn"), "shorter");
+  assert.equal(mapChipToRewriteMode("Kịch tính hơn"), "dramatic");
+  assert.equal(mapChipToRewriteMode("kịch tính"), "dramatic");
+  assert.equal(mapChipToRewriteMode("Dễ hiểu hơn"), "simpler");
+  assert.equal(mapChipToRewriteMode("Đơn giản hơn"), "simpler");
+  assert.equal(mapChipToRewriteMode("Thêm câu nối"), "bridge");
+  assert.equal(mapChipToRewriteMode("câu nối"), "bridge");
+  assert.equal(mapChipToRewriteMode("khác lạ"), "dramatic"); // fallback
+});
+
+test("mapLabDraftStageToProgress — ánh xạ stage dựng nháp sang tiếng Việt và phần trăm", () => {
+  const p1 = mapLabDraftStageToProgress("tts", 30);
+  assert.equal(p1.stageName, "Đang đọc giọng thuyết minh TTS...");
+  assert.equal(p1.percent, 30);
+
+  const p2 = mapLabDraftStageToProgress("match", 65, "Khớp 12 đoạn cảnh");
+  assert.equal(p2.stageName, "Đang khớp khung hình gameplay & cutscene...");
+  assert.equal(p2.percent, 65);
+  assert.equal(p2.message, "Khớp 12 đoạn cảnh");
+
+  const p3 = mapLabDraftStageToProgress("render", 90);
+  assert.equal(p3.stageName, "Kiểm tra luật dựng và xuất video nháp...");
+  assert.equal(p3.percent, 90);
+
+  const p4 = mapLabDraftStageToProgress("done", 100);
+  assert.equal(p4.stageName, "Hoàn tất dựng video nháp");
+  assert.equal(p4.percent, 100);
+});
+
+test("mapLabBuildDraftResultToUi — ánh xạ kết quả dựng nháp đầy đủ trường", () => {
+  const backendResult = {
+    items: [
+      {
+        id: 1,
+        sourceIdx: 0,
+        start: 0,
+        end: 5,
+        picture: "Mở đầu",
+        narration: "Bắt đầu.",
+        keepOriginal: false,
+        ttsSecs: 4.5,
+      },
+    ],
+    totalSec: 4.5,
+    rulesPassed: true,
+    warningsCount: 0,
+    unplaced: [],
+    notes: ["Đã tự căn chỉnh thời lượng khớp giọng đọc"],
+    draftPath: "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.mp4",
+    studioProjectPath: "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.sublix-dubbing.json",
+  };
+
+  const uiResult = mapLabBuildDraftResultToUi(backendResult as any);
+
+  assert.equal(uiResult.items.length, 1);
+  assert.equal(uiResult.totalSec, 4.5);
+  assert.equal(uiResult.rulesPassed, true);
+  assert.equal(uiResult.warningsCount, 0);
+  assert.deepEqual(uiResult.notes, ["Đã tự căn chỉnh thời lượng khớp giọng đọc"]);
+  assert.equal(uiResult.draftPath, "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.mp4");
+  assert.equal(uiResult.studioProjectPath, "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.sublix-dubbing.json");
 });

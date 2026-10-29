@@ -3,9 +3,17 @@
 //! Khớp 100% luật dựng R1-R6 của Rust (`src-tauri/src/lab/recap_script.rs`).
 //! Tách riêng để kiểm thử bằng `node --test scripts/lab-tests/`.
 
-import type { AppConfig, LabAnalysis, LabProgressEvent, LabSourceInput } from "../../lib/tauri";
+import type {
+  AppConfig,
+  LabAnalysis,
+  LabProgressEvent,
+  LabSourceInput,
+  LabRecapItem,
+  LabRewriteMode,
+  LabBuildDraftResult,
+} from "../../lib/tauri";
 import type { MockChapter, MockCharacter, MockJunkSegment, MockVideoSource } from "./labMock";
-import type { AnalyzeResult, AnalyzeStageProgress } from "./labApi";
+import type { AnalyzeResult, AnalyzeStageProgress, BuildDraftResult } from "./labApi";
 
 export type RuleCode = "R1" | "R2" | "R3" | "R4" | "R5" | "R6";
 
@@ -536,4 +544,91 @@ export function prepareLabSourceInputs(sources: MockVideoSource[]): LabSourceInp
     name: s.name,
     studioProject: s.studioProjectName || null,
   }));
+}
+
+// ───────────────────────────── v0.16 Xưởng AI Bước B & C: Pure Mappings (TSK-LAB-U1C) ─────────────────────────────
+
+/**
+ * Ánh xạ một đoạn `LabRecapItem` từ backend sang `RecapItem` của UI trình sửa lời bình.
+ */
+export function mapLabRecapItemToUi(item: LabRecapItem): RecapItem {
+  return {
+    id: Number(item.id),
+    sourceIdx: Number(item.sourceIdx ?? 0),
+    start: Number(item.start ?? 0),
+    end: Number(item.end ?? 0),
+    picture: item.picture || "Cảnh quay gameplay",
+    narration: item.narration || "",
+    keepOriginal: Boolean(item.keepOriginal),
+    ttsSecs: typeof item.ttsSecs === "number" && !isNaN(item.ttsSecs) ? item.ttsSecs : undefined,
+  };
+}
+
+/**
+ * Ánh xạ ngược `RecapItem` của UI sang `LabRecapItem` để gửi xuống backend Tauri dựng nháp.
+ */
+export function mapUiToLabRecapItem(item: RecapItem): LabRecapItem {
+  return {
+    id: item.id,
+    sourceIdx: item.sourceIdx,
+    start: item.start,
+    end: item.end,
+    picture: item.picture,
+    narration: item.narration,
+    keepOriginal: item.keepOriginal,
+    ttsSecs: item.ttsSecs ?? null,
+  };
+}
+
+/**
+ * Ánh xạ nhãn chip trong hộp thoại viết lại sang `LabRewriteMode` của backend.
+ * - "Ngắn hơn" → "shorter"
+ * - "Kịch tính hơn" → "dramatic"
+ * - "Dễ hiểu hơn" / "Đơn giản hơn" → "simpler"
+ * - "Thêm câu nối" / "Câu nối" → "bridge"
+ */
+export function mapChipToRewriteMode(chip: string): LabRewriteMode {
+  const lower = (chip || "").toLowerCase().trim();
+  if (lower.includes("ngắn")) return "shorter";
+  if (lower.includes("kịch tính")) return "dramatic";
+  if (lower.includes("đơn giản") || lower.includes("dễ hiểu")) return "simpler";
+  if (lower.includes("nối")) return "bridge";
+  return "dramatic";
+}
+
+/**
+ * Ánh xạ tiến trình bước C (`tts` | `match` | `render` | `done`) sang thông báo tiếng Việt.
+ */
+export function mapLabDraftStageToProgress(
+  stage: string,
+  percent: number,
+  message?: string,
+): { stageName: string; percent: number; message: string } {
+  let stageName = "Đang dựng nháp...";
+  if (stage === "tts") stageName = "Đang đọc giọng thuyết minh TTS...";
+  else if (stage === "match") stageName = "Đang khớp khung hình gameplay & cutscene...";
+  else if (stage === "render") stageName = "Kiểm tra luật dựng và xuất video nháp...";
+  else if (stage === "done") stageName = "Hoàn tất dựng video nháp";
+
+  return {
+    stageName,
+    percent: Math.min(100, Math.max(0, Math.round(percent))),
+    message: message || stageName,
+  };
+}
+
+/**
+ * Ánh xạ kết quả dựng nháp từ backend `LabBuildDraftResult` sang `BuildDraftResult` của UI.
+ */
+export function mapLabBuildDraftResultToUi(result: LabBuildDraftResult): BuildDraftResult {
+  return {
+    items: (result.items || []).map(mapLabRecapItemToUi),
+    totalSec: Number(result.totalSec ?? 0),
+    rulesPassed: Boolean(result.rulesPassed),
+    warningsCount: Number(result.warningsCount ?? 0),
+    unplaced: result.unplaced || [],
+    notes: result.notes || [],
+    draftPath: result.draftPath,
+    studioProjectPath: result.studioProjectPath,
+  };
 }

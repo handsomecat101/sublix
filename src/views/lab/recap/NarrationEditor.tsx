@@ -10,6 +10,8 @@ interface NarrationEditorProps {
   onChangeItems: (items: RecapItem[]) => void;
   targetDurationSec: number;
   chapters: MockChapter[];
+  onRegenerate?: () => void;
+  isGenerating?: boolean;
 }
 
 export const NarrationEditor: React.FC<NarrationEditorProps> = ({
@@ -17,6 +19,8 @@ export const NarrationEditor: React.FC<NarrationEditorProps> = ({
   onChangeItems,
   targetDurationSec,
   chapters,
+  onRegenerate,
+  isGenerating = false,
 }) => {
   const [selectedId, setSelectedId] = useState<number>(items[0]?.id ?? 1);
 
@@ -84,6 +88,17 @@ export const NarrationEditor: React.FC<NarrationEditorProps> = ({
               Bấm trực tiếp vào chữ để sửa · R: Viết lại · G: Đổi sang thoại gốc
             </span>
           </div>
+          {onRegenerate && (
+            <button
+              type="button"
+              className="lab-btn-secondary"
+              onClick={onRegenerate}
+              disabled={isGenerating}
+              style={{ fontSize: "12px", padding: "4px 10px" }}
+            >
+              {isGenerating ? "⏳ Đang viết lời bình..." : "✦ Viết lại bằng AI"}
+            </button>
+          )}
         </div>
 
         {items.map((item, idx) => {

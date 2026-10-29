@@ -1,17 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { RecapItem } from "../labModel";
 import { formatDur } from "../labModel";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface DraftResultProps {
   items: RecapItem[];
   onOpenStudio: () => void;
   onRebuild: () => void;
+  draftPath?: string;
+  notes?: string[];
+  warningsCount?: number;
+  unplaced?: string[];
+  rulesPassed?: boolean;
 }
 
 export const DraftResult: React.FC<DraftResultProps> = ({
   items,
   onOpenStudio,
   onRebuild,
+  draftPath,
+  notes,
+  warningsCount = 0,
+  unplaced,
+  rulesPassed = true,
 }) => {
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const selectedItem = items[selectedIdx] ?? items[0];
@@ -25,6 +36,15 @@ export const DraftResult: React.FC<DraftResultProps> = ({
     0,
   );
   const ostRatio = totalSec > 0 ? Math.round((ostSec / totalSec) * 100) : 0;
+
+  const draftMediaUrl = useMemo(() => {
+    if (!draftPath) return null;
+    try {
+      return convertFileSrc(draftPath);
+    } catch {
+      return draftPath;
+    }
+  }, [draftPath]);
 
   return (
     <div className="lab-draft-layout">
@@ -111,21 +131,31 @@ export const DraftResult: React.FC<DraftResultProps> = ({
         }}
       >
         <h4 style={{ fontSize: "14px", fontWeight: 800, margin: 0, color: "var(--t1)" }}>
-          Xem thử phân đoạn #{selectedIdx + 1}
+          {draftMediaUrl ? "Video nháp hoàn chỉnh" : `Xem thử phân đoạn #${selectedIdx + 1}`}
         </h4>
 
-        {/* Khung xem thử video 16:9 */}
-        <div className="lab-player-mock">
-          <div style={{ textAlign: "center", color: "var(--t4)", fontSize: "12px" }}>
-            <span>▶ Preview Cảnh #{selectedIdx + 1}</span>
-            <div style={{ marginTop: 4, color: "var(--t3)", fontSize: "11px" }}>
-              {selectedItem?.picture}
+        {/* Khung phát video thật hoặc preview giả lập */}
+        {draftMediaUrl ? (
+          <div style={{ borderRadius: "10px", overflow: "hidden", background: "#000", border: "1px solid var(--line)" }}>
+            <video
+              src={draftMediaUrl}
+              controls
+              style={{ width: "100%", maxHeight: "220px", display: "block" }}
+            />
+          </div>
+        ) : (
+          <div className="lab-player-mock">
+            <div style={{ textAlign: "center", color: "var(--t4)", fontSize: "12px" }}>
+              <span>▶ Preview Cảnh #{selectedIdx + 1}</span>
+              <div style={{ marginTop: 4, color: "var(--t3)", fontSize: "11px" }}>
+                {selectedItem?.picture}
+              </div>
+            </div>
+            <div className="lab-player-sub-overlay">
+              {selectedItem?.narration}
             </div>
           </div>
-          <div className="lab-player-sub-overlay">
-            {selectedItem?.narration}
-          </div>
-        </div>
+        )}
 
         {/* Bảng chi tiết cảnh */}
         <div
@@ -162,19 +192,79 @@ export const DraftResult: React.FC<DraftResultProps> = ({
           </div>
         </div>
 
+        {/* Ghi chú tối ưu hóa / tự sửa luật */}
+        {notes && notes.length > 0 && (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "8px",
+              background: "rgba(56, 189, 248, 0.08)",
+              border: "1px solid rgba(56, 189, 248, 0.25)",
+              fontSize: "12px",
+              color: "var(--ac-txt)",
+            }}
+          >
+            <strong>✦ Ghi chú tối ưu:</strong>
+            <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
+              {notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Cảnh báo nếu có */}
+        {warningsCount > 0 && (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "8px",
+              background: "rgba(234, 179, 8, 0.08)",
+              border: "1px solid rgba(234, 179, 8, 0.25)",
+              fontSize: "12px",
+              color: "var(--warn-txt)",
+            }}
+          >
+            ⚠ Có {warningsCount} cảnh báo cần lưu ý khi dựng.
+          </div>
+        )}
+
+        {/* Các câu chưa khớp cảnh nếu có */}
+        {unplaced && unplaced.length > 0 && (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "8px",
+              background: "rgba(244, 63, 94, 0.08)",
+              border: "1px solid rgba(244, 63, 94, 0.25)",
+              fontSize: "12px",
+              color: "#fb7185",
+            }}
+          >
+            <strong>⚠ {unplaced.length} câu chưa tìm được cảnh phù hợp:</strong>
+            <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
+              {unplaced.map((u, i) => (
+                <li key={i}>{u}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Hộp kiểm luật */}
-        <div
-          style={{
-            padding: "10px 12px",
-            borderRadius: "8px",
-            background: "rgba(74, 222, 128, 0.08)",
-            border: "1px solid rgba(74, 222, 128, 0.25)",
-            fontSize: "12px",
-            color: "var(--ok-txt)",
-          }}
-        >
-          ✓ <strong>Kiểm luật dựng:</strong> Đạt 100% các tiêu chuẩn về Hook mở đầu, tỷ lệ thoại gốc và cầu nối giữa các cảnh quay.
-        </div>
+        {rulesPassed && (
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "8px",
+              background: "rgba(74, 222, 128, 0.08)",
+              border: "1px solid rgba(74, 222, 128, 0.25)",
+              fontSize: "12px",
+              color: "var(--ok-txt)",
+            }}
+          >
+            ✓ <strong>Kiểm luật dựng:</strong> Đạt 100% các tiêu chuẩn về Hook mở đầu, tỷ lệ thoại gốc và cầu nối giữa các cảnh quay.
+          </div>
+        )}
 
         {/* NÚT CHÍNH: MỞ SANG STUDIO */}
         <button
