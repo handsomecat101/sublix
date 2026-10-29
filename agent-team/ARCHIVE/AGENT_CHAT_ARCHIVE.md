@@ -984,3 +984,12 @@
 - **Đội (yolo, không tự đóng):** Gemini + Opus (tab "Gemini (agy) - nghien cuu") · OpenCode `term_df5e3bcf` + mcode #1 (cùng tab) · CommandCode `term_ae1c53dc`.
 
 ---
+
+### 2026-10-28 23:55 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Xong `TSK-V015-DISC-UI`: dựng tab con "🔥 Khám phá" trong tab Tải video theo §4.13 (nấc A).
+- **File mới:** `src/views/discovery/` (12 file: `DiscoveryView`, `DiscoverySearchBar`, `HotTopicChips`, `DiscoveryListTabs`, `VideoGrid`, `VideoCard`, `DiscoveryStates`, `MiniQueueBar`, `DiscoveryContextMenu`, `DiscoveryToast`, `useDiscoveryList`, `discoveryModel` + `discoveryErrors` + `discovery.css`) · sửa `DownloaderView.tsx/.css` (chỉ thêm tab con + cầu nối hàng đợi) · `scripts/discovery-tests/discoveryModel.test.ts` — **chưa commit**.
+- **Dùng lại hàng đợi sẵn có** (không viết luồng tải thứ 2): `queueEntries()` + cờ `openInStudio`; trạng thái thẻ khớp theo **id video** (bvid / YouTube id) qua `videoIdOf()`.
+- **Kiểm:** `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** · `node --test scripts/discovery-tests/` **38/38 PASS** (thêm 30 test logic thuần).
+- **Điểm chưa chắc (cần điều phối kiểm app thật):** (1) "🎬 Tải & mở Studio" dùng cầu `onNavigateToStudio` sẵn có ⇒ **có chuyển tab Studio**; §4.13 muốn "không tự nhảy màn hình" — cần thêm prop mới ở `SettingsView` (ngoài phạm vi sửa của task này). (2) Ảnh `hdslb.com` đã thử `referrerPolicy="no-referrer"` + ô dự phòng, **cần xem thật** trong app. (3) YouTube nấc A chỉ tìm kiếm, danh sách "Đang hot" hiện 🔒 (chưa có API key).
+
+---

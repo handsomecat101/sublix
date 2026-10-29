@@ -1,4 +1,4 @@
-﻿# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
+# AGENT_CHAT.md — Bảng Bàn Giao Ca Trực (Rolling Handoff Board)
 
 > **⚠️ QUY TẮC CHỐNG PHÌNH TO & TRÙNG LẶP (BẮT BUỘC CHO MỌI AGENT):**
 > 1. **Ngắn gọn tuyệt đối:** Mỗi tin nhắn chỉ từ **3 – 7 dòng** (dạng bullet).
@@ -8,6 +8,14 @@
 
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
+
+### 2026-10-30 00:40 - Claude Code (điều phối) -> @Team / agent máy PC nhà (RTX 3090)
+- **Loại:** `@handoff` — đã push `master` (v0.14 + v0.15 Khám phá + Xưởng AI thử nghiệm). Xưởng AI **⏸️ tạm dừng** (PO: chốt quy trình bằng team nội dung trước — `docs/XUONG_AI_PLAN.md` đầu file, `docs/RECAP_WORKFLOW.md`).
+- **Việc ở PC nhà:** cho app chạy chuẩn trên máy đó. Sau `git pull`: `npm install`, build lại Rust (`cargo build`), đặt lại model + nhà cung cấp dịch/TTS trong Cài đặt (không nằm trong git). Nhánh **CUDA/Whisper GPU chưa từng kiểm** trên máy dev (không NVIDIA) ⇒ nghi đầu tiên.
+- Lỗi tìm được ⇒ ghi `ISSUE_LOG.md` (mã + Quick Index); sửa trên nhánh riêng hoặc báo PO trước khi push để không đè việc máy dev.
+- Còn dở: nhánh local `wip/lab-c5` (chỉ ở máy dev, chưa push).
+
+---
 
 ### 2026-10-29 02:20 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Hoàn thành `TSK-LAB-U1D`: "Mở trong Studio" nạp SẴN lời bình + sửa 3 lỗi nhỏ của U1C.
@@ -72,22 +80,5 @@
 - **Thành phần:** 19 component tại `src/views/lab/**` (thư viện mẫu, trình hướng dẫn 4 bước: nguồn, phân tích AI 5 giai đoạn, biên tập lời bình, xem trước bản dựng); tích hợp mock API `labApi.ts` có thanh tiến trình và huỷ `AbortSignal`.
 - **Topbar & Trải nghiệm:** Thêm tab "Xưởng AI" kèm nhãn nổi bật "Thử nghiệm" sau "Tải video" trên `MasterTopbar` (cả SettingsView & SublixStudioView); hỗ trợ phím tắt số 1-4, `Ctrl+Enter` sửa nhanh câu.
 - **Kiểm chứng:** `node --test scripts/lab-tests/` **14/14 PASS** (bắt đúng 6 luật R1-R6 kịch bản recap, đếm âm tiết tiếng Việt) · `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** (2.98s, 0 lỗi).
-
----
-
-### 2026-10-28 23:55 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu
-- **Loại:** `@done` — Xong `TSK-V015-DISC-UI`: dựng tab con "🔥 Khám phá" trong tab Tải video theo §4.13 (nấc A).
-- **File mới:** `src/views/discovery/` (12 file: `DiscoveryView`, `DiscoverySearchBar`, `HotTopicChips`, `DiscoveryListTabs`, `VideoGrid`, `VideoCard`, `DiscoveryStates`, `MiniQueueBar`, `DiscoveryContextMenu`, `DiscoveryToast`, `useDiscoveryList`, `discoveryModel` + `discoveryErrors` + `discovery.css`) · sửa `DownloaderView.tsx/.css` (chỉ thêm tab con + cầu nối hàng đợi) · `scripts/discovery-tests/discoveryModel.test.ts` — **chưa commit**.
-- **Dùng lại hàng đợi sẵn có** (không viết luồng tải thứ 2): `queueEntries()` + cờ `openInStudio`; trạng thái thẻ khớp theo **id video** (bvid / YouTube id) qua `videoIdOf()`.
-- **Kiểm:** `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** · `node --test scripts/discovery-tests/` **38/38 PASS** (thêm 30 test logic thuần).
-- **Điểm chưa chắc (cần điều phối kiểm app thật):** (1) "🎬 Tải & mở Studio" dùng cầu `onNavigateToStudio` sẵn có ⇒ **có chuyển tab Studio**; §4.13 muốn "không tự nhảy màn hình" — cần thêm prop mới ở `SettingsView` (ngoài phạm vi sửa của task này). (2) Ảnh `hdslb.com` đã thử `referrerPolicy="no-referrer"` + ô dự phòng, **cần xem thật** trong app. (3) YouTube nấc A chỉ tìm kiếm, danh sách "Đang hot" hiện 🔒 (chưa có API key).
-
----
-
-
-
----
-
-
 
 ---

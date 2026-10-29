@@ -12,8 +12,9 @@
 | Field | Value |
 |-------|-------|
 | **Project Name** | **Sublix** |
-| **Bản Build Hiện Tại** | `v0.14.0` (dev mode — chạy qua `Chay-Sublix.bat`) — v0.12.0 + v0.13.0 đã push; **v0.14.0 xong + kiểm app thật, CHỜ PO duyệt push** (2026-10-28) |
-| **Git Commit** | nhánh `master` (`origin` = `https://github.com/handsomecat101/sublix.git`) — origin @ `f5d139e`; local có thêm commit v0.14 chưa push |
+| **Bản Build Hiện Tại** | `v0.15.0` (dev mode — chạy qua `Chay-Sublix.bat`) — **đã push 2026-10-30** gồm v0.14 (kiểu phụ đề, che hardsub) + v0.15 (tab Khám phá) + tab **Xưởng AI (Thử nghiệm, ⏸️ tạm dừng — xem `docs/XUONG_AI_PLAN.md` đầu file)** |
+| **Git Commit** | nhánh `master` (`origin` = `https://github.com/handsomecat101/sublix.git`) — đã push đủ; nhánh `wip/lab-c5` (C5 dở dang, chỉ local) |
+| **Máy khác (PC nhà, RTX 3090)** | Sau `git pull`: `npm install` + build lại Rust; model/cấu hình KHÔNG nằm trong git (đặt lại trong Cài đặt); nhánh CUDA chưa kiểm ở máy dev (máy dev không có NVIDIA) ⇒ lỗi gì ghi `ISSUE_LOG.md` |
 | **Workspace Máy Dev** | `C:\AI Project\Sublix` (máy: Win11 11 Home build 26200, AMD Ryzen AI Max 390, 31 GB RAM, **không có GPU NVIDIA**) |
 | **Trạng Thái** | 🟢 Sẵn sàng làm việc — `cargo build` OK, `cargo test --lib` **60/60 PASS**, `npx tsc --noEmit` 0 lỗi, `npm run build` OK, guard `npm run verify:version` PASS exit 0 (6/6 nguồn = `0.11.36`); app chạy dev + verify GUI qua CDP (port 9223) |
 | **Provider Dịch Đang Dùng** | `ollama` (`qwen2.5:3b`, chạy **iGPU qua ROCm**) — vì `llama-server.exe` bị Smart App Control chặn, xem `BUG-H09` |
@@ -64,6 +65,7 @@
 | `TSK-V015-DISC-B` | v0.15 nấc B — danh mục, tự dịch từ khoá Việt→Trung, YouTube hot (API key tuỳ chọn) | mcode / agy | 🟡 MEDIUM | sau nấc A |
 | `TSK-V015-BROWSER-SPIKE` | v0.15 nấc C — thử trình duyệt nhúng (TikTok/Douyin) + nút "Tải video đang xem"; trang ngoài KHÔNG có quyền gọi lệnh Tauri | agy / Sonnet | 🟢 LOW | độc lập, thử kỹ thuật 1 ngày |
 | `TSK-BATCH` | Batch: chạy lồng tiếng cả danh sách video 1 lần (gộp `TSK-022.2`) | — | 🟡 MEDIUM | sau v0.15 |
+| `TSK-RECAP-CONTENT-TEAM` | **PO chốt 2026-10-30:** chốt quy trình recap bằng 1 team nội dung (người + agent đóng vai: nắm cốt truyện · xem gameplay · viết lời bình · dựng) làm thử video thật TRƯỚC; ổn mới làm phần mềm | PO + điều phối | 🟡 MEDIUM | `docs/RECAP_WORKFLOW.md`; C5 dở ở nhánh `wip/lab-c5` |
 | `TSK-AI-RECAP-1` | Dựng AI nấc 1: reel highlight từ gameplay dài (chia cảnh + lọc cutscene + 9:16 + chữ nhảy) | — | 🟡 MEDIUM | `docs/GAME_RECAP_RESEARCH.md` — cần kế hoạch chi tiết |
 | `TSK-AI-RECAP-2` | Dựng AI nấc 2: recap cốt truyện game có lời bình (tóm tắt phân cấp → kịch bản → TTS → ghép cảnh theo lời) | — | 🟡 MEDIUM | sau nấc 1 |
 | `TSK-022.2` | Phase 2: Workflow Automation & Chế bản Auto Sub/Dub (n8n / Node graph / Batch automation) | Antigravity / Claude Code | 🔴 HIGH | Tự động hóa chuỗi: Download -> STT -> Translate -> Voice Over -> Xuất video một chạm |
@@ -76,6 +78,8 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-LAB-R3` | Nghiên cứu quy trình recap cốt truyện game nhiều vai AI | Opus | 2026-10-30 | ✅ `docs/RECAP_WORKFLOW.md` — 6 bước, 2 điểm duyệt, chi phí 10 giờ, 11 việc R3-x |
+| `TSK-LAB-C4` | Viết lời bình + dựng nháp (TTS thật → khớp cảnh → dự án Studio) | mcode + OpenCode | 2026-10-29 | ✅ `166e6d5` — dựng thật 36 s → video 11,6 s |
 | `TSK-LAB-U1D` | Mở trong Studio nạp SẴN lời bình + sửa 3 lỗi nhỏ của U1C | Antigravity | 2026-10-29 | ✅ mapDubbingProjectToPersistedTab nạp sẵn segments/speakers vào Studio; buffer sự kiện lab; bắt lỗi runId/draftPath; 25/25 test lab PASS; 84/84 studio-tabs PASS; tsc/vite build OK |
 | TSK-LAB-U1C | Nối bước B (Lời bình) + C (Dựng nháp) của Xưởng AI vào lệnh THẬT | Antigravity | 2026-10-29 | ✅ Nối labWriteNarration + labBuildDraft + labRewriteSegment + labLoadDraftProject; voice thật; video preview convertFileSrc; 23/23 test PASS; tsc/vite build OK |
 | `TSK-V015-UI-FIX` | Sửa tab Khám phá theo bản duyệt Opus (P1-1, §1 toast app, P1-2..4, P2, P3) | Antigravity | 2026-10-29 | ✅ Đạt toàn bộ P1 (§1 không tự chuyển màn, P1-1..4) + P2 + P3 · 46/46 test discoveryModel PASS · tsc/build OK |
@@ -84,9 +88,9 @@
 | `TSK-V015-DISC-B1` | Tự dịch từ khoá Việt/Anh → Trung khi tìm Bilibili + đơn vị lượt xem kiểu Việt | mcode #1 (Orca worker) | 2026-10-28 | ✅ `discovery/keyword_translate.rs` + lệnh `discovery_translate_keyword` (provider đã cấu hình) + đơn vị `nghìn/triệu/tỷ` thống nhất 2 nguồn — 87 Rust + 41 node; dịch thật `elden ring boss` → `艾尔登法环 Boss`; **chưa commit** |
 | `TSK-V015-DISC-UI` | Tab con Khám phá: chip Douyin, Bilibili hot/xếp hạng/tìm, tìm YouTube, Tải về / Tải & mở Studio | mcode #1 | 2026-10-28 | ✅ `26ebe2d` — kiểm app thật: tải clip 21 s → tự mở tab Studio; ảnh `shots/v015-app-*.png` |
 | `TSK-V015-DISC-CMD` | Nối Khám phá: gọi mạng + 5 lệnh Tauri + mã lỗi + wrapper TS | mcode #1 | 2026-10-28 | ✅ `b8cf7d9` — 437 Rust + 418 node; mạng thật OK (Bilibili hot, Douyin, tìm 原神) |
-| `TSK-LAB-DESIGN` (D1) | Thiết kế tab Xưởng AI (thư viện mẫu, 3 bước, sửa lời bình) | **Opus (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `docs/ui-mockups/v016-lab*` · `docs/UI_REDESIGN_PLAN.md` §4.14 |
-| `TSK-LAB-CORE` (C1) | Lõi thuần `lab/`: kịch bản recap + luật dựng + lọc rác + khớp cảnh theo TTS | **OpenCode (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `src-tauri/src/lab/*.rs` (mới) · `src-tauri/src/lib.rs` (+1 dòng) |
-| `TSK-LAB-RESEARCH` (R1+R2) | So sánh bộ dựng video bằng code + Việt hoá prompt NarratoAI cho game | **Gemini (Orca worker)** | 🟡 MEDIUM | 🟡 Đang làm 2026-10-28 | `docs/LAB_RENDER_ENGINES.md` · `src-tauri/src/lab/prompts/*` |
+| `TSK-LAB-DESIGN` (D1) | Thiết kế tab Xưởng AI | Opus | 2026-10-28 | ✅ `4bccb28` mockup + §4.14 |
+| `TSK-LAB-CORE` (C1) | Lõi thuần `lab/`: kịch bản recap + luật dựng + lọc rác + khớp cảnh | OpenCode | 2026-10-28 | ✅ `af3a7f8` |
+| `TSK-LAB-RESEARCH` (R1+R2) | Bộ dựng video bằng code + Việt hoá prompt NarratoAI | Gemini | 2026-10-28 | ✅ `docs/LAB_RENDER_ENGINES.md` · `lab/prompts/*` |
 | TSK-RESEARCH-RECAP-TOOLS | Nghiên cứu sâu các tool recap/review: Sublix tận dụng được gì | Antigravity | 2026-10-28 | ✅ docs/RECAP_TOOLS_DEEPDIVE.md — Mổ xẻ NarratoAI (MIT, prompt OST, công thức từ/5), VideoLingo, auto-editor (The Unlicense), TransNetV2 ONNX, 13 đề xuất |
 | `TSK-V015-DISC-CORE` | Lõi thuần Rust `discovery/` (parser Bilibili/Douyin/yt-dlp + cache TTL) | OpenCode | 2026-10-28 | ✅ `321fb8e` — 37 test JSON mẫu thật; phát hiện Bilibili tìm tiếng Anh bị -412 |
 | `TSK-DESIGN-V015-DISCOVERY` | Thiết kế tab Khám phá (mockup 8 khu + 8 ảnh + §4.13) | Opus | 2026-10-28 | ✅ `7bf7e5b` — tab con trong Tải video, chip Douyin, Tải & mở Studio |

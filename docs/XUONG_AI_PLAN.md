@@ -4,6 +4,11 @@
 > Nguồn: `docs/GAME_RECAP_RESEARCH.md`, `docs/RECAP_TOOLS_DEEPDIVE.md` (13 hạng mục, prompt NarratoAI — MIT), `agent-team/TAM_NHIN_SUBLIX_STUDIO.md` GĐ6.
 > Người viết: Claude Code (điều phối). Ai làm gì + trạng thái ⇒ checklist §4 (tích ✅ khi điều phối đã kiểm & commit).
 
+> ⏸️ **TẠM DỪNG 2026-10-30 (PO chốt):** recap cả game (vài–chục giờ) quá khó để app luật cứng tự làm. Hướng mới: **chốt quy trình trước bằng 1 "team nội dung"** (người + agent đóng các vai: nắm cốt truyện · xem gameplay nhặt chuyện · viết lời bình · dựng khớp cảnh) làm thử vài video thật; quy trình ổn mới đưa vào phần mềm. Nghiên cứu nền: `docs/RECAP_WORKFLOW.md` (Opus — 6 bước, 2 điểm duyệt, chi phí 10 giờ, 11 việc R3-x).
+> - Đã có trong bản push: tab Xưởng AI (Thử nghiệm) chạy đủ Nguồn → Phân tích → Lời bình → Dựng nháp → Mở trong Studio (mới thử clip 30 s).
+> - C5 (video dài: gộp hồi, ngân sách thời lượng, cache theo cụm) **dở dang** ở nhánh `wip/lab-c5` (`540bbbc`, chưa kiểm).
+> - Khi làm lại: đọc `RECAP_WORKFLOW.md` §5 ⇒ chọn việc; test thật lượt 1 ~1–2 giờ, lượt 2 cả game.
+
 ## 1. Người dùng thấy gì (luồng mẫu "Recap cốt truyện game")
 1. Mở tab **Xưởng AI** → thư viện thẻ mẫu (Recap game · Reel highlight · *sắp có*: Top 10, Lore nhân vật, So sánh).
 2. Chọn **Recap game** → đưa 1 hoặc nhiều video gameplay (hoặc chọn dự án Studio đã nhận dạng thoại) → chọn: độ dài đích (5 / 10 / 15 / 20 phút), giọng đọc, **tỷ lệ tiếng gốc** (thanh trượt 0–60 %, mặc định 30 %), tên game (để AI tra bối cảnh nếu bật).
@@ -41,7 +46,7 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
 - [x] **C4** (mcode + OpenCode làm nốt — commit sau `2497b5b`; dựng nháp thật 36 s → video 11,6 s + dự án Studio) lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
-- [ ] **C5** (OpenCode — đang làm) chịu gameplay **dài 3–15 giờ, nhiều phần**: gộp chương nhỏ → hồi/arc, viết lời bình theo ngân sách thời lượng đích, lưu/tiếp tục theo cụm (hỏng giữa chừng không làm lại từ đầu), ETA, đo thời gian/RAM ngoại suy 10 giờ
+- [ ] **C5** (OpenCode — ⏸️ dở dang, nhánh `wip/lab-c5`) chịu gameplay **dài 3–15 giờ, nhiều phần**: gộp chương nhỏ → hồi/arc, viết lời bình theo ngân sách thời lượng đích, lưu/tiếp tục theo cụm (hỏng giữa chừng không làm lại từ đầu), ETA, đo thời gian/RAM ngoại suy 10 giờ
 - [x] **U1** (Gemini — giao diện `c6c3442`; Nguồn + Phân tích `2497b5b`; B/C `e138da5`; Mở trong Studio nạp sẵn lời bình `6db5286`) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
 
 ### Giai đoạn 3 — Kiểm & phát hành
