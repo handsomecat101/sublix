@@ -1081,6 +1081,69 @@ export const sublix = {
   async labForgetAnalysis(runId: string): Promise<void> {
     await invoke<void>("lab_forget_analysis", { runId });
   },
+
+  /**
+   * v0.16 Xưởng AI — **bước B: viết lời bình** theo từ chương của lần phân tích.
+   *
+   * Trả về danh sách đoạn (mỗi đoạn 1–3 câu; đoạn `keepOriginal` là thoại gốc
+   * được gợi ý chèn).
+   */
+  async labWriteNarration(
+    runId: string,
+    options?: LabNarrationOptions,
+  ): Promise<LabRecapItem[]> {
+    return await invoke<LabRecapItem[]>("lab_write_narration", {
+      runId,
+      options: options ?? null,
+    });
+  },
+
+  /** v0.16 Xưởng AI — **viết lại 1 đoạn** (ô "Viết lại đoạn" của UI). */
+  async labRewriteSegment(
+    text: string,
+    mode: LabRewriteMode,
+    hint?: string,
+  ): Promise<string> {
+    return await invoke<string>("lab_rewrite_segment", {
+      text,
+      mode,
+      hint: hint ?? null,
+    });
+  },
+
+  /**
+   * v0.16 Xưởng AI — **bước C: dựng video nháp** (chạy nền).
+   *
+   * Trả `run_id` ngay; kết quả qua sự kiện `lab:done` (`LabBuildDraftResult`),
+   * lỗi qua `lab:error`, tiến trình qua `lab:progress`
+   * (`stage` = `tts` | `match` | `render` | `done`).
+   */
+  async labBuildDraft(
+    runId: string,
+    segments: LabRecapItem[],
+    options: LabDraftOptions,
+  ): Promise<string> {
+    return await invoke<string>("lab_build_draft", {
+      runId,
+      segments,
+      options,
+    });
+  },
+
+  /** v0.16 Xưởng AI — huỷ lượt dựng video nháp đang chạy. */
+  async labCancelDraft(runId: string): Promise<void> {
+    await invoke<void>("lab_cancel_draft", { runId });
+  },
+
+  /**
+   * v0.16 Xưởng AI — đọc lại **dự án Studio** đã lưu của video nháp.
+   *
+   * UI dùng hàm này khi bấm "Mở trong Studio": lấy `DubbingProject` đã có sẵn
+   * (lời bình + thời gian) thay vì chạy lại nhận dạng thoại trên video nháp.
+   */
+  async labLoadDraftProject(draftPath: string): Promise<DubbingProject> {
+    return await invoke<DubbingProject>("lab_load_draft_project", { draftPath });
+  },
 };
 
 /**
@@ -1227,6 +1290,70 @@ export interface LabJunkSegment {
   restored: boolean;
 }
 
+/**
+ * Một đoạn lời bình / thoại gốc (bước B của Xưởng AI).
+ *
+ * Khớp `RecapItem` của `src/views/lab/labModel.ts` (UI dùng trực tiếp kiểu này).
+ */
+export interface LabRecapItem {
+  id: number;
+  sourceIdx: number;
+  /** Bắt đầu (giây, trong video nguồn). */
+  start: number;
+  /** Kết thúc (giây, trong video nguồn). */
+  end: number;
+  /** Mô tả hình ảnh. */
+  picture: string;
+  /** Lời bình (rỗng khi `keepOriginal`). */
+  narration: string;
+  /** Giữ tiếng gốc của game thay vì đọc lời bình. */
+  keepOriginal: boolean;
+  /** Thời lượng đọc thật (giây) — có sau khi TTS. */
+  ttsSecs?: number | null;
+}
+
+/** Tuỳ chọn bước B (viết lời bình). */
+export interface LabNarrationOptions {
+  /** Tên game (đưa vào prompt). */
+  gameName?: string;
+  /** Thể loại game. */
+  gameGenre?: string;
+  /** Thời lượng đích của video nháp (giây). */
+  targetDurationSec?: number;
+  /** Tỷ lệ tiếng gốc mong muốn (0.0–1.0). */
+  originalRatio?: number;
+}
+
+/** Chế độ viết lại 1 đoạn (ô "Viết lại đoạn"). */
+export type LabRewriteMode = "shorter" | "dramatic" | "simpler" | "bridge";
+
+/** Tuỳ chọn bước C (dựng video nháp). */
+export interface LabDraftOptions {
+  /** Voice id (tiền tố engine: `kokoro:`, `vietneu:`, `zerotts:`, `minimax:`…). */
+  voice: string;
+  /** Tốc độ đọc (`+0%`). */
+  rate?: string;
+  /** Cao độ (`+0Hz`). */
+  pitch?: string;
+  /** Tỷ lệ tiếng gốc (0.0–1.0). */
+  originalRatio?: number;
+}
+
+/** Kết quả bước C (dựng video nháp). */
+export interface LabBuildDraftResult {
+  items: LabRecapItem[];
+  totalSec: number;
+  rulesPassed: boolean;
+  warningsCount: number;
+  unplaced: string[];
+  /** Ghi chú tự sửa khi dựng (bỏ đoạn thoại gốc sai luật…). */
+  notes: string[];
+  /** Đường dẫn video nháp. */
+  draftPath: string;
+  /** Đường dẫn dự án Studio (mở tab Studio được). */
+  studioProjectPath: string;
+}
+
 /** Đặc trưng đo được của 1 đoạn cảnh (tầng điểm cutscene). */
 export interface LabSceneFeatures {
   letterboxCover: number;
@@ -1292,6 +1419,12 @@ export interface LabErrorEvent {
   message: string;
 }
 
+/** Payload sự kiện `lab:draft-done` (bước C — dựng video nháp xong). */
+export interface LabDraftDoneEvent {
+  runId: string;
+  result: LabBuildDraftResult;
+}
+
 /**
  * Nghe sự kiện `lab:progress` của Xưởng AI (tiến trình Bước A).
  *
@@ -1320,6 +1453,51 @@ export async function onLabError(
 ): Promise<() => void> {
   const { listen } = await import("@tauri-apps/api/event");
   const unlisten = await listen<LabErrorEvent>("lab:error", (e) => handler(e.payload));
+  return unlisten;
+}
+
+/** Nghe sự kiện `lab:draft-done` (bước C — dựng video nháp xong) — trả hàm gỡ nghe. */
+export async function onLabDraftDone(
+  handler: (event: LabDraftDoneEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<LabDraftDoneEvent>("lab:draft-done", (e) => handler(e.payload));
+  return unlisten;
+}
+
+/** Giai đoạn của bước C (dựng video nháp) — dùng chung sự kiện `lab:progress`. */
+export type LabDraftStage = "tts" | "match" | "render" | "done";
+
+/** Tiến trình bước C đã lọc theo lượt dựng. */
+export interface LabDraftProgressEvent {
+  runId: string;
+  stage: LabDraftStage;
+  percent: number;
+  message: string;
+}
+
+/**
+ * Nghe tiến trình **bước C** (TTS / khớp cảnh / render) của đúng `runId`.
+ *
+ * Backend dùng chung sự kiện `lab:progress` với bước A; hàm này lọc stage của bước C
+ * để UI không phải tự phân biệt.
+ */
+export async function onLabDraftProgress(
+  runId: string,
+  handler: (event: LabDraftProgressEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<LabProgressEvent>("lab:progress", (e) => {
+    if (e.payload.runId !== runId) return;
+    const stage = e.payload.stage as string;
+    if (stage !== "tts" && stage !== "match" && stage !== "render" && stage !== "done") return;
+    handler({
+      runId: e.payload.runId,
+      stage,
+      percent: e.payload.percent,
+      message: e.payload.message,
+    });
+  });
   return unlisten;
 }
 

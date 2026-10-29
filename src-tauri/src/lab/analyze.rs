@@ -228,6 +228,7 @@ pub fn analyze(
 
         analysis.sources.push(LabSource {
             id: format!("s{source_idx}"),
+            path: source.path.clone(),
             name,
             duration_sec: total_secs,
             size_mb: file_size_mb(&path),

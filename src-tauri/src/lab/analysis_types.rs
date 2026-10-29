@@ -30,6 +30,9 @@ pub const AVATAR_COLORS: [&str; 6] = [
 #[serde(rename_all = "camelCase")]
 pub struct LabSource {
     pub id: String,
+    /// Đường dẫn video nguồn trên đĩa (bước C dựng video nháp cần).
+    #[serde(default)]
+    pub path: String,
     pub name: String,
     pub duration_sec: f64,
     pub size_mb: f64,
