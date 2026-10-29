@@ -31,7 +31,7 @@ import {
 
 export interface StudioTabsHostProps {
   /** Yêu cầu mở video từ bên ngoài (SettingsView / tab Tiến trình). */
-  openRequest?: { path: string; nonce: number; tabId?: string } | null;
+  openRequest?: { path: string; nonce: number; tabId?: string; prebuiltTab?: PersistedTab | null } | null;
   /** Video mở sẵn (tab đầu tiên khi vào Studio). */
   initialPath?: string;
   /** Báo tổng việc đang chạy lên trên (ô trạng thái topbar). */
@@ -191,6 +191,7 @@ function StudioTabsHostInner({
   const [dialog, setDialog] = useState<CloseDialog | null>(null);
   /** Đường dẫn đang chờ mở (khi đạt trần → hỏi đóng tab cũ). */
   const pendingPathRef = useRef<string | null>(null);
+  const pendingPrebuiltRef = useRef<PersistedTab | null>(null);
   /** Nonce yêu cầu DỪNG việc cho từng tab. */
   const cancelNonceRef = useRef<Record<string, number>>({});
   /**
@@ -203,7 +204,7 @@ function StudioTabsHostInner({
 
   /** Mở 1 video: nhảy tab cùng path / tái dùng tab trống / tạo tab mới / hỏi khi đủ trần. */
   const openVideo = useCallback(
-    (path: string) => {
+    (path: string, prebuiltTab?: PersistedTab | null) => {
       if (!path) return;
       const cur = stateRef.current;
       const state: TabsState = {
@@ -213,6 +214,7 @@ function StudioTabsHostInner({
       const outcome = addTab(state, nextTabId(), path);
       if (outcome.kind === "needs-confirm") {
         pendingPathRef.current = path;
+        pendingPrebuiltRef.current = prebuiltTab ?? null;
         setDialog({
           kind: "limit",
           tabId: outcome.oldestClosableId ?? "",
@@ -228,7 +230,13 @@ function StudioTabsHostInner({
           if (outcome.kind === "reused-empty") {
             return prev.map((tab) =>
               tab.id === outcome.tabId
-                ? { ...tab, path, title: titleFromPath(path), loadNonce: tab.loadNonce + 1 }
+                ? {
+                    ...tab,
+                    path,
+                    title: titleFromPath(path),
+                    loadNonce: tab.loadNonce + 1,
+                    restored: prebuiltTab ? { ...prebuiltTab, tabId: outcome.tabId } : tab.restored,
+                  }
                 : tab,
             );
           }
@@ -246,6 +254,7 @@ function StudioTabsHostInner({
             dirty: false,
             loadNonce: 0,
             cancelNonce: 0,
+            restored: prebuiltTab ? { ...prebuiltTab, tabId: outcome.tabId } : null,
           },
         ];
       });
@@ -339,22 +348,24 @@ function StudioTabsHostInner({
     }
     // Đạt trần: đóng tab cũ nhất rồi mở video đang chờ.
     const pending = pendingPathRef.current;
+    const pendingPrebuilt = pendingPrebuiltRef.current;
     pendingPathRef.current = null;
+    pendingPrebuiltRef.current = null;
     if (dialog.tabId) applyCloseTab(dialog.tabId);
     setDialog(null);
     if (pending) {
       // Mở lại sau khi state cập nhật (dùng effect bên dưới).
-      pendingOpenRef.current = pending;
+      pendingOpenRef.current = { path: pending, prebuiltTab: pendingPrebuilt };
     }
   }, [dialog, applyCloseTab]);
 
   /** Video chờ mở sau khi đóng tab cũ (đạt trần). */
-  const pendingOpenRef = useRef<string | null>(null);
+  const pendingOpenRef = useRef<{ path: string; prebuiltTab?: PersistedTab | null } | null>(null);
   useEffect(() => {
     const pending = pendingOpenRef.current;
     if (!pending) return;
     pendingOpenRef.current = null;
-    openVideo(pending);
+    openVideo(pending.path, pending.prebuiltTab);
   });
 
   /** Yêu cầu mở video từ bên ngoài (SettingsView). */
@@ -369,7 +380,7 @@ function StudioTabsHostInner({
       setActiveId(wanted);
       return;
     }
-    if (openRequest.path) openVideo(openRequest.path);
+    if (openRequest.path) openVideo(openRequest.path, openRequest.prebuiltTab);
   }, [openRequest, openVideo]);
 
   /** Instance báo trạng thái → cập nhật tab (chỉ số liệu nhẹ). */
@@ -497,7 +508,7 @@ function StudioTabsHostInner({
               tabId={tab.id}
               isActive={active && isVisible}
               initialFilePath={tab.initialPath}
-              loadRequest={tab.loadNonce > 0 ? { path: tab.path, nonce: tab.loadNonce } : null}
+              loadRequest={tab.loadNonce > 0 ? { path: tab.path, nonce: tab.loadNonce, prebuiltTab: tab.restored } : null}
               cancelRequest={tab.cancelNonce > 0 ? tab.cancelNonce : undefined}
               restoredTab={tab.restored ?? null}
               onRequestOpenVideo={openVideo}

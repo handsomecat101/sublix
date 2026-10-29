@@ -1,10 +1,14 @@
 import React, { useState } from "react";
 import { TemplateLibrary } from "./TemplateLibrary";
 import { LabWizard } from "./wizard/LabWizard";
+import type { PersistedTab } from "../../lib/studio/sessionStore";
 import "./lab.css";
 
 interface LabViewProps {
-  onNavigateToStudio?: (projectName?: string) => void;
+  onNavigateToStudio?: (
+    projectName?: string,
+    options?: { prebuiltTab?: PersistedTab | null },
+  ) => void;
   onOpenSettings?: () => void;
 }
 

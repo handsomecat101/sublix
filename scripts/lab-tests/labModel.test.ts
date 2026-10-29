@@ -25,6 +25,7 @@ import {
   mapChipToRewriteMode,
   mapLabDraftStageToProgress,
   mapLabBuildDraftResultToUi,
+  mapDubbingProjectToPersistedTab,
   type RecapItem,
 } from "../../src/views/lab/labModel.ts";
 
@@ -587,4 +588,112 @@ test("mapLabBuildDraftResultToUi — ánh xạ kết quả dựng nháp đầy �
   assert.deepEqual(uiResult.notes, ["Đã tự căn chỉnh thời lượng khớp giọng đọc"]);
   assert.equal(uiResult.draftPath, "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.mp4");
   assert.equal(uiResult.studioProjectPath, "C:\\Users\\dev\\AppData\\Local\\Sublix\\lab-drafts\\run1\\draft.sublix-dubbing.json");
+});
+
+test("mapDubbingProjectToPersistedTab — ánh xạ chuẩn xác DubbingProject sang PersistedTab", () => {
+  const project = {
+    input_path: "C:\\Videos\\draft-recap-elden-ring.mp4",
+    media_duration_sec: 120.5,
+    speakers: [
+      {
+        id: "narrator",
+        label: "Người dẫn (AI)",
+        voice: "vi-VN-Standard-A",
+        pitch: "+0Hz",
+        rate: "+0%",
+        gender: "female",
+      },
+      {
+        id: "orig",
+        label: "Tiếng gốc game",
+        voice: "",
+        pitch: "+0Hz",
+        rate: "+0%",
+        gender: "male",
+      },
+    ],
+    segments: [
+      {
+        id: 1,
+        speaker_id: "narrator",
+        start_sec: 0,
+        end_sec: 8.5,
+        original_text: "Đây là vùng đất Trung Địa hoang tàn.",
+        dubbed_text: "Đây là vùng đất Trung Địa hoang tàn.",
+        status: "ready",
+      },
+      {
+        id: 2,
+        speaker_id: "orig",
+        start_sec: 8.5,
+        end_sec: 14.0,
+        original_text: "I am Malenia, Blade of Miquella.",
+        dubbed_text: "",
+        status: "ready",
+      },
+      {
+        id: 3,
+        speaker_id: "narrator",
+        start_sec: 14.0,
+        end_sec: 22.0,
+        original_text: "Một trận chiến khốc liệt sắp diễn ra.",
+        dubbed_text: "Một trận chiến khốc liệt sắp diễn ra.",
+        status: "ready",
+      },
+    ],
+    bgm_volume: 0.3,
+    voice_volume: 1.0,
+    target_lang: "vi",
+  };
+
+  const persisted = mapDubbingProjectToPersistedTab(project as any, "tab_123");
+
+  assert.equal(persisted.tabId, "tab_123");
+  assert.equal(persisted.filePath, "C:\\Videos\\draft-recap-elden-ring.mp4");
+  assert.equal(persisted.fileName, "draft-recap-elden-ring.mp4");
+  assert.equal(persisted.mediaDuration, 120.5);
+  assert.equal(persisted.targetLang, "vi");
+  assert.equal(persisted.hadAudio, true, "hadAudio phải true để kích hoạt lostAudio của Studio");
+
+  // Kiểm tra speakers
+  assert.equal(persisted.speakers.length, 2);
+  const narrator = persisted.speakers.find((s) => s.id === "narrator")!;
+  assert.equal(narrator.name, "Người dẫn (AI)");
+  assert.equal(narrator.gender, "female");
+  assert.equal(narrator.color, "#38bdf8");
+  assert.equal(narrator.count, 2, "narrator có 2 câu thoại");
+
+  const orig = persisted.speakers.find((s) => s.id === "orig")!;
+  assert.equal(orig.name, "Tiếng gốc game");
+  assert.equal(orig.gender, "male");
+  assert.equal(orig.count, 1, "orig có 1 câu thoại");
+
+  // Kiểm tra segments
+  assert.equal(persisted.segments.length, 3);
+  assert.equal(persisted.segments[0].id, 1);
+  assert.equal(persisted.segments[0].speakerId, "narrator");
+  assert.equal(persisted.segments[0].original, "Đây là vùng đất Trung Địa hoang tàn.");
+  assert.equal(persisted.segments[0].translated, "Đây là vùng đất Trung Địa hoang tàn.");
+  assert.equal(persisted.segments[0].hasAudio, false);
+
+  assert.equal(persisted.segments[1].id, 2);
+  assert.equal(persisted.segments[1].speakerId, "orig");
+  assert.equal(persisted.segments[1].original, "I am Malenia, Blade of Miquella.");
+  assert.equal(persisted.segments[1].translated, "");
+});
+
+test("mapDubbingProjectToPersistedTab — xử lý dự án rỗng và thiếu trường loa", () => {
+  const minimalProject = {
+    input_path: "",
+    media_duration_sec: 0,
+    speakers: [],
+    segments: [],
+  };
+
+  const persisted = mapDubbingProjectToPersistedTab(minimalProject as any);
+  assert.equal(persisted.tabId, "tab_draft");
+  assert.equal(persisted.fileName, "Bản nháp Xưởng AI");
+  assert.equal(persisted.speakers.length, 2, "Tự bổ sung 2 speaker mặc định nếu project rỗng");
+  assert.equal(persisted.segments.length, 0);
+  assert.equal(persisted.hadAudio, true);
 });

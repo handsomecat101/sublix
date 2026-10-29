@@ -22,15 +22,20 @@ import {
   isLlmConfigured,
   isLabMockMode,
   setLabMockMode,
+  mapDubbingProjectToPersistedTab,
   type RecapItem,
 } from "../labModel";
 import { labApi, type AnalyzeStageProgress, type BuildDraftResult } from "../labApi";
-import { sublix, type VoicePreset } from "../../../lib/tauri";
+import { sublix, type VoicePreset, type DubbingProject } from "../../../lib/tauri";
+import type { PersistedTab } from "../../../lib/studio/sessionStore";
 
 interface LabWizardProps {
   templateId: string;
   onBackToLibrary: () => void;
-  onOpenStudioProject?: (projectName: string) => void;
+  onOpenStudioProject?: (
+    projectName?: string,
+    options?: { prebuiltTab?: PersistedTab | null },
+  ) => void;
   onOpenSettings?: () => void;
 }
 
@@ -414,11 +419,58 @@ export const LabWizard: React.FC<LabWizardProps> = ({
 
   // Mở bản nháp đã dựng sang Studio
   const handleOpenStudio = async () => {
-    const targetPath = draftResult?.draftPath || "draft-crown-1";
+    const isMock = isLabMockMode();
+    const targetPath = draftResult?.draftPath || (isMock ? "draft-crown-1.mp4" : "");
+    if (!targetPath) {
+      showToast("Chưa có video nháp để mở trong Studio. Vui lòng hoàn thành bước dựng nháp.");
+      return;
+    }
+
     try {
       const res = await labApi.openInStudio(targetPath);
+      let prebuiltTab: PersistedTab | null = null;
+      if (res.project) {
+        prebuiltTab = mapDubbingProjectToPersistedTab(res.project);
+      } else if (isMock && draftResult?.items) {
+        // Tạo project giả lập trong mock mode để user demo thấy sẵn các câu trên timeline Studio
+        const mockProject: DubbingProject = {
+          input_path: targetPath,
+          media_duration_sec: draftResult.totalSec,
+          speakers: [
+            {
+              id: "narrator",
+              label: "Người dẫn (AI)",
+              voice: selectedVoiceId || "vi-VN-Standard-A",
+              pitch: "+0Hz",
+              rate: "+0%",
+              gender: "female",
+            },
+            {
+              id: "orig",
+              label: "Tiếng gốc game",
+              voice: "",
+              pitch: "+0Hz",
+              rate: "+0%",
+              gender: "male",
+            },
+          ],
+          segments: draftResult.items.map((it, idx) => ({
+            id: idx + 1,
+            speaker_id: it.keepOriginal ? "orig" : "narrator",
+            start_sec: it.start,
+            end_sec: it.end,
+            original_text: it.narration,
+            dubbed_text: it.keepOriginal ? "" : it.narration,
+            status: "ready",
+          })),
+          bgm_volume: 0.3,
+          voice_volume: 1.0,
+        };
+        prebuiltTab = mapDubbingProjectToPersistedTab(mockProject);
+      }
+
       showToast(`Đã nạp dự án "${res.studioTabTitle}". Đang mở trong Studio...`);
-      onOpenStudioProject?.(targetPath);
+      onOpenStudioProject?.(targetPath, { prebuiltTab });
     } catch (err) {
       showToast(`Lỗi mở Studio: ${err instanceof Error ? err.message : String(err)}`);
     }

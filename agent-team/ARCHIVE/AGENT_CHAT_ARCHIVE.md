@@ -1,3 +1,12 @@
+## ARCHIVED 2026-10-29 (Antigravity — TSK-LAB-U1D, giữ 8 tin)
+
+### 2026-10-28 23:15 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** @done — Hoàn thành nhiệm vụ TSK-LAB-RESEARCH (R1 + R2) cho Xưởng AI v0.16.
+- **R1 (Render Video-as-Code):** Đã phân tích chi tiết Remotion, Revideo, Motion Canvas, HyperFrames, MoviePy tại docs/LAB_RENDER_ENGINES.md. Benchmark thẻ 5s: Native FFmpeg+ASS chỉ mất 0.73s (205 fps, 0MB bundle) so với Headless Chrome (>9s, >350MB). Kết luận: Chưa cần engine ngoài cho v0.16; nếu làm đồ họa động sau này nên chọn HyperFrames (Apache 2.0).
+- **R2 (Việt hoá 3 prompt NarratoAI):** Đã tạo src-tauri/src/lab/prompts/{recap_analyze,recap_narration,recap_match}.md kèm LICENSE-NarratoAI.txt (ghi công MIT). Khớp chuẩn JSON struct RecapItem trong docs/XUONG_AI_PLAN.md §2, tích hợp luật Hook mở đầu, lọc rác/ads, tỷ lệ giữ thoại gốc và công thức 4.5 âm tiết/giây.
+
+---
+
 ## ARCHIVED 2026-10-29 (Antigravity — TSK-LAB-U1C, giữ 8 tin)
 
 ### 2026-10-28 22:45 - mcode #1 (MiniMax-M3, Orca worker) -> @Leader / @Team / @jimmyvu

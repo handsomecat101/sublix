@@ -76,6 +76,7 @@
 
 | ID | Task | Agent | Ngày xong | Kết quả / Version (1 câu ngắn) |
 |----|------|-------|-----------|--------------------------------|
+| `TSK-LAB-U1D` | Mở trong Studio nạp SẴN lời bình + sửa 3 lỗi nhỏ của U1C | Antigravity | 2026-10-29 | ✅ mapDubbingProjectToPersistedTab nạp sẵn segments/speakers vào Studio; buffer sự kiện lab; bắt lỗi runId/draftPath; 25/25 test lab PASS; 84/84 studio-tabs PASS; tsc/vite build OK |
 | TSK-LAB-U1C | Nối bước B (Lời bình) + C (Dựng nháp) của Xưởng AI vào lệnh THẬT | Antigravity | 2026-10-29 | ✅ Nối labWriteNarration + labBuildDraft + labRewriteSegment + labLoadDraftProject; voice thật; video preview convertFileSrc; 23/23 test PASS; tsc/vite build OK |
 | `TSK-V015-UI-FIX` | Sửa tab Khám phá theo bản duyệt Opus (P1-1, §1 toast app, P1-2..4, P2, P3) | Antigravity | 2026-10-29 | ✅ Đạt toàn bộ P1 (§1 không tự chuyển màn, P1-1..4) + P2 + P3 · 46/46 test discoveryModel PASS · tsc/build OK |
 | `TSK-LAB-C3` | Lệnh Tauri `lab_analyze` (phân tích thật) + tiến trình + huỷ | mcode #1 (Orca worker) | 2026-10-29 | ✅ `src-tauri/src/lab/{analyze,analyze_sources,analyze_summary,analysis_types,llm_json,llm_prompt,cache,transcript,commands}.rs` + `lib.rs` (4 lệnh) + `src/lib/tauri.ts` — 561 Rust PASS; chạy thật fixture 30 s: **6,2 s** (1 cảnh, 1 câu thoại, LLM trả 0 chương vì clip không có cốt truyện); **chưa commit** |

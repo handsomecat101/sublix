@@ -11,7 +11,9 @@ import type {
   LabRecapItem,
   LabRewriteMode,
   LabBuildDraftResult,
+  DubbingProject,
 } from "../../lib/tauri";
+import type { PersistedTab, PersistedSegment, PersistedSpeaker } from "../../lib/studio/sessionStore";
 import type { MockChapter, MockCharacter, MockJunkSegment, MockVideoSource } from "./labMock";
 import type { AnalyzeResult, AnalyzeStageProgress, BuildDraftResult } from "./labApi";
 
@@ -630,5 +632,95 @@ export function mapLabBuildDraftResultToUi(result: LabBuildDraftResult): BuildDr
     notes: result.notes || [],
     draftPath: result.draftPath,
     studioProjectPath: result.studioProjectPath,
+  };
+}
+
+/**
+ * [TSK-LAB-U1D] Ánh xạ thuần từ `DubbingProject` (kết quả dựng nháp hoặc file dự án Studio)
+ * sang `PersistedTab` để nạp trực tiếp vào StudioTabsHost mà không cần nhận dạng lại.
+ */
+export function mapDubbingProjectToPersistedTab(
+  project: DubbingProject,
+  tabId = "tab_draft",
+): PersistedTab {
+  const filePath = project.input_path || "";
+  const fileName = filePath.split(/[\\/]/).filter(Boolean).pop() || "Bản nháp Xưởng AI";
+
+  // Đếm số câu cho từng speaker
+  const speakerCounts = new Map<string, number>();
+  for (const seg of project.segments || []) {
+    const spkId = seg.speaker_id || "narrator";
+    speakerCounts.set(spkId, (speakerCounts.get(spkId) ?? 0) + 1);
+  }
+
+  // Ánh xạ danh sách nhân vật / người nói
+  const speakers: PersistedSpeaker[] = (project.speakers || []).map((spk) => {
+    const isNarrator = spk.id === "narrator";
+    const name = spk.label || (isNarrator ? "Người dẫn (AI)" : "Tiếng gốc game");
+    const gender = spk.gender === "female" ? "female" : "male";
+    const color = isNarrator ? "#38bdf8" : "#a855f7";
+
+    return {
+      id: spk.id,
+      name,
+      gender,
+      color,
+      voice: spk.voice || "",
+      count: speakerCounts.get(spk.id) ?? 0,
+    };
+  });
+
+  // Nếu project chưa có speaker nào, mặc định tạo 2 speaker narrator & orig
+  if (speakers.length === 0) {
+    speakers.push(
+      {
+        id: "narrator",
+        name: "Người dẫn (AI)",
+        gender: "female",
+        color: "#38bdf8",
+        voice: "",
+        count: speakerCounts.get("narrator") ?? 0,
+      },
+      {
+        id: "orig",
+        name: "Tiếng gốc game",
+        gender: "male",
+        color: "#a855f7",
+        voice: "",
+        count: speakerCounts.get("orig") ?? 0,
+      },
+    );
+  }
+
+  // Ánh xạ danh sách phân đoạn phụ đề
+  const segments: PersistedSegment[] = (project.segments || []).map((seg, idx) => {
+    const isOrig = seg.speaker_id === "orig";
+    const original = seg.original_text || "";
+    const translated = seg.dubbed_text || (isOrig ? "" : original);
+
+    return {
+      id: seg.id || idx + 1,
+      start: seg.start_sec,
+      end: seg.end_sec,
+      speakerId: seg.speaker_id || "narrator",
+      original,
+      translated,
+      hasAudio: false,
+    };
+  });
+
+  return {
+    tabId,
+    filePath,
+    fileName,
+    mediaDuration: project.media_duration_sec || 0,
+    segments,
+    speakers,
+    markers: [],
+    sttLang: "vi",
+    targetLang: project.target_lang || "vi",
+    currentTime: 0,
+    // hadAudio = true để kích hoạt thông báo lostAudio chuẩn của Studio
+    hadAudio: true,
   };
 }

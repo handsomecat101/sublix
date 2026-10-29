@@ -40,6 +40,10 @@ import {
   type LabSourceInput,
   type LabTranscriptLine,
   type DubbingProject,
+  type LabProgressEvent,
+  type LabDraftDoneEvent,
+  type LabErrorEvent,
+  type LabDoneEvent,
 } from "../../lib/tauri";
 
 export interface AnalyzeOptions {
@@ -195,6 +199,13 @@ export const labApi = {
     let unlistenDone: (() => void) | null = null;
     let unlistenError: (() => void) | null = null;
 
+    type BufferedAnalyzeEvent =
+      | { type: "progress"; event: LabProgressEvent }
+      | { type: "done"; event: LabDoneEvent }
+      | { type: "error"; event: LabErrorEvent };
+
+    const eventBuffer: BufferedAnalyzeEvent[] = [];
+
     const cleanup = () => {
       if (unlistenProgress) {
         unlistenProgress();
@@ -208,6 +219,7 @@ export const labApi = {
         unlistenError();
         unlistenError = null;
       }
+      eventBuffer.length = 0;
     };
 
     return new Promise<AnalyzeResult>(async (resolve, reject) => {
@@ -250,20 +262,26 @@ export const labApi = {
       try {
         // Đăng ký nghe sự kiện trước khi gọi invoke để không sót sự kiện
         unlistenProgress = await onLabProgress((event) => {
-          if (!activeRunId || event.runId === activeRunId) {
+          if (!activeRunId) {
+            eventBuffer.push({ type: "progress", event });
+          } else if (event.runId === activeRunId) {
             onProgress?.(mapLabStageToProgress(event));
           }
         });
 
         unlistenDone = await onLabDone((event) => {
-          if (!activeRunId || event.runId === activeRunId) {
+          if (!activeRunId) {
+            eventBuffer.push({ type: "done", event });
+          } else if (event.runId === activeRunId) {
             const mapped = mapLabAnalysisToResult(event.analysis);
             finishResolve(mapped);
           }
         });
 
         unlistenError = await onLabError((event) => {
-          if (!activeRunId || event.runId === activeRunId) {
+          if (!activeRunId) {
+            eventBuffer.push({ type: "error", event });
+          } else if (event.runId === activeRunId) {
             finishReject(new Error(event.message || "Quá trình phân tích thất bại"));
           }
         });
@@ -275,6 +293,20 @@ export const labApi = {
 
         const runId = await sublix.labAnalyze(inputs, analyzeOpts);
         activeRunId = runId;
+
+        // Xử lý các sự kiện đã đệm trong lúc chờ lệnh labAnalyze trả về runId
+        for (const item of eventBuffer) {
+          if (item.event.runId === activeRunId) {
+            if (item.type === "progress") {
+              onProgress?.(mapLabStageToProgress(item.event));
+            } else if (item.type === "done") {
+              finishResolve(mapLabAnalysisToResult(item.event.analysis));
+            } else if (item.type === "error") {
+              finishReject(new Error(item.event.message || "Quá trình phân tích thất bại"));
+            }
+          }
+        }
+        eventBuffer.length = 0;
       } catch (err) {
         finishReject(err instanceof Error ? err : new Error(String(err)));
       }
@@ -301,8 +333,11 @@ export const labApi = {
       opts = optionsOrTitle;
     }
 
-    if (isLabMockMode() || !opts.runId) {
+    if (isLabMockMode()) {
       return this._writeNarrationMock(opts);
+    }
+    if (!opts.runId) {
+      throw new Error("Chế độ thật: Thiếu runId của lần phân tích để viết lời bình.");
     }
     return this._writeNarrationReal(opts);
   },
@@ -374,8 +409,11 @@ export const labApi = {
     onProgress?: (stage: string, percent: number) => void,
     signal?: AbortSignal,
   ): Promise<BuildDraftResult> {
-    if (isLabMockMode() || !options.runId) {
+    if (isLabMockMode()) {
       return this._buildDraftMock(options, onProgress, signal);
+    }
+    if (!options.runId) {
+      throw new Error("Chế độ thật: Thiếu runId phân tích để dựng nháp.");
     }
     return this._buildDraftReal(options, onProgress, signal);
   },
@@ -440,6 +478,20 @@ export const labApi = {
     let unlistenDone: (() => void) | null = null;
     let unlistenError: (() => void) | null = null;
 
+    type BufferedDraftEvent =
+      | { type: "progress"; event: LabProgressEvent }
+      | { type: "done"; event: LabDraftDoneEvent }
+      | { type: "error"; event: LabErrorEvent };
+
+    const eventBuffer: BufferedDraftEvent[] = [];
+
+    const handleProgress = (event: LabProgressEvent) => {
+      const st = event.stage as string;
+      if (st === "tts" || st === "match" || st === "render" || st === "done") {
+        onProgress?.(st, event.percent);
+      }
+    };
+
     const cleanup = () => {
       if (unlistenProgress) {
         unlistenProgress();
@@ -453,6 +505,7 @@ export const labApi = {
         unlistenError();
         unlistenError = null;
       }
+      eventBuffer.length = 0;
     };
 
     return new Promise<BuildDraftResult>(async (resolve, reject) => {
@@ -488,24 +541,27 @@ export const labApi = {
       try {
         // Đăng ký nghe sự kiện tiến trình dựng nháp (tts | match | render | done)
         unlistenProgress = await onLabProgress((event) => {
-          if (!activeDraftRunId || event.runId === activeDraftRunId) {
-            const st = event.stage as string;
-            if (st === "tts" || st === "match" || st === "render" || st === "done") {
-              onProgress?.(st, event.percent);
-            }
+          if (!activeDraftRunId) {
+            eventBuffer.push({ type: "progress", event });
+          } else if (event.runId === activeDraftRunId) {
+            handleProgress(event);
           }
         });
 
         // Đăng ký nghe sự kiện hoàn tất dựng nháp
         unlistenDone = await onLabDraftDone((event) => {
-          if (!activeDraftRunId || event.runId === activeDraftRunId) {
+          if (!activeDraftRunId) {
+            eventBuffer.push({ type: "done", event });
+          } else if (event.runId === activeDraftRunId) {
             finishResolve(mapLabBuildDraftResultToUi(event.result));
           }
         });
 
         // Đăng ký nghe sự kiện lỗi
         unlistenError = await onLabError((event) => {
-          if (!activeDraftRunId || event.runId === activeDraftRunId) {
+          if (!activeDraftRunId) {
+            eventBuffer.push({ type: "error", event });
+          } else if (event.runId === activeDraftRunId) {
             finishReject(new Error(event.message || "Quá trình dựng nháp thất bại"));
           }
         });
@@ -517,6 +573,20 @@ export const labApi = {
 
         const draftRunId = await sublix.labBuildDraft(analysisRunId, segments, draftOpts);
         activeDraftRunId = draftRunId;
+
+        // Xử lý các sự kiện đã đệm trong lúc chờ lệnh labBuildDraft trả về draftRunId
+        for (const item of eventBuffer) {
+          if (item.event.runId === activeDraftRunId) {
+            if (item.type === "progress") {
+              handleProgress(item.event);
+            } else if (item.type === "done") {
+              finishResolve(mapLabBuildDraftResultToUi(item.event.result));
+            } else if (item.type === "error") {
+              finishReject(new Error(item.event.message || "Quá trình dựng nháp thất bại"));
+            }
+          }
+        }
+        eventBuffer.length = 0;
       } catch (err) {
         finishReject(err instanceof Error ? err : new Error(String(err)));
       }
@@ -530,7 +600,7 @@ export const labApi = {
   async openInStudio(
     draftPath: string,
   ): Promise<{ success: boolean; studioTabTitle: string; project?: DubbingProject }> {
-    if (isLabMockMode() || !draftPath || !draftPath.endsWith(".mp4")) {
+    if (isLabMockMode()) {
       await delay(300);
       return {
         success: true,
@@ -538,20 +608,22 @@ export const labApi = {
       };
     }
 
+    if (!draftPath || typeof draftPath !== "string" || !draftPath.trim()) {
+      throw new Error("Chế độ thật: Thiếu đường dẫn video nháp để mở trong Studio.");
+    }
+
     try {
       const project = await sublix.labLoadDraftProject(draftPath);
       const fileName = draftPath.replace(/^.*[/\\]/, "");
       return {
         success: true,
-        studioTabTitle: fileName,
+        studioTabTitle: fileName || "Bản nháp Xưởng AI",
         project,
       };
     } catch (err) {
-      console.warn("Không đọc được dự án nháp từ disk, fallback:", err);
-      return {
-        success: true,
-        studioTabTitle: draftPath.replace(/^.*[/\\]/, ""),
-      };
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Lỗi đọc file dự án nháp:", err);
+      throw new Error(`Không đọc được file dự án nháp từ "${draftPath}": ${msg}`);
     }
   },
 

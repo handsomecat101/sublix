@@ -9,6 +9,15 @@
 
 ## 📌 Tin Nhắn Bàn Giao Gần Nhất (Mới nhất ở trên)
 
+### 2026-10-29 02:20 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
+- **Loại:** `@done` — Hoàn thành `TSK-LAB-U1D`: "Mở trong Studio" nạp SẴN lời bình + sửa 3 lỗi nhỏ của U1C.
+- **P1 (Nạp sẵn vào Studio):** Tạo hàm thuần `mapDubbingProjectToPersistedTab` (ánh xạ DubbingProject → PersistedTab mang sẵn segments, speakers, mediaDuration, hadAudio: true). Mở rộng `studioOpenRequest` truyền `prebuiltTab` vào `StudioTabsHost` và `SublixStudioView` (cả tab tạo mới lẫn tái dùng tab trống), kích hoạt thông báo nhắc tạo lại giọng tự nhiên `lostAudio` của Studio.
+- **P2.1 & P2.2 (Sửa lỗi giả & bắt lỗi thật):** Chế độ thật: chặn rơi ngầm về mock data khi thiếu `runId` (ném lỗi rõ ràng); `openInStudio` kiểm tra `draftPath`, bắt lỗi đọc dự án thật và hiển thị toast lỗi thay vì giả vờ thành công; loại bỏ fallback đường dẫn giả `"draft-crown-1"`.
+- **P2.3 (Lọc & đệm sự kiện):** Thêm hàng đợi đệm sự kiện `eventBuffer` trong `_buildDraftReal` và `_analyzeReal` tới khi nhận `activeDraftRunId`/`activeRunId`; lọc bỏ triệt để sự kiện của các runId lạ tránh nhiễm chéo.
+- **Kiểm chứng:** `node --test scripts/lab-tests/` **25/25 PASS** · `scripts/studio-tabs-tests/` **84/84 PASS** · `npx tsc --noEmit` **0 lỗi** · `npx vite build` **OK** (4.25s).
+
+---
+
 ### 2026-10-29 01:45 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
 - **Loại:** `@done` — Hoàn thành `TSK-LAB-U1C`: Nối bước B (Lời bình) và Bước C (Dựng nháp) của Xưởng AI vào lệnh THẬT.
 - **Nối Bước B (Lời bình):** `labApi.writeNarration` nối `sublix.labWriteNarration` (targetDur, ostRatio); hàm thuần `mapLabRecapItemToUi` / `mapUiToLabRecapItem` đồng bộ dữ liệu; `RewritePopover` nối `sublix.labRewriteSegment` với các mode (shorter, dramatic, simpler, bridge); bảo lưu chỉnh sửa và công tắc `keepOriginal` truyền sang Bước C.
@@ -75,10 +84,7 @@
 
 ---
 
-### 2026-10-28 23:15 - Antigravity (Gemini Flash, worker) -> @Leader / @Team / @jimmyvu
-- **Loại:** @done — Hoàn thành nhiệm vụ TSK-LAB-RESEARCH (R1 + R2) cho Xưởng AI v0.16.
-- **R1 (Render Video-as-Code):** Đã phân tích chi tiết Remotion, Revideo, Motion Canvas, HyperFrames, MoviePy tại docs/LAB_RENDER_ENGINES.md. Benchmark thẻ 5s: Native FFmpeg+ASS chỉ mất 0.73s (205 fps, 0MB bundle) so với Headless Chrome (>9s, >350MB). Kết luận: Chưa cần engine ngoài cho v0.16; nếu làm đồ họa động sau này nên chọn HyperFrames (Apache 2.0).
-- **R2 (Việt hoá 3 prompt NarratoAI):** Đã tạo src-tauri/src/lab/prompts/{recap_analyze,recap_narration,recap_match}.md kèm LICENSE-NarratoAI.txt (ghi công MIT). Khớp chuẩn JSON struct RecapItem trong docs/XUONG_AI_PLAN.md §2, tích hợp luật Hook mở đầu, lọc rác/ads, tỷ lệ giữ thoại gốc và công thức 4.5 âm tiết/giây.
+
 
 ---
 

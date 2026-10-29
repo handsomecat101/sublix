@@ -48,6 +48,7 @@ import {
 } from "../icons";
 import LabView from "./lab/LabView";
 import DiscoveryToast from "./discovery/DiscoveryToast";
+import type { PersistedTab } from "../lib/studio/sessionStore";
 import spotModelsUrl from "../assets/spot-models.jpg";
 import MasterTopbar from "./MasterTopbar";
 // TSK-UI-REDESIGN-R2-5: các mục Cài đặt tách riêng (mỗi file < 300 dòng).
@@ -156,7 +157,7 @@ export default function SettingsView() {
   const [pendingDubbingPath, setPendingDubbingPath] = useState<string>("");
   const [pendingStudioPath, setPendingStudioPath] = useState<string>("");
   // [TSK-TABS-P1] Yêu cầu mở video cho host (tab mới / nhảy tab cùng path).
-  const [studioOpenRequest, setStudioOpenRequest] = useState<{ path: string; nonce: number; tabId?: string } | null>(null);
+  const [studioOpenRequest, setStudioOpenRequest] = useState<{ path: string; nonce: number; tabId?: string; prebuiltTab?: PersistedTab | null } | null>(null);
   const studioOpenNonceRef = useRef(0);
 
   /**
@@ -192,7 +193,7 @@ export default function SettingsView() {
     setDiscoveryStudioToasts([]);
   }, []);
 
-  const handleRouteToStudio = (path: string, options?: { activate?: boolean; title?: string }) => {
+  const handleRouteToStudio = (path: string, options?: { activate?: boolean; title?: string; prebuiltTab?: PersistedTab | null }) => {
     const safe = path ? path.replace(/\//g, "\\").trim() : "";
     setPendingDubbingPath(safe);
     setPendingStudioPath(safe);
@@ -200,7 +201,7 @@ export default function SettingsView() {
     // [TSK-TABS-P1] Mọi nguồn mở video (Tải video, Lịch sử, tab Tiến trình) đi qua
     // host ⇒ tab mới / nhảy tab đã có cùng path (không ghi đè dự án đang mở).
     studioOpenNonceRef.current += 1;
-    setStudioOpenRequest({ path: safe, nonce: studioOpenNonceRef.current });
+    setStudioOpenRequest({ path: safe, nonce: studioOpenNonceRef.current, prebuiltTab: options?.prebuiltTab });
     if (options?.activate !== false) {
       setActiveTab("studio");
     }
@@ -1787,7 +1788,7 @@ export default function SettingsView() {
           height: "100%",
         }}
       >
-        <LabView onNavigateToStudio={(projectName) => handleRouteToStudio(projectName || '')} />
+        <LabView onNavigateToStudio={(projectName, options) => handleRouteToStudio(projectName || '', options)} />
       </div>
 
       {/* PERSISTENT MOUNT: Keep FileSubView mounted across tab switching

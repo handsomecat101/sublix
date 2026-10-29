@@ -223,7 +223,7 @@ export interface SublixStudioViewProps {
    * [TSK-TABS-P1] Host yêu cầu nạp video vào tab này (tab trống được lấp đầy).
    * `nonce` tăng mỗi lần yêu cầu ⇒ instance nạp đúng 1 lần.
    */
-  loadRequest?: { path: string; nonce: number } | null;
+  loadRequest?: { path: string; nonce: number; prebuiltTab?: PersistedTab | null } | null;
   /**
    * [TSK-TABS-P1] Host yêu cầu **DỪNG** việc của tab này (khi đóng tab đang chạy).
    * `nonce` tăng mỗi lần yêu cầu ⇒ dừng đúng 1 lần.
@@ -876,7 +876,7 @@ export default function SublixStudioView({
   // [TSK-TABS-P3] Dữ liệu khôi phục theo TỪNG TAB (host đọc `sessionStore` rồi truyền
   // xuống); không còn đọc khoá v1 — host đã migrate một lần.
   const [cachedProject] = useState(() => {
-    if (initialFilePath || !restoredTab) return null;
+    if (!restoredTab) return null;
     return {
       filePath: restoredTab.filePath,
       fileName: restoredTab.fileName,
@@ -1465,7 +1465,7 @@ export default function SublixStudioView({
     if (!loadRequest || !loadRequest.path) return;
     if (loadRequest.nonce === lastLoadRequestNonceRef.current) return;
     lastLoadRequestNonceRef.current = loadRequest.nonce;
-    handleLoadNewVideoFile(loadRequest.path);
+    handleLoadNewVideoFile(loadRequest.path, loadRequest.prebuiltTab);
   }, [loadRequest]);
 
   // [TSK-TABS-P1] Host yêu cầu DỪNG việc (đóng tab đang chạy việc).
@@ -2716,19 +2716,34 @@ export default function SublixStudioView({
   };
 
   // Xử lý nạp tệp video mới: Reset sạch trạng thái cũ, bộ đệm preview, timeline, phân vai & undo
-  const handleLoadNewVideoFile = (newPath: string) => {
+  const handleLoadNewVideoFile = (newPath: string, prebuilt?: PersistedTab | null) => {
     if (!newPath) return;
     setTranscodedPath(null);
     setFilePath(newPath);
     const name = newPath.split(/[\\/]/).pop() || newPath;
     setFileName(name);
-    setMediaDuration(0);
-    mediaDurationRef.current = 0;
+    setMediaDuration(prebuilt?.mediaDuration || 0);
+    mediaDurationRef.current = prebuilt?.mediaDuration || 0;
     setCurrentTime(0.0);
     setIsPlaying(false);
     isPlayingRef.current = false;
-    setSegments([]);
-    setSpeakers([]);
+    setSegments(prebuilt ? (prebuilt.segments as SubtitleItem[]) : []);
+    setSpeakers(
+      prebuilt
+        ? prebuilt.speakers.map((s) => ({
+            id: s.id,
+            name: s.name.trim().toLowerCase() === "phụ đề" ? "Thuyết minh AI" : s.name,
+            gender: s.gender,
+            color: s.color || (s.id === "narrator" ? "#38bdf8" : "#a855f7"),
+            voice: s.voice || "",
+            count: s.count || 0,
+            sampleAudio: null,
+          }))
+        : []
+    );
+    if (prebuilt?.hadAudio) {
+      lostAudioRef.current = true;
+    }
     setAudioPeaks([]);
     setFilmstripThumbs([]);
     setVideoPlayError(false);
