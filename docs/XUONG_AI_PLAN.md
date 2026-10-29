@@ -41,8 +41,9 @@ AI nhìn hình (VLM), Top 10 / thẻ đồ hoạ động, Batch, xoá phụ đ�
 
 ### Giai đoạn 2 — Lời bình & dựng (sau C3, D1)
 - [x] **C4** (mcode + OpenCode làm nốt — commit sau `2497b5b`; dựng nháp thật 36 s → video 11,6 s + dự án Studio) lệnh `lab_write_narration` (LLM viết lời bình theo độ dài đích) + `lab_build_draft` (TTS từng câu → `allocate` → kiểm luật → `to_studio`)
-- [~] **U1** (Gemini — ✅ giao diện + dữ liệu giả `c6c3442`, kiểm app thật 4 bước; Nguồn + Phân tích nối thật `2497b5b`; đang nối B/C) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
+- [ ] **C5** (OpenCode — đang làm) chịu gameplay **dài 3–15 giờ, nhiều phần**: gộp chương nhỏ → hồi/arc, viết lời bình theo ngân sách thời lượng đích, lưu/tiếp tục theo cụm (hỏng giữa chừng không làm lại từ đầu), ETA, đo thời gian/RAM ngoại suy 10 giờ
+- [x] **U1** (Gemini — giao diện `c6c3442`; Nguồn + Phân tích `2497b5b`; B/C `e138da5`; Mở trong Studio nạp sẵn lời bình `6db5286`) giao diện theo D1: thư viện mẫu + trình hướng dẫn + trình sửa lời bình + mở sang Studio
 
 ### Giai đoạn 3 — Kiểm & phát hành
-- [ ] Điều phối: bản sạch + app thật với **gameplay thật 20–40 phút** → ra dự án Studio xem được, lời bình hợp lý, luật dựng đúng
+- [ ] Điều phối: bản sạch + app thật với **gameplay thật**: lượt 1 ~1–2 giờ (đúng/sai, đo tốc độ), lượt 2 cả game nhiều giờ (sau C5) → ra dự án Studio xem được, lời bình hợp lý, luật dựng đúng
 - [ ] Opus duyệt UI so mockup · bump 0.16.0 + changelog · **PO duyệt push**
